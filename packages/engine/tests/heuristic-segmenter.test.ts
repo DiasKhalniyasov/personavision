@@ -468,6 +468,56 @@ describe('the similarity and background bounds', () => {
   });
 });
 
+describe('the grid over page space', () => {
+  it('reads a screenshot at a device pixel ratio of two as the same page', async () => {
+    // The same page, captured twice: once at 1:1 and once at 2x. Page space is what an
+    // area of interest is in, so both have to answer in page coordinates.
+    const atOne = raster(400, 400, PAPER, [
+      { bbox: box(80, 80, 120, 120), colour: [170, 110, 100] },
+    ]);
+    const atTwo = raster(800, 800, PAPER, [
+      { bbox: box(160, 160, 240, 240), colour: [170, 110, 100] },
+    ]);
+    const screen = capture(400, 400);
+
+    expect((await segment(atTwo, screen)).map((region) => region.bbox)).toEqual([
+      box(80, 80, 120, 120),
+    ]);
+    expect(await segment(atTwo, screen)).toEqual(await segment(atOne, screen));
+  });
+
+  it('reads a screenshot smaller than the page it describes', async () => {
+    const half = raster(200, 200, PAPER, [{ bbox: box(40, 40, 60, 60), colour: [170, 110, 100] }]);
+
+    expect((await segment(half, capture(400, 400))).map((region) => region.bbox)).toEqual([
+      box(80, 80, 120, 120),
+    ]);
+  });
+
+  it('strikes out the cells an explained box touches and not the next one along', async () => {
+    const ink = box(100, 100, 80, 80);
+    const page = raster(400, 400, PAPER, [{ bbox: ink, colour: [170, 110, 100] }]);
+
+    // Ends exactly where the ink begins, on a cell boundary: the ink survives whole.
+    const upToTheEdge = box(20, 100, 80, 80);
+    expect(
+      (
+        await segment(page, capture(400, 400, [element(upToTheEdge)]), [explainedArea(upToTheEdge)])
+      ).map((region) => region.bbox),
+    ).toEqual([ink]);
+
+    // Ends two pixels into the ink's first cell: that whole cell goes, and no more.
+    const twoPixelsOver = box(20, 100, 82, 80);
+    expect(
+      (
+        await segment(page, capture(400, 400, [element(twoPixelsOver)]), [
+          explainedArea(twoPixelsOver),
+        ])
+      ).map((region) => region.bbox),
+    ).toEqual([box(104, 100, 76, 80)]);
+  });
+});
+
 describe('determinism', () => {
   it('produces byte-identical regions from the same screenshot twice', async () => {
     const screen = cardGrid();
