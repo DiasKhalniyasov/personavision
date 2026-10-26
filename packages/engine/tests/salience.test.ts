@@ -274,7 +274,17 @@ describe('every number comes from the configuration object', () => {
 
   /** The source with its comments removed, so a `0..1` in prose is not read as a number. */
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  const literals = new Set((code.match(/\b\d+(?:\.\d+)?\b/g) ?? []).map(Number));
+
+  /**
+   * Every numeric literal the module writes down, in any spelling JavaScript allows: a
+   * tunable hidden as `3e-1`, `0x10` or `1_000` is still a tunable written inline, and a
+   * check that only read `0.3` would be a check with a way around it.
+   */
+  const literals = new Set(
+    (code.match(/\b(?:0[xXbBoO][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?)\b/g) ?? [])
+      .map((literal) => literal.replace(/_/g, ''))
+      .map(Number),
+  );
 
   /**
    * The only numbers the module is allowed to write down, each a definition rather than a
@@ -305,7 +315,12 @@ describe('every number comes from the configuration object', () => {
     );
   });
 
-  it('resolves no path and reads no file of its own', () => {
+  /**
+   * This ticket's own half of the purity criterion. Reading no file and opening no socket
+   * is held over every module in the package at once by `tests/config.test.ts`, which
+   * scans `src/` recursively, so it is not scanned a second time here.
+   */
+  it('resolves no path of its own', () => {
     for (const forbidden of ['node:path', 'node:url', 'readFile', 'import.meta']) {
       expect(source).not.toContain(forbidden);
     }

@@ -42,9 +42,10 @@ import type { BoundingBox } from './types.js';
  *
  * **Pure, and determinate.** The screenshot arrives as bytes the caller read: this module
  * resolves no path, reads no file and opens no socket. Pixels are summed in row-major
- * order, and only operations IEEE-754 rounds exactly are used on the way to a value — no
- * `Math.hypot`, whose result an engine may choose — so the same screenshot and areas give
- * identical values on every machine.
+ * order, and a distance is `Math.sqrt` of a sum of squares rather than `Math.hypot` or
+ * `**`: the first is the hardware's square root, which every engine rounds the same way,
+ * while the other two are implementation-approximated and do differ between engines. So
+ * the same screenshot and the same areas give identical values on every machine.
  */
 
 /** The six bottom-up terms, named exactly as `config.salience.weights` names them. */
@@ -80,6 +81,10 @@ export interface AreaSalience {
  * Page space is the space an area's `bbox` is in — the origin is the top-left of the full
  * page — so the position and size terms are read against the whole page and not against the
  * viewport. The screenshot's own pixel dimensions carry the device pixel ratio.
+ *
+ * Not `Viewport`, which it is shaped like: a viewport is the device's visible area and a
+ * page is taller than one. And not in `types.ts`, which holds the shapes `packages/browser`
+ * publishes field-for-field and is not this package's to add to.
  */
 export interface PageBox {
   readonly width: number;
@@ -122,7 +127,10 @@ const CHANNEL_MAX = 255;
  */
 const LUMA = { red: 0.2126, green: 0.7152, blue: 0.0722 } as const;
 
-/** Below this, a decoded pixel is one grey sample standing in for all three channels. */
+/**
+ * Three samples or more and a decoded pixel carries colour; fewer, and its single grey
+ * sample stands in for all three channels.
+ */
 const RGB_CHANNELS = 3;
 
 /** Where red, green and blue sit in a decoded RGB pixel. The buffer's layout. */
@@ -133,9 +141,7 @@ const RGB_OFFSETS = { red: 0, green: 1, blue: 2 } as const;
  * -2..2, and the furthest two opponent pairs can be apart is the diagonal of that square.
  */
 const OPPONENT_SPAN = 2;
-const MAX_OPPONENT_DISTANCE = Math.sqrt(
-  OPPONENT_SPAN * OPPONENT_SPAN + OPPONENT_SPAN * OPPONENT_SPAN,
-);
+const MAX_OPPONENT_DISTANCE = OPPONENT_SPAN * Math.SQRT2;
 
 /** Everything this module answers is on 0..1, and a non-finite input is a 0, not a `NaN`. */
 const clampUnit = (value: number): number =>
@@ -218,10 +224,9 @@ const emptySums = (): Sums => ({ luminance: 0, redGreen: 0, yellowBlue: 0, count
 const addPixel = (sums: Sums, pixels: ScreenshotPixels, x: number, y: number): void => {
   const at = (y * pixels.width + x) * pixels.channels;
   const inColour = pixels.channels >= RGB_CHANNELS;
-  const grey = pixels.data[at + RGB_OFFSETS.red];
-  const red = grey / CHANNEL_MAX;
-  const green = (inColour ? pixels.data[at + RGB_OFFSETS.green] : grey) / CHANNEL_MAX;
-  const blue = (inColour ? pixels.data[at + RGB_OFFSETS.blue] : grey) / CHANNEL_MAX;
+  const red = pixels.data[at + RGB_OFFSETS.red] / CHANNEL_MAX;
+  const green = inColour ? pixels.data[at + RGB_OFFSETS.green] / CHANNEL_MAX : red;
+  const blue = inColour ? pixels.data[at + RGB_OFFSETS.blue] / CHANNEL_MAX : red;
 
   sums.luminance += LUMA.red * red + LUMA.green * green + LUMA.blue * blue;
   sums.redGreen += red - green;
@@ -317,6 +322,12 @@ const centreBiasOf = (centre: { x: number; y: number }): number => {
  * anything. Dividing by the reachable maximum keeps the term on 0..1 *and* keeps it
  * monotonic in familiarity, which clamping at 1 would not: a clamped button prior would
  * stop widening its gap over a paragraph exactly where familiarity starts to matter.
+ *
+ * The two factors are the two branches of `rolePriorFor`, not numbers chosen here: a prior
+ * is either multiplied by the persona's scale (a conventional control) or left exactly as
+ * it is (everything else), so the highest prior in the table times the larger of those two
+ * is reachable and nothing above it is. Were the scale fitted below 1 at both ends, the
+ * unscaled branch would still be the maximum, which is why it cannot be dropped.
  */
 const maxRolePriorOf = (config: EngineConfig): number => {
   const ends = [config.persona.rolePriorScale.atZero, config.persona.rolePriorScale.atOne].filter(
@@ -350,6 +361,12 @@ const rolePriorTermOf = (
  * Every weight zero is 0 rather than a division by zero — a caller that switched off every
  * term asked for no bottom-up salience at all, which is a legitimate thing to ask for and is
  * how `tests/salience.test.ts` reads one term at a time.
+ *
+ * Two things calibration (#11) should know about the divisor. Scaling every weight by the
+ * same factor changes nothing here, by design: the overall scale of bottom-up salience is
+ * `alpha`'s to carry, so that one direction is not this object's to fit. And weights that
+ * are *all* negative leave every area at 0, because the value is clamped at the bottom of
+ * its range — an all-negative fit is a sign that belongs on `alpha`, not on six terms.
  */
 const combine = (terms: SalienceTerms, config: EngineConfig): number => {
   const weights = config.salience.weights;
