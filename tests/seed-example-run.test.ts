@@ -52,22 +52,36 @@ const scored = (session: Session): boolean => !session.outcome.excludedFromScore
 const reached = (session: Session, step: string): boolean =>
   session.screens.some((screen) => screen.step === step);
 
-const hashTree = (dir: string): Record<string, string> => {
-  const hashes: Record<string, string> = {};
+/** Every file under `dir`, by its path relative to it, depth first and sorted. */
+const filesUnder = (dir: string): string[] => {
+  const files: string[] = [];
   const walk = (current: string): void => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = join(current, entry.name);
       if (entry.isDirectory()) walk(full);
-      else
-        hashes[relative(dir, full)] = createHash('sha256').update(readFileSync(full)).digest('hex');
+      else files.push(relative(dir, full));
     }
   };
   walk(dir);
-  return hashes;
+  return files.sort();
 };
+
+const hashTree = (dir: string): Record<string, string> =>
+  Object.fromEntries(
+    filesUnder(dir).map((file) => {
+      const bytes = readFileSync(join(dir, file));
+      return [file, createHash('sha256').update(bytes).digest('hex')];
+    }),
+  );
 
 const jsonOnly = (hashes: Record<string, string>): Record<string, string> =>
   Object.fromEntries(Object.entries(hashes).filter(([file]) => file.endsWith('.json')));
+
+/** Every JSON file of the committed artifact, as raw text, by its path inside the run. */
+const jsonFiles = (): Array<[string, string]> =>
+  filesUnder(committedDir)
+    .filter((file) => file.endsWith('.json'))
+    .map((file) => [file, readFileSync(join(committedDir, file), 'utf8')]);
 
 const pngHeader = (file: string): { width: number; height: number } => {
   const bytes = readFileSync(file);
@@ -120,6 +134,32 @@ describe('the committed run directory', () => {
 
   it('carries the UEyes figures the header badge shows', () => {
     expect(run.calibration).toEqual({ benchmark: 'UEyes', cc: 0.68, nss: 1.9, scanMatch: 0.54 });
+  });
+
+  it('names nobody: no account, no workspace and no address anywhere in it', () => {
+    // The fixture is committed to a public repository and shipped as the example run, so it
+    // carries the test and nothing about whoever ran it. `Email field` is a form label on the
+    // payment step, which is why this looks for an address and for the id fields by name.
+    const IDENTITY_KEYS = [
+      'accountId',
+      'workspaceId',
+      'organizationId',
+      'organisationId',
+      'tenantId',
+      'userId',
+      'ownerId',
+      'authorId',
+      'apiKey',
+      'token',
+    ];
+    for (const [file, text] of jsonFiles()) {
+      expect(text, `${file} holds an email address`).not.toMatch(
+        /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+      );
+      for (const key of IDENTITY_KEYS) {
+        expect(text, `${file} holds a "${key}"`).not.toContain(`"${key}"`);
+      }
+    }
   });
 });
 
@@ -559,10 +599,22 @@ describe('the areas of interest', () => {
         expect(caption?.caption).toMatch(/\S/);
       }
     }
+  });
+
+  it('reads the prototype’s eight captions back word for word', () => {
+    // In the prototype's own order: both variants of each step, cart to confirmation.
     expect(
-      run.stepCaptions.find((caption) => caption.variant === 'B' && caption.step === 'review')
-        ?.caption,
-    ).toContain('0 of 9 agents who reached this step ever fixated it');
+      run.stepCaptions.map((caption) => `${caption.variant}-${caption.step}: ${caption.caption}`),
+    ).toEqual([
+      'A-cart: Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-led people left here over it.',
+      'B-cart: Variant B, cart. The promo banner takes the first fixation, and "calculated later" draws a second fixation in 8 of 11 sessions before Checkout is clicked.',
+      'A-payment: Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 people who reached this step fixated "Continue to review", median 1.8 s in.',
+      'B-payment: Variant B, payment step. The promo banner takes the first fixation in 9 of 10 sessions and holds 3.1 s of dwell. The primary action here says "Place order", but it only advances to the review step.',
+      'A-review: Variant A, review step. The total is read once, then the primary action; 9 of 9 people placed the order.',
+      'B-review: Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 people who reached this step ever fixated it.',
+      'A-confirm: Variant A, confirmation. 9 of 11 people reached it.',
+      'B-confirm: Variant B, confirmation. Only 2 of 11 people reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.',
+    ]);
   });
 });
 
@@ -596,9 +648,47 @@ describe('the findings', () => {
       expect(finding.claim).toMatch(/\S/);
       expect(finding.evidence).toMatch(/\S/);
     }
-    expect(findings.findings[0].claim).toBe(
-      'Nobody ever looked at the button that completes the order on variant B.',
-    );
+  });
+
+  it('carries the prototype’s six claims and evidence sentences, character for character', () => {
+    expect(findings.findings.map((finding) => [finding.claim, finding.evidence])).toEqual([
+      [
+        'Nobody in your audience ever looked at the button that completes the order on the redesign.',
+        'On the review step, “Confirm purchase” sits about 180 px below the fold. Of the 9 people who got that far, 0 looked at it. On your current checkout the same button was seen by 9 of 9, after 2.3 s on average.',
+      ],
+      [
+        'A $9.95 service fee only appears after the card is entered, and 4 of 9 people left within 5 seconds of seeing it.',
+        'The fee holds the eye for 610 ms the first time and is returned to 2.4 times — the most re-read thing in the test. The total changes from $129.00 to $147.95 between the two steps.',
+      ],
+      [
+        'The sale banner takes the first look in 9 of 10 people, about 1.3 s before they look at any form field.',
+        'It holds 3.1 s of attention against 1.2 s on the button beneath it, and nobody used the code: it costs attention without earning anything.',
+      ],
+      [
+        'The payment button says “Place order” but only moves to a review step, and 3 of 11 people stopped there believing they had bought the boots.',
+        'All three look for a confirmation on the next screen, then stop. They end with no order placed — a failure, not someone choosing to leave.',
+      ],
+      [
+        'On your current checkout, 2 of 11 people gave up at the cart after re-reading the shipping line.',
+        'Both were price-led shoppers; $8.95 shipping on a $129.00 order was read twice before they left. Reported for balance: the current checkout is the better version, not a perfect one.',
+      ],
+      [
+        '2 of 24 people could not be simulated to the end, and are excluded from both figures.',
+        'Our own browser automation timed out on the card field (one person on each version) after one retry. This is a weakness of the simulation, never evidence against your checkout.',
+      ],
+    ]);
+  });
+
+  it('words every claim for a business reader, with none of the product’s own jargon', () => {
+    // `docs/FLOW.md` section 6: no jargon in a claim sentence. The evidence sentence under it
+    // may carry a number and a unit, and the Attention screen's captions may say `fixation`.
+    const JARGON = ['fixation', 'fixated', 'dwell', 'saccade', 'aoi', 'area of interest'];
+    for (const finding of findings.findings) {
+      const claim = finding.claim.toLowerCase();
+      for (const word of JARGON) {
+        expect(claim, `${finding.id} says "${word}" in its claim`).not.toContain(word);
+      }
+    }
   });
 
   it('carries the link the Comparison screen navigates by', () => {

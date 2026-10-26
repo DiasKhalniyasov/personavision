@@ -688,14 +688,14 @@ const AOI_METRICS: Record<StepId, MetricRow[]> = {
 
 // prettier-ignore
 const STEP_CAPTION: Array<{ variant: VariantId; step: StepId; caption: string }> = [
-  { variant: 'A', step: 'cart', caption: 'Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-sensitive agents left here over it.' },
+  { variant: 'A', step: 'cart', caption: 'Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-led people left here over it.' },
   { variant: 'B', step: 'cart', caption: 'Variant B, cart. The promo banner takes the first fixation, and "calculated later" draws a second fixation in 8 of 11 sessions before Checkout is clicked.' },
-  { variant: 'A', step: 'payment', caption: 'Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 agents who reached this step fixated "Continue to review", median 1.8 s in.' },
+  { variant: 'A', step: 'payment', caption: 'Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 people who reached this step fixated "Continue to review", median 1.8 s in.' },
   { variant: 'B', step: 'payment', caption: 'Variant B, payment step. The promo banner takes the first fixation in 9 of 10 sessions and holds 3.1 s of dwell. The primary action here says "Place order", but it only advances to the review step.' },
-  { variant: 'A', step: 'review', caption: 'Variant A, review step. The total is read once, then the primary action; 9 of 9 agents placed the order.' },
-  { variant: 'B', step: 'review', caption: 'Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 agents who reached this step ever fixated it.' },
-  { variant: 'A', step: 'confirm', caption: 'Variant A, confirmation. 9 of 11 agents reached it.' },
-  { variant: 'B', step: 'confirm', caption: 'Variant B, confirmation. Only 2 of 11 agents reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.' },
+  { variant: 'A', step: 'review', caption: 'Variant A, review step. The total is read once, then the primary action; 9 of 9 people placed the order.' },
+  { variant: 'B', step: 'review', caption: 'Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 people who reached this step ever fixated it.' },
+  { variant: 'A', step: 'confirm', caption: 'Variant A, confirmation. 9 of 11 people reached it.' },
+  { variant: 'B', step: 'confirm', caption: 'Variant B, confirmation. Only 2 of 11 people reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.' },
 ];
 
 /* ===== the canonical scanpaths, from the prototype's FIX =================== */
@@ -834,8 +834,9 @@ const SCORE_READING: Record<
 
 /**
  * What the Verdict screen leads with, from the prototype's `VERDICT`: the headline in the
- * audience's words and the two reasons behind it, drawn from the top findings. #106
- * re-transcribes these against the rewritten design contract once PR #98 lands.
+ * audience's words and the two reasons behind it, drawn from the top findings. The
+ * prototype writes `preferredVariant: 'a'`; it is stored upper-case because the contract
+ * cross-checks it against this run's declared variant ids.
  */
 const AUDIENCE_SENTENCE =
   'Your audience completes the purchase on the current checkout, not on the redesign.';
@@ -1357,14 +1358,19 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
   );
   const automationFailures = idsWhere((session) => session.outcome.excludedFromScores);
 
+  // Every claim and evidence sentence is the prototype's `FINDINGS` transcribed character
+  // for character. A claim is one sentence the owner of the shop could repeat out loud, so
+  // it carries no fixation, dwell, saccade or area of interest: `docs/FLOW.md` section 6
+  // states that rule and a test holds the six claims to it.
   const findings: Findings['findings'] = [
     {
       id: 'F-1',
       rank: 1,
       severity: 'critical',
-      claim: 'Nobody ever looked at the button that completes the order on variant B.',
+      claim:
+        'Nobody in your audience ever looked at the button that completes the order on the redesign.',
       evidence:
-        '“Confirm purchase” sits about 180 px below the fold on the review step. Of the 9 agents who reached that step, 0 fixated it; on variant A the equivalent button was fixated by 9 of 9, median 2.3 s in.',
+        'On the review step, “Confirm purchase” sits about 180 px below the fold. Of the 9 people who got that far, 0 looked at it. On your current checkout the same button was seen by 9 of 9, after 2.3 s on average.',
       variant: 'B',
       step: 'review',
       aoiId: aoiKey('B', 'review', 'complete'),
@@ -1381,9 +1387,9 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       rank: 2,
       severity: 'critical',
       claim:
-        'A $9.95 service fee appears only after payment details are entered, and 4 of 9 agents left within 5 s of fixating it.',
+        'A $9.95 service fee only appears after the card is entered, and 4 of 9 people left within 5 seconds of seeing it.',
       evidence:
-        'The fee row holds 610 ms on first fixation and 2.4 revisits — the highest revisit count in the run. The total changes from $129.00 to $147.95 between the payment and review steps.',
+        'The fee holds the eye for 610 ms the first time and is returned to 2.4 times — the most re-read thing in the test. The total changes from $129.00 to $147.95 between the two steps.',
       variant: 'B',
       step: 'review',
       aoiId: aoiKey('B', 'review', 'fee-row'),
@@ -1400,9 +1406,9 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       rank: 3,
       severity: 'high',
       claim:
-        'The promo banner takes the first fixation in 9 of 10 sessions, a median 1.3 s before any form field.',
+        'The sale banner takes the first look in 9 of 10 people, about 1.3 s before they look at any form field.',
       evidence:
-        'Dwell 3.1 s with 1.8 revisits, against 1.2 s on the primary action beneath it. No agent applied the code: the banner costs attention without being used.',
+        'It holds 3.1 s of attention against 1.2 s on the button beneath it, and nobody used the code: it costs attention without earning anything.',
       variant: 'B',
       step: 'payment',
       aoiId: aoiKey('B', 'payment', 'promo'),
@@ -1419,9 +1425,9 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       rank: 4,
       severity: 'medium',
       claim:
-        'The payment step’s button says “Place order” but only advances to review, and 3 of 11 agents stopped there believing they had bought the boots.',
+        'The payment button says “Place order” but only moves to a review step, and 3 of 11 people stopped there believing they had bought the boots.',
       evidence:
-        'All three show a confirmation-seeking fixation pattern on the next screen (summary, then support link) and no further action. Their outcome is a failure with no order placed, not an abandonment.',
+        'All three look for a confirmation on the next screen, then stop. They end with no order placed — a failure, not someone choosing to leave.',
       variant: 'B',
       step: 'payment',
       aoiId: aoiKey('B', 'payment', 'primary'),
@@ -1435,9 +1441,9 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       rank: 5,
       severity: 'low',
       claim:
-        'On variant A, 2 of 11 agents abandoned at the cart after re-reading the shipping line.',
+        'On your current checkout, 2 of 11 people gave up at the cart after re-reading the shipping line.',
       evidence:
-        'Both were the price-sensitive scanner persona; $8.95 shipping on a $129.00 order drew 2 revisits before they left. Reported for symmetry: variant A is the cleaner variant, not a perfect one.',
+        'Both were price-led shoppers; $8.95 shipping on a $129.00 order was read twice before they left. Reported for balance: the current checkout is the better version, not a perfect one.',
       variant: 'A',
       step: 'cart',
       aoiId: aoiKey('A', 'cart', 'cart-total'),
@@ -1450,9 +1456,10 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       id: 'F-6',
       rank: 6,
       severity: 'info',
-      claim: '2 of 24 sessions ended in an automation failure and are excluded from both scores.',
+      claim:
+        '2 of 24 people could not be simulated to the end, and are excluded from both figures.',
       evidence:
-        'Playwright selector timeout on the card-number iframe (S-09 on variant A, S-23 on variant B) after one retry each. This is a weakness of the simulation, never evidence against a variant.',
+        'Our own browser automation timed out on the card field (one person on each version) after one retry. This is a weakness of the simulation, never evidence against your checkout.',
       // The finding concerns the simulation, not either variant: the prototype's chip reads
       // "both variants".
       variant: null,
