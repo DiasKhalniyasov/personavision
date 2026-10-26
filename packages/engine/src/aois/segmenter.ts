@@ -16,6 +16,10 @@ import type { BoundingBox, Capture } from '../types.js';
  *   malformed, or that throws leaves `buildAois` returning the element-derived areas. A
  *   missing credential, a timeout or a broken image is never allowed to break the build or
  *   the demo, so `buildAois` swallows the failure by design rather than propagating it.
+ *   An implementation that wants to *say* it is unavailable rather than return nothing —
+ *   #69, with no credential — composes above this seam: its own factory reports that in its
+ *   own result and hands back the offline segmenter. The seam stays one method wide,
+ *   because every caller of it has the same question.
  * - **The engine stays pure.** A segmenter is handed the screenshot's run-directory-relative
  *   path and the page geometry, and whether it opens the image or calls a service is its own
  *   business, outside the engine's purity rule. `buildAois` itself touches no file and no
@@ -24,9 +28,6 @@ import type { BoundingBox, Capture } from '../types.js';
  *   regions, with the same ids, in the same order. `buildAois` re-orders the result anyway,
  *   so a segmenter owes determinism of *content*, not of order.
  */
-
-/** A value or a promise of one: the seam takes a synchronous segmenter and an asynchronous one. */
-export type Awaitable<T> = T | Promise<T>;
 
 /** What a segmenter is given: the captured screen, and the areas already accounted for. */
 export interface SegmenterInput {
@@ -65,7 +66,12 @@ export interface SegmentedArea {
 }
 
 export interface Segmenter {
-  segment(input: SegmenterInput): Awaitable<readonly SegmentedArea[]>;
+  /**
+   * A value or a promise of one, so that a synchronous segmenter and an asynchronous one
+   * both satisfy the seam: #66 reads the screenshot through `sharp` and #69 calls a
+   * service, while a test double just returns a list.
+   */
+  segment(input: SegmenterInput): readonly SegmentedArea[] | Promise<readonly SegmentedArea[]>;
 }
 
 /**

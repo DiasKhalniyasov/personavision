@@ -10,4 +10,4 @@ export { aoiId, buildAois } from './build-aois.js';
 export type { AoiIdentity, BuildAoisInput } from './build-aois.js';
 
 export { defaultSegmenter, noSegmenter } from './segmenter.js';
-export type { Awaitable, SegmentedArea, Segmenter, SegmenterInput } from './segmenter.js';
+export type { SegmentedArea, Segmenter, SegmenterInput } from './segmenter.js';

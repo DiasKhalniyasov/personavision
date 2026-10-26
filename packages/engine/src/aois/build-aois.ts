@@ -57,27 +57,47 @@ export interface AoiIdentity {
 }
 
 /**
+ * What every area of one screen shares. These four are this module's to set and no
+ * segmenter's: a segmenter cannot disagree with the capture about the fold, and cannot put
+ * its region on another variant or another step.
+ */
+interface Screen {
+  readonly variant: string;
+  readonly step: string;
+  readonly foldY: number;
+}
+
+/** What differs between an element-derived area and a segmented one. */
+interface AreaParts {
+  readonly id: string;
+  readonly label: string;
+  readonly source: ElementSource;
+  readonly role: string | null;
+  readonly bbox: BoundingBox;
+  readonly isPrimaryAction: boolean;
+}
+
+/**
  * `dom` before `a11y` before `sam`: which member of a merged group speaks for the area.
  *
  * A control reported by both trees is recorded as `source: 'dom'` — the DOM is what gives
  * the area a laid-out box and a selector, and the accessibility tree contributed its name.
- * The distinction the screens lean on is between an element we can name and a region we
- * segmented, so `sam` last matters more than `dom` before `a11y`.
+ * It is also what `docs/design/prototype.html` draws in the areas-of-interest table, where
+ * every control reads "DOM" and only a region reads "SAM 3.1 segment".
  */
 const SOURCE_PRECEDENCE: readonly ElementSource[] = ['dom', 'a11y', 'sam'];
 
-const LABEL_SLUG_LIMIT = 40;
+const SLUG_LIMIT = 40;
 
 /** Lower case, alphanumeric and single dashes, so an id reads like `a-cart-button-checkout`. */
-const slug = (value: string, limit: number): string =>
+const slug = (value: string): string =>
   value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .slice(0, limit)
+    .slice(0, SLUG_LIMIT)
     .replace(/^-+|-+$/g, '');
 
-const token = (value: string, fallback: string, limit = LABEL_SLUG_LIMIT): string =>
-  slug(value, limit) || fallback;
+const token = (value: string, fallback: string): string => slug(value) || fallback;
 
 /**
  * A coordinate in an id. Negative becomes `n12` rather than `-12`: an element off the left
@@ -110,6 +130,27 @@ export const aoiId = (identity: AoiIdentity): string =>
   ].join('-');
 
 /**
+ * The one place an area of interest is constructed.
+ *
+ * `belowFold` is computed here from the capture's own fold line rather than copied from an
+ * element's flag, which is per element and would disagree with a merged area's box. The
+ * fold line is in page space and content below it needed a scroll to be seen, so an area
+ * whose top edge is at or past the fold is below it; one that straddles the fold is not,
+ * because part of it was on screen without scrolling.
+ */
+const areaOn = (screen: Screen, parts: AreaParts): Aoi => ({
+  id: parts.id,
+  variant: screen.variant,
+  step: screen.step,
+  label: parts.label,
+  source: parts.source,
+  role: parts.role,
+  bbox: parts.bbox,
+  isPrimaryAction: parts.isPrimaryAction,
+  belowFold: parts.bbox.y >= screen.foldY,
+});
+
+/**
  * Elements that occupy the same box are the same control, reported twice.
  *
  * The box is the merge key, not the role and name: the DOM entry for a button often has no
@@ -136,16 +177,6 @@ const firstNonEmpty = (values: readonly string[]): string | null =>
   values.map((value) => value.trim()).find((value) => value !== '') ?? null;
 
 /**
- * The fold line is in page space and content below it needed a scroll to be seen, so an
- * area whose top edge is at or past the fold is below it. One that straddles the fold is
- * not: part of it was on screen without scrolling.
- *
- * Recomputed from the capture's `foldY` rather than copied from the element's own flag,
- * which is per element and would disagree with the merged area's box.
- */
-const isBelowFold = (bbox: BoundingBox, foldY: number): boolean => bbox.y >= foldY;
-
-/**
  * One area from the elements that share a box.
  *
  * The accessible name wins the label, as the acceptance criterion asks: it is the text a
@@ -154,7 +185,7 @@ const isBelowFold = (bbox: BoundingBox, foldY: number): boolean => bbox.y >= fol
  * role is the last resort, because `run.json` types a label as a non-empty string and a
  * blank label would read on screen as a missing area rather than an unnamed one.
  */
-const mergedArea = (members: readonly CaptureElement[], variant: string, capture: Capture): Aoi => {
+const mergedArea = (members: readonly CaptureElement[], screen: Screen): Aoi => {
   const inPrecedence = [...members].sort(bySourceThenId);
   const accessible = inPrecedence.filter((element) => element.source === 'a11y');
   const speaker = inPrecedence[0];
@@ -171,71 +202,82 @@ const mergedArea = (members: readonly CaptureElement[], variant: string, capture
     role ??
     'Unnamed area';
 
-  const identity = { variant, step: capture.step, role, label, bbox: speaker.bbox };
-
-  return {
-    id: aoiId(identity),
-    variant,
-    step: capture.step,
+  return areaOn(screen, {
+    id: aoiId({ ...screen, role, label, bbox: speaker.bbox }),
     label,
     source: speaker.source,
     role,
     bbox: speaker.bbox,
     isPrimaryAction: members.some((element) => element.isPrimaryAction),
-    belowFold: isBelowFold(speaker.bbox, capture.foldY),
-  };
+  });
 };
 
-const isFinitePoint = (value: number): boolean => Number.isFinite(value);
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isNonBlank = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '';
+
+const hasExtent = (bbox: unknown): bbox is BoundingBox => {
+  if (typeof bbox !== 'object' || bbox === null) return false;
+  const box = bbox as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
+  return (
+    isFiniteNumber(box.x) &&
+    isFiniteNumber(box.y) &&
+    isFiniteNumber(box.width) &&
+    box.width > 0 &&
+    isFiniteNumber(box.height) &&
+    box.height > 0
+  );
+};
 
 /**
- * A region a malformed segmenter cannot smuggle into the artifact: a box that is not finite
- * or has no extent, a blank id or a blank label would all fail the contract's own schema
- * when the run is written, which is a broken run rather than a missing region.
- */
-const isUsable = (area: SegmentedArea): boolean =>
-  typeof area.id === 'string' &&
-  area.id.trim() !== '' &&
-  typeof area.label === 'string' &&
-  area.label.trim() !== '' &&
-  isFinitePoint(area.bbox.x) &&
-  isFinitePoint(area.bbox.y) &&
-  isFinitePoint(area.bbox.width) &&
-  isFinitePoint(area.bbox.height) &&
-  area.bbox.width > 0 &&
-  area.bbox.height > 0;
-
-/**
- * Segmented regions as areas of interest.
+ * A region this module is willing to put its name to, checked rather than trusted.
  *
- * `variant`, `step`, `belowFold` and `source` are this module's to set, and
+ * A segmenter is third-party code — one of them is a reply from a service (#69) — so a
+ * blank id, a missing box or a box with no extent is answered by dropping the region. The
+ * alternative is a run artifact the contract rejects when it is written, which is a broken
+ * run rather than a screen with one area fewer.
+ */
+const isUsableRegion = (region: unknown): region is SegmentedArea => {
+  if (typeof region !== 'object' || region === null) return false;
+  const area = region as { id?: unknown; label?: unknown; bbox?: unknown };
+  return isNonBlank(area.id) && isNonBlank(area.label) && hasExtent(area.bbox);
+};
+
+/**
+ * Segmented regions as areas of interest, in whatever order they arrived.
+ *
  * `isPrimaryAction` is always `false`: the primary action is the control the task declares,
  * and a region nobody could name is not it. A region whose id is already taken is dropped
- * rather than merged, because an id is a promise about one area across every session.
+ * rather than merged, because an id is a promise about one area across every session. The
+ * geometry is copied field by field so that nothing a segmenter hung on its box reaches the
+ * artifact, and a missing role is `null` rather than absent.
  */
-const segmentedAreas = (
-  areas: readonly SegmentedArea[],
-  variant: string,
-  capture: Capture,
-  taken: ReadonlySet<string>,
-): Aoi[] => {
+const segmentedAreas = (returned: unknown, screen: Screen, taken: ReadonlySet<string>): Aoi[] => {
+  if (!Array.isArray(returned)) return [];
+
   const used = new Set(taken);
   const kept: Aoi[] = [];
 
-  for (const area of areas) {
-    if (!isUsable(area) || used.has(area.id)) continue;
-    used.add(area.id);
-    kept.push({
-      id: area.id,
-      variant,
-      step: capture.step,
-      label: area.label,
-      source: 'sam',
-      role: area.role,
-      bbox: area.bbox,
-      isPrimaryAction: false,
-      belowFold: isBelowFold(area.bbox, capture.foldY),
-    });
+  for (const region of returned as readonly unknown[]) {
+    if (!isUsableRegion(region) || used.has(region.id)) continue;
+    used.add(region.id);
+    kept.push(
+      areaOn(screen, {
+        id: region.id,
+        label: region.label,
+        source: 'sam',
+        role: typeof region.role === 'string' ? region.role : null,
+        bbox: {
+          x: region.bbox.x,
+          y: region.bbox.y,
+          width: region.bbox.width,
+          height: region.bbox.height,
+        },
+        isPrimaryAction: false,
+      }),
+    );
   }
 
   return kept;
@@ -255,6 +297,7 @@ const segmentedAreas = (
  */
 export const buildAois = async (input: BuildAoisInput): Promise<Aoi[]> => {
   const { capture, variant } = input;
+  const screen: Screen = { variant, step: capture.step, foldY: capture.foldY };
 
   const groups = new Map<string, CaptureElement[]>();
   for (const element of capture.elements) {
@@ -265,22 +308,22 @@ export const buildAois = async (input: BuildAoisInput): Promise<Aoi[]> => {
   }
 
   const elementAreas = [...groups.values()]
-    .map((members) => mergedArea(members, variant, capture))
+    .map((members) => mergedArea(members, screen))
     .sort(inReadingOrder);
 
-  const segmenter = input.segmenter ?? defaultSegmenter;
-  let segmented: readonly SegmentedArea[] = [];
+  const taken = new Set(elementAreas.map((area) => area.id));
+  let segmented: Aoi[] = [];
   try {
-    const returned = await segmenter.segment({ capture, explained: elementAreas });
-    if (Array.isArray(returned)) segmented = returned;
+    const returned = await (input.segmenter ?? defaultSegmenter).segment({
+      capture,
+      explained: elementAreas,
+    });
+    segmented = segmentedAreas(returned, screen, taken);
   } catch {
     // Additive and never required: a segmenter's failure is a screen with fewer areas on
     // it, never a failed run. #69 reports its own unavailability through its own result.
     segmented = [];
   }
 
-  const taken = new Set(elementAreas.map((area) => area.id));
-  return [...elementAreas, ...segmentedAreas(segmented, variant, capture, taken)].sort(
-    inReadingOrder,
-  );
+  return [...elementAreas, ...segmented].sort(inReadingOrder);
 };

@@ -366,21 +366,33 @@ describe('the Segmenter seam', () => {
     );
   });
 
-  it('drops a region with no extent, a blank label and a duplicate id', async () => {
+  it('drops a region with no extent, no box, a blank label or a duplicate id', async () => {
     const screen = capture([PROMO]);
     const fromElements = await buildAois({
       capture: screen,
       variant: VARIANT,
       segmenter: noSegmenter,
     });
-    const malformed: readonly SegmentedArea[] = [
+    // A segmenter is third-party code — one of them a reply from a service (#69) — so the
+    // shapes below are the ones a run artifact must never be built out of, including the
+    // ones that would throw on the way: no box at all, and nothing at all.
+    const malformed = [
       { ...CARD_GRID, bbox: { ...CARD_GRID.bbox, height: 0 } },
       { ...CARD_GRID, id: 'a-cart-region-blank-0-0-10x10', label: '   ' },
       { ...CARD_GRID, id: fromElements[0].id, label: 'Stealing an element id' },
       { ...CARD_GRID, bbox: { ...CARD_GRID.bbox, x: Number.NaN } },
+      { id: 'a-cart-region-boxless-0-0-10x10', label: 'No box at all', role: null },
+      {
+        ...CARD_GRID,
+        id: 'a-cart-region-infinite-0-0-10x10',
+        bbox: { ...CARD_GRID.bbox, width: Number.POSITIVE_INFINITY },
+      },
+      null,
+      undefined,
+      'not an area at all',
       CARD_GRID,
       { ...CARD_GRID, label: 'The same region twice' },
-    ];
+    ] as unknown as readonly SegmentedArea[];
 
     const aois = await buildAois({
       capture: screen,
@@ -389,6 +401,25 @@ describe('the Segmenter seam', () => {
     });
 
     expect(aois.map((aoi) => aoi.label)).toEqual(['Free shipping over £50', 'Product card grid']);
+  });
+
+  it('takes a region as given but never a field the contract would reject', async () => {
+    const sloppy = {
+      ...CARD_GRID,
+      role: 42,
+      bbox: { ...CARD_GRID.bbox, inventedByTheSegmenter: true },
+    } as unknown as SegmentedArea;
+
+    const aois = await buildAois({
+      capture: capture([PROMO]),
+      variant: VARIANT,
+      segmenter: segmenterReturning([sloppy]),
+    });
+    const segmented = aois.find((aoi) => aoi.source === 'sam');
+
+    expect(segmented?.role).toBeNull();
+    expect(Object.keys(segmented?.bbox ?? {}).sort()).toEqual(['height', 'width', 'x', 'y']);
+    expect(runSchema.shape.aois.parse(aois)).toEqual(aois);
   });
 
   it('survives a segmenter that returns something that is not a list', async () => {
@@ -427,26 +458,34 @@ describe('aoiId', () => {
   });
 });
 
-describe('purity', () => {
+/**
+ * #7 makes purity a hard requirement: a capture in, areas out. The screenshot leaves here
+ * as the path the capture carried, and only an injected segmenter may go and look at it.
+ *
+ * `config.test.ts` holds the package-wide scan and explains why purity is asserted over
+ * the sources rather than by spying at run time; this is #64's own criterion, kept where a
+ * reader of this ticket looks for it.
+ */
+it('is pure: nothing under src/aois reaches for a file, a socket or an unseeded draw', () => {
   const aoisDir = new URL('../src/aois/', import.meta.url);
   const sources = readdirSync(aoisDir)
     .filter((entry) => entry.endsWith('.ts'))
     .map((entry) => ({ entry, text: readFileSync(new URL(entry, aoisDir), 'utf8') }));
 
-  /**
-   * #7 makes purity a hard requirement: a capture in, areas out. The screenshot leaves
-   * here as the path the capture carried, and only an injected segmenter may go and open
-   * it. Asserted over the sources, as `config.test.ts` explains.
-   */
-  it.each(['node:fs', 'node:net', 'node:http', 'node:dns', 'fetch(', 'XMLHttpRequest'])(
-    'never reaches for %s',
-    (forbidden) => {
-      expect(sources).not.toHaveLength(0);
-      for (const { entry, text } of sources) expect(`${entry}: ${text}`).not.toContain(forbidden);
-    },
-  );
-
-  it('never uses Math.random, so nothing here depends on an unseeded draw', () => {
-    for (const { entry, text } of sources) expect(`${entry}: ${text}`).not.toContain('Math.random');
-  });
+  expect(sources.map(({ entry }) => entry).sort()).toEqual([
+    'build-aois.ts',
+    'index.ts',
+    'segmenter.ts',
+  ]);
+  for (const forbidden of [
+    'node:fs',
+    'node:net',
+    'node:http',
+    'node:dns',
+    'fetch(',
+    'XMLHttpRequest',
+    'Math.random',
+  ]) {
+    for (const { entry, text } of sources) expect(`${entry}: ${text}`).not.toContain(forbidden);
+  }
 });
