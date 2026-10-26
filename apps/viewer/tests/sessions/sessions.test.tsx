@@ -57,7 +57,15 @@ describe('the Sessions screen', () => {
       screen.getByText('One row per generated person × version × seed. Open one to watch it back.'),
     ).toBeTruthy();
     // The shell's one disclaimer carries it, so the sentence is written once for the product.
-    expect(await screen.findByText(/is simulated, for the audience named at the top/)).toBeTruthy();
+    const disclaimer = await waitFor(() => {
+      const slot = document.querySelector('[data-shell="simulated-disclaimer"]');
+      expect(prose(slot?.textContent ?? '')).toContain('simulated');
+      return slot as HTMLElement;
+    });
+    expect(prose(disclaimer.textContent)).toContain(
+      'Every figure on this screen is simulated, for the audience named at the top — ' +
+        'Outdoor-gear shoppers.',
+    );
   });
 
   it('lists one row per session in run.json, in that order, named S-01 … S-NN', async () => {
