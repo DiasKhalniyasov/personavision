@@ -23,6 +23,16 @@ import {
  * decisions.
  */
 
+/**
+ * A couple of microtask turns. Enough to prove that a release which is waiting has not
+ * happened, because what it waits on cannot settle until this test settles it.
+ */
+const tick = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 /** The screens a session is checked across: a matching one, a barren one, a navigation one. */
 const SCREENS = [undefined, BARREN_SCREEN, NAVIGATION_SCREEN] as const;
 
@@ -221,21 +231,103 @@ describe('createDecisionSession', () => {
     await closing;
   });
 
-  it('lets a decision already in flight finish', async () => {
+  it('waits for a turn still in flight before it releases what the session held', async () => {
     let settle = (value: Decision): void => void value;
     const inFlight = new Promise<Decision>((resolve) => {
       settle = resolve;
     });
+    const close = vi.fn(async () => {});
     const session = createDecisionSession({
       personaId: 'p-anna',
       seed: 5,
       decide: () => inFlight,
+      close,
     });
 
     const pending = session.decide(contextOf());
-    await session.close();
-    settle(decision);
+    const closing = session.close();
+    await tick();
 
+    // Shutting the sink here would shut it under the line this turn is about to write.
+    expect(close).not.toHaveBeenCalled();
+
+    settle(decision);
+    await closing;
+
+    expect(close).toHaveBeenCalledTimes(1);
     expect(await pending).toEqual(decision);
+  });
+
+  it('releases the session even when its last turn failed', async () => {
+    const failure = new Error('the model would not answer');
+    const close = vi.fn(async () => {});
+    const session = createDecisionSession({
+      personaId: 'p-anna',
+      seed: 5,
+      decide: () => Promise.reject(failure),
+      close,
+    });
+
+    const pending = session.decide(contextOf());
+
+    // The rejection belongs to whoever asked for the decision; it is not a reason to leave
+    // a trajectory file open.
+    await expect(pending).rejects.toBe(failure);
+    await session.close();
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves a second close when the release finishes, not before', async () => {
+    let release = (): void => {};
+    const flushing = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const close = vi.fn(() => flushing);
+    const { session } = sessionWith({ close });
+
+    const first = session.close();
+    const second = session.close();
+    let secondSettled = false;
+    void second.then(() => {
+      secondSettled = true;
+    });
+
+    await tick();
+    expect(secondSettled).toBe(false);
+
+    release();
+    await Promise.all([first, second]);
+
+    expect(secondSettled).toBe(true);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a release that failed to every caller rather than claiming success', async () => {
+    const failure = new Error('the trajectory sink could not be flushed');
+    const { session } = sessionWith({
+      close: () => Promise.reject(failure),
+    });
+
+    // A second close that resolved would report a flush that never happened.
+    await expect(session.close()).rejects.toBe(failure);
+    await expect(session.close()).rejects.toBe(failure);
+  });
+
+  it('rejects rather than throwing when the provider’s body throws synchronously', async () => {
+    const session = createDecisionSession({
+      personaId: 'p-anna',
+      seed: 5,
+      decide: () => {
+        throw new Error('this request cannot be built');
+      },
+    });
+
+    // A synchronous throw out of `decide` would escape a `Promise.all` over the swarm's
+    // sessions and strand every sibling promise it had already created. If it threw, this
+    // line is where the test would fail rather than the assertion below.
+    const pending = session.decide(contextOf());
+
+    await expect(pending).rejects.toThrow('this request cannot be built');
   });
 });

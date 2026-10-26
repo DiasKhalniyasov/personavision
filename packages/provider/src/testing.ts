@@ -137,8 +137,25 @@ export const describeDecisionProviderContract = (
   options: DecisionProviderContractOptions,
 ): void => {
   const seeds = seedBand(options.seedBand ?? 32);
+  /**
+   * One decision per seed in the band, each **through its own session handle** — the path a
+   * run actually takes. A provider whose `beginSession` body diverged from its session-less
+   * `decide` — a second request builder that forgot `cachedInputTokens`, say — would pass a
+   * suite that only ever called the latter, and then understate every run's cost (#32).
+   */
   const decideAll = async (context: DecisionContext): Promise<readonly Decision[]> =>
-    Promise.all(seeds.map((seed) => options.createProvider({ seed }).decide(context)));
+    Promise.all(
+      seeds.map(async (seed) => {
+        const session = options
+          .createProvider({ seed })
+          .beginSession({ personaId: `p-${seed}`, seed });
+        try {
+          return await session.decide(context);
+        } finally {
+          await session.close();
+        }
+      }),
+    );
 
   describe(`the decision provider contract, against ${options.name}`, () => {
     it('declares the three facts a run records about it', () => {
@@ -251,23 +268,39 @@ export const describeDecisionProviderContract = (
         await session.close();
       });
 
-      it('keeps two handles with a different persona or seed independent', async () => {
+      it('keeps two sessions’ screens apart when their turns interleave', async () => {
         const provider = options.createProvider({ seed: 11 });
-        const first = provider.beginSession({ personaId: 'p-anna', seed: 11 });
-        const second = provider.beginSession({ personaId: 'p-boris', seed: 12 });
+        const anna = provider.beginSession({ personaId: 'p-anna', seed: 11 });
+        const boris = provider.beginSession({ personaId: 'p-boris', seed: 12 });
 
-        expect(first.personaId).not.toBe(second.personaId);
-        expect(first.seed).not.toBe(second.seed);
+        // Two sessions on two screens that share no element id, taking turns. A provider
+        // that let one session's conversation, cache entry or buffer answer the other would
+        // target an element that was never on this screen, and `validateDecision` names it.
+        // Ungated, because a provider that holds session state is exactly the one that can
+        // fail this — and the one that declares itself non-deterministic.
+        const screens = [
+          [anna, [element('el-jacket', 'Waterproof jacket — £129', 'link')]],
+          [boris, [element('el-boots', 'Walking boots — £89', 'link')]],
+        ] as const;
 
-        await walkSession(first);
-        await first.close();
+        for (const step of SESSION_STEPS) {
+          for (const [session, fixatedElements] of screens) {
+            const context = contextOf({ step, fixatedElements });
+            const decision = await session.decide(context);
+
+            expect(validateDecision(context, decision)).toEqual([]);
+            expect([null, fixatedElements[0]?.id]).toContain(decision.action.targetElementId);
+          }
+        }
+
+        await anna.close();
 
         // One session ending ends that session and no other: the second is still deciding
         // after the first has been closed, flushed and refused.
-        await expect(first.decide(contextOf())).rejects.toBeInstanceOf(DecisionSessionClosedError);
-        expect(await walkSession(second)).toHaveLength(SESSION_STEPS.length);
+        await expect(anna.decide(contextOf())).rejects.toBeInstanceOf(DecisionSessionClosedError);
+        expect(await walkSession(boris)).toHaveLength(SESSION_STEPS.length);
 
-        await second.close();
+        await boris.close();
       });
 
       it('refuses to decide once the session is closed, and names the session', async () => {
@@ -301,7 +334,9 @@ export const describeDecisionProviderContract = (
           const provider = options.createProvider({ seed: 9 });
           const identity = { personaId: 'p-anna', seed: 9 } as const;
 
-          const alone = await walkSession(provider.beginSession(identity));
+          const first = provider.beginSession(identity);
+          const alone = await walkSession(first);
+          await first.close();
 
           // The same session again, turn for turn, with a second session's turns in
           // between. Any state the two shared — a conversation, a cache key, a counter —

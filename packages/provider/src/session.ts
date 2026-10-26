@@ -6,17 +6,26 @@ import type {
 } from './types.js';
 
 /**
- * The handle one agent session decides through, and the one guarantee no provider should
- * have to re-implement: a session that has ended decides nothing further.
+ * The handle one agent session decides through, and the guarantees no provider should have
+ * to re-implement around the end of a session.
  *
  * `createDecisionSession` is the body of `beginSession` for every provider. It takes the
  * session's identity, what the session decides and what ending it releases, and it owns the
- * closing: the guard runs **before** the provider's own `decide` body, so a decision asked
- * of a closed session never reaches the conversation, the request builder or the trajectory
- * sink — it is refused, and nothing is written after the end. A provider that wrote its own
- * handle could put that check after the first `await` and leave a line in a file whose
- * session is over; the contract suite catches it, and this helper means there is no reason
- * to be caught.
+ * closing — three things that are easy to get subtly wrong and expensive to get wrong,
+ * because what a session holds is an append-only file (#139):
+ *
+ * 1. **A decision asked for after `close` never reaches the provider's body.** The refusal
+ *    happens before `options.decide` is called, so it cannot reach a conversation, a
+ *    request builder or a trajectory sink: nothing is written, rather than one more line
+ *    after the end.
+ * 2. **A decision already in flight is the session's last, and `close` waits for it.** The
+ *    sink is shut once that turn has settled, so a flush never races the line it is meant
+ *    to contain. Whether that turn succeeded is the caller's business; it is not a reason
+ *    to leave the sink open.
+ * 3. **`close` releases exactly once, and every caller waits for the same release.** An
+ *    overlapping `close` resolves when the flush does rather than straight away, and a
+ *    flush that failed is reported to every caller instead of becoming a quiet success on
+ *    the second attempt.
  *
  * What it deliberately does not do is hold the session's state. The conversation, the cache
  * key and the file handle are the provider's own business and stay in the closure the
@@ -48,8 +57,9 @@ export interface DecisionSessionOptions extends DecisionSessionIdentity {
   decide(context: DecisionContext): Promise<Decision>;
   /**
    * What ending the session releases — a trajectory sink to flush and close (#139), a
-   * conversation to drop. Called once however often `close` is. Absent for a provider that
-   * holds nothing, which is the offline policy.
+   * conversation to drop. Called once however often `close` is, and only once every turn
+   * still in flight has settled. Absent for a provider that holds nothing, which is the
+   * offline policy.
    */
   close?(): Promise<void> | void;
 }
@@ -60,17 +70,35 @@ export const createDecisionSession = (options: DecisionSessionOptions): Decision
     seed: options.seed,
   };
   let closed = false;
+  let closing: Promise<void> | undefined;
+  const inFlight = new Set<Promise<Decision>>();
+
+  const release = async (): Promise<void> => {
+    // Flipped before anything is awaited, so a turn that arrives while the sink is still
+    // flushing is refused rather than appended behind it.
+    closed = true;
+    // `allSettled`, not `all`: a last turn that failed still has to be out of the way
+    // before the sink is shut, and its rejection belongs to whoever asked for it.
+    await Promise.allSettled([...inFlight]);
+    await options.close?.();
+  };
 
   return {
     ...identity,
-    decide: (context) =>
-      closed ? Promise.reject(new DecisionSessionClosedError(identity)) : options.decide(context),
-    close: async () => {
-      if (closed) return;
-      // Flipped before anything is awaited, so a decision that arrives while the sink is
-      // still flushing is refused rather than appended after the end.
-      closed = true;
-      await options.close?.();
+    // `async`, so that a provider body which throws synchronously — a request it cannot
+    // build, a context it rejects — comes back as a rejected promise rather than throwing
+    // out of the caller's `.map()` and stranding its sibling sessions' promises.
+    decide: async (context) => {
+      if (closed) throw new DecisionSessionClosedError(identity);
+
+      const pending = options.decide(context);
+      inFlight.add(pending);
+      try {
+        return await pending;
+      } finally {
+        inFlight.delete(pending);
+      }
     },
+    close: () => (closing ??= release()),
   };
 };

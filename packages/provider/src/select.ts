@@ -25,7 +25,11 @@ import type { DecisionProvider, ProviderMode } from './types.js';
 export const MODEL_API_KEY_ENV = 'MODEL_API_KEY';
 
 export interface SelectDecisionProviderOptions {
-  /** The session's seed, which the offline provider decides from. */
+  /**
+   * The seed the selected provider's session-less `decide` works from. A run begins a
+   * session per persona and seed on the provider this returns, and each of those decides
+   * from the seed its handle was begun with (#138) — not from this one.
+   */
   readonly seed: number;
   /** Defaults to `process.env`; a test passes its own and touches nothing global. */
   readonly env?: Readonly<Record<string, string | undefined>>;

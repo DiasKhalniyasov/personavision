@@ -219,10 +219,12 @@ export interface DecisionSessionIdentity {
  * what one of them decides, closes or writes is invisible to the rest.
  *
  * **A handle is closable**, because a session ends: that is the moment a trajectory sink is
- * flushed and shut (#139), so that a half-written line is never left behind. Afterwards it
- * refuses to decide — with `DecisionSessionClosedError`, before the provider's own body
- * runs and therefore before anything could be written — rather than appending to a session
- * that is over.
+ * flushed and shut (#139), so that a half-written line is never left behind. `close` waits
+ * for a turn still in flight — that turn is the session's last, and the sink is shut once it
+ * has settled rather than under the line it is meant to contain — and it releases exactly
+ * once however often it is called. Afterwards the handle refuses to decide, with
+ * `DecisionSessionClosedError`, before the provider's own body runs and therefore before
+ * anything could be written.
  */
 export interface DecisionSession extends DecisionSessionIdentity {
   decide(context: DecisionContext): Promise<Decision>;
