@@ -132,13 +132,40 @@ const DESKTOP = {
 };
 
 /**
+ * The device mix the audience was authored with, from the prototype's `AUDIENCE`: a class
+ * of device, the nominal viewport of that class, and the share of the audience on it. The
+ * Audiences screen draws these two as `Mobile 60% · 390 × 844` and `Desktop 40% · 1280 ×
+ * 800`, so they are the audience's own numbers rather than the devices below. A generated
+ * person carries the concrete device it ran on — `PERSONAS[].device`, a model with a
+ * viewport of its own — which is what a session records and what the gaze is projected
+ * from.
+ */
+const AUDIENCE_DEVICES: Run['audience']['devices'] = [
+  {
+    name: 'mobile',
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    touch: true,
+    share: 0.6,
+  },
+  {
+    name: 'desktop',
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 1,
+    touch: false,
+    share: 0.4,
+  },
+];
+
+/**
  * The audience, from the prototype's `AUDIENCE` constant. `size` is how many simulated
  * people it generates — four — not how many sessions a test runs, which is the reading
  * `docs/FLOW.md` section 1 states and the contract enforces against `personas`. The 24
  * sessions are those four people across two variants and three seeds.
  *
- * The device mix carries the prototype's shares against the devices the personas actually
- * ran on, so the audience and the people generated from it cannot disagree.
+ * `AUDIENCE.summary` is the one field of the constant that is not stored: `audienceSchema`
+ * is a strict object with no such field, and the sentence it holds is formatted from the
+ * fields beside it rather than written down twice.
  */
 const AUDIENCE: Run['audience'] = {
   id: 'outdoor-gear-shoppers',
@@ -147,10 +174,7 @@ const AUDIENCE: Run['audience'] = {
   roles: ['First-time buyer', 'Returning customer'],
   regions: ['United Kingdom', 'Ireland'],
   goals: ['Buy one item quickly', 'Compare prices first'],
-  devices: [
-    { ...MOBILE, share: 0.6 },
-    { ...DESKTOP, share: 0.4 },
-  ],
+  devices: AUDIENCE_DEVICES,
   techSavviness: 0.55,
   priceSensitivity: 0.75,
   size: 4,

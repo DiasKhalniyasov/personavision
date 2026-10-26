@@ -271,6 +271,24 @@ describe('the required reading of docs/FLOW.md section 5', () => {
       1,
       6,
     );
+    // The device mix is the audience's own, as the Audiences screen draws it: a class of
+    // device and the share on it, not the models the four generated people ran on.
+    expect(run.audience.devices).toEqual([
+      {
+        name: 'mobile',
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        touch: true,
+        share: 0.6,
+      },
+      {
+        name: 'desktop',
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 1,
+        touch: false,
+        share: 0.4,
+      },
+    ]);
     for (const persona of run.personas) {
       expect(persona.audienceId).toBe(run.audience.id);
       expect(persona.segment).toMatch(/^(mobile|desktop) · \S/);
