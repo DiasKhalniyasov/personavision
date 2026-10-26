@@ -5,43 +5,73 @@
 
        <link rel="stylesheet" href="tokens.css">
 
-   Groups: type · spacing · radius / border / shadow / motion · layout ·
-   neutral colour · accent · severity · outcome · attribution · friction score ·
-   variant identity · gaze & heatmap.
+   Visual direction (owner, see docs/FLOW.md section 10): the styling of
+   optimizely.com — its colours, type roles, radii and motion — carrying
+   PersonaVision's own name, logo, wording and images. Nothing of Optimizely's
+   brand is used: no logo, wordmark, copy, illustration, photograph or font file.
+
+   Components: shadcn/ui (Radix + Tailwind) for the app; Aceternity UI (Motion)
+   for the animated moments listed in section 10. The Tailwind theme maps onto
+   the tokens below; a component never carries a colour of its own.
+
+   Groups: type · spacing · radius / border / shadow / motion · moments ·
+   layout · neutral colour · accent · link · severity · outcome · attribution ·
+   completion · friction score · variant identity · gaze & heatmap.
    Dark mode is defined once at the bottom and overrides colour tokens only.
    ========================================================================== */
 
 :root {
   color-scheme: light dark;
 
-  /* ---- Type ------------------------------------------------------------- */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-               "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-               "Liberation Mono", monospace;
+  /* ---- Type ------------------------------------------------------------
+     Four roles. The licensed families are commercial (VC Nudge, Die Grotesk B,
+     VC Henrietta Condensed) and no font file is ever taken from optimizely.com.
+     Until the owner buys the licences each role renders in the closest free
+     Google Fonts match, self-hosted from the repository so the platform still
+     renders with no network. Buying a licence is one edit per token: put the
+     licensed family first in the stack below and vendor its files. Nothing else
+     in the product mentions a font name. */
+  --font-display-licensed: "VC Nudge";             /* headlines */
+  --font-sans-licensed: "Die Grotesk B";           /* body, buttons, forms */
+  --font-editorial-licensed: "VC Henrietta Condensed"; /* editorial headlines */
 
-  --text-2xs: 0.6875rem;  /* 11px — table micro-labels, overlay fixation numbers */
-  --text-xs:  0.75rem;    /* 12px — column headers, chips, meta */
-  --text-sm:  0.8125rem;  /* 13px — table cells, secondary copy */
-  --text-base:0.9375rem;  /* 15px — body */
-  --text-md:  1.0625rem;  /* 17px — card titles, finding sentences */
-  --text-lg:  1.25rem;    /* 20px — screen titles */
-  --text-xl:  1.5rem;     /* 24px — section headline */
-  --text-2xl: 2rem;       /* 32px — variant name on comparison */
-  --text-score: 3.25rem;  /* 52px — the friction score itself */
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system,
+                  "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-editorial: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+               Consolas, "Liberation Mono", monospace;
 
+  --text-2xs: 0.6875rem;      /* 11px — table micro-labels, overlay fixation numbers */
+  --text-xs:  0.75rem;        /* 12px — column headers, chips, meta */
+  --text-sm:  0.875rem;       /* 14px — table cells, secondary copy */
+  --text-base:1rem;           /* 16px — body */
+  --text-md:  1.125rem;       /* 18px — card titles, finding sentences */
+  --text-lg:  1.5rem;         /* 24px — screen titles */
+  --text-xl:  2rem;           /* 32px — section headline */
+  --text-2xl: 2.5rem;         /* 40px — variant name */
+  --text-display-sm: 2.75rem; /* 44px — the verdict headline at narrow widths */
+  --text-display: 3.5rem;     /* 56px — the verdict headline */
+  --text-score: 3.25rem;      /* 52px — the friction score itself */
+  --text-figure: 4.5rem;      /* 72px — a completion figure on the verdict screen */
+
+  /* Display weights are 400 / 600 / 800; body, buttons and forms use 400 / 500
+     / 700. A body face is never set to 600, and a headline never to 500. */
   --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
+  --weight-medium: 500;    /* body only */
+  --weight-semibold: 600;  /* display only */
   --weight-bold: 700;
+  --weight-extrabold: 800; /* display only */
 
-  --leading-tight: 1.15;
-  --leading-snug: 1.3;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+  --leading-tight: 1.05;
+  --leading-snug: 1.25;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
 
-  --tracking-wide: 0.06em;   /* uppercase micro-labels */
-  --tracking-tight: -0.01em; /* large numerals and titles */
+  --tracking-wide: 0.08em;     /* uppercase overline labels, set in mono */
+  --tracking-tight: -0.015em;  /* large numerals and titles */
+  --tracking-tighter: -0.03em; /* display headlines */
 
   /* ---- Spacing (4px scale) --------------------------------------------- */
   --space-0: 0;
@@ -55,122 +85,199 @@
   --space-10: 2.5rem;  /* 40px */
   --space-12: 3rem;    /* 48px */
   --space-16: 4rem;    /* 64px */
+  --space-20: 5rem;    /* 80px */
+  --space-24: 6rem;    /* 96px */
 
-  /* ---- Radius, border, shadow, motion ---------------------------------- */
-  --radius-sm: 4px;
-  --radius-md: 7px;
-  --radius-lg: 12px;
-  --radius-full: 999px;
+  /* Whitespace is part of the direction: a section breathes by default. */
+  --section-pad-y: var(--space-16);
+  --section-pad-y-lg: var(--space-24);
+
+  /* ---- Radius, border, shadow ------------------------------------------
+     The scale is 20 / 16 / 12 / 8 / 4, cards and large panels at 20px, and
+     every button fully rounded. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;   /* cards and large panels */
+  --radius-full: 999px; /* every button, chip and tag */
 
   --border-width: 1px;
   --border-width-strong: 2px;
 
-  --shadow-sm: 0 1px 2px rgb(16 20 28 / 0.06);
-  --shadow-md: 0 2px 6px rgb(16 20 28 / 0.08), 0 1px 2px rgb(16 20 28 / 0.05);
-  --shadow-lg: 0 10px 28px rgb(16 20 28 / 0.14);
+  --shadow-sm: 0 1px 2px rgb(8 37 26 / 0.06);
+  --shadow-md: 0 4px 16px rgb(8 37 26 / 0.08), 0 1px 3px rgb(8 37 26 / 0.05);
+  --shadow-lg: 0 18px 48px rgb(8 37 26 / 0.14);
 
-  --duration-fast: 90ms;
-  --duration-base: 160ms;
-  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  /* ---- Motion ----------------------------------------------------------
+     One base transition for hover and state changes, and one soft pulse for
+     live or loading states. Nothing else moves by default. */
+  --duration-fast: 150ms;
+  --duration-base: 150ms;
+  --duration-slow: 300ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --pulse-duration: 2s;
+  --pulse-opacity-low: 0.45;
+
+  /* ---- Moments ---------------------------------------------------------
+     The animated moments of section 10 — the Verdict reveal, the heatmap
+     warming up, the landing and demo pages. Durations live here so no
+     component invents its own, and every one of them is skipped outright
+     under prefers-reduced-motion. */
+  --moment-ticker-duration: 900ms;   /* a completion figure counting up */
+  --moment-spotlight-duration: 700ms;/* the winning version lit */
+  --moment-beam-duration: 1200ms;    /* audience to the two versions */
+  --moment-heat-duration: 900ms;     /* the heatmap warming up */
+  --moment-stagger: 80ms;            /* between items of one reveal */
 
   /* ---- Layout ---------------------------------------------------------- */
-  --layout-max: 1280px;
-  --layout-gutter: var(--space-6);
+  --layout-max: 1200px;
+  --layout-max-narrow: 760px;  /* prose, forms, the verdict's lead paragraph */
+  --layout-gutter: var(--space-8);
   --layout-gutter-narrow: var(--space-4);  /* phone width */
-  --header-height: 56px;
+  --header-height: 68px;
 
-  /* Device frames used wherever a page screenshot is shown. */
+  /* Device frames used wherever a page screenshot is shown. A screenshot is
+     never flush against the page: it sits on a neutral mat. */
   --frame-ratio-desktop: 16 / 10;
   --frame-ratio-mobile: 390 / 844;
   --frame-width-mobile: 300px;
   --frame-fold-desktop: 62%;  /* where the first viewport ends */
   --frame-fold-mobile: 46%;
+  --frame-mat-pad: var(--space-6);
 
-  /* ---- Neutral colour -------------------------------------------------- */
-  --color-canvas: #f6f7f9;         /* page background */
-  --color-surface: #ffffff;        /* cards, tables */
-  --color-surface-raised: #ffffff; /* elevated over canvas */
-  --color-surface-sunken: #eceef2; /* bar tracks, inert fills */
-  --color-border: #dfe3e9;
-  --color-border-strong: #c3cad4;
-  --color-text: #141a22;
-  --color-text-muted: #5b6676;
-  --color-text-faint: #8a94a2;
-  --color-focus: #2f6df6;
+  /* ---- Neutral colour --------------------------------------------------
+     Dark fir on white, with pale greens for tinted sections, soft panels and
+     dividers. Black is not used. The two mid-greens marked (derived) are mixes
+     of fir with white: the palette carries no mid-grey and muted text needs
+     one. */
+  --color-canvas: #ffffff;          /* page background — sections are white */
+  --color-canvas-alt: #e4f0da;      /* the tinted section, for rhythm */
+  --color-canvas-dark: #08251a;     /* dark fir band: sign-in, closing band */
+  --color-canvas-dark-strong: #061c14; /* fir-800, the deepest band */
+  --color-canvas-dark-mid: #0d3a29;    /* mid fir, a panel inside a dark band */
+  --color-on-canvas-dark: #ffffff;
+  --color-surface: #ffffff;         /* cards, tables */
+  --color-surface-raised: #ffffff;  /* elevated over canvas */
+  --color-surface-sunken: #eff6e9;  /* form fields, bar tracks, screenshot mats */
+  --color-border: #d8e4cb;
+  --color-border-strong: #c3ceaf;
+  --color-text: #101828;            /* body copy */
+  --color-heading: #08251a;         /* dark fir — every headline */
+  --color-text-muted: #4a5c53;      /* (derived) */
+  --color-text-faint: #6b7a72;      /* (derived) */
+  --color-focus: #08251a;           /* visible on white and on lime */
 
-  /* ---- Accent ---------------------------------------------------------- */
-  --color-accent: #2f6df6;
-  --color-accent-strong: #1b4fd0;
-  --color-accent-soft: #e8efff;
-  --color-on-accent: #ffffff;
+  /* ---- Accent: reserved for actions ------------------------------------
+     Lime with dark fir text. It is never decoration, and it is never used to
+     carry meaning: severity, outcome and gaze colours are semantic. */
+  --color-accent: #abff44;
+  --color-accent-strong: #92ec41;   /* hover */
+  --color-accent-grass: #7ddd3d;    /* pressed, and the landing page's beam */
+  --color-accent-soft: #eff6e9;     /* a lime-tinted panel, not a button */
+  --color-on-accent: #08251a;
+
+  /* ---- Link ------------------------------------------------------------
+     Lime is unreadable as text on white, so links are teal and underlined. */
+  --color-link: #007b79;
+  --color-link-hover: #00514f;
 
   /* ---- Severity (findings) --------------------------------------------- */
-  --sev-critical: #b4232a;
-  --sev-critical-bg: #fdeceb;
-  --sev-critical-border: #f0b6b4;
-  --sev-high: #b45309;
-  --sev-high-bg: #fdf0e0;
-  --sev-high-border: #efcb9a;
-  --sev-medium: #8a6a00;
-  --sev-medium-bg: #fcf6dd;
-  --sev-medium-border: #e4d79a;
-  --sev-low: #3f6b57;
-  --sev-low-bg: #e9f4ef;
-  --sev-low-border: #bcd9cb;
-  --sev-info: #3c5a7a;
-  --sev-info-bg: #eaf1f8;
-  --sev-info-border: #bdd0e2;
+  --sev-critical: #c80808;
+  --sev-critical-bg: #fdeaea;      /* (derived) */
+  --sev-critical-border: #f4b9b9;  /* (derived) */
+  --sev-high: #f13030;
+  --sev-high-bg: #fdeeee;          /* (derived) */
+  --sev-high-border: #f8c4c4;      /* (derived) */
+  --sev-medium: #8f4764;
+  --sev-medium-bg: #fdeef2;        /* (derived) */
+  --sev-medium-border: #ff99b6;
+  --sev-low: #227d47;
+  --sev-low-bg: #e4f0da;
+  --sev-low-border: #c3ceaf;
+  --sev-info: #00514f;
+  --sev-info-bg: #e3f1f1;          /* (derived) */
+  --sev-info-border: #91dbda;
 
   /* ---- Task outcome ---------------------------------------------------- */
-  --outcome-success: #1f7a4d;
-  --outcome-success-bg: #e6f5ec;
-  --outcome-abandoned: #b45309;
-  --outcome-abandoned-bg: #fdf0e0;
-  --outcome-failed: #b4232a;
-  --outcome-failed-bg: #fdeceb;
+  --outcome-success: #227d47;
+  --outcome-success-bg: #e4f0da;
+  --outcome-abandoned: #8f4764;
+  --outcome-abandoned-bg: #fdeef2;
+  --outcome-failed: #c80808;
+  --outcome-failed-bg: #fdeaea;
 
-  /* ---- Attribution: was the product at fault, or our automation? ------- */
-  --attr-product: #b4232a;        /* counts against the variant */
-  --attr-product-bg: #fdeceb;
-  --attr-automation: #5b6676;     /* excluded from every score */
-  --attr-automation-bg: #eceef2;
+  /* ---- Attribution: was the product at fault, or our simulation? ------- */
+  --attr-product: #c80808;        /* counts against the version */
+  --attr-product-bg: #fdeaea;
+  --attr-automation: #4a5c53;     /* excluded from every score */
+  --attr-automation-bg: #eff6e9;
 
-  /* ---- Friction score bands (0-100, higher = worse) -------------------- */
+  /* ---- Completion: the figure the verdict screen leads with ------------
+     Share of the audience that finished the task, 0..1. The thresholds are
+     tokens for the same reason the friction bands are: one edit moves the
+     product. Read them from CSS; never hard-code 0.6 or 0.3. */
+  --completion-threshold-good: 0.6;  /* at or above: the audience gets through */
+  --completion-threshold-bad: 0.3;   /* at or below: the audience does not */
+  --completion-good: #227d47;
+  --completion-good-bg: #e4f0da;
+  --completion-warn: #8f4764;
+  --completion-warn-bg: #fdeef2;
+  --completion-bad: #c80808;
+  --completion-bad-bg: #fdeaea;
+
+  /* ---- Friction score bands (0-100, higher = worse) --------------------
+     One click deeper than the verdict: the index ranks versions and is the
+     pipeline's acceptance gate. See docs/FLOW.md section 5. */
   --score-threshold-good: 25;  /* at or below: clean       */
   --score-threshold-bad: 60;   /* at or above: defective   */
-  --score-good: #1f7a4d;
-  --score-good-bg: #e6f5ec;
-  --score-warn: #b45309;
-  --score-warn-bg: #fdf0e0;
-  --score-bad: #b4232a;
-  --score-bad-bg: #fdeceb;
+  --score-good: #227d47;
+  --score-good-bg: #e4f0da;
+  --score-warn: #8f4764;
+  --score-warn-bg: #fdeef2;
+  --score-bad: #c80808;
+  --score-bad-bg: #fdeaea;
 
-  /* ---- Variant identity (kept stable everywhere A and B appear) -------- */
-  --variant-a: #4338ca;
-  --variant-a-bg: #eceafd;
-  --variant-b: #0f766e;
-  --variant-b-bg: #e3f4f2;
+  /* ---- Variant identity (kept stable everywhere A and B appear) --------
+     Teal and deep pink: two hues of the palette that stay apart for a
+     colour-blind reader, and neither is the lime accent. */
+  --variant-a: #007b79;
+  --variant-a-bg: #e3f1f1;
+  --variant-b: #8f4764;
+  --variant-b-bg: #fdeef2;
 
   /* ---- Gaze, scanpath, AOI, heatmap ------------------------------------ */
-  --gaze-fixation: #1b4fd0;
-  --gaze-fixation-current: #b4232a;
-  --gaze-fixation-label: #ffffff;
-  --gaze-saccade: rgb(27 79 208 / 0.55);
+  --gaze-fixation: #08251a;
+  --gaze-fixation-current: #f13030;
+  --gaze-fixation-label: #abff44;
+  --gaze-saccade: rgb(8 37 26 / 0.55);
   --gaze-saccade-width: 1.5px;
-  --gaze-aoi: rgb(20 26 34 / 0.45);
-  --gaze-aoi-active: var(--color-accent);
+  --gaze-aoi: rgb(8 37 26 / 0.42);
+  --gaze-aoi-active: #007b79;   /* teal, not the accent: this is data, not an action */
   --gaze-aoi-dash: 4 3;
 
-  /* Duration-weighted heat ramp: cool (brief) to hot (long dwell). */
-  --heat-1: rgb(60 110 240 / 0.00);
-  --heat-2: rgb(60 180 230 / 0.35);
-  --heat-3: rgb(120 220 120 / 0.45);
-  --heat-4: rgb(245 200 60 / 0.55);
-  --heat-5: rgb(220 50 40 / 0.65);
+  /* Duration-weighted heat ramp: cool (brief) to hot (long dwell), drawn from
+     the palette — light blue, lime, pink, error red. */
+  --heat-1: rgb(145 219 218 / 0.00);
+  --heat-2: rgb(145 219 218 / 0.38);
+  --heat-3: rgb(171 255 68 / 0.46);
+  --heat-4: rgb(255 153 182 / 0.58);
+  --heat-5: rgb(241 48 48 / 0.68);
   --heat-opacity: 0.85;
 
   /* The page screenshot is dimmed under overlays so fixations stay legible. */
   --screenshot-scrim: rgb(255 255 255 / 0.35);
+}
+
+/* =============================================================================
+   The one pulse. Live and loading states use this and nothing else; it is
+   switched off under prefers-reduced-motion at the bottom of this file.
+   ========================================================================== */
+
+@keyframes pv-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: var(--pulse-opacity-low); }
 }
 
 /* =============================================================================
@@ -179,158 +286,211 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-canvas: #0e1218;
-    --color-surface: #161b23;
-    --color-surface-raised: #1b212b;
-    --color-surface-sunken: #222a35;
-    --color-border: #2a333f;
-    --color-border-strong: #3c4857;
-    --color-text: #e8ecf2;
-    --color-text-muted: #9aa5b4;
-    --color-text-faint: #717d8c;
-    --color-focus: #6f9bff;
+    --color-canvas: #08251a;
+    --color-canvas-alt: #0d3a29;
+    --color-canvas-dark: #061c14;
+    --color-canvas-dark-strong: #03110b;
+    --color-canvas-dark-mid: #0d3a29;
+    --color-on-canvas-dark: #e4f0da;
+    --color-surface: #0d3a29;
+    --color-surface-raised: #11442f;
+    --color-surface-sunken: #061c14;
+    --color-border: #1c4e3a;
+    --color-border-strong: #2b6a50;
+    --color-text: #e4f0da;
+    --color-heading: #ffffff;
+    --color-text-muted: #a9c2b2;
+    --color-text-faint: #7e9c8c;
+    --color-focus: #abff44;
 
-    --color-accent: #6f9bff;
-    --color-accent-strong: #9bb9ff;
-    --color-accent-soft: #1c2b47;
-    --color-on-accent: #0e1218;
+    --color-accent: #abff44;
+    --color-accent-strong: #92ec41;
+    --color-accent-grass: #7ddd3d;
+    --color-accent-soft: #11442f;
+    --color-on-accent: #08251a;
 
-    --sev-critical: #ff8c86;
-    --sev-critical-bg: #351a1b;
-    --sev-critical-border: #5d2a2a;
-    --sev-high: #f0b558;
-    --sev-high-bg: #352714;
-    --sev-high-border: #5a4320;
-    --sev-medium: #ddc55c;
-    --sev-medium-bg: #322d14;
-    --sev-medium-border: #524a20;
-    --sev-low: #85c9a9;
-    --sev-low-bg: #16291f;
-    --sev-low-border: #27483a;
-    --sev-info: #93b6da;
-    --sev-info-bg: #16222e;
-    --sev-info-border: #2a3d50;
+    --color-link: #91dbda;
+    --color-link-hover: #c6ecec;
 
-    --outcome-success: #70cf9d;
-    --outcome-success-bg: #16291f;
-    --outcome-abandoned: #f0b558;
-    --outcome-abandoned-bg: #352714;
-    --outcome-failed: #ff8c86;
-    --outcome-failed-bg: #351a1b;
+    --sev-critical: #ff9a9a;
+    --sev-critical-bg: #3a1413;
+    --sev-critical-border: #5f2423;
+    --sev-high: #ff8c86;
+    --sev-high-bg: #3a1a18;
+    --sev-high-border: #632c29;
+    --sev-medium: #ff99b6;
+    --sev-medium-bg: #3a1a26;
+    --sev-medium-border: #63303f;
+    --sev-low: #7ddd3d;
+    --sev-low-bg: #10301d;
+    --sev-low-border: #235234;
+    --sev-info: #91dbda;
+    --sev-info-bg: #06302f;
+    --sev-info-border: #0e4b4a;
 
-    --attr-product: #ff8c86;
-    --attr-product-bg: #351a1b;
-    --attr-automation: #9aa5b4;
-    --attr-automation-bg: #222a35;
+    --outcome-success: #7ddd3d;
+    --outcome-success-bg: #10301d;
+    --outcome-abandoned: #ff99b6;
+    --outcome-abandoned-bg: #3a1a26;
+    --outcome-failed: #ff9a9a;
+    --outcome-failed-bg: #3a1413;
 
-    --score-good: #70cf9d;
-    --score-good-bg: #16291f;
-    --score-warn: #f0b558;
-    --score-warn-bg: #352714;
-    --score-bad: #ff8c86;
-    --score-bad-bg: #351a1b;
+    --attr-product: #ff9a9a;
+    --attr-product-bg: #3a1413;
+    --attr-automation: #a9c2b2;
+    --attr-automation-bg: #061c14;
 
-    --variant-a: #a5a0f5;
-    --variant-a-bg: #1f1d3a;
-    --variant-b: #66ccc2;
-    --variant-b-bg: #10302d;
+    --completion-good: #7ddd3d;
+    --completion-good-bg: #10301d;
+    --completion-warn: #ff99b6;
+    --completion-warn-bg: #3a1a26;
+    --completion-bad: #ff9a9a;
+    --completion-bad-bg: #3a1413;
 
-    --gaze-fixation: #6f9bff;
+    --score-good: #7ddd3d;
+    --score-good-bg: #10301d;
+    --score-warn: #ff99b6;
+    --score-warn-bg: #3a1a26;
+    --score-bad: #ff9a9a;
+    --score-bad-bg: #3a1413;
+
+    --variant-a: #91dbda;
+    --variant-a-bg: #06302f;
+    --variant-b: #ff99b6;
+    --variant-b-bg: #3a1a26;
+
+    --gaze-fixation: #abff44;
     --gaze-fixation-current: #ff8c86;
-    --gaze-fixation-label: #0e1218;
-    --gaze-saccade: rgb(111 155 255 / 0.6);
-    --gaze-aoi: rgb(232 236 242 / 0.45);
+    --gaze-fixation-label: #08251a;
+    --gaze-saccade: rgb(171 255 68 / 0.6);
+    --gaze-aoi: rgb(228 240 218 / 0.45);
+    --gaze-aoi-active: #91dbda;
 
-    --heat-1: rgb(60 110 240 / 0.00);
-    --heat-2: rgb(60 180 230 / 0.40);
-    --heat-3: rgb(120 220 120 / 0.48);
-    --heat-4: rgb(245 200 60 / 0.58);
-    --heat-5: rgb(220 50 40 / 0.70);
+    --heat-1: rgb(145 219 218 / 0.00);
+    --heat-2: rgb(145 219 218 / 0.42);
+    --heat-3: rgb(171 255 68 / 0.50);
+    --heat-4: rgb(255 153 182 / 0.60);
+    --heat-5: rgb(241 48 48 / 0.72);
 
-    --screenshot-scrim: rgb(14 18 24 / 0.45);
+    --screenshot-scrim: rgb(6 28 20 / 0.45);
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.35);
-    --shadow-lg: 0 10px 28px rgb(0 0 0 / 0.55);
+    --shadow-md: 0 4px 16px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+    --shadow-lg: 0 18px 48px rgb(0 0 0 / 0.55);
   }
 }
 
 :root[data-theme="dark"] {
-  --color-canvas: #0e1218;
-  --color-surface: #161b23;
-  --color-surface-raised: #1b212b;
-  --color-surface-sunken: #222a35;
-  --color-border: #2a333f;
-  --color-border-strong: #3c4857;
-  --color-text: #e8ecf2;
-  --color-text-muted: #9aa5b4;
-  --color-text-faint: #717d8c;
-  --color-focus: #6f9bff;
+  --color-canvas: #08251a;
+  --color-canvas-alt: #0d3a29;
+  --color-canvas-dark: #061c14;
+  --color-canvas-dark-strong: #03110b;
+  --color-canvas-dark-mid: #0d3a29;
+  --color-on-canvas-dark: #e4f0da;
+  --color-surface: #0d3a29;
+  --color-surface-raised: #11442f;
+  --color-surface-sunken: #061c14;
+  --color-border: #1c4e3a;
+  --color-border-strong: #2b6a50;
+  --color-text: #e4f0da;
+  --color-heading: #ffffff;
+  --color-text-muted: #a9c2b2;
+  --color-text-faint: #7e9c8c;
+  --color-focus: #abff44;
 
-  --color-accent: #6f9bff;
-  --color-accent-strong: #9bb9ff;
-  --color-accent-soft: #1c2b47;
-  --color-on-accent: #0e1218;
+  --color-accent: #abff44;
+  --color-accent-strong: #92ec41;
+  --color-accent-grass: #7ddd3d;
+  --color-accent-soft: #11442f;
+  --color-on-accent: #08251a;
 
-  --sev-critical: #ff8c86;
-  --sev-critical-bg: #351a1b;
-  --sev-critical-border: #5d2a2a;
-  --sev-high: #f0b558;
-  --sev-high-bg: #352714;
-  --sev-high-border: #5a4320;
-  --sev-medium: #ddc55c;
-  --sev-medium-bg: #322d14;
-  --sev-medium-border: #524a20;
-  --sev-low: #85c9a9;
-  --sev-low-bg: #16291f;
-  --sev-low-border: #27483a;
-  --sev-info: #93b6da;
-  --sev-info-bg: #16222e;
-  --sev-info-border: #2a3d50;
+  --color-link: #91dbda;
+  --color-link-hover: #c6ecec;
 
-  --outcome-success: #70cf9d;
-  --outcome-success-bg: #16291f;
-  --outcome-abandoned: #f0b558;
-  --outcome-abandoned-bg: #352714;
-  --outcome-failed: #ff8c86;
-  --outcome-failed-bg: #351a1b;
+  --sev-critical: #ff9a9a;
+  --sev-critical-bg: #3a1413;
+  --sev-critical-border: #5f2423;
+  --sev-high: #ff8c86;
+  --sev-high-bg: #3a1a18;
+  --sev-high-border: #632c29;
+  --sev-medium: #ff99b6;
+  --sev-medium-bg: #3a1a26;
+  --sev-medium-border: #63303f;
+  --sev-low: #7ddd3d;
+  --sev-low-bg: #10301d;
+  --sev-low-border: #235234;
+  --sev-info: #91dbda;
+  --sev-info-bg: #06302f;
+  --sev-info-border: #0e4b4a;
 
-  --attr-product: #ff8c86;
-  --attr-product-bg: #351a1b;
-  --attr-automation: #9aa5b4;
-  --attr-automation-bg: #222a35;
+  --outcome-success: #7ddd3d;
+  --outcome-success-bg: #10301d;
+  --outcome-abandoned: #ff99b6;
+  --outcome-abandoned-bg: #3a1a26;
+  --outcome-failed: #ff9a9a;
+  --outcome-failed-bg: #3a1413;
 
-  --score-good: #70cf9d;
-  --score-good-bg: #16291f;
-  --score-warn: #f0b558;
-  --score-warn-bg: #352714;
-  --score-bad: #ff8c86;
-  --score-bad-bg: #351a1b;
+  --attr-product: #ff9a9a;
+  --attr-product-bg: #3a1413;
+  --attr-automation: #a9c2b2;
+  --attr-automation-bg: #061c14;
 
-  --variant-a: #a5a0f5;
-  --variant-a-bg: #1f1d3a;
-  --variant-b: #66ccc2;
-  --variant-b-bg: #10302d;
+  --completion-good: #7ddd3d;
+  --completion-good-bg: #10301d;
+  --completion-warn: #ff99b6;
+  --completion-warn-bg: #3a1a26;
+  --completion-bad: #ff9a9a;
+  --completion-bad-bg: #3a1413;
 
-  --gaze-fixation: #6f9bff;
+  --score-good: #7ddd3d;
+  --score-good-bg: #10301d;
+  --score-warn: #ff99b6;
+  --score-warn-bg: #3a1a26;
+  --score-bad: #ff9a9a;
+  --score-bad-bg: #3a1413;
+
+  --variant-a: #91dbda;
+  --variant-a-bg: #06302f;
+  --variant-b: #ff99b6;
+  --variant-b-bg: #3a1a26;
+
+  --gaze-fixation: #abff44;
   --gaze-fixation-current: #ff8c86;
-  --gaze-fixation-label: #0e1218;
-  --gaze-saccade: rgb(111 155 255 / 0.6);
-  --gaze-aoi: rgb(232 236 242 / 0.45);
+  --gaze-fixation-label: #08251a;
+  --gaze-saccade: rgb(171 255 68 / 0.6);
+  --gaze-aoi: rgb(228 240 218 / 0.45);
+  --gaze-aoi-active: #91dbda;
 
-  --heat-1: rgb(60 110 240 / 0.00);
-  --heat-2: rgb(60 180 230 / 0.40);
-  --heat-3: rgb(120 220 120 / 0.48);
-  --heat-4: rgb(245 200 60 / 0.58);
-  --heat-5: rgb(220 50 40 / 0.70);
+  --heat-1: rgb(145 219 218 / 0.00);
+  --heat-2: rgb(145 219 218 / 0.42);
+  --heat-3: rgb(171 255 68 / 0.50);
+  --heat-4: rgb(255 153 182 / 0.60);
+  --heat-5: rgb(241 48 48 / 0.72);
 
-  --screenshot-scrim: rgb(14 18 24 / 0.45);
+  --screenshot-scrim: rgb(6 28 20 / 0.45);
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-lg: 0 10px 28px rgb(0 0 0 / 0.55);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 18px 48px rgb(0 0 0 / 0.55);
 }
 
+/* =============================================================================
+   Reduced motion. Transitions collapse, the pulse stops, and every moment of
+   section 10 is skipped: a component reads this media query (Motion's
+   useReducedMotion) and renders the end state, never a shortened animation.
+   ========================================================================== */
+
 @media (prefers-reduced-motion: reduce) {
-  :root { --duration-fast: 0ms; --duration-base: 0ms; }
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --moment-ticker-duration: 0ms;
+    --moment-spotlight-duration: 0ms;
+    --moment-beam-duration: 0ms;
+    --moment-heat-duration: 0ms;
+    --moment-stagger: 0ms;
+    --pulse-opacity-low: 1;
+  }
+  @keyframes pv-pulse { 0%, 100% { opacity: 1; } }
 }
