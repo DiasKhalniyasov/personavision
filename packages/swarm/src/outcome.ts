@@ -120,21 +120,33 @@ export interface OutcomePolicy {
   /** Dwell tolerated since it last got anywhere: at patience 0, and at patience 1. */
   readonly dwellAtNoPatienceMs: number;
   readonly dwellAtFullPatienceMs: number;
-  /** Fruitless actions tolerated since it last got anywhere: at persistence 0, and at 1. */
-  readonly attemptsAtNoPersistence: number;
-  readonly attemptsAtFullPersistence: number;
+  /**
+   * Fruitless actions tolerated since it last got anywhere, as a base plus a term per
+   * trait. These three mirror the offline policy's own abandon budget
+   * (`packages/provider/src/offline.ts`, #33) deliberately: that policy emits the
+   * `abandon` action, and a budget here that ran out *sooner* would record a give-up on
+   * screens the agent's own policy had decided to keep going on. They are duplicated
+   * rather than imported because a provider is one way a trace is produced and this
+   * module decides over every trace, model-mode traces included, where no policy emits an
+   * `abandon` action at all.
+   */
+  readonly attemptsBase: number;
+  readonly attemptsPerPersistence: number;
+  readonly attemptsPerPatience: number;
 }
 
 /**
- * The committed budgets: roughly 8 to 40 seconds of dwell and 2 to 10 fruitless actions
- * across the trait range. They are configurable because the demo's spread is tuned
- * against the acceptance table in `docs/FLOW.md` section 5, never per call site.
+ * The committed budgets: 8 to 40 seconds of dwell across the patience range, and 2 to 16
+ * fruitless actions across the two traits. They are configurable because the demo's
+ * spread is tuned against the acceptance table in `docs/FLOW.md` section 5, never per
+ * call site.
  */
 export const OUTCOME_POLICY: OutcomePolicy = {
   dwellAtNoPatienceMs: 8_000,
   dwellAtFullPatienceMs: 40_000,
-  attemptsAtNoPersistence: 2,
-  attemptsAtFullPersistence: 10,
+  attemptsBase: 2,
+  attemptsPerPersistence: 10,
+  attemptsPerPatience: 4,
 };
 
 /** The step named when the walk captured no screen at all — it never reached one. */
@@ -163,9 +175,11 @@ export function decideOutcome(
   persona: DecidingPersona,
   policy: OutcomePolicy = OUTCOME_POLICY,
 ): SessionOutcome {
+  const endStep = trace.screens.at(-1)?.step ?? NO_SCREEN_STEP;
+
   const failure = automationFailureOf(trace);
   if (failure) {
-    return automationOutcome(failure);
+    return automationOutcome(failure, endStep);
   }
 
   const giveUp = findGiveUp(trace, persona, policy);
@@ -173,7 +187,6 @@ export function decideOutcome(
     return productOutcome('abandoned', giveUp.step, giveUpReason(trace, giveUp));
   }
 
-  const endStep = trace.screens.at(-1)?.step ?? NO_SCREEN_STEP;
   if (trace.taskCompleted) {
     return productOutcome(
       'success',
@@ -248,17 +261,23 @@ function findGiveUp(
     persona.traits.patience,
   );
   const attemptsBudget = Math.round(
-    lerp(
-      policy.attemptsAtNoPersistence,
-      policy.attemptsAtFullPersistence,
-      persona.traits.persistence,
-    ),
+    policy.attemptsBase +
+      policy.attemptsPerPersistence * clampUnit(persona.traits.persistence) +
+      policy.attemptsPerPatience * clampUnit(persona.traits.patience),
   );
+
+  // Effort after the task was done is not effort towards it: an agent reading the
+  // confirmation page has given up on nothing, so the scan stops where the task was
+  // completed rather than running to the end of the trace.
+  const until = trace.taskCompleted ? completedAtMs(trace) : Number.POSITIVE_INFINITY;
 
   let sinceMs = 0;
   let attempts = 0;
 
   for (const action of trace.actions) {
+    if (action.tMs > until) {
+      break;
+    }
     const at = (cause: GiveUp['cause']): GiveUp => ({
       cause,
       step: stepAt(trace, action.tMs),
@@ -284,12 +303,37 @@ function findGiveUp(
       return at('patience');
     }
   }
+
+  // A session ends when the agent stops acting, so the dwell it ends on is where giving up
+  // most often happens — and there is no action after it to measure it at.
+  const trailingDwellMs = trace.durationMs - sinceMs;
+  if (!trace.taskCompleted && trailingDwellMs > dwellBudgetMs) {
+    return {
+      cause: 'patience',
+      step: trace.screens.at(-1)?.step ?? NO_SCREEN_STEP,
+      attempts,
+      dwellMs: trailingDwellMs,
+      tMs: trace.durationMs,
+      sinceMs,
+    };
+  }
   return null;
+}
+
+/** When the task was done: the last action that got the agent anywhere. */
+function completedAtMs(trace: SessionTrace): number {
+  let completedAt = Number.POSITIVE_INFINITY;
+  for (const action of trace.actions) {
+    if (action.ok && PROGRESS_ACTIONS.includes(action.type)) {
+      completedAt = action.tMs;
+    }
+  }
+  return completedAt;
 }
 
 function giveUpReason(trace: SessionTrace, giveUp: GiveUp): string {
   const revisits = revisitsBetween(trace, giveUp.sinceMs, giveUp.tMs);
-  const effort = `${giveUp.attempts} actions, ${seconds(giveUp.dwellMs)} s of dwell and ${revisits} revisits to areas of interest it had already seen, since it last got anywhere`;
+  const effort = `${plural(giveUp.attempts, 'action')}, ${seconds(giveUp.dwellMs)} s of dwell and ${revisitClause(revisits)}, since it last got anywhere`;
   if (giveUp.cause === 'stated') {
     return `Gave up on the "${giveUp.step}" step: ${effort}.`;
   }
@@ -318,34 +362,38 @@ function primaryActionClause(trace: SessionTrace): string {
   const clicked = trace.actions.some(
     (action) => action.type === 'click' && action.aoiId === aoiId && action.ok,
   );
-  const looked = `fixated ${onPrimary.length} times, first ${seconds(first.tMs)} s in`;
+  const looked = `fixated ${plural(onPrimary.length, 'time')}, first ${seconds(first.tMs)} s in`;
   return clicked
     ? ` The primary action in "${aoiId}" was ${looked}, and clicked.`
     : ` The primary action in "${aoiId}" was ${looked}, but never clicked.`;
 }
 
 /**
- * Returns, in a window, to an area of interest the agent had already fixated before the
- * window opened: the revisits an outcome's reason counts.
+ * Returns, in a window, to an area of interest the gaze had already visited **and left**,
+ * so a run of consecutive fixations inside one area is one visit and not a revisit. It is
+ * the definition `packages/scoring`'s dead-end returns uses, because `revisit` is one word
+ * in this product (`docs/FLOW.md` section 8) and an outcome's reason counts it the same
+ * way the friction score does.
  */
 function revisitsBetween(trace: SessionTrace, fromMs: number, toMs: number): number {
   const seen = new Set<string>();
+  let previousAoiId: string | null = null;
   let revisits = 0;
   for (const fixation of trace.fixations) {
-    if (fixation.aoiId == null) {
-      continue;
-    }
-    if (fixation.tMs < fromMs) {
-      seen.add(fixation.aoiId);
-      continue;
-    }
     if (fixation.tMs > toMs) {
       break;
     }
-    if (seen.has(fixation.aoiId)) {
+    const aoiId = fixation.aoiId;
+    // A fixation outside every area breaks the run, so coming back across it is a return.
+    if (aoiId == null) {
+      previousAoiId = null;
+      continue;
+    }
+    if (fixation.tMs >= fromMs && seen.has(aoiId) && previousAoiId !== aoiId) {
       revisits += 1;
     }
-    seen.add(fixation.aoiId);
+    seen.add(aoiId);
+    previousAoiId = aoiId;
   }
   return revisits;
 }
@@ -366,11 +414,15 @@ function stepAt(trace: SessionTrace, tMs: number): string {
 }
 
 /** The one place `attribution` and `excludedFromScores` are set together. */
-function automationOutcome(failure: AutomationFailure): SessionOutcome {
+function automationOutcome(failure: AutomationFailure, endStep: string): SessionOutcome {
+  // A driver that broke before it knew where it was reports no step, and the contract's
+  // `outcome.step` is a non-empty name: this module promises an outcome that parses, so
+  // the last screen's step stands in rather than being passed through blank.
+  const step = failure.step.trim() === '' ? endStep : failure.step;
   return {
     status: 'automation_failure',
-    step: failure.step,
-    reason: `Our own browsing broke on the "${failure.step}" step: ${failure.detail}.`,
+    step,
+    reason: `Our own browsing broke on the "${step}" step: ${failure.detail}.`,
     attribution: 'automation',
     excludedFromScores: true,
   };
@@ -390,6 +442,18 @@ function lerp(atZero: number, atOne: number, t: number): number {
 
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+/** The revisit clause of a reason, in the singular when there was one of them. */
+function revisitClause(revisits: number): string {
+  return revisits === 1
+    ? '1 revisit to an area of interest it had already seen'
+    : `${revisits} revisits to areas of interest it had already seen`;
+}
+
+/** "1 action", "3 actions": the reason is copy a designer reads, not a counter. */
+function plural(howMany: number, noun: string): string {
+  return `${howMany} ${noun}${howMany === 1 ? '' : 's'}`;
 }
 
 /** One decimal, because a reason reads "12.4 s of dwell" and not "12437 ms". */

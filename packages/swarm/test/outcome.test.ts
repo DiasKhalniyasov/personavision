@@ -107,6 +107,46 @@ const SELECTOR_TIMEOUT: SessionTrace = {
   },
 };
 
+/**
+ * The task was done five seconds in, and then the agent read the confirmation page: four
+ * actions that get nowhere, because there is nowhere left to get to.
+ */
+const READ_ON_AFTER_COMPLETING: SessionTrace = {
+  screens: [
+    { index: 0, step: 'review' },
+    { index: 1, step: 'complete' },
+  ],
+  fixations: [
+    fixation(0, 500, 'summary'),
+    fixation(1, 5_500, PRIMARY_ACTION_AOI),
+    fixation(1, 7_000, 'order-number'),
+  ],
+  actions: [
+    { tMs: 5_000, type: 'click', aoiId: PRIMARY_ACTION_AOI, ok: true },
+    { tMs: 6_000, type: 'scroll', aoiId: null, ok: true },
+    { tMs: 7_000, type: 'hesitate', aoiId: 'order-number', ok: true },
+    { tMs: 8_000, type: 'scroll', aoiId: null, ok: true },
+    { tMs: 9_000, type: 'scroll', aoiId: null, ok: true },
+  ],
+  durationMs: 10_000,
+  taskCompleted: true,
+  primaryActionAoiId: PRIMARY_ACTION_AOI,
+};
+
+/** One scroll, then half a minute of looking at the total, and no further action. */
+const STARED_AND_STOPPED: SessionTrace = {
+  screens: [{ index: 0, step: 'review' }],
+  fixations: [
+    fixation(0, 1_500, 'total'),
+    fixation(0, 12_000, 'fee-notice'),
+    fixation(0, 25_000, 'total'),
+  ],
+  actions: [{ tMs: 1_000, type: 'scroll', aoiId: null, ok: true }],
+  durationMs: 30_000,
+  taskCompleted: false,
+  primaryActionAoiId: PRIMARY_ACTION_AOI,
+};
+
 /** The same walk, under a per-session wall-clock cap it ran past. */
 const PAST_THE_WALL_CLOCK: SessionTrace = {
   ...PRIMARY_ACTION_NEVER_SEEN,
@@ -148,7 +188,8 @@ describe('decideOutcome', () => {
       { ...PAST_THE_WALL_CLOCK, wallClockBudgetMs: 120_000 },
       PERSISTENT,
     );
-    expect(within).toMatchObject({ status: 'failed', attribution: 'product' });
+    expect(within.status).not.toBe('automation_failure');
+    expect(within).toMatchObject({ attribution: 'product', excludedFromScores: false });
   });
 
   it('ends the task-not-done walk as failed, naming the primary action nobody saw', () => {
@@ -193,6 +234,87 @@ describe('decideOutcome', () => {
       reason: expect.stringContaining('Persistence spent'),
     });
     expect(decideOutcome(trace, PERSISTENT).status).toBe('failed');
+  });
+
+  it('leaves a completed session a success when the agent reads on past the task', () => {
+    // Effort after the task was done is not effort towards it, however little patience the
+    // persona has left: a completed session counts towards the completion figure, and
+    // against neither the abandonment nor the task-failure component of the score.
+    expect(decideOutcome(READ_ON_AFTER_COMPLETING, IMPATIENT)).toMatchObject({
+      status: 'success',
+      step: 'complete',
+      attribution: 'product',
+      excludedFromScores: false,
+    });
+  });
+
+  it('spends patience on the dwell a session ends on', () => {
+    // A session ends when the agent stops acting, so there is no action after the last
+    // dwell to notice it at.
+    expect(decideOutcome(STARED_AND_STOPPED, IMPATIENT)).toMatchObject({
+      status: 'abandoned',
+      step: 'review',
+      reason: expect.stringContaining('Patience spent'),
+    });
+    // Thirty seconds is inside a patient persona's budget: that session simply ended with
+    // the task not done.
+    expect(decideOutcome(STARED_AND_STOPPED, PERSISTENT).status).toBe('failed');
+  });
+
+  it('counts a revisit as a return to an area of interest it had left', () => {
+    const walk = {
+      screens: [{ index: 0, step: 'review' }],
+      actions: [{ tMs: 9_000, type: 'abandon' as const, aoiId: null, ok: true }],
+      durationMs: 10_000,
+      taskCompleted: false,
+    };
+    const stayed = decideOutcome(
+      {
+        ...walk,
+        fixations: [
+          fixation(0, 1_000, 'total'),
+          fixation(0, 2_000, 'total'),
+          fixation(0, 3_000, 'total'),
+        ],
+      },
+      PERSISTENT,
+    );
+    const returned = decideOutcome(
+      {
+        ...walk,
+        fixations: [
+          fixation(0, 1_000, 'total'),
+          fixation(0, 2_000, 'fee-notice'),
+          fixation(0, 3_000, 'total'),
+        ],
+      },
+      PERSISTENT,
+    );
+
+    // One long look split into three fixations is one visit, as the friction score's
+    // dead-end returns count it.
+    expect(stayed.reason).toContain('0 revisits to areas of interest');
+    expect(returned.reason).toContain('1 revisit to an area of interest');
+  });
+
+  it('names a step even when the driver broke before it knew one', () => {
+    const outcome = decideOutcome(
+      {
+        ...PRIMARY_ACTION_NEVER_SEEN,
+        automationFailure: { kind: 'navigation_error', detail: 'the page never loaded', step: '' },
+      },
+      PERSISTENT,
+    );
+
+    expect(outcome).toMatchObject({
+      status: 'automation_failure',
+      step: 'review',
+      attribution: 'automation',
+      excludedFromScores: true,
+    });
+    expect(() =>
+      sessionSchema.parse(sessionWith(PRIMARY_ACTION_NEVER_SEEN, outcome)),
+    ).not.toThrow();
   });
 
   it('attributes every outcome and derives exclusion from the attribution alone', () => {
