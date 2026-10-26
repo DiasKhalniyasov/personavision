@@ -40,7 +40,7 @@
     {
       "variant": "A",
       "step": "cart",
-      "caption": "Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-sensitive agents left here over it."
+      "caption": "Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-led people left here over it."
     },
     {
       "variant": "B",
@@ -50,7 +50,7 @@
     {
       "variant": "A",
       "step": "payment",
-      "caption": "Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 agents who reached this step fixated \"Continue to review\", median 1.8 s in."
+      "caption": "Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 people who reached this step fixated \"Continue to review\", median 1.8 s in."
     },
     {
       "variant": "B",
@@ -60,22 +60,22 @@
     {
       "variant": "A",
       "step": "review",
-      "caption": "Variant A, review step. The total is read once, then the primary action; 9 of 9 agents placed the order."
+      "caption": "Variant A, review step. The total is read once, then the primary action; 9 of 9 people placed the order."
     },
     {
       "variant": "B",
       "step": "review",
-      "caption": "Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and \"Confirm purchase\" sits below the fold: 0 of 9 agents who reached this step ever fixated it."
+      "caption": "Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and \"Confirm purchase\" sits below the fold: 0 of 9 people who reached this step ever fixated it."
     },
     {
       "variant": "A",
       "step": "confirm",
-      "caption": "Variant A, confirmation. 9 of 11 agents reached it."
+      "caption": "Variant A, confirmation. 9 of 11 people reached it."
     },
     {
       "variant": "B",
       "step": "confirm",
-      "caption": "Variant B, confirmation. Only 2 of 11 agents reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to."
+      "caption": "Variant B, confirmation. Only 2 of 11 people reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to."
     }
   ],
   "audience": {
@@ -99,7 +99,7 @@
     ],
     "devices": [
       {
-        "name": "iPhone 15",
+        "name": "mobile",
         "viewport": {
           "width": 390,
           "height": 844
@@ -109,12 +109,12 @@
         "share": 0.6
       },
       {
-        "name": "MacBook Air 13",
+        "name": "desktop",
         "viewport": {
-          "width": 1440,
-          "height": 900
+          "width": 1280,
+          "height": 800
         },
-        "deviceScaleFactor": 2,
+        "deviceScaleFactor": 1,
         "touch": false,
         "share": 0.4
       }
