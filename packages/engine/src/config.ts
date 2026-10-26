@@ -91,6 +91,46 @@ export interface SegmentationConfig {
   readonly maxRegions: number;
 }
 
+/**
+ * What `predict` assumes about a bare screenshot, and how it renders a saliency map.
+ *
+ * `predict` (#68) is the path the calibration step scores the engine through: a screenshot
+ * with no DOM, no goal and no persona in, a saliency map and a scanpath out. The four
+ * numbers under `map` are the ones a reported CC, NSS, KLD or AUC-Judd is sensitive to, so
+ * they are configuration rather than constants — a reviewer has to be able to see what was
+ * compared, and #11 has to be able to fit it. `packages/engine/README.md` states the
+ * convention they describe.
+ */
+export interface PredictionConfig {
+  readonly map: {
+    /**
+     * Image pixels per map cell on a side: the downscale factor from the image to the map.
+     * A map is `round(imageWidth / cellPx)` × `round(imageHeight / cellPx)` cells, at least
+     * one of each.
+     */
+    readonly cellPx: number;
+    /** The Gaussian kernel's standard deviation, as a share of the map's longer side. */
+    readonly kernelSigmaShare: number;
+    /** How many standard deviations of the kernel are summed before it is truncated. */
+    readonly kernelRadiusSigmas: number;
+    /**
+     * The exponent on a fixation's dwell when it is spread into the map: 1 weights each
+     * fixation by its dwell, 0 weights every fixation equally.
+     */
+    readonly dwellWeightExponent: number;
+  };
+  /**
+   * How many cells across the position-prior grid is, for an image the segmenter finds no
+   * structure in at all. The rows follow from the image's aspect ratio.
+   */
+  readonly priorGridCellsAcross: number;
+  /**
+   * The value every persona trait takes for a bare image, which has no persona. 0.5 is the
+   * middle of each row of the trait table rather than a claim about a population.
+   */
+  readonly neutralTrait: number;
+}
+
 export interface EngineConfig {
   /** `P(area) ∝ exp(alpha·salience + beta·relevance + gamma·history)` — #7, user story 7. */
   readonly alpha: number;
@@ -209,6 +249,9 @@ export interface EngineConfig {
 
   /** The offline heuristic segmenter's thresholds. */
   readonly segmentation: SegmentationConfig;
+
+  /** What `predict` assumes about a bare screenshot, and how it renders a map. */
+  readonly prediction: PredictionConfig;
 }
 
 /** A partial configuration, to any depth: what a run's `engine.weights` is one of. */
@@ -324,6 +367,35 @@ export const defaultEngineConfig: EngineConfig = {
     minAspectRatio: 0.12,
     minRectangularity: 0.75,
     maxRegions: 12,
+  },
+
+  prediction: {
+    map: {
+      // Ten image pixels a cell. The size is set by #83's aspect rule rather than by
+      // taste: it compares the two grids' shapes and *refuses* a pair more than one per
+      // cent apart, and the shape of an integer grid is only as faithful as its own
+      // coarseness. A twenty-pixel cell is over that bound on a 390x844, an 828x1792 and a
+      // 1170x2532 image — ordinary phone screenshots, a third of the mobile category — and
+      // a ten-pixel cell is inside it on every size tried. The blur is a share of the
+      // grid's longer side, so halving the cell leaves the kernel the same width in image
+      // pixels and only states it on a finer grid; the prediction is then resampled onto
+      // the ground truth's grid, which is #83's documented path and an exact area-weighted
+      // mean when the two are integer multiples, as 32x24 onto 16x12 is.
+      cellPx: 10,
+      // Three per cent of the longer side is the blur the saliency-benchmark literature
+      // compares maps at, so a figure here is comparable with a published one.
+      kernelSigmaShare: 0.03,
+      // Past three standard deviations a Gaussian contributes about two parts in a thousand,
+      // and the normalisation absorbs what the truncation drops.
+      kernelRadiusSigmas: 3,
+      // Dwell-weighted: a long look counts for more than a glance, as a human fixation map
+      // aggregated over dwell does. Zero makes it a count of fixations instead.
+      dwellWeightExponent: 1,
+    },
+    // Five across: coarse enough that a featureless image is a handful of looks rather than
+    // a sampling grid, fine enough that the centre and top priors can tell cells apart.
+    priorGridCellsAcross: 5,
+    neutralTrait: 0.5,
   },
 };
 
