@@ -129,8 +129,12 @@ export const MODEL_FAILURE_KINDS = [
   'timeout',
   'http_status',
   'refusal',
+  /** Our own output cap cut the answer off, which is our failure and not the model's. */
+  'incomplete',
   'unparseable',
   'conversation',
+  /** The trajectory could not be written, so the run would not be replayable from it. */
+  'trajectory',
 ] as const;
 
 export type ModelFailureKind = (typeof MODEL_FAILURE_KINDS)[number];
@@ -175,6 +179,20 @@ export class ModelDecisionError extends Error {
  */
 const redact = (text: string, apiKey: string): string =>
   apiKey === '' ? text : text.split(apiKey).join('[redacted]');
+
+/**
+ * The same, through a response body — which is not ours and may quote the key straight back:
+ * a 401 page, a proxy that echoes the request, a gateway that logs what it received. The
+ * trajectory is written to disk, so the body is redacted before it is recorded rather than
+ * trusted because it came from the API.
+ */
+const redactBody = (body: unknown, apiKey: string): unknown => {
+  if (apiKey === '') return body;
+  if (typeof body === 'string') return redact(body, apiKey);
+  const text = JSON.stringify(body);
+  if (text === undefined || !text.includes(apiKey)) return body;
+  return JSON.parse(redact(text, apiKey)) as unknown;
+};
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -235,8 +253,15 @@ interface Conversation {
   readonly promptCacheKey: string;
   prefix?: readonly ResponsesMessage[];
   readonly turns: ResponsesMessage[];
-  previousResponseId?: string;
   calls: number;
+  /**
+   * One turn at a time. Two overlapping `decide` calls on one handle would both read `turns`
+   * before either appended to it: two requests with the same prefix, then two appends in
+   * whatever order they finished, and the session's append-only history — the thing its whole
+   * cache entry rests on — would be wrong from then on. The engine drives one screen at a
+   * time today; this makes the invariant the provider's own rather than the caller's.
+   */
+  queue: Promise<unknown>;
 }
 
 export const createMetaModelApiProvider = (
@@ -254,7 +279,7 @@ export const createMetaModelApiProvider = (
     return (options.apiKey ?? env[MODEL_API_KEY_ENV] ?? '').trim();
   };
 
-  const decideOn = async (
+  const takeTurn = async (
     identity: DecisionSessionIdentity,
     conversation: Conversation,
     context: DecisionContext,
@@ -270,8 +295,26 @@ export const createMetaModelApiProvider = (
       promptCacheKey: conversation.promptCacheKey,
     };
 
+    const error = (kind: ModelFailureKind, message: string, status?: number): ModelDecisionError =>
+      new ModelDecisionError({
+        kind,
+        message,
+        mode,
+        modelId,
+        ...(status === undefined ? {} : { status }),
+      });
+
+    /**
+     * Writes one record. A sink that rejects is a failure in its own right — a run is not
+     * replayable from a trajectory with a hole in it — so it surfaces as `trajectory` rather
+     * than as whatever I/O error the sink threw.
+     */
     const record = async (entry: TrajectoryRecord): Promise<void> => {
-      await options.trajectory?.(entry);
+      try {
+        await options.trajectory?.(entry);
+      } catch (thrown) {
+        throw error('trajectory', redact(messageOf(thrown), apiKey));
+      }
     };
 
     const fail = async (
@@ -280,14 +323,10 @@ export const createMetaModelApiProvider = (
       status?: number,
     ): Promise<never> => {
       const message = redact(detail, apiKey);
-      await record({ ...call, kind: 'failure', failure: { kind, message } });
-      throw new ModelDecisionError({
-        kind,
-        message,
-        mode,
-        modelId,
-        ...(status === undefined ? {} : { status }),
-      });
+      // A sink that cannot write never replaces the failure being recorded: the call failed
+      // for the reason it failed, and that is the reason the run loop is given.
+      await record({ ...call, kind: 'failure', failure: { kind, message } }).catch(() => undefined);
+      throw error(kind, message, status);
     };
 
     if (apiKey === '') {
@@ -316,9 +355,6 @@ export const createMetaModelApiProvider = (
       modelId,
       input: [...conversation.prefix, ...conversation.turns, screen],
       promptCacheKey: conversation.promptCacheKey,
-      ...(conversation.previousResponseId === undefined
-        ? {}
-        : { previousResponseId: conversation.previousResponseId }),
     });
 
     await record({ ...call, kind: 'request', url: META_RESPONSES_ENDPOINT, body });
@@ -343,16 +379,19 @@ export const createMetaModelApiProvider = (
         : fail('transport', `the call could not be made: ${detail}`);
     }
 
-    await record({ ...call, kind: 'response', status: response.status, body: response.body });
+    await record({
+      ...call,
+      kind: 'response',
+      status: response.status,
+      body: redactBody(response.body, apiKey),
+    });
 
     if (response.status < 200 || response.status >= 300) {
       return fail('http_status', `the API answered ${response.status}`, response.status);
     }
 
     const read = readResponse(response.body);
-    if (!read.ok) {
-      return fail(read.refusal ? 'refusal' : 'unparseable', read.detail);
-    }
+    if (!read.ok) return fail(read.fault, read.detail);
 
     const reply = readReply(read.value.replyText);
     if (!reply.ok) {
@@ -366,12 +405,18 @@ export const createMetaModelApiProvider = (
       reasoningTokens: read.value.tokens.reasoningTokens,
       estimatedCostUsd: estimateCostUsd(modelId, read.value.tokens),
     };
+    // A hint is advisory metadata, so one the interface would reject — an element from the
+    // screen before, a score on a 0-to-100 scale — is dropped rather than allowed to throw
+    // away a decision that has already been paid for.
+    const fixated = new Set(context.fixatedElements.map((element) => element.id));
+    const hints = Object.entries(reply.value.relevanceHints ?? {}).filter(
+      ([elementId, hint]) => fixated.has(elementId) && hint >= 0 && hint <= 1,
+    );
+
     const decision: Decision = {
       intent: reply.value.intent,
       action: reply.value.action,
-      ...(reply.value.relevanceHints === undefined
-        ? {}
-        : { relevanceHints: reply.value.relevanceHints }),
+      ...(hints.length === 0 ? {} : { relevanceHints: Object.fromEntries(hints) }),
       usage,
       model: { mode, modelId },
     };
@@ -387,11 +432,22 @@ export const createMetaModelApiProvider = (
     // Appended only now: a screen that failed is not a turn, so the next request opens with
     // exactly the bytes this session has already been charged for.
     conversation.turns.push(screen, assistantMessage(read.value.replyText));
-    if (read.value.responseId !== undefined) {
-      conversation.previousResponseId = read.value.responseId;
-    }
 
     return decision;
+  };
+
+  /** One turn at a time per conversation, in the order it was asked for. */
+  const decideOn = (
+    identity: DecisionSessionIdentity,
+    conversation: Conversation,
+    context: DecisionContext,
+  ): Promise<Decision> => {
+    const turn = conversation.queue.then(
+      () => takeTurn(identity, conversation, context),
+      () => takeTurn(identity, conversation, context),
+    );
+    conversation.queue = turn.catch(() => undefined);
+    return turn;
   };
 
   return {
@@ -408,6 +464,7 @@ export const createMetaModelApiProvider = (
         promptCacheKey: anonymousCacheKey(buildPrefix(context)),
         turns: [],
         calls: 0,
+        queue: Promise.resolve(),
       };
       return decideOn({ personaId: 'anonymous', seed: 0 }, conversation, context);
     },
@@ -418,6 +475,7 @@ export const createMetaModelApiProvider = (
         promptCacheKey: promptCacheKey(identity),
         turns: [],
         calls: 0,
+        queue: Promise.resolve(),
       };
       return createDecisionSession({
         personaId: identity.personaId,

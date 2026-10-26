@@ -18,15 +18,20 @@ import type { ModelId } from './meta-pricing.js';
  * caching rules are shape rules, and they are the expensive thing to get wrong:
  *
  * 1. **The whole conversation goes in `input`, every turn** — the instructions, the persona
- *    and its task, the tools, then every earlier turn, then the new message.
- *    `previous_response_id` is sent as well when the provider has one, but it is never the
- *    only thing holding the history: the instructions and the tools have to be resent
- *    anyway, so the conversation is built from our own record of it.
+ *    and its task, the tools, then every earlier turn, then the new message. The history is
+ *    never carried by `previous_response_id`: the instructions and the tools have to be
+ *    resent anyway, so the conversation is built from our own record of it.
  * 2. **The conversation is append-only.** Turn N's `input` is a byte-exact prefix of turn
  *    N+1's: an earlier message is never edited, reordered or re-rendered. Nothing in the
  *    prefix is a timestamp, a random id, a `Date.now()` or an iteration over a map whose
  *    order could change — the elements of a screen are rendered in the order the capture
  *    handed them over, and that screen's message is never touched again.
+ * 4. **`previous_response_id` is not sent at all.** The protocol prepends the stored turns of
+ *    the response it names and then appends `input`, so a request that carries both pays for
+ *    every earlier turn twice — measured live: turn 2 of a session billed 1,363 input tokens
+ *    with the id and 767 without it, for the same two screens (2026-10-27). Our own record of the
+ *    conversation is the whole history, which is what the instructions and the tools having to
+ *    be resent every turn already forces.
  * 3. **Only the tail is volatile**: the elements fixated on *this* screen, the action
  *    history, the step. A changed prefix is a cache miss on every screen of every session,
  *    and the run then pays uncached prices for the whole swarm.
@@ -72,8 +77,6 @@ export interface ResponsesRequestBody {
   readonly prompt_cache_key: string;
   readonly prompt_cache_retention: '24h';
   readonly max_output_tokens: number;
-  /** An addition when the provider has one, never the only carrier of the history. */
-  readonly previous_response_id?: string;
 }
 
 /**
@@ -178,6 +181,14 @@ const historyLine = (action: PastAction, index: number): string =>
  * from screen to screen is in this one message, and the screenshot joins it only when the
  * model called accepts image input.
  */
+/**
+ * **The image part's wire shape is not settled.** No model in the price table accepts image
+ * input, so this branch sends nothing today; `image_url` carries the run-relative path the
+ * context gave us, which is not something an HTTP API can fetch. Whichever ticket flips a
+ * model's `acceptsImages` owes this a verified encoding — a data URL built from the file, or a
+ * hosted URL — and the test that covers the branch asserts the screenshot is there rather than
+ * blessing the shape.
+ */
 export const buildScreenMessage = (
   context: DecisionContext,
   options: { readonly acceptsImages: boolean },
@@ -246,16 +257,12 @@ export const buildRequestBody = (options: {
   readonly modelId: ModelId;
   readonly input: readonly ResponsesMessage[];
   readonly promptCacheKey: string;
-  readonly previousResponseId?: string;
 }): ResponsesRequestBody => ({
   model: options.modelId,
   input: options.input,
   prompt_cache_key: options.promptCacheKey,
   prompt_cache_retention: '24h',
   max_output_tokens: MAX_OUTPUT_TOKENS,
-  ...(options.previousResponseId === undefined
-    ? {}
-    : { previous_response_id: options.previousResponseId }),
 });
 
 /** What the model spent, as the five figures a decision reports minus the price. */
@@ -279,6 +286,10 @@ const count = (value: unknown): number =>
  * than the invoice. The two "of which" figures are clamped to their totals, because a
  * decision whose cached tokens exceeded its input tokens would be rejected by
  * `validateDecision` and lose the whole call.
+ *
+ * Both figures really are "of which", as the live calls on 2026-10-27 reported them: 497
+ * cached of 572 input tokens, and 1,697 reasoning of 1,763 output tokens. The clamp therefore
+ * only fires if the protocol's own accounting changes under us.
  */
 export const readTokens = (usage: unknown): ReportedTokens => {
   const block = isObject(usage) ? usage : {};
@@ -295,26 +306,40 @@ export const readTokens = (usage: unknown): ReportedTokens => {
 };
 
 export interface ReadResponse {
-  readonly responseId?: string;
   readonly replyText: string;
   readonly tokens: ReportedTokens;
 }
 
+/**
+ * Why a response produced no decision. The three are kept apart because they send an
+ * investigation to three different places: the model declined, our own output cap cut the
+ * answer off, or the envelope was not what the protocol documents.
+ */
+export type ResponseFault = 'refusal' | 'incomplete' | 'unparseable';
+
 export type ResponseReading =
   | { readonly ok: true; readonly value: ReadResponse }
-  | { readonly ok: false; readonly refusal: true; readonly detail: string }
-  | { readonly ok: false; readonly refusal: false; readonly detail: string };
+  | { readonly ok: false; readonly fault: ResponseFault; readonly detail: string };
 
-const refused = (detail: string): ResponseReading => ({ ok: false, refusal: true, detail });
-const unreadable = (detail: string): ResponseReading => ({ ok: false, refusal: false, detail });
+const faulty = (fault: ResponseFault, detail: string): ResponseReading => ({
+  ok: false,
+  fault,
+  detail,
+});
 
 /**
- * Reads the protocol's envelope: the reply text out of `output`, the usage out of `usage`,
- * the response id for the next turn. A refusal and an envelope that makes no sense are told
- * apart, because one is the model declining and the other is our own call being wrong.
+ * Reads the protocol's envelope: the reply text out of the assistant's message, and the usage
+ * out of `usage`.
+ *
+ * The text is taken from `output` items of type `message` only. A `reasoning` item that
+ * carried a text part would otherwise be concatenated in front of the JSON — the decision
+ * would be lost as unparseable, and the conversation would replay back to the model something
+ * it never said.
  */
 export const readResponse = (body: unknown): ResponseReading => {
-  if (!isObject(body)) return unreadable(`the response body is not an object: ${typeof body}`);
+  if (!isObject(body)) {
+    return faulty('unparseable', `the response body is not an object: ${typeof body}`);
+  }
 
   const status = typeof body.status === 'string' ? body.status : undefined;
   const output = Array.isArray(body.output) ? body.output : [];
@@ -324,30 +349,34 @@ export const readResponse = (body: unknown): ResponseReading => {
   for (const item of output) {
     if (!isObject(item)) continue;
     if (item.type === 'refusal' && typeof item.refusal === 'string') refusals.push(item.refusal);
-    const content = Array.isArray(item.content) ? item.content : [];
-    for (const part of content) {
+    if (item.type !== 'message') continue;
+    for (const part of Array.isArray(item.content) ? item.content : []) {
       if (!isObject(part)) continue;
       if (part.type === 'output_text' && typeof part.text === 'string') texts.push(part.text);
       if (part.type === 'refusal' && typeof part.refusal === 'string') refusals.push(part.refusal);
     }
   }
 
-  if (refusals.length > 0) return refused(`the model refused: ${refusals.join(' ')}`);
+  if (refusals.length > 0) return faulty('refusal', `the model refused: ${refusals.join(' ')}`);
+  if (status === 'incomplete') {
+    // Our own `max_output_tokens` is the usual reason, and it is our failure rather than the
+    // model's: a run that lost screens this way should be sent to the cap, not to the model.
+    const details = isObject(body.incomplete_details)
+      ? JSON.stringify(body.incomplete_details)
+      : '';
+    return faulty(
+      'incomplete',
+      `the answer was cut off before it finished${details === '' ? '' : `: ${details}`}`,
+    );
+  }
   if (status !== undefined && status !== 'completed') {
-    return refused(`the response came back ${status} rather than completed`);
+    return faulty('unparseable', `the response came back ${status} rather than completed`);
   }
   if (texts.length === 0) {
-    return unreadable('the response carried no output text to read a decision from');
+    return faulty('unparseable', 'the response carried no output text to read a decision from');
   }
 
-  return {
-    ok: true,
-    value: {
-      ...(typeof body.id === 'string' ? { responseId: body.id } : {}),
-      replyText: texts.join(''),
-      tokens: readTokens(body.usage),
-    },
-  };
+  return { ok: true, value: { replyText: texts.join(''), tokens: readTokens(body.usage) } };
 };
 
 /** What the model said it does, before the interface's own check is applied to it. */

@@ -170,18 +170,39 @@ describe('the Meta Model API provider', () => {
       }
     });
 
-    it('never leans on previous_response_id alone: the history is in every request', async () => {
+    it('carries the history itself and never hands it to previous_response_id', async () => {
       const { provider, fake } = withFake();
 
       await walkSession(provider.beginSession(anna));
 
-      const second = fake.requests[1]?.body;
-      expect(second?.previous_response_id).toBe('resp-1');
-      // The addition carries the id; the conversation still carries itself — three
-      // messages of prefix, the first screen, its reply, and this screen.
-      expect(inputOf(second as ResponsesRequestBody)).toHaveLength(6);
-      expect(textOf(inputOf(second as ResponsesRequestBody)[0])).toBe(INSTRUCTIONS);
-      expect(textOf(inputOf(second as ResponsesRequestBody)[2])).toBe(TOOLS);
+      for (const request of fake.requests) {
+        // Sending the id as well would have the protocol prepend the stored turns and then
+        // append ours: every earlier turn billed twice, which is the cost the whole caching
+        // protocol exists to avoid.
+        expect(JSON.stringify(request.body)).not.toContain('previous_response_id');
+      }
+      // Three messages of prefix, the first screen, its reply, and this screen.
+      const second = fake.requests[1]?.body as ResponsesRequestBody;
+      expect(inputOf(second)).toHaveLength(6);
+      expect(textOf(inputOf(second)[0])).toBe(INSTRUCTIONS);
+      expect(textOf(inputOf(second)[2])).toBe(TOOLS);
+    });
+
+    it('takes one turn at a time, however the caller overlaps them', async () => {
+      const { provider, fake } = withFake();
+      const session = provider.beginSession(anna);
+
+      // Two screens asked for at once. Unserialised, both would be built from the same
+      // conversation and the session's append-only history would be wrong from then on.
+      await Promise.all([
+        session.decide(contextOf({ step: SESSION_STEPS[0] })),
+        session.decide(contextOf({ step: SESSION_STEPS[1] })),
+      ]);
+
+      const [first, second] = fake.requests.map((request) => inputOf(request.body));
+      expect(first).toHaveLength(4);
+      expect(second).toHaveLength(6);
+      expect(JSON.stringify(second?.slice(0, 4))).toBe(JSON.stringify(first));
     });
 
     it('makes turn N’s input a byte-exact prefix of turn N+1’s across three screens', async () => {
@@ -424,6 +445,67 @@ describe('the Meta Model API provider', () => {
       await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'refusal' });
     });
 
+    it('surfaces an answer cut off by our own output cap as incomplete, not as a refusal', async () => {
+      const { provider } = failing(
+        answering({
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+          output: [{ type: 'reasoning', summary: [] }],
+        }),
+      );
+
+      await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'incomplete' });
+    });
+
+    it('reads the reply off the assistant’s message and not off a reasoning item', async () => {
+      const { provider } = failing(
+        answering({
+          status: 'completed',
+          output: [
+            {
+              type: 'reasoning',
+              content: [{ type: 'output_text', text: 'I should probably click something.' }],
+            },
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: JSON.stringify({
+                    intent: 'That is the jacket.',
+                    action: { kind: 'click', targetElementId: 'el-jacket' },
+                  }),
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      // Concatenating the reasoning item's text in front of the JSON would lose the screen,
+      // and would replay into the conversation something the model never said.
+      const decision = await provider.decide(contextOf());
+
+      expect(decision.action).toEqual({ kind: 'click', targetElementId: 'el-jacket' });
+    });
+
+    it('drops a relevance hint it cannot use rather than the decision', async () => {
+      const { provider } = withFake({
+        reply: () => ({
+          intent: 'That is the jacket.',
+          action: { kind: 'click', targetElementId: 'el-jacket' },
+          // One score on the wrong scale, one element from the screen before, one usable.
+          relevanceHints: { 'el-jacket': 90, 'el-elsewhere': 0.5, 'el-home': 0.2 },
+        }),
+      });
+
+      const decision = await provider.beginSession(anna).decide(contextOf());
+
+      expect(decision.action).toEqual({ kind: 'click', targetElementId: 'el-jacket' });
+      expect(decision.relevanceHints).toEqual({ 'el-home': 0.2 });
+    });
+
     it('surfaces an unparseable reply as unparseable', async () => {
       const { provider } = failing(
         answering({
@@ -656,6 +738,26 @@ describe('the Meta Model API provider', () => {
       vi.restoreAllMocks();
     });
 
+    it('redacts a response body that quotes the key back at us', async () => {
+      const sink = recordingSink();
+      const provider = createMetaModelApiProvider({
+        mode: 'standard',
+        // A 401 page that echoes the request, as a gateway or a proxy will.
+        transport: () =>
+          Promise.resolve({
+            status: 401,
+            body: { error: { message: `invalid key ${TEST_KEY}`, header: `Bearer ${TEST_KEY}` } },
+          }),
+        trajectory: sink.sink,
+      });
+
+      await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'http_status' });
+
+      const written = JSON.stringify(sink.records);
+      expect(written).not.toContain(TEST_KEY);
+      expect(written).toContain('[redacted]');
+    });
+
     it('carries no credential and no credential path in its source', () => {
       const dir = fileURLToPath(new URL('../src/', import.meta.url));
 
@@ -665,6 +767,37 @@ describe('the Meta Model API provider', () => {
         expect(source).not.toMatch(/\.config\/personavision/);
         expect(source).not.toMatch(/(?:sk|key)-[A-Za-z0-9]{12,}/);
       }
+    });
+  });
+
+  describe('a trajectory sink that cannot write', () => {
+    it('reports the write as its own failure when the call itself was fine', async () => {
+      const fake = fakeTransport();
+      const provider = createMetaModelApiProvider({
+        mode: 'contributor',
+        env: TEST_ENV,
+        transport: fake.transport,
+        trajectory: () => Promise.reject(new Error('ENOSPC: no space left on device')),
+      });
+
+      await expect(provider.decide(contextOf())).rejects.toMatchObject({
+        kind: 'trajectory',
+        attribution: 'automation',
+      });
+    });
+
+    it('never replaces the failure it was asked to record', async () => {
+      const provider = createMetaModelApiProvider({
+        mode: 'contributor',
+        env: TEST_ENV,
+        transport: () => Promise.reject(new Error('ECONNRESET')),
+        trajectory: (record) => {
+          if (record.kind === 'failure') throw new Error('EBADF: the file is already closed');
+        },
+      });
+
+      // The run loop is told the call failed on the transport, not that a file was shut.
+      await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'transport' });
     });
   });
 
