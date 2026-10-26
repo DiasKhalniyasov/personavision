@@ -79,26 +79,51 @@ const personaTraitsSchema = z.strictObject({
  */
 const audienceDeviceSchema = deviceSchema.extend({ share: unitInterval });
 
+/** `devices[].share` is a distribution, so the mix has to add up to one whole audience. */
+const SHARE_TOLERANCE = 1e-6;
+
 /**
  * The audience a test was run for, as it was **when the test started** — copied into the
  * artifact by value, never referenced, so that editing the stored audience later cannot
  * restate a finished test. `docs/FLOW.md` section 1 declares the shape; the platform and
  * the persona generator both import this one rather than restating it.
+ *
+ * Its two invariants live here rather than on `runSchema`, so that a caller parsing an
+ * audience on its own — the platform storing one, the generator sampling from one — is
+ * held to them too, and not only once a whole run has been simulated and written.
  */
-export const audienceSchema = z.strictObject({
-  id: name,
-  name,
-  ageRange: z.strictObject({ min: z.int().min(0), max: z.int().min(0) }),
-  roles: z.array(name),
-  regions: z.array(name),
-  goals: z.array(name),
-  devices: z.array(audienceDeviceSchema).min(1),
-  techSavviness: unitInterval,
-  priceSensitivity: unitInterval,
-  /** How many simulated people the audience generates, and so how many personas a run has. */
-  size: z.int().positive(),
-  generatedFrom: z.strictObject({ seed: z.int(), generatorVersion: name }),
-});
+export const audienceSchema = z
+  .strictObject({
+    id: name,
+    name,
+    ageRange: z.strictObject({ min: z.int().min(0), max: z.int().min(0) }),
+    roles: z.array(name),
+    regions: z.array(name),
+    goals: z.array(name),
+    devices: z.array(audienceDeviceSchema).min(1),
+    techSavviness: unitInterval,
+    priceSensitivity: unitInterval,
+    /** How many simulated people the audience generates, and so how many personas a run has. */
+    size: z.int().positive(),
+    generatedFrom: z.strictObject({ seed: z.int(), generatorVersion: name }),
+  })
+  .superRefine((audience, ctx) => {
+    const shareTotal = audience.devices.reduce((total, device) => total + device.share, 0);
+    if (Math.abs(shareTotal - 1) > SHARE_TOLERANCE) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['devices'],
+        message: `the device mix is a distribution: the shares must sum to 1 (±${SHARE_TOLERANCE}), and these sum to ${shareTotal}`,
+      });
+    }
+    if (audience.ageRange.min > audience.ageRange.max) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ageRange'],
+        message: `an age range runs from min to max: found ${audience.ageRange.min}–${audience.ageRange.max}`,
+      });
+    }
+  });
 
 /**
  * One simulated person, generated from the audience. It carries where it came from —
@@ -160,7 +185,12 @@ const scoreSchema = z.strictObject({
     failed: count,
     automationFailure: count,
   }),
-  scoredSessionCount: count,
+  /**
+   * Automation failures are excluded, so this is at least one: a variant whose every
+   * session was an automation failure has no friction score and no completion rate, and
+   * belongs out of `scores` rather than in it reporting a zero nobody measured.
+   */
+  scoredSessionCount: z.int().positive(),
   perSeedGroup: z.array(z.strictObject({ seed: z.int(), frictionScore: points })),
 });
 
@@ -189,9 +219,6 @@ export const verdictSchema = z.strictObject({
   /** The one heatmap the verdict embeds: `aoiId` is `null` when the whole step is the evidence. */
   heroEvidence: z.strictObject({ variant: name, step: name, aoiId: name.nullable() }),
 });
-
-/** `devices[].share` is a distribution, so the mix has to add up to one whole audience. */
-const SHARE_TOLERANCE = 1e-6;
 
 /**
  * How far a stored `completionRate` may sit from the counts it summarises: two decimal
@@ -271,24 +298,6 @@ export const runSchema = z
   .superRefine((run, ctx) => {
     const { audience } = run;
 
-    // The device mix is a distribution over one audience, so its shares add up to one.
-    const shareTotal = audience.devices.reduce((total, device) => total + device.share, 0);
-    if (Math.abs(shareTotal - 1) > SHARE_TOLERANCE) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['audience', 'devices'],
-        message: `the device mix is a distribution: the shares must sum to 1 (±${SHARE_TOLERANCE}), and these sum to ${shareTotal}`,
-      });
-    }
-
-    if (audience.ageRange.min > audience.ageRange.max) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['audience', 'ageRange'],
-        message: `an age range runs from min to max: found ${audience.ageRange.min}–${audience.ageRange.max}`,
-      });
-    }
-
     // The personas are generated from the audience, so the audience's size is how many of
     // them there are and the audience's id is the one every one of them carries.
     if (run.personas.length !== audience.size) {
@@ -298,6 +307,7 @@ export const runSchema = z
         message: `the audience generates ${audience.size} ${audience.size === 1 ? 'person' : 'people'}, but this run carries ${run.personas.length}`,
       });
     }
+    const generated = new Set<string>();
     run.personas.forEach((persona, index) => {
       if (persona.audienceId !== audience.id) {
         ctx.addIssue({
@@ -306,21 +316,41 @@ export const runSchema = z
           message: `"${persona.audienceId}" is not this run's audience "${audience.id}": a run's personas are generated from the audience it carries`,
         });
       }
+      // A persona id addresses one simulated person on the Sessions screen and in every
+      // session file, so two people cannot share one.
+      if (generated.has(persona.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['personas', index, 'id'],
+          message: `persona "${persona.id}" appears more than once: a persona id names one simulated person`,
+        });
+      }
+      generated.add(persona.id);
     });
 
     // `completionRate` is stored so that no screen computes it, which only works while it
     // agrees with the outcome counts underneath it.
     run.scores.forEach((score, index) => {
-      const { success } = score.outcomeCounts;
-      const expected = score.scoredSessionCount === 0 ? 0 : success / score.scoredSessionCount;
+      const { success, abandoned, failed } = score.outcomeCounts;
+      // The denominator is the scored sessions, and the three product outcomes are what
+      // they are made of: an automation failure is excluded from the scores, not from the
+      // run. Without this, 5 successes and 5 abandonments over 5 scored sessions would
+      // state a completion rate of 1 and agree with itself.
+      const accounted = success + abandoned + failed;
+      if (accounted !== score.scoredSessionCount) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scores', index, 'scoredSessionCount'],
+          message: `${score.scoredSessionCount} sessions were scored, but the outcomes account for ${accounted} of them (${success} success, ${abandoned} abandoned, ${failed} failed; automation failures are counted separately and excluded)`,
+        });
+      }
+      if (score.scoredSessionCount <= 0) return;
+      const expected = success / score.scoredSessionCount;
       if (Math.abs(score.completionRate - expected) > COMPLETION_TOLERANCE) {
         ctx.addIssue({
           code: 'custom',
           path: ['scores', index, 'completionRate'],
-          message:
-            score.scoredSessionCount === 0
-              ? `no session was scored, so the completion rate is 0, not ${score.completionRate}`
-              : `completionRate ${score.completionRate} disagrees with ${success} of ${score.scoredSessionCount} scored sessions (${expected})`,
+          message: `completionRate ${score.completionRate} disagrees with ${success} of ${score.scoredSessionCount} scored sessions (${expected})`,
         });
       }
     });
@@ -449,29 +479,51 @@ export const sessionSchema = z
     });
   });
 
-export const findingsSchema = z.strictObject({
-  schemaVersion,
-  runId: name,
-  findings: z.array(
-    z.strictObject({
-      id: name,
-      rank: z.int().positive(),
-      severity: severitySchema,
-      claim: name,
-      evidence: name,
-      variant: name,
-      step: name,
-      aoiId: name.nullable(),
-      sessionIds: z.array(name),
-      sessionCount: count,
-      attribution: attributionSchema,
-      evidence_link: z.strictObject({
-        screen: z.enum(['attention', 'sessions']),
-        params: z.record(z.string(), z.string()),
+/**
+ * The query parameters the two evidence screens take, from the routes in `docs/FLOW.md`
+ * section 3. The key space is closed like every other object in the artifact: a link
+ * cannot carry a parameter those screens have no use for, and so cannot carry a
+ * credential under a name of its own invention.
+ */
+const EVIDENCE_LINK_PARAMS = ['variant', 'step', 'aoi', 'outcome'] as const;
+
+export const findingsSchema = z
+  .strictObject({
+    schemaVersion,
+    runId: name,
+    findings: z.array(
+      z.strictObject({
+        id: name,
+        rank: z.int().positive(),
+        severity: severitySchema,
+        claim: name,
+        evidence: name,
+        variant: name,
+        step: name,
+        aoiId: name.nullable(),
+        sessionIds: z.array(name),
+        sessionCount: count,
+        attribution: attributionSchema,
+        evidence_link: z.strictObject({
+          screen: z.enum(['attention', 'sessions']),
+          params: z.record(z.string(), z.string()),
+        }),
       }),
-    }),
-  ),
-});
+    ),
+  })
+  .superRefine((findings, ctx) => {
+    findings.findings.forEach((finding, index) => {
+      for (const key of Object.keys(finding.evidence_link.params)) {
+        if (!(EVIDENCE_LINK_PARAMS as readonly string[]).includes(key)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['findings', index, 'evidence_link', 'params', key],
+            message: `"${key}" is not a parameter the evidence screens take (${EVIDENCE_LINK_PARAMS.join(', ')})`,
+          });
+        }
+      }
+    });
+  });
 
 /**
  * The arguments a new run is started with. The CLI's `run` command and the web app's
@@ -480,7 +532,13 @@ export const findingsSchema = z.strictObject({
 export const runRequestSchema = z.strictObject({
   task: z.strictObject({ prompt: name }),
   variants: z.array(variantSchema).min(1),
-  personaIds: z.array(name).min(1),
+  /**
+   * The audience the test is for, by id — the platform resolves it and the pipeline copies
+   * it into `run.json` by value as the test starts. There is no subset of personas to
+   * name: the personas are generated from the audience, and a run carries `audience.size`
+   * of them.
+   */
+  audienceId: name,
   /** Sessions per persona per variant. */
   repeats: z.int().positive(),
   seed: z.int(),

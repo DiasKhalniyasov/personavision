@@ -1,7 +1,15 @@
 import { writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Audience, Persona, Score, Verdict, Violation } from '../src/index.js';
-import { readRun, runPaths, runSchema, validate, writeRun } from '../src/index.js';
+import {
+  audienceSchema,
+  readRun,
+  runPaths,
+  runRequestSchema,
+  runSchema,
+  validate,
+  writeRun,
+} from '../src/index.js';
 import {
   AUDIENCE_ID,
   CART,
@@ -219,17 +227,144 @@ describe('the completion rate the product leads with', () => {
     ).toEqual([]);
   });
 
-  it('rejects a rate above zero when no session was scored at all', async () => {
+  it('rejects outcome counts that do not account for the sessions that were scored', async () => {
     const run = validRun();
-    run.scores[0].outcomeCounts = { success: 0, abandoned: 0, failed: 0, automationFailure: 2 };
-    run.scores[0].scoredSessionCount = 0;
-    run.scores[0].completionRate = 0.5;
+    // Five successes and five abandonments over five scored sessions: a completion rate of
+    // 1 agrees with the numerator and still says the opposite of what happened.
+    run.scores[0].outcomeCounts = { success: 5, abandoned: 5, failed: 0, automationFailure: 0 };
+    run.scores[0].scoredSessionCount = 5;
+    run.scores[0].completionRate = 1;
     await writeFile(runPaths(runDir.dir()).run, asJson(run));
 
     const violations = await validate(runDir.dir());
 
-    expect(offenders(violations)).toContain(`${label.run}/scores/0/completionRate`);
-    expect(violations[0].message).toMatch(/no session was scored/);
+    expect(offenders(violations)).toContain(`${label.run}/scores/0/scoredSessionCount`);
+    expect(violations[0].message).toMatch(/the outcomes account for 10 of them/);
+  });
+
+  it('accepts counts where the automation failures sit outside the denominator', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.scores[0].outcomeCounts = { success: 9, abandoned: 2, failed: 0, automationFailure: 1 };
+        run.scores[0].scoredSessionCount = 11;
+        run.scores[0].completionRate = 9 / 11;
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a score row that scored no sessions at all, rather than calling it zero', async () => {
+    const run = validRun();
+    run.scores[0].outcomeCounts = { success: 0, abandoned: 0, failed: 0, automationFailure: 2 };
+    run.scores[0].scoredSessionCount = 0;
+    run.scores[0].completionRate = 0;
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    // A variant whose every session was an automation failure has no completion rate to
+    // state. The artifact says so by carrying no score row, not by reporting a zero.
+    expect(offenders(await validate(runDir.dir()))).toContain(
+      `${label.run}/scores/0/scoredSessionCount`,
+    );
+  });
+});
+
+describe('the audience schema on its own, as the platform and the generator parse it', () => {
+  it('holds a bare audience to its device mix, before any run exists', () => {
+    const audience = { ...validRun().audience };
+    audience.devices = audience.devices.map((device) => ({ ...device, share: 0.6 }));
+
+    const result = audienceSchema.safeParse(audience);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join('/'))).toContain('devices');
+  });
+
+  it('holds a bare audience to an age range that runs forwards', () => {
+    const result = audienceSchema.safeParse({
+      ...validRun().audience,
+      ageRange: { min: 65, max: 25 },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join('/'))).toContain('ageRange');
+  });
+
+  it('accepts the audience the run carries', () => {
+    expect(audienceSchema.safeParse(validRun().audience).success).toBe(true);
+  });
+});
+
+describe('a persona names one simulated person', () => {
+  const runDir = describeRunDir();
+
+  it('rejects two personas sharing an id', async () => {
+    const run = validRun();
+    run.audience.size = 2;
+    run.personas = [run.personas[0], { ...run.personas[0] }];
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/personas/1/id`);
+    expect(violations[0].message).toMatch(/appears more than once/);
+  });
+
+  it('accepts two personas with distinct ids', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience.size = 2;
+        run.personas = [run.personas[0], { ...run.personas[0], id: 'careful-comparer' }];
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("a finding's evidence link", () => {
+  const runDir = describeRunDir();
+
+  it('rejects a parameter the evidence screens do not take', async () => {
+    const findings = validFindings();
+    findings.findings[0].evidence_link.params = { variant: 'B', token: 'not-in-an-artifact' };
+    await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(
+      `${label.findings}/findings/0/evidence_link/params/token`,
+    );
+    expect(violations[0].message).toMatch(/is not a parameter the evidence screens take/);
+  });
+
+  it('accepts the parameters the Attention and Sessions routes have', async () => {
+    const findings = validFindings();
+    findings.findings[0].evidence_link.params = {
+      variant: 'B',
+      step: CONFIRM,
+      aoi: COMPLETE_AOI,
+      outcome: 'abandoned',
+    };
+    await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
+
+    expect(await validate(runDir.dir())).toEqual([]);
+  });
+});
+
+describe('a new test is started from an audience', () => {
+  it('takes the audience by id, and no subset of personas', () => {
+    const request = {
+      task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
+      variants: validRun().variants,
+      audienceId: AUDIENCE_ID,
+      repeats: 3,
+      seed: 1,
+      engineMode: 'offline' as const,
+    };
+
+    expect(runRequestSchema.safeParse(request).success).toBe(true);
+    // A request naming a handful of personas could never be written as a valid run: a run
+    // carries `audience.size` of them, generated from the audience.
+    const withPersonaIds: Record<string, unknown> = { ...request, personaIds: ['rushed-buyer'] };
+    delete withPersonaIds['audienceId'];
+    expect(runRequestSchema.safeParse(withPersonaIds).success).toBe(false);
   });
 });
 
@@ -594,5 +729,21 @@ describe('a schemaVersion that is not a version at all', () => {
 
     expect(offenders(violations)).toContain(`${label.run}/schemaVersion`);
     expect(violations[0].message).toBe('"2" is not a schema version: expected the number 2');
+  });
+});
+
+describe('the one heatmap the verdict embeds has a page to be drawn on', () => {
+  const runDir = describeRunDir();
+
+  it('rejects hero evidence of a variant and step no screenshot was captured of', async () => {
+    const run = validRun();
+    // Variant A and the confirmation step are both declared; the pair was never captured.
+    run.verdict.heroEvidence = { variant: 'A', step: CONFIRM, aoiId: null };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toEqual([`${label.run}/verdict/heroEvidence/step`]);
+    expect(violations[0].message).toMatch(/no screenshot was captured of A confirm/);
   });
 });

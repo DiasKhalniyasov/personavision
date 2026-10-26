@@ -162,6 +162,22 @@ const checkReferences = (
       ),
     );
   }
+  // The evidence is a heatmap drawn over a page, so the page has to have been captured.
+  // This is the only thing holding the `aoiId: null` case — "the whole step is the
+  // evidence" — to something the Verdict screen can actually render.
+  if (
+    !run.screenshots.some(
+      (screenshot) => screenshot.variant === hero.variant && screenshot.step === hero.step,
+    )
+  ) {
+    violations.push(
+      at(
+        relative.run,
+        [...heroPath, 'step'],
+        `no screenshot was captured of ${hero.variant} ${hero.step}, so there is no page for the verdict's heatmap to be drawn on`,
+      ),
+    );
+  }
   if (hero.aoiId !== null) {
     const heroAoi = run.aois.find((aoi) => aoi.id === hero.aoiId);
     if (heroAoi === undefined) {
