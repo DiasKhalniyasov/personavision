@@ -131,6 +131,16 @@ const sessionsLink = (params: Readonly<Record<string, string>>): RuleHit['eviden
 const primaryActions = (reading: VariantReading): AreaReading[] =>
   reading.areas.filter((area) => area.aoi.isPrimaryAction);
 
+/**
+ * The version a claim compares itself against: the first other version by id.
+ *
+ * A run of three versions is representable (`runRequestSchema` sets no maximum), and this
+ * picks one of the two rather than both. The sentence it feeds **names** the version it
+ * read — "On variant A the same control was seen by …" — so it is never a claim about the
+ * run as a whole, only a narrower one than a three-version run could support. Deciding
+ * which comparison to lead with when there are several is the Comparison screen's
+ * question, not a rule's.
+ */
 const theOtherVariant = (reading: VariantReading, run: RunReading): VariantReading | undefined =>
   run.variants.find((other) => other.variant !== reading.variant);
 
