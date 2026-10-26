@@ -2,7 +2,7 @@ import { Link, useMatch } from 'react-router';
 import type { Run } from '@personavision/contract';
 import { Button } from '@/components/ui/button';
 import { AccountMenu } from './AccountMenu';
-import { patterns, paths } from './paths';
+import { matches, paths, patterns } from './paths';
 import { SimulatedBadge, SimulatedBadgePlaceholder } from './SimulatedBadge';
 import { TestPicker, TestPickerPlaceholder } from './TestPicker';
 import type { RunState } from './useRun';
@@ -32,9 +32,9 @@ const tabsFor = (run: Run) => [
     // The step and version the verdict turns on: the run says which, so the tab opens on
     // the evidence rather than on an arbitrary first step.
     to: paths.attention(run.runId, run.verdict.heroEvidence.variant, run.verdict.heroEvidence.step),
-    match: `${patterns.run}/attention/*`,
+    match: matches.attention,
   },
-  { label: 'Sessions', to: paths.sessions(run.runId), match: `${patterns.sessions}/*` },
+  { label: 'Sessions', to: paths.sessions(run.runId), match: matches.sessions },
 ];
 
 function Tab({ label, to, match }: { label: string; to: string; match: string }) {
@@ -83,7 +83,7 @@ export function AppChrome({ run }: { run: RunState | null }) {
                 ))
               : null}
           <span className="grow" />
-          <Tab label="Audiences" to={paths.audiences} match={`${patterns.audiences}/*`} />
+          <Tab label="Audiences" to={paths.audiences} match={matches.audiences} />
         </div>
       </nav>
     </>

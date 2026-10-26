@@ -25,6 +25,19 @@ export const patterns = {
   session: '/runs/:runId/sessions/:sessionId',
 } as const;
 
+/**
+ * The `useMatch` patterns for a route and everything under it — the star is react-router's.
+ * The chrome asks which tab is the current one with these, so no component composes a
+ * pattern of its own either.
+ */
+export const matches = {
+  /** Any screen of one test, whichever of its tabs is open. */
+  runScreens: `${patterns.run}/*`,
+  attention: `${patterns.run}/attention/*`,
+  sessions: `${patterns.sessions}/*`,
+  audiences: `${patterns.audiences}/*`,
+} as const;
+
 const segment = (value: string): string => encodeURIComponent(value);
 
 /** The paths themselves. A screen links through these and never assembles a URL. */

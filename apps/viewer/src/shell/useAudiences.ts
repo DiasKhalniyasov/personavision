@@ -1,6 +1,6 @@
 import { createContext, use } from 'react';
 import type { Audience } from '@personavision/contract';
-import { useLatestRun, useRun } from './useRun';
+import { useLatestRun, useOptionalRun } from './useRun';
 
 /**
  * The audiences this workspace has. A test cannot be run without one, so `/new` asks for
@@ -22,11 +22,11 @@ export const AudiencesContext = createContext<AudiencesState | null>(null);
 export function useAudiences(): AudiencesState {
   const override = use(AudiencesContext);
   const latest = useLatestRun();
-  const run = useRun(latest.status === 'ready' ? latest.runId : '');
+  const run = useOptionalRun(latest.status === 'ready' ? latest.runId : null);
 
   if (override !== null) return override;
   if (latest.status === 'loading') return { status: 'loading' };
   if (latest.status !== 'ready') return { status: 'ready', audiences: [] };
-  if (run.status === 'loading') return { status: 'loading' };
+  if (run === null || run.status === 'loading') return { status: 'loading' };
   return { status: 'ready', audiences: run.status === 'ready' ? [run.run.audience] : [] };
 }

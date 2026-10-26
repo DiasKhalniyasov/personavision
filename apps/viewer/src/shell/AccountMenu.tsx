@@ -1,13 +1,12 @@
-import { Link } from 'react-router';
-import { paths } from './paths';
 import { useSession, workspaceInitials } from './useSession';
 
 /**
  * The account corner of the chrome.
  *
- * A slot: the shell renders who is signed in and a way to reach the account, and **#103**
- * fills in the menu itself — account, workspace switching and signing out. It is a link
- * rather than a button, so the chrome is operable by keyboard with nothing to fill in yet.
+ * A slot: the shell names who is signed in, and **#103** fills in the menu itself —
+ * account, workspace switching and signing out. Until then it does nothing, because the
+ * only account route there is to reach is `/signin`, and a signed-in reader's own avatar
+ * must not lead back to signing in.
  */
 export function AccountMenu() {
   const state = useSession();
@@ -16,13 +15,9 @@ export function AccountMenu() {
   const { account, workspace } = state.session;
 
   return (
-    <Link
-      className="avatar"
-      data-shell="account-menu"
-      to={paths.signIn}
-      aria-label={`Signed in as ${account.name} of ${workspace.name} — account and sign out`}
-    >
+    <span className="avatar" data-shell="account-menu">
+      <span className="sr-only">{`Signed in as ${account.name} of ${workspace.name}`}</span>
       <span aria-hidden="true">{workspaceInitials(workspace.name)}</span>
-    </Link>
+    </span>
   );
 }

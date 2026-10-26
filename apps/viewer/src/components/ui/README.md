@@ -20,7 +20,7 @@ the only _content_ differences from the registry are the four below.
 Nothing here carries a colour, a radius, a type size or a duration of its own. The
 Tailwind theme in `../../styles/theme.css` maps every one of those onto
 `docs/design/tokens.css`, so `bg-primary` is the lime action colour, `rounded-xl` is the
-20px card radius, and a token edit moves the whole product. `apps/viewer/tests/theme.test.tsx`
+20px card radius, and a token edit moves the whole product. `apps/viewer/tests/theme.test.ts`
 asserts that.
 
 ## The four departures from the registry's own classes

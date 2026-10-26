@@ -60,17 +60,15 @@ describe('the chrome names whose data this is', () => {
     expect(testMeta(earlier)).toContain('Mar');
   });
 
-  it('offers New test and the account, both reachable by keyboard', async () => {
+  it('offers New test, and names the account whose menu #103 builds', async () => {
     const { runId } = await exampleRun();
     mountApp(paths.run(runId));
 
     const bar = within(await waitFor(() => chrome()));
     expect(bar.getByRole('link', { name: 'New test' }).getAttribute('href')).toBe(paths.newTest);
-    expect(
-      bar.getByRole('link', {
-        name: 'Signed in as Workspace owner of Northwind Outdoors — account and sign out',
-      }),
-    ).toBeTruthy();
+    // The avatar says who is signed in and does nothing yet: there is no account screen
+    // to reach, and the corner must not send a signed-in reader back to sign-in.
+    expect(bar.getByText('Signed in as Workspace owner of Northwind Outdoors')).toBeTruthy();
 
     // Everything in the chrome that does something is a link or a button, so the whole bar
     // is operable with the keyboard alone and nothing needs a pointer.

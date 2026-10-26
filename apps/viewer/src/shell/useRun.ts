@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useMatch } from 'react-router';
-import { findingsSchema, runSchema } from '@personavision/contract';
+import { findingsSchema, runPaths, runSchema } from '@personavision/contract';
 import type { Findings, Run } from '@personavision/contract';
 // Type-only, and therefore erased: the listing's shape is `readRunIndex`'s own, so the
 // viewer does not restate the three field names it answers with. `@personavision/cli`
 // reads files and never reaches the browser bundle.
 import type { RunSummary } from '@personavision/cli';
-import { patterns } from './paths';
+import { matches, patterns } from './paths';
 
 /**
  * Reading a run. The **only** place in the viewer that does.
@@ -30,8 +30,12 @@ import { patterns } from './paths';
 
 const RUNS = '/runs';
 const indexUrl = `${RUNS}/index.json`;
-const runUrl = (runId: string): string => `${RUNS}/${encodeURIComponent(runId)}/run.json`;
-const findingsUrl = (runId: string): string => `${RUNS}/${encodeURIComponent(runId)}/findings.json`;
+/** The file names inside a run are the contract's layout, never restated here. */
+const layout = runPaths('');
+const runFile = (runId: string, file: string): string =>
+  `${RUNS}/${encodeURIComponent(runId)}/${file}`;
+const runUrl = (runId: string): string => runFile(runId, layout.run);
+const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
 
 /** Run data is served from the site root; `fetch` wants an absolute URL in a test. */
 const absolute = (path: string): string => new URL(path, window.location.href).toString();
@@ -122,12 +126,17 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
   if (!answer.ok) return { status: 'unreadable', url: indexUrl, problem: answer.problem };
   // The listing is newest first, as `readRunIndex` sorts it, so the most recent test is
   // the first entry and the viewer does not re-sort it by a timestamp of its own.
-  const listed = answer.body as RunSummary[];
+  const listed: unknown = answer.body;
   if (!Array.isArray(listed)) {
     return { status: 'unreadable', url: indexUrl, problem: 'it is not a list of tests' };
   }
-  const latest = listed[0];
-  return latest === undefined ? { status: 'none' } : { status: 'ready', runId: latest.runId };
+  const latest = (listed as Partial<RunSummary>[])[0];
+  if (latest === undefined) return { status: 'none' };
+  // The id addresses every other read, so a listing that carries none is unreadable rather
+  // than a workspace with no test: nothing is fetched from a path built out of `undefined`.
+  return typeof latest.runId === 'string' && latest.runId !== ''
+    ? { status: 'ready', runId: latest.runId }
+    : { status: 'unreadable', url: indexUrl, problem: 'a test in the listing has no id' };
 };
 
 /**
@@ -246,7 +255,7 @@ export function useCurrentRunId(): string | null {
   // Two patterns rather than one wildcard, so that `/runs/<id>` and everything under it
   // are both the same test, and nothing else is.
   const run = useMatch(patterns.run);
-  const under = useMatch(`${patterns.run}/*`);
+  const under = useMatch(matches.runScreens);
   return run?.params.runId ?? under?.params.runId ?? null;
 }
 
@@ -266,12 +275,15 @@ export function useCurrentRun(): RunState | null {
   return routeRunId === null && listed ? null : { status: 'loading' };
 }
 
-/** The shared body of `useRun` and `useCurrentRun`: `null` while there is no id to read. */
-function useOptionalRun(runId: string | null): RunState | null {
+/**
+ * One run, or no run: `null` while there is no id to read, which is what a caller that may
+ * not have one yet asks with. `useRun` is this with a loading state in place of the `null`.
+ */
+export function useOptionalRun(runId: string | null): RunState | null {
   const [state, setState] = useState<RunState | null>(null);
 
   useEffect(() => {
-    if (runId === null || runId === '') {
+    if (runId === null) {
       setState(null);
       return;
     }

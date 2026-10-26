@@ -20,7 +20,7 @@
      utilities, so `bg-primary` compiles to `background-color: var(--color-accent)`
      and again no variable of this app's own reaches the document.
 
-   `tests/theme.test.tsx` asserts both of those against a production build: the
+   `tests/theme.test.ts` asserts both of those against a production build: the
    app adds no declaration of a token's name, and every mapped value is a
    `var(--…)`.
    ========================================================================== */
