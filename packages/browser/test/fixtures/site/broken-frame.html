@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card details - fixture shop</title>
+    <link rel="stylesheet" href="fixture.css" />
+  </head>
+  <body class="page-broken-frame">
+    <h1 id="broken-frame-heading" style="left: 16px; top: 16px; width: 358px; height: 40px">
+      Card details
+    </h1>
+    <p id="broken-frame-intro" style="left: 16px; top: 72px; width: 358px; height: 56px">
+      Two frames that never arrive: one whose response never comes, one whose host does not resolve.
+      Waiting for the load event on this page is waiting forever, by design.
+    </p>
+    <iframe
+      id="broken-frame-stalled"
+      class="frame"
+      src="/slow"
+      title="Card details, served by a route that never answers"
+      style="left: 16px; top: 144px; width: 358px; height: 200px"
+    ></iframe>
+    <iframe
+      id="broken-frame-unresolvable"
+      class="frame"
+      src="http://frame.invalid/card.html"
+      title="Card details, served by a host that cannot resolve"
+      style="left: 16px; top: 368px; width: 358px; height: 200px"
+    ></iframe>
+    <button
+      id="broken-frame-submit"
+      type="button"
+      style="left: 16px; top: 600px; width: 358px; height: 44px"
+    >
+      Pay now
+    </button>
+  </body>
+</html>

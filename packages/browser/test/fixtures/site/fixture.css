@@ -1,0 +1,131 @@
+/*
+ * The fixture site's shared styling.
+ *
+ * Geometry lives on the elements themselves, as an inline `style` with `left`, `top`,
+ * `width` and `height`: every landmark of this site is taken out of flow, so its
+ * page-space box is a stated fact rather than the outcome of a layout, and it is the same
+ * box at 390x844 and at 1440x900. `LANDMARKS.md` records those boxes, and
+ * `fixture-site.test.ts` compares the record against the markup, so the two cannot drift.
+ *
+ * What is left here is what no assertion depends on — type, colour, the two regions the
+ * DOM cannot explain — plus the one geometric fact that cannot sit on an element: each
+ * page's total height, which is what a full-page screenshot is tall.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* The origin every landmark's `top` and `left` is measured from. */
+  position: relative;
+  width: 100%;
+  background: #ffffff;
+  color: #111111;
+  font:
+    16px/1.4 system-ui,
+    sans-serif;
+}
+
+/* Every id in this site is a landmark, and every landmark is positioned. A border would
+ * shift the containing block of a nested landmark, so there are none; regions are drawn
+ * with a background instead. */
+[id] {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+p {
+  font-size: 14px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  font-size: 14px;
+  background: #f4f4f5;
+  border-radius: 6px;
+  outline: 1px solid #c9c9cf;
+}
+
+a {
+  color: #1a4fd6;
+  font-size: 14px;
+}
+
+.control-primary {
+  display: block;
+  padding: 12px;
+  text-align: center;
+  color: #ffffff;
+  background: #1a4fd6;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.field-label {
+  position: absolute;
+  left: 12px;
+  font-size: 12px;
+  color: #4a4a52;
+}
+
+/* The two regions the DOM does not explain in words: no text, no role, no accessible
+ * name. An extractor can only report a box here; naming what is inside one is the
+ * hand-off a later segmenter fills (see `LANDMARKS.md`, "Regions the DOM cannot explain"). */
+.region-banner {
+  background: linear-gradient(90deg, #2b2b33 0%, #5a4bd6 100%);
+  border-radius: 6px;
+}
+
+.region-card {
+  background: linear-gradient(160deg, #ffd9a0 0%, #f08a6c 60%, #c9517a 100%);
+  border-radius: 10px;
+}
+
+.frame {
+  background: #f4f4f5;
+  outline: 1px dashed #c9c9cf;
+}
+
+/* ------------------------------------------------------------------ page heights
+ *
+ * Each page's own height, which is what a full-page screenshot is tall and what
+ * `LANDMARKS.md` records. No page is shorter than 900px on purpose: a page shorter than
+ * the viewport reports the *viewport's* height as its scroll height, so a shorter page
+ * would have one page height on mobile and another on desktop and could not be stated
+ * once. */
+
+body.page-cart {
+  height: 1400px;
+}
+
+body.page-payment {
+  height: 1200px;
+}
+
+body.page-review {
+  height: 1100px;
+}
+
+body.page-confirmation {
+  height: 1000px;
+}
+
+body.page-no-control {
+  height: 1000px;
+}
+
+body.page-broken-frame {
+  height: 1000px;
+}

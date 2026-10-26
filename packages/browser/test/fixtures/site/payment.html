@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Payment - fixture shop</title>
+    <link rel="stylesheet" href="fixture.css" />
+  </head>
+  <body class="page-payment">
+    <h1 id="payment-heading" style="left: 16px; top: 16px; width: 358px; height: 40px">Payment</h1>
+    <p id="payment-intro" style="left: 16px; top: 72px; width: 358px; height: 56px">
+      Card details for the fixture order. No value typed here leaves the machine: the form submits
+      to the next page of this site.
+    </p>
+    <img
+      id="payment-card-image"
+      src="assets/card.svg"
+      alt="A payment card"
+      style="left: 16px; top: 144px; width: 120px; height: 120px"
+    />
+    <form
+      id="payment-form"
+      aria-label="Payment details"
+      action="review.html"
+      method="get"
+      style="left: 16px; top: 288px; width: 358px; height: 300px"
+    >
+      <label class="field-label" for="payment-card-number" style="top: 12px">Card number</label>
+      <input
+        id="payment-card-number"
+        name="card"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        style="left: 12px; top: 36px; width: 334px; height: 32px"
+      />
+      <label class="field-label" for="payment-expiry-month" style="top: 84px">Expiry month</label>
+      <select
+        id="payment-expiry-month"
+        name="expiry"
+        style="left: 12px; top: 108px; width: 334px; height: 32px"
+      >
+        <option value="01">January</option>
+        <option value="02">February</option>
+        <option value="03">March</option>
+      </select>
+      <button
+        id="payment-submit"
+        type="submit"
+        style="left: 12px; top: 180px; width: 200px; height: 44px"
+      >
+        Review order
+      </button>
+    </form>
+    <p id="payment-footer-note" style="left: 16px; top: 1000px; width: 358px; height: 40px">
+      Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.
+    </p>
+  </body>
+</html>
