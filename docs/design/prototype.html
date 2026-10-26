@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PersonaVision — flow prototype</title>
+<!-- tokens.css is the single source of visual truth. No value below restates one. -->
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ===== Base ============================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { margin: 0; letter-spacing: var(--tracking-tight); line-height: var(--leading-snug); }
+p { margin: 0; }
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: var(--border-width-strong) solid var(--color-focus); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ===== Prototype-only strip (not part of the product) ==================== */
+.proto {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--layout-gutter);
+  border-bottom: var(--border-width) dashed var(--color-border-strong);
+  background: var(--color-surface-sunken);
+  font-size: var(--text-2xs); color: var(--color-text-muted);
+}
+.proto b { text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--color-text-faint); }
+.proto button {
+  font: var(--weight-medium) var(--text-2xs)/1 var(--font-sans);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
+}
+.proto button:hover { color: var(--color-text); border-color: var(--color-text-faint); }
+.proto .spacer { flex: 1; }
+
+/* ===== App chrome ======================================================== */
+.wrap { max-width: var(--layout-max); margin: 0 auto; padding: 0 var(--layout-gutter); }
+.appbar {
+  display: flex; align-items: center; gap: var(--space-4);
+  min-height: var(--header-height);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.appbar .wrap { display: flex; align-items: center; gap: var(--space-4); width: 100%; min-height: var(--header-height); }
+.logo { font-weight: var(--weight-bold); font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
+.logo span { color: var(--color-text-faint); font-weight: var(--weight-regular); }
+.runpick {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  font-size: var(--text-sm); color: var(--color-text-muted); cursor: pointer;
+}
+.runpick strong { color: var(--color-text); font-weight: var(--weight-medium); }
+.sim-badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--sev-info-border);
+  background: var(--sev-info-bg); color: var(--sev-info);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
+}
+.sim-badge .dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
+.grow { flex: 1; }
+
+.tabs { background: var(--color-surface); border-bottom: var(--border-width) solid var(--color-border); }
+.tabs .wrap { display: flex; gap: var(--space-5); }
+.tab {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  padding: var(--space-3) var(--space-1);
+  font: var(--weight-medium) var(--text-sm)/1.4 var(--font-sans);
+  color: var(--color-text-muted); border-bottom: var(--border-width-strong) solid transparent;
+}
+.tab[aria-current="page"] { color: var(--color-text); border-bottom-color: var(--color-accent); }
+.tab:hover { color: var(--color-text); }
+
+/* ===== Buttons, chips, tags ============================================== */
+.btn {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text);
+  font: var(--weight-medium) var(--text-sm)/1 var(--font-sans);
+  transition: background var(--duration-fast) var(--ease);
+}
+.btn:hover { background: var(--color-surface-sunken); }
+.btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.btn-primary:hover { background: var(--color-accent-strong); }
+.btn-quiet { border-color: transparent; background: none; color: var(--color-text-muted); }
+.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+
+.seg { display: inline-flex; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.seg button {
+  appearance: none; border: 0; cursor: pointer; background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  font: var(--weight-medium) var(--text-xs)/1 var(--font-sans); color: var(--color-text-muted);
+  border-right: var(--border-width) solid var(--color-border);
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 2px var(--space-2); border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
+  border: var(--border-width) solid transparent; white-space: nowrap;
+}
+.tag-critical { color: var(--sev-critical); background: var(--sev-critical-bg); border-color: var(--sev-critical-border); }
+.tag-high     { color: var(--sev-high);     background: var(--sev-high-bg);     border-color: var(--sev-high-border); }
+.tag-medium   { color: var(--sev-medium);   background: var(--sev-medium-bg);   border-color: var(--sev-medium-border); }
+.tag-low      { color: var(--sev-low);      background: var(--sev-low-bg);      border-color: var(--sev-low-border); }
+.tag-info     { color: var(--sev-info);     background: var(--sev-info-bg);     border-color: var(--sev-info-border); }
+.tag-success    { color: var(--outcome-success);   background: var(--outcome-success-bg); }
+.tag-abandoned  { color: var(--outcome-abandoned); background: var(--outcome-abandoned-bg); }
+.tag-failed     { color: var(--outcome-failed);    background: var(--outcome-failed-bg); }
+.tag-product    { color: var(--attr-product);    background: var(--attr-product-bg); }
+.tag-automation { color: var(--attr-automation); background: var(--attr-automation-bg); }
+.tag-a { color: var(--variant-a); background: var(--variant-a-bg); }
+.tag-b { color: var(--variant-b); background: var(--variant-b-bg); }
+
+/* ===== Page scaffolding ================================================== */
+main { padding: var(--space-8) 0 var(--space-16); }
+.screen[hidden] { display: none; }
+.pagehead { display: flex; align-items: flex-end; gap: var(--space-4); margin-bottom: var(--space-2); }
+.pagehead h1 { font-size: var(--text-lg); }
+.lede { color: var(--color-text-muted); font-size: var(--text-sm); }
+.runmeta {
+  display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5);
+  margin: var(--space-4) 0 var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); font-size: var(--text-xs); color: var(--color-text-muted);
+}
+.runmeta b { color: var(--color-text); font-weight: var(--weight-medium); }
+.runmeta code { font-family: var(--font-mono); font-size: var(--text-2xs); }
+.card {
+  background: var(--color-surface); border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg); padding: var(--space-5);
+}
+.section { margin-top: var(--space-8); }
+.section > h2 { font-size: var(--text-md); margin-bottom: var(--space-1); }
+.section > .lede { margin-bottom: var(--space-4); }
+.microlabel {
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-text-faint); font-weight: var(--weight-semibold);
+}
+.notice {
+  display: flex; gap: var(--space-3); align-items: flex-start;
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--sev-high-border); background: var(--sev-high-bg);
+  color: var(--sev-high); font-size: var(--text-sm); margin-bottom: var(--space-5);
+}
+.notice.info { border-color: var(--sev-info-border); background: var(--sev-info-bg); color: var(--sev-info); }
+.notice a { color: inherit; text-decoration: underline; }
+.footnote { margin-top: var(--space-8); color: var(--color-text-faint); font-size: var(--text-xs); }
+
+/* ===== Score cards ======================================================= */
+.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+.score-card { position: relative; }
+.score-card[data-variant="a"] { border-top: 3px solid var(--variant-a); }
+.score-card[data-variant="b"] { border-top: 3px solid var(--variant-b); }
+.score-card h3 { font-size: var(--text-2xl); }
+.score-card .url { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-faint); }
+.score-row { display: flex; align-items: flex-end; gap: var(--space-4); margin: var(--space-4) 0 var(--space-2); }
+.score-value { font-size: var(--text-score); font-weight: var(--weight-bold); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.score-spread { font-size: var(--text-md); color: var(--color-text-muted); padding-bottom: var(--space-2); }
+.score-band { font-size: var(--text-xs); font-weight: var(--weight-semibold); padding-bottom: var(--space-3); }
+.band-good { color: var(--score-good); }
+.band-warn { color: var(--score-warn); }
+.band-bad  { color: var(--score-bad); }
+.score-value.band-good { color: var(--score-good); }
+.score-value.band-warn { color: var(--score-warn); }
+.score-value.band-bad  { color: var(--score-bad); }
+.scale {
+  position: relative; height: 8px; border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--score-good-bg), var(--score-warn-bg), var(--score-bad-bg));
+  margin: var(--space-3) 0 var(--space-2);
+}
+.scale .marker { position: absolute; top: -3px; width: 3px; height: 14px; border-radius: var(--radius-sm); background: currentColor; }
+.scale .spreadband { position: absolute; top: 0; height: 8px; border-radius: var(--radius-full); background: currentColor; opacity: 0.25; }
+.scale-legend { display: flex; justify-content: space-between; font-size: var(--text-2xs); color: var(--color-text-faint); }
+.components { list-style: none; margin: var(--space-5) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.components li { display: grid; grid-template-columns: 1fr 90px auto; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
+.components .what { color: var(--color-text-muted); }
+.components .what i { font-style: normal; color: var(--color-text-faint); font-size: var(--text-2xs); }
+.bar { height: 6px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: currentColor; border-radius: var(--radius-full); }
+.components .val { font-variant-numeric: tabular-nums; font-weight: var(--weight-medium); min-width: 56px; text-align: right; }
+.verdict {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin-top: var(--space-5); padding: var(--space-4);
+  border-radius: var(--radius-md); border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-sunken); font-size: var(--text-md); font-weight: var(--weight-medium);
+}
+.verdict .delta { font-size: var(--text-xl); font-weight: var(--weight-bold); color: var(--score-bad); }
+
+/* ===== Tables ============================================================ */
+.tablewrap { overflow-x: auto; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+th {
+  text-align: left; font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); color: var(--color-text-faint); font-weight: var(--weight-semibold);
+  padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); white-space: nowrap;
+}
+td { padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr[data-click] { cursor: pointer; }
+tbody tr[data-click]:hover { background: var(--color-accent-soft); }
+tbody tr[aria-selected="true"] { background: var(--color-accent-soft); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-text-muted); }
+.faint { color: var(--color-text-faint); }
+.never { color: var(--sev-critical); font-weight: var(--weight-medium); }
+.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+
+/* ===== Findings ========================================================== */
+.findings { display: grid; gap: var(--space-3); }
+.finding {
+  display: grid; grid-template-columns: var(--space-8) 1fr auto; gap: var(--space-4);
+  padding: var(--space-4); background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md); cursor: pointer; text-align: left;
+  font: inherit; color: inherit;
+}
+.finding:hover { box-shadow: var(--shadow-md); }
+.finding[data-sev="critical"] { border-left-color: var(--sev-critical); }
+.finding[data-sev="high"]     { border-left-color: var(--sev-high); }
+.finding[data-sev="medium"]   { border-left-color: var(--sev-medium); }
+.finding[data-sev="low"]      { border-left-color: var(--sev-low); }
+.finding[data-sev="info"]     { border-left-color: var(--sev-info); }
+.finding .rank { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
+.finding .claim { font-size: var(--text-md); line-height: var(--leading-snug); margin-bottom: var(--space-2); }
+.finding .evidence { font-size: var(--text-sm); color: var(--color-text-muted); }
+.finding .meta { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
+.finding .meta .aoi { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-faint); }
+.finding .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+
+/* ===== Device frame + fake page =========================================== */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-5); align-items: start; }
+.frame {
+  position: relative; overflow: hidden;
+  aspect-ratio: var(--frame-ratio-desktop);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md); background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+.frame.is-mobile { aspect-ratio: var(--frame-ratio-mobile); max-width: var(--frame-width-mobile); margin: 0 auto; }
+.frame .fold {
+  position: absolute; left: 0; right: 0; top: var(--frame-fold-desktop);
+  border-top: var(--border-width) dashed var(--color-border-strong); pointer-events: none; z-index: 3;
+}
+.frame.is-mobile .fold { top: var(--frame-fold-mobile); }
+.frame .fold span {
+  position: absolute; right: var(--space-2); top: 2px;
+  font-size: var(--text-2xs); color: var(--color-text-faint); background: var(--color-surface);
+  padding: 0 var(--space-1);
+}
+.frame.dim .page::after {
+  content: ""; position: absolute; inset: 0; background: var(--screenshot-scrim); z-index: 2;
+}
+
+/* The fake page. data-variant drives the planted defects; .is-mobile stacks it. */
+.page { position: absolute; inset: 0; overflow: hidden; font-size: 9px; line-height: 1.35; }
+.page .shop-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-bottom: var(--border-width) solid var(--color-border);
+  font-size: 10px; font-weight: var(--weight-bold); letter-spacing: var(--tracking-wide);
+}
+.page .shop-bar .cart { margin-left: auto; font-weight: var(--weight-regular); color: var(--color-text-muted); }
+.page .promo {
+  margin: var(--space-2) var(--space-3); padding: var(--space-3);
+  border-radius: var(--radius-sm); background: var(--sev-high-bg);
+  border: var(--border-width) solid var(--sev-high-border); color: var(--sev-high);
+  font-weight: var(--weight-bold); font-size: 11px; text-align: center;
+}
+.page .promo small { display: block; font-weight: var(--weight-regular); font-size: 8px; }
+.page[data-variant="a"] .only-b { display: none; }
+.page[data-variant="b"] .only-a { display: none; }
+.page .body { padding: var(--space-3); display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-4); }
+.frame.is-mobile .page .body { grid-template-columns: 1fr; }
+.page h4 { font-size: 10px; margin-bottom: var(--space-2); }
+.page .field {
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm);
+  padding: var(--space-2); margin-bottom: var(--space-2); color: var(--color-text-faint);
+  background: var(--color-surface-raised);
+}
+.page .field b { display: block; color: var(--color-text-muted); font-size: 8px; font-weight: var(--weight-medium); }
+.page .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.page .cta {
+  display: block; width: 100%; text-align: center; padding: var(--space-3);
+  border-radius: var(--radius-sm); background: var(--color-accent); color: var(--color-on-accent);
+  font-weight: var(--weight-bold); font-size: 10px; margin-top: var(--space-2);
+}
+.page .cta.weak { background: var(--color-surface-sunken); color: var(--color-text-muted); font-weight: var(--weight-medium); }
+.page .summary {
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm);
+  padding: var(--space-3); background: var(--color-surface-raised);
+}
+.page .summary dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-2); }
+.page .summary dt { color: var(--color-text-muted); }
+.page .summary dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.page .summary .total { font-weight: var(--weight-bold); border-top: var(--border-width) solid var(--color-border); padding-top: var(--space-2); margin-top: var(--space-1); }
+.page .summary .fee-new { color: var(--sev-critical); font-weight: var(--weight-medium); }
+.page .trust { display: flex; gap: var(--space-2); padding: var(--space-3); color: var(--color-text-faint); font-size: 8px; border-top: var(--border-width) solid var(--color-border); }
+.page .trust .support { margin-left: auto; color: var(--color-accent); }
+.page .confirmbox { margin: var(--space-6) var(--space-4); padding: var(--space-5); text-align: center; border-radius: var(--radius-md); background: var(--outcome-success-bg); color: var(--outcome-success); font-weight: var(--weight-bold); }
+.page .confirmbox small { display: block; color: var(--color-text-muted); font-weight: var(--weight-regular); margin-top: var(--space-2); }
+.page .item { display: flex; gap: var(--space-3); align-items: center; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-2); margin-bottom: var(--space-2); }
+.page .item .thumb { width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--color-surface-sunken); }
+.page .item .price { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Overlay layers */
+.layer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.layer.heat { mix-blend-mode: normal; opacity: var(--heat-opacity); }
+.layer.heat i { position: absolute; border-radius: var(--radius-full); transform: translate(-50%, -50%); }
+.layer svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.fx-num { font: var(--weight-bold) var(--text-2xs)/1 var(--font-sans); fill: var(--gaze-fixation-label); }
+.aoibox { fill: none; stroke: var(--gaze-aoi); stroke-width: 1; stroke-dasharray: var(--gaze-aoi-dash); }
+.aoibox.active { stroke: var(--gaze-aoi-active); stroke-width: var(--border-width-strong); stroke-dasharray: none; }
+.aoibox.empty { stroke: var(--sev-critical); stroke-width: var(--border-width-strong); stroke-dasharray: none; }
+.nofix { color: var(--sev-critical); font-weight: var(--weight-medium); }
+.page .pushdown { height: 150px; }
+.aoilabel { font: var(--weight-medium) var(--text-2xs)/1 var(--font-sans); fill: var(--color-text-muted); }
+
+.sidepanel { display: grid; gap: var(--space-4); }
+.panel { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-4); }
+.panel h3 { font-size: var(--text-sm); margin-bottom: var(--space-3); }
+.toggles { display: grid; gap: var(--space-2); }
+.toggles label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); cursor: pointer; }
+.heatkey { height: 8px; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5)); margin: var(--space-2) 0 var(--space-1); }
+.filmstrip { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.step {
+  flex: 1; cursor: pointer; text-align: left; background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3); font: inherit; color: inherit;
+}
+.step[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.step .microlabel { display: block; }
+.step .reach { font-size: var(--text-xs); color: var(--color-text-muted); }
+.step .reach.zero { color: var(--sev-critical); }
+
+/* Empty state */
+.empty {
+  display: grid; place-items: center; gap: var(--space-3); text-align: center;
+  padding: var(--space-12) var(--space-6);
+  border: var(--border-width) dashed var(--color-border-strong); border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.empty h2 { font-size: var(--text-md); }
+.empty p { color: var(--color-text-muted); font-size: var(--text-sm); max-width: 46ch; }
+.empty .cmd { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-surface-sunken); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); color: var(--color-text-muted); }
+.empty .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
+
+/* Replay */
+.replay { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.scrub { margin-top: var(--space-4); display: grid; gap: var(--space-2); }
+.scrub .row { display: flex; align-items: center; gap: var(--space-3); }
+.scrub input[type="range"] { flex: 1; accent-color: var(--color-accent); }
+.scrub .clock { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted); min-width: 92px; }
+.timeline { display: grid; gap: var(--space-3); }
+.tl-screen { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-4); }
+.tl-screen[data-active="true"] { border-color: var(--color-accent); box-shadow: var(--shadow-sm); }
+.tl-screen header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.tl-screen h3 { font-size: var(--text-sm); }
+.intent { font-size: var(--text-md); line-height: var(--leading-snug); margin-bottom: var(--space-3); }
+.intent::before { content: "\201C"; }
+.intent::after { content: "\201D"; }
+.events { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.events li { display: grid; grid-template-columns: 54px 1fr; gap: var(--space-3); color: var(--color-text-muted); }
+.events .t { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); }
+.events .kind { color: var(--color-text); font-weight: var(--weight-medium); }
+.outcome-card { border: var(--border-width) solid var(--outcome-abandoned-bg); background: var(--outcome-abandoned-bg); border-radius: var(--radius-md); padding: var(--space-4); }
+.outcome-card h3 { font-size: var(--text-md); color: var(--outcome-abandoned); margin-bottom: var(--space-2); }
+.outcome-card p { font-size: var(--text-sm); color: var(--color-text); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-4); font-size: var(--text-sm); margin-top: var(--space-3); }
+.kv dt { color: var(--color-text-muted); }
+.kv dd { margin: 0; }
+
+/* Forms */
+.form { display: grid; gap: var(--space-5); max-width: 760px; }
+.field-group { display: grid; gap: var(--space-2); }
+.field-group > label { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.field-group .hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+.field-group .err { font-size: var(--text-xs); color: var(--sev-critical); font-weight: var(--weight-medium); }
+input[type="text"], input[type="url"], textarea, select {
+  font: var(--weight-regular) var(--text-sm)/1.4 var(--font-sans);
+  padding: var(--space-3); border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text); width: 100%;
+}
+input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(--sev-critical-bg); }
+.inline2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface);
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
+}
+.chip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.formfoot { display: flex; align-items: center; gap: var(--space-4); border-top: var(--border-width) solid var(--color-border); padding-top: var(--space-5); }
+
+/* Progress */
+.progress { height: 8px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--color-accent); }
+.log { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); display: grid; gap: var(--space-1); max-height: 180px; overflow: auto; }
+.log b { color: var(--color-text); font-weight: var(--weight-medium); }
+
+/* Error */
+.errorcard { border-color: var(--sev-critical-border); background: var(--sev-critical-bg); }
+.errorcard h2 { font-size: var(--text-md); color: var(--sev-critical); margin-bottom: var(--space-2); }
+.errorcard .detail { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); background: var(--color-surface); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-3); margin: var(--space-3) 0; white-space: pre-wrap; }
+.errorcard ul { margin: 0 0 var(--space-4); padding-left: var(--space-5); font-size: var(--text-sm); }
+
+/* Segment breakdown */
+.segments { display: grid; gap: var(--space-2); }
+.segbar { display: grid; grid-template-columns: 160px 1fr auto; gap: var(--space-3); align-items: center; font-size: var(--text-sm); }
+.stack { display: flex; height: 14px; border-radius: var(--radius-sm); overflow: hidden; background: var(--color-surface-sunken); }
+.stack i { display: block; }
+.stack .s { background: var(--outcome-success); }
+.stack .ab { background: var(--outcome-abandoned); }
+.stack .f { background: var(--outcome-failed); }
+.stack .au { background: var(--attr-automation); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-3); }
+.legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.legend i { width: 10px; height: 10px; border-radius: 2px; }
+
+@media (max-width: 1000px) {
+  .score-grid, .stage, .replay, .inline2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .wrap { padding: 0 var(--layout-gutter-narrow); }
+  .appbar .wrap { flex-wrap: wrap; padding-top: var(--space-2); padding-bottom: var(--space-2); }
+  .score-value { font-size: var(--text-2xl); }
+  .segbar { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== prototype-only navigation ====================== -->
+<div class="proto">
+  <b>Prototype</b>
+  <button data-go="empty">No runs</button>
+  <button data-go="newrun">New run</button>
+  <button data-go="newrun-invalid">New run · invalid</button>
+  <button data-go="running">Running</button>
+  <button data-go="error">Run failed</button>
+  <button data-go="comparison">Comparison</button>
+  <button data-go="attention">Attention</button>
+  <button data-go="sessions">Sessions</button>
+  <button data-go="sessions-empty">Sessions · no match</button>
+  <button data-go="replay">Replay</button>
+  <span class="spacer"></span>
+  <button id="themebtn">Dark mode</button>
+</div>
+
+<!-- ===================== product chrome ================================= -->
+<div class="appbar" id="chrome">
+  <div class="wrap">
+    <span class="logo">PersonaVision <span>local</span></span>
+    <button class="runpick" data-go="empty">
+      <strong>northwind-demo · checkout A vs B</strong>
+      <span>24 Oct 14:02 · 24 sessions</span>
+      <span aria-hidden="true">&#9662;</span>
+    </button>
+    <span class="grow"></span>
+    <span class="sim-badge" title="Attention is simulated. UEyes similarity: CC 0.68 / NSS 1.9 / ScanMatch 0.54 on the UEyes benchmark.">
+      <i class="dot"></i> Simulated &middot; UEyes similarity 0.68
+    </span>
+    <button class="btn btn-primary" data-go="newrun">New run</button>
+  </div>
+</div>
+<div class="tabs" id="tabbar">
+  <div class="wrap">
+    <button class="tab" data-go="comparison">Comparison</button>
+    <button class="tab" data-go="attention">Attention</button>
+    <button class="tab" data-go="sessions">Sessions</button>
+  </div>
+</div>
+
+<main>
+
+<!-- ===================== 1. empty: no runs yet ========================== -->
+<section class="screen" id="screen-empty" hidden>
+  <div class="wrap">
+    <div class="empty">
+      <h2>No runs yet</h2>
+      <p>PersonaVision reads and writes runs in <code class="mono">./runs/</code>. Nothing is there yet. Open the bundled example run of the demo shop, or start your own.</p>
+      <div class="actions">
+        <button class="btn btn-primary" data-go="comparison">Open example run &middot; northwind-demo</button>
+        <button class="btn" data-go="newrun">New run</button>
+      </div>
+      <p class="cmd">personavision run --url http://localhost:4173/checkout-a --task "Buy the boots" --personas default --repeats 3</p>
+      <p class="faint">The example run needs no API key: it was produced by the deterministic offline engine.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. new run ===================================== -->
+<section class="screen" id="screen-newrun" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>New run</h1></div>
+    <p class="lede">Two variants of the same task, the same personas on both, repeated with different seeds.</p>
+    <form class="form card" style="margin-top: var(--space-6)" onsubmit="return false">
+      <div class="inline2">
+        <div class="field-group">
+          <label for="url-a">Variant A URL</label>
+          <input id="url-a" type="url" value="http://localhost:4173/checkout-a">
+          <span class="hint">Named <b>Current checkout</b> in results.</span>
+        </div>
+        <div class="field-group">
+          <label for="url-b">Variant B URL</label>
+          <input id="url-b" type="url" value="http://localhost:4173/checkout-b">
+          <span class="hint">Named <b>Redesign candidate</b> in results.</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="task">Task</label>
+        <input id="task" type="text" value="Buy the hiking boots and pay with the saved card.">
+        <span class="hint" id="task-hint">One sentence, in the user's words. It must say what counts as finishing &mdash; agents stop when they believe the task is done.</span>
+      </div>
+      <div class="field-group">
+        <label>Personas <span class="faint">4 selected &middot; 3 repeats each &middot; 12 sessions per variant</span></label>
+        <div class="chips">
+          <button type="button" class="chip" aria-pressed="true">Rushed buyer &middot; mobile</button>
+          <button type="button" class="chip" aria-pressed="true">Careful comparer &middot; desktop</button>
+          <button type="button" class="chip" aria-pressed="true">First-time visitor &middot; desktop</button>
+          <button type="button" class="chip" aria-pressed="true">Price-sensitive scanner &middot; mobile</button>
+          <button type="button" class="chip">Screen-reader user &middot; desktop</button>
+          <button type="button" class="chip">Returning power user &middot; desktop</button>
+          <button type="button" class="chip">+ Edit persona policies</button>
+        </div>
+        <span class="hint">A persona is an attention policy with a seed: persistence, scanning vs reading, detail orientation, interface familiarity, device, patience, risk tolerance.</span>
+      </div>
+      <div class="inline2">
+        <div class="field-group">
+          <label for="repeats">Repeats per persona</label>
+          <select id="repeats"><option>3 &mdash; shows run-to-run spread</option><option>1 &mdash; fastest, no spread</option><option>5</option><option>10</option></select>
+        </div>
+        <div class="field-group">
+          <label for="seed">Base seed</label>
+          <input id="seed" type="text" value="20261024">
+          <span class="hint">Same seed and same persona reproduce the run exactly.</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="engine">Decision engine</label>
+        <select id="engine">
+          <option>Offline deterministic &mdash; no API key, reproducible</option>
+          <option>Meta Muse Spark &mdash; key not found in environment</option>
+          <option>Meta Muse Spark + SAM 3.1 segmentation &mdash; key not found</option>
+        </select>
+        <span class="hint">The attention engine (saliency, relevance, gaze sampler) always runs locally. Only per-screen intent and actions use the model.</span>
+      </div>
+      <div class="formfoot">
+        <button class="btn btn-primary" data-go="running">Start run &middot; 24 sessions</button>
+        <span class="faint">Estimated 6 min offline. Writes <code class="mono">./runs/2026-10-24-1402-northwind-demo/</code></span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ===================== 2b. new run, invalid ============================ -->
+<section class="screen" id="screen-newrun-invalid" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>New run</h1></div>
+    <p class="lede">Two variants of the same task, the same personas on both, repeated with different seeds.</p>
+    <form class="form card" style="margin-top: var(--space-6)" onsubmit="return false">
+      <div class="notice">The run was not started. Two fields need attention.</div>
+      <div class="inline2">
+        <div class="field-group">
+          <label for="url-a2">Variant A URL</label>
+          <input id="url-a2" type="url" value="http://localhost:4173/checkout-a">
+        </div>
+        <div class="field-group">
+          <label for="url-b2">Variant B URL</label>
+          <input id="url-b2" type="url" value="localhost:4173/checkout-b" aria-invalid="true">
+          <span class="err">Needs a scheme: http:// or https://</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="task2">Task</label>
+        <input id="task2" type="text" value="Have a look around" aria-invalid="true">
+        <span class="err">The task must say what finishing means, or no session can be scored a success.</span>
+        <span class="hint">Example: &ldquo;Buy the hiking boots and pay with the saved card.&rdquo;</span>
+      </div>
+      <div class="formfoot">
+        <button class="btn btn-primary" data-go="newrun-invalid">Start run &middot; 24 sessions</button>
+        <button class="btn btn-quiet" data-go="newrun">Reset</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ===================== 3. running ===================================== -->
+<section class="screen" id="screen-running" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>Running &middot; northwind-demo</h1></div>
+    <p class="lede">17 of 24 sessions finished &middot; 3 min elapsed &middot; about 2 min left &middot; offline deterministic engine</p>
+    <div class="card" style="margin-top: var(--space-6)">
+      <div class="progress" style="margin-bottom: var(--space-5)"><span style="width: 71%"></span></div>
+      <div class="segments">
+        <div class="segbar"><span><span class="tag tag-a">A</span> Current checkout</span><div class="progress"><span style="width: 83%"></span></div><span class="num">10 / 12</span></div>
+        <div class="segbar"><span><span class="tag tag-b">B</span> Redesign candidate</span><div class="progress"><span style="width: 58%"></span></div><span class="num">7 / 12</span></div>
+      </div>
+      <div class="log" style="margin-top: var(--space-5)">
+        <div><b>00:03:11</b> S-24 Price-sensitive scanner &middot; B &middot; seed 3 &mdash; abandoned at the review step (product: service fee revealed late)</div>
+        <div><b>00:03:04</b> S-14 Rushed buyer &middot; B &middot; seed 2 &mdash; 31 fixations, clicked &ldquo;Place order&rdquo; on the payment step</div>
+        <div><b>00:02:51</b> S-16 Careful comparer &middot; B &middot; seed 1 &mdash; success in 58.4 s</div>
+        <div><b>00:02:44</b> S-09 First-time visitor &middot; A &middot; seed 3 &mdash; automation failure: selector timeout on card iframe, will retry once</div>
+        <div><b>00:02:30</b> S-08 First-time visitor &middot; A &middot; seed 2 &mdash; success in 31.0 s</div>
+      </div>
+      <div class="formfoot" style="margin-top: var(--space-5)">
+        <button class="btn" data-go="comparison">Show partial results</button>
+        <button class="btn btn-quiet">Stop run</button>
+        <span class="faint">Each finished session is written to disk as it completes; stopping keeps what is done.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. run failed ================================== -->
+<section class="screen" id="screen-error" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>Run failed to start</h1></div>
+    <div class="card errorcard" style="margin-top: var(--space-6)">
+      <h2>Variant B URL could not be opened</h2>
+      <p>No session ran. Nothing was written to <code class="mono">./runs/</code>.</p>
+      <div class="detail">playwright: net::ERR_CONNECTION_REFUSED at http://localhost:4173/checkout-b
+variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
+      <ul>
+        <li>Is the dev server for variant B running on port 4173?</li>
+        <li>If it needs a login, add a session cookie or a sign-in step to the run.</li>
+        <li>Both variants must be reachable: scores are only comparable from one run.</li>
+      </ul>
+      <div style="display: flex; gap: var(--space-2); flex-wrap: wrap">
+        <button class="btn btn-primary" data-go="running">Retry run</button>
+        <button class="btn" data-go="newrun">Edit run</button>
+        <button class="btn btn-quiet" data-go="comparison">Open last good run</button>
+      </div>
+    </div>
+    <div class="notice info" style="margin-top: var(--space-5)">
+      <span>No <code class="mono">META_API_KEY</code> in the environment, so the offline deterministic engine was selected. Simulated attention is unaffected; per-screen intent text is terser than with Muse Spark.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. comparison (the demo screen) ================ -->
+<section class="screen" id="screen-comparison" hidden>
+  <div class="wrap">
+    <div class="pagehead">
+      <h1>Which variant is easier, and why</h1>
+    </div>
+    <div class="runmeta">
+      <span><b>Task</b> Buy the hiking boots and pay with the saved card.</span>
+      <span><b>Personas</b> 4 &times; 3 seeds = 12 sessions per variant</span>
+      <span><b>Devices</b> 2 mobile &middot; 2 desktop</span>
+      <span><b>Engine</b> offline deterministic</span>
+      <span><b>Run</b> <code>runs/2026-10-24-1402-northwind-demo</code></span>
+    </div>
+
+    <div class="notice">
+      <span>2 of 24 sessions ended in an <b>automation failure</b> (selector timeout on the card iframe). They are excluded from both scores and are not held against either variant. <a href="#" data-go="sessions">See the 2 sessions</a>.</span>
+    </div>
+
+    <div class="score-grid">
+      <div class="card score-card" data-variant="a">
+        <span class="microlabel">Variant A</span>
+        <h3>Current checkout</h3>
+        <p class="url">http://localhost:4173/checkout-a</p>
+        <div class="score-row">
+          <span class="score-value band-good num">22</span>
+          <span class="score-spread num">&plusmn; 3</span>
+          <span class="score-band band-good">Friction score &middot; clean</span>
+        </div>
+        <div class="scale band-good">
+          <i class="spreadband" style="left: 19%; width: 6%"></i>
+          <i class="marker" style="left: 22%"></i>
+        </div>
+        <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
+        <ul class="components">
+          <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-good"><span style="width: 1%"></span></span><span class="val">0 / 11</span></li>
+          <li><span class="what">Abandonment <i>weight 20%</i></span><span class="bar band-good"><span style="width: 18%"></span></span><span class="val">2 / 11</span></li>
+          <li><span class="what">Time to first fixation on the primary action <i>weight 35% &middot; worst step: review</i></span><span class="bar band-good"><span style="width: 38%"></span></span><span class="val">2.3 s</span></li>
+          <li><span class="what">Dead-end revisits per session <i>weight 15%</i></span><span class="bar band-good"><span style="width: 30%"></span></span><span class="val">1.5</span></li>
+        </ul>
+        <p class="footnote" style="margin-top: var(--space-4)">9 success &middot; 2 abandoned &middot; 0 failed &middot; 1 automation failure excluded</p>
+      </div>
+
+      <div class="card score-card" data-variant="b">
+        <span class="microlabel">Variant B</span>
+        <h3>Redesign candidate</h3>
+        <p class="url">http://localhost:4173/checkout-b</p>
+        <div class="score-row">
+          <span class="score-value band-bad num">67</span>
+          <span class="score-spread num">&plusmn; 4</span>
+          <span class="score-band band-bad">Friction score &middot; defective</span>
+        </div>
+        <div class="scale band-bad">
+          <i class="spreadband" style="left: 63%; width: 8%"></i>
+          <i class="marker" style="left: 67%"></i>
+        </div>
+        <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
+        <ul class="components">
+          <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-bad"><span style="width: 27%"></span></span><span class="val">3 / 11</span></li>
+          <li><span class="what">Abandonment <i>weight 20%</i></span><span class="bar band-bad"><span style="width: 55%"></span></span><span class="val">6 / 11</span></li>
+          <li><span class="what">Time to first fixation on the primary action <i>weight 35% &middot; worst step: review</i></span><span class="bar band-bad"><span style="width: 100%"></span></span><span class="val">never</span></li>
+          <li><span class="what">Dead-end revisits per session <i>weight 15%</i></span><span class="bar band-bad"><span style="width: 86%"></span></span><span class="val">4.3</span></li>
+        </ul>
+        <p class="footnote" style="margin-top: var(--space-4)">2 success &middot; 6 abandoned &middot; 3 failed &middot; 1 automation failure excluded</p>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <span class="delta num">+45</span>
+      <span>Variant B is harder. The gap held in all 3 seed groups (A 19&ndash;25, B 63&ndash;71 &mdash; the bands do not overlap).</span>
+      <span class="grow"></span>
+      <button class="btn btn-sm" data-go="attention">See where attention went</button>
+    </div>
+
+    <div class="section">
+      <h2>Findings</h2>
+      <p class="lede">What the run concluded, ranked by severity. Each sentence carries the evidence behind it.</p>
+      <div class="findings" id="findings"></div>
+    </div>
+
+    <div class="section">
+      <h2>Task outcomes by persona segment</h2>
+      <p class="lede">Same personas, same seeds, both variants.</p>
+      <div class="card">
+        <div class="segments" id="segments"></div>
+        <div class="legend">
+          <span><i style="background: var(--outcome-success)"></i> Success</span>
+          <span><i style="background: var(--outcome-abandoned)"></i> Abandoned</span>
+          <span><i style="background: var(--outcome-failed)"></i> Failed</span>
+          <span><i style="background: var(--attr-automation)"></i> Automation failure (excluded)</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="footnote">
+      Every number on this screen is <b>simulated</b>. It ranks variants and locates friction; it is not a conversion-lift estimate
+      and does not replace a test on real users. Attention similarity to human gaze on the UEyes benchmark: CC 0.68 / NSS 1.9 / ScanMatch 0.54.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== 6. attention (variant) ========================= -->
+<section class="screen" id="screen-attention" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>Where did attention go</h1></div>
+    <p class="lede">Fixations of all sessions on this variant, over the page as the agents saw it.</p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-5) 0">
+      <div class="seg" id="variant-seg">
+        <button data-variant="a" aria-pressed="false">A &middot; Current checkout</button>
+        <button data-variant="b" aria-pressed="true">B &middot; Redesign candidate</button>
+      </div>
+      <span class="grow"></span>
+      <span class="microlabel">Aggregate of <span id="att-n">11</span> scored sessions</span>
+    </div>
+
+    <div class="filmstrip" id="filmstrip"></div>
+
+    <div class="stage">
+      <div>
+        <div class="frame dim" id="att-frame">
+          <div class="page" id="att-page" data-variant="b"></div>
+          <div class="layer heat" id="att-heat"></div>
+          <div class="layer" id="att-vec"></div>
+          <div class="fold"><span>fold &middot; 1280 &times; 800</span></div>
+        </div>
+        <p class="footnote" id="att-caption"></p>
+      </div>
+      <div class="sidepanel">
+        <div class="panel">
+          <h3>Overlays</h3>
+          <div class="toggles">
+            <label><input type="checkbox" id="t-heat" checked> Attention heatmap <span class="faint">dwell-weighted</span></label>
+            <label><input type="checkbox" id="t-scan" checked> Scanpath <span class="faint">numbered fixations</span></label>
+            <label><input type="checkbox" id="t-aoi"> Areas of interest</label>
+          </div>
+          <div class="heatkey"></div>
+          <div class="scale-legend"><span>brief</span><span>long dwell</span></div>
+        </div>
+        <div class="panel">
+          <h3>This step</h3>
+          <dl class="kv" id="att-stats"></dl>
+        </div>
+        <div class="panel">
+          <h3>Reading this</h3>
+          <p class="lede">Numbers are fixation order, median across sessions. Fixation size is dwell time. Click a row in the table to isolate one area of interest.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Areas of interest</h2>
+      <p class="lede">DOM and accessibility tree for controls and text, SAM 3.1 segments for everything else. Click a row to isolate it, or open the sessions that fixated it.</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Area of interest</th>
+              <th>Source</th>
+              <th class="n">Time to first fixation</th>
+              <th class="n">First fixation</th>
+              <th class="n">Total dwell</th>
+              <th class="n">Fixations</th>
+              <th class="n">Revisits</th>
+              <th class="n">Looked at it</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="aoi-rows"></tbody>
+        </table>
+      </div>
+      <p class="footnote">Medians across scored sessions. &ldquo;Looked at it&rdquo; is the share of sessions with at least one fixation inside the area.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 7. sessions ==================================== -->
+<section class="screen" id="screen-sessions" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>What happened to each agent</h1></div>
+    <p class="lede">One row per persona &times; variant &times; seed. A session is the main object in PersonaVision: open one to replay it.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-5) 0">
+      <div class="seg">
+        <button aria-pressed="true">All variants</button><button aria-pressed="false">A</button><button aria-pressed="false">B</button>
+      </div>
+      <div class="seg">
+        <button aria-pressed="true">All outcomes</button><button aria-pressed="false">Success</button><button aria-pressed="false">Abandoned</button><button aria-pressed="false">Failed</button>
+      </div>
+      <span class="chip" aria-pressed="true">Fixated: Confirm purchase &times;</span>
+      <span class="grow"></span>
+      <span class="microlabel">24 sessions &middot; 22 scored &middot; 2 automation failures</span>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Session</th><th>Persona</th><th>Variant</th><th>Device</th><th>Outcome</th>
+            <th class="n">Time</th><th class="n">Fixations</th><th>Attributed to</th><th>Where it ended</th>
+          </tr>
+        </thead>
+        <tbody id="session-rows"></tbody>
+      </table>
+    </div>
+    <p class="footnote">Automation failures are the simulation's own fault, never the product's: they are excluded from the friction score and from every area-of-interest metric.</p>
+  </div>
+</section>
+
+<!-- ===================== 7b. sessions, nothing matches ================== -->
+<section class="screen" id="screen-sessions-empty" hidden>
+  <div class="wrap">
+    <div class="pagehead"><h1>What happened to each agent</h1></div>
+    <p class="lede">One row per persona &times; variant &times; seed.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-5) 0">
+      <div class="seg"><button aria-pressed="false">All variants</button><button aria-pressed="true">B</button><button aria-pressed="false">A</button></div>
+      <div class="seg"><button aria-pressed="false">All outcomes</button><button aria-pressed="true">Success</button></div>
+      <span class="chip" aria-pressed="true">Fixated: Confirm purchase &times;</span>
+      <span class="grow"></span>
+      <span class="microlabel">0 of 24 sessions</span>
+    </div>
+    <div class="empty">
+      <h2>No session matches</h2>
+      <p>On variant B, no session both fixated <b>Confirm purchase</b> and finished the task. That is the finding, not an empty table: of the 9 agents who reached the review step, none ever looked at the button that completes the order.</p>
+      <div class="actions">
+        <button class="btn" data-go="sessions">Clear filters</button>
+        <button class="btn btn-quiet" data-go="attention">See the heatmap for B</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 8. session replay ============================== -->
+<section class="screen" id="screen-replay" hidden>
+  <div class="wrap">
+    <p class="lede" style="margin-bottom: var(--space-2)"><a href="#" data-go="sessions">Sessions</a> / S-15</p>
+    <div class="pagehead"><h1>S-15 &middot; Rushed buyer &middot; Variant B &middot; seed 3</h1></div>
+    <p class="lede">
+      <span class="tag tag-b">B Redesign candidate</span>
+      <span class="tag tag-abandoned">Abandoned at 0:38</span>
+      <span class="tag tag-product">Product at fault</span>
+      <span class="faint">mobile 390 &times; 844 &middot; 23 fixations &middot; 3 screens &middot; reproducible with seed 3</span>
+    </p>
+
+    <div class="replay" style="margin-top: var(--space-6)">
+      <div>
+        <div class="frame is-mobile dim" id="rp-frame">
+          <div class="page" id="rp-page" data-variant="b"></div>
+          <div class="layer" id="rp-vec"></div>
+          <div class="fold"><span>fold</span></div>
+        </div>
+        <div class="scrub">
+          <div class="row">
+            <button class="btn btn-sm" id="rp-prev">&#8592; Fixation</button>
+            <button class="btn btn-sm" id="rp-next">Fixation &#8594;</button>
+            <span class="clock num" id="rp-clock">0:00 / 0:38</span>
+          </div>
+          <div class="row">
+            <input type="range" id="rp-range" min="1" max="23" value="12">
+            <span class="microlabel" id="rp-fixlabel">fixation 12 of 23</span>
+          </div>
+          <p class="footnote">Scrubbing moves gaze, scrolling, clicks and typing together. The screen shown is the one the agent was on at that moment.</p>
+        </div>
+      </div>
+
+      <div class="timeline" id="rp-timeline"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+/* ===========================================================================
+   Hard-coded run: runs/2026-10-24-1402-northwind-demo
+   Four personas x two variants x three seeds = 24 sessions, 22 scored.
+   Variant A = current checkout (clean). Variant B = redesign candidate with
+   three planted defects: a competing promo banner, a fee revealed late, and a
+   mislabelled button. Every number below is representative, not random.
+   ======================================================================== */
+
+const SCORED = 11;                /* scored sessions per variant (12 - 1 automation failure) */
+
+const STEPS = [
+  { id: 'cart',    name: 'Cart',         reach: { a: 11, b: 11 } },
+  { id: 'payment', name: 'Payment',      reach: { a: 9,  b: 10 } },
+  { id: 'review',  name: 'Review',       reach: { a: 9,  b: 9 } },
+  { id: 'confirm', name: 'Confirmation', reach: { a: 9,  b: 2 } }
+];
+
+/* Fake page markup per step. data-variant on .page hides .only-a / .only-b. */
+const PAGES = {
+  cart: `
+    <div class="shop-bar">NORTHWIND<span class="cart" data-aoi="cart-badge">Cart (1)</span></div>
+    <div class="promo only-b" data-aoi="promo">SPRING SALE &minus;20%<small>code SPRING20 &middot; today only</small></div>
+    <div class="body" style="grid-template-columns: 1fr">
+      <div>
+        <h4>Your cart</h4>
+        <div class="item" data-aoi="cart-line"><i class="thumb"></i><span>Ridgeline hiking boots<br><span class="faint">size 43 &middot; brown</span></span><span class="price">$129.00</span></div>
+        <div class="summary" data-aoi="cart-total">
+          <dl><dt>Subtotal</dt><dd>$129.00</dd>
+          <dt class="only-a">Shipping</dt><dd class="only-a">$8.95</dd>
+          <dt class="only-b faint">Shipping</dt><dd class="only-b faint">calculated later</dd>
+          <dt class="total">Total</dt><dd class="total only-a">$137.95</dd><dd class="total only-b">$129.00</dd></dl>
+        </div>
+        <span class="cta" data-aoi="cart-checkout">Checkout</span>
+        <span class="cta weak" data-aoi="keep-shopping">Keep shopping</span>
+      </div>
+    </div>`,
+  payment: `
+    <div class="shop-bar">NORTHWIND<span class="cart" data-aoi="cart-badge">Cart (1)</span></div>
+    <div class="promo only-b" data-aoi="promo">SPRING SALE &minus;20%<small>code SPRING20 &middot; today only</small></div>
+    <div class="body">
+      <div>
+        <h4>Payment details</h4>
+        <div class="field" data-aoi="email"><b>Email</b>you@example.com</div>
+        <div class="field" data-aoi="card"><b>Card number</b>&bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; 4242</div>
+        <div class="row2">
+          <div class="field" data-aoi="expiry"><b>Expiry</b>09 / 29</div>
+          <div class="field" data-aoi="cvc"><b>CVC</b>&bull;&bull;&bull;</div>
+        </div>
+        <span class="cta only-a" data-aoi="primary">Continue to review</span>
+        <span class="cta only-b" data-aoi="primary">Place order &middot; $129.00</span>
+      </div>
+      <div>
+        <h4>Order summary</h4>
+        <div class="summary" data-aoi="summary">
+          <dl><dt>Ridgeline boots</dt><dd>$129.00</dd>
+          <dt class="only-a">Shipping</dt><dd class="only-a">$8.95</dd>
+          <dt class="only-b faint" data-aoi="shipping-row">Shipping</dt><dd class="only-b faint">calculated at next step</dd>
+          <dt class="total">Total</dt><dd class="total only-a">$137.95</dd><dd class="total only-b">$129.00</dd></dl>
+        </div>
+      </div>
+    </div>
+    <div class="trust" data-aoi="trust">Secure payment &middot; 30-day returns<span class="support" data-aoi="support">Need help?</span></div>`,
+  review: `
+    <div class="shop-bar">NORTHWIND<span class="cart" data-aoi="cart-badge">Cart (1)</span></div>
+    <div class="promo only-b" data-aoi="promo">SPRING SALE &minus;20%<small>code SPRING20 &middot; today only</small></div>
+    <div class="body">
+      <div>
+        <h4>Review your order</h4>
+        <div class="field" data-aoi="ship-to"><b>Ship to</b>14 Mill Lane, Bristol</div>
+        <div class="field" data-aoi="pay-with"><b>Pay with</b>Visa &bull;&bull;&bull;&bull; 4242 &middot; <span style="color: var(--color-accent)">Edit</span></div>
+        <span class="cta only-a" data-aoi="complete">Place order &middot; $137.95</span>
+        <div class="pushdown only-b" aria-hidden="true"></div>
+        <span class="cta only-b" data-aoi="complete">Confirm purchase &middot; $147.95</span>
+      </div>
+      <div>
+        <h4>Order summary</h4>
+        <div class="summary" data-aoi="summary">
+          <dl><dt>Ridgeline boots</dt><dd>$129.00</dd>
+          <dt>Shipping</dt><dd>$8.95</dd>
+          <dt class="only-b fee-new" data-aoi="fee-row">Service fee</dt><dd class="only-b fee-new">$9.95</dd>
+          <dt class="total">Total</dt><dd class="total only-a">$137.95</dd><dd class="total only-b fee-new">$147.95</dd></dl>
+        </div>
+      </div>
+    </div>
+    <div class="trust" data-aoi="trust">Secure payment &middot; 30-day returns<span class="support" data-aoi="support">Need help?</span></div>`,
+  confirm: `
+    <div class="shop-bar">NORTHWIND<span class="cart" data-aoi="cart-badge">Cart (0)</span></div>
+    <div class="confirmbox" data-aoi="confirm">Order placed<small data-aoi="order-number">Order NW-20418 &middot; arrives Tue 28 Oct</small></div>
+    <div class="body" style="grid-template-columns: 1fr"><div class="summary" data-aoi="summary"><dl><dt>Paid</dt><dd class="only-a">$137.95</dd><dd class="only-b">$147.95</dd></dl></div></div>`
+};
+
+/* Fixations are anchored to an area of interest, so they always land on the
+   element they belong to: { aoi, ox, oy (fraction inside the box), dur ms }.
+   Order in the array is fixation order. */
+const FIX = {
+  'a-cart': [
+    { aoi: 'cart-line', ox: .3, oy: .5, dur: 310 }, { aoi: 'cart-line', ox: .85, oy: .5, dur: 240 },
+    { aoi: 'cart-total', ox: .8, oy: .75, dur: 420 }, { aoi: 'cart-total', ox: .8, oy: .9, dur: 360 },
+    { aoi: 'cart-checkout', ox: .5, oy: .5, dur: 520 }
+  ],
+  'b-cart': [
+    { aoi: 'promo', ox: .5, oy: .45, dur: 480 }, { aoi: 'promo', ox: .5, oy: .8, dur: 260 },
+    { aoi: 'cart-line', ox: .3, oy: .5, dur: 280 }, { aoi: 'cart-total', ox: .8, oy: .55, dur: 300 },
+    { aoi: 'cart-total', ox: .8, oy: .85, dur: 340 }, { aoi: 'promo', ox: .5, oy: .5, dur: 210 },
+    { aoi: 'cart-checkout', ox: .5, oy: .5, dur: 450 }
+  ],
+  'a-payment': [
+    { aoi: 'email', ox: .3, oy: .5, dur: 260 }, { aoi: 'card', ox: .4, oy: .5, dur: 480 },
+    { aoi: 'expiry', ox: .5, oy: .5, dur: 220 }, { aoi: 'cvc', ox: .5, oy: .5, dur: 200 },
+    { aoi: 'summary', ox: .7, oy: .35, dur: 300 }, { aoi: 'summary', ox: .75, oy: .8, dur: 410 },
+    { aoi: 'primary', ox: .5, oy: .5, dur: 560 }, { aoi: 'primary', ox: .35, oy: .5, dur: 240 }
+  ],
+  'b-payment': [
+    { aoi: 'promo', ox: .5, oy: .4, dur: 520 }, { aoi: 'promo', ox: .55, oy: .8, dur: 300 },
+    { aoi: 'email', ox: .3, oy: .5, dur: 240 }, { aoi: 'card', ox: .4, oy: .5, dur: 460 },
+    { aoi: 'expiry', ox: .5, oy: .5, dur: 210 }, { aoi: 'cvc', ox: .5, oy: .5, dur: 190 },
+    { aoi: 'summary', ox: .55, oy: .25, dur: 280 }, { aoi: 'shipping-row', ox: .3, oy: .5, dur: 380 },
+    { aoi: 'summary', ox: .80, oy: .88, dur: 440 }, { aoi: 'shipping-row', ox: .8, oy: .5, dur: 350 },
+    { aoi: 'promo', ox: .5, oy: .5, dur: 230 }, { aoi: 'primary', ox: .5, oy: .5, dur: 420 }
+  ],
+  'a-review': [
+    { aoi: 'ship-to', ox: .4, oy: .5, dur: 280 }, { aoi: 'pay-with', ox: .4, oy: .5, dur: 320 },
+    { aoi: 'summary', ox: .75, oy: .5, dur: 340 }, { aoi: 'summary', ox: .75, oy: .9, dur: 430 },
+    { aoi: 'complete', ox: .5, oy: .5, dur: 610 }
+  ],
+  /* Variant B, review step: no fixation ever lands on "complete". That is the
+     headline finding, not missing data. */
+  'b-review': [
+    { aoi: 'summary', ox: .55, oy: .35, dur: 520 }, { aoi: 'fee-row', ox: .35, oy: .5, dur: 610 },
+    { aoi: 'summary', ox: .82, oy: .92, dur: 480 }, { aoi: 'fee-row', ox: .75, oy: .5, dur: 540 },
+    { aoi: 'pay-with', ox: .35, oy: .5, dur: 260 }, { aoi: 'summary', ox: .60, oy: .95, dur: 500 },
+    { aoi: 'support', ox: .5, oy: .5, dur: 330 }
+  ],
+  'a-confirm': [
+    { aoi: 'confirm', ox: .5, oy: .4, dur: 460 }, { aoi: 'order-number', ox: .5, oy: .5, dur: 380 },
+    { aoi: 'summary', ox: .75, oy: .5, dur: 240 }
+  ],
+  'b-confirm': [
+    { aoi: 'confirm', ox: .5, oy: .4, dur: 430 }, { aoi: 'summary', ox: .6, oy: .5, dur: 520 },
+    { aoi: 'order-number', ox: .5, oy: .5, dur: 300 }
+  ]
+};
+
+/* Area-of-interest metrics per step, per variant.
+   null            = the area does not exist in that variant.
+   ttff === null   = the area exists and no agent ever fixated it. */
+const AOI_METRICS = {
+  cart: [
+    { id: 'promo', label: 'Promo banner', src: 'SAM 3.1 segment', a: null, b: { ttff: 0.3, ffd: 480, dwell: 2.4, fix: 3.1, rev: 1.4, seen: 91 } },
+    { id: 'cart-line', label: 'Cart line item', src: 'DOM', a: { ttff: 0.5, ffd: 310, dwell: 1.4, fix: 2.2, rev: 0.4, seen: 100 }, b: { ttff: 1.1, ffd: 280, dwell: 1.1, fix: 1.8, rev: 0.3, seen: 100 } },
+    { id: 'cart-total', label: 'Cart total', src: 'DOM', a: { ttff: 1.2, ffd: 420, dwell: 2.1, fix: 2.8, rev: 0.6, seen: 100 }, b: { ttff: 1.9, ffd: 300, dwell: 1.9, fix: 2.6, rev: 0.9, seen: 91 } },
+    { id: 'cart-checkout', label: '"Checkout" button', src: 'DOM &middot; primary action', a: { ttff: 2.0, ffd: 520, dwell: 1.0, fix: 1.3, rev: 0.1, seen: 100 }, b: { ttff: 3.4, ffd: 450, dwell: 0.9, fix: 1.2, rev: 0.2, seen: 100 } },
+    { id: 'keep-shopping', label: '"Keep shopping" link', src: 'DOM', a: { ttff: 3.1, ffd: 180, dwell: 0.2, fix: 0.4, rev: 0.0, seen: 27 }, b: { ttff: 4.0, ffd: 190, dwell: 0.3, fix: 0.5, rev: 0.1, seen: 36 } }
+  ],
+  payment: [
+    { id: 'promo', label: 'Promo banner', src: 'SAM 3.1 segment', a: null, b: { ttff: 0.4, ffd: 520, dwell: 3.1, fix: 4.2, rev: 1.8, seen: 92 } },
+    { id: 'summary', label: 'Order summary', src: 'DOM', a: { ttff: 2.4, ffd: 300, dwell: 2.3, fix: 3.1, rev: 0.8, seen: 100 }, b: { ttff: 3.0, ffd: 280, dwell: 3.4, fix: 4.4, rev: 2.1, seen: 100 } },
+    { id: 'shipping-row', label: 'Shipping row &mdash; B: "calculated at next step"', src: 'DOM', a: null, b: { ttff: 4.1, ffd: 380, dwell: 1.9, fix: 2.4, rev: 1.3, seen: 83 } },
+    { id: 'card', label: 'Card number field', src: 'DOM', a: { ttff: 1.1, ffd: 480, dwell: 2.0, fix: 2.2, rev: 0.3, seen: 100 }, b: { ttff: 2.2, ffd: 460, dwell: 1.9, fix: 2.1, rev: 0.4, seen: 100 } },
+    { id: 'primary', label: 'Primary action &mdash; A: "Continue to review", B: "Place order"', src: 'DOM &middot; primary action', a: { ttff: 1.8, ffd: 560, dwell: 1.4, fix: 1.9, rev: 0.2, seen: 100 }, b: { ttff: 3.6, ffd: 420, dwell: 1.2, fix: 1.6, rev: 0.3, seen: 92 } },
+    { id: 'trust', label: 'Trust badges', src: 'SAM 3.1 segment', a: { ttff: 4.6, ffd: 200, dwell: 0.3, fix: 0.6, rev: 0.0, seen: 36 }, b: { ttff: 5.2, ffd: 210, dwell: 0.4, fix: 0.7, rev: 0.1, seen: 41 } },
+    { id: 'support', label: '"Need help?" link', src: 'DOM', a: { ttff: 5.8, ffd: 190, dwell: 0.2, fix: 0.3, rev: 0.0, seen: 18 }, b: { ttff: 5.0, ffd: 280, dwell: 0.9, fix: 1.2, rev: 0.4, seen: 58 } }
+  ],
+  review: [
+    { id: 'fee-row', label: 'Service fee row &mdash; planted defect', src: 'DOM', a: null, b: { ttff: 1.2, ffd: 610, dwell: 3.6, fix: 3.9, rev: 2.4, seen: 100 } },
+    { id: 'summary', label: 'Order summary', src: 'DOM', a: { ttff: 1.6, ffd: 340, dwell: 2.2, fix: 2.9, rev: 0.7, seen: 100 }, b: { ttff: 0.6, ffd: 520, dwell: 4.8, fix: 5.6, rev: 3.1, seen: 100 } },
+    { id: 'complete', label: 'Completing action &mdash; A: "Place order", B: "Confirm purchase"', src: 'DOM &middot; primary action', a: { ttff: 2.3, ffd: 610, dwell: 1.6, fix: 2.0, rev: 0.2, seen: 100 }, b: { ttff: null, ffd: null, dwell: 0, fix: 0, rev: 0, seen: 0 } },
+    { id: 'pay-with', label: 'Payment method row', src: 'DOM', a: { ttff: 1.1, ffd: 320, dwell: 1.1, fix: 1.6, rev: 0.3, seen: 91 }, b: { ttff: 2.8, ffd: 260, dwell: 0.8, fix: 1.2, rev: 0.4, seen: 67 } },
+    { id: 'support', label: '"Need help?" link', src: 'DOM', a: { ttff: 4.9, ffd: 180, dwell: 0.2, fix: 0.3, rev: 0.0, seen: 9 }, b: { ttff: 3.4, ffd: 330, dwell: 1.0, fix: 1.3, rev: 0.5, seen: 67 } }
+  ],
+  confirm: [
+    { id: 'confirm', label: 'Confirmation message', src: 'DOM', a: { ttff: 0.4, ffd: 460, dwell: 1.8, fix: 2.1, rev: 0.2, seen: 100 }, b: { ttff: 0.5, ffd: 430, dwell: 1.5, fix: 1.9, rev: 0.2, seen: 100 } },
+    { id: 'order-number', label: 'Order number', src: 'DOM', a: { ttff: 1.0, ffd: 380, dwell: 1.2, fix: 1.4, rev: 0.3, seen: 89 }, b: { ttff: 1.4, ffd: 300, dwell: 0.9, fix: 1.1, rev: 0.4, seen: 100 } },
+    { id: 'summary', label: 'Amount paid', src: 'DOM', a: { ttff: 1.9, ffd: 240, dwell: 0.6, fix: 0.9, rev: 0.1, seen: 67 }, b: { ttff: 1.1, ffd: 520, dwell: 2.2, fix: 2.5, rev: 1.5, seen: 100 } }
+  ]
+};
+
+const STEP_CAPTION = {
+  'a-cart': 'Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-sensitive agents left here over it.',
+  'b-cart': 'Variant B, cart. The promo banner takes the first fixation, and "calculated later" draws a second fixation in 8 of 11 sessions before Checkout is clicked.',
+  'a-payment': 'Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 agents who reached this step fixated "Continue to review", median 1.8 s in.',
+  'b-payment': 'Variant B, payment step. The promo banner takes the first fixation in 9 of 10 sessions and holds 3.1 s of dwell. The primary action here says "Place order", but it only advances to the review step.',
+  'a-review': 'Variant A, review step. The total is read once, then the primary action; 9 of 9 agents placed the order.',
+  'b-review': 'Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 agents who reached this step ever fixated it.',
+  'a-confirm': 'Variant A, confirmation. 9 of 11 agents reached it.',
+  'b-confirm': 'Variant B, confirmation. Only 2 of 11 agents reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.'
+};
+
+const FINDINGS = [
+  { sev: 'critical', variant: 'b', claim: 'Nobody ever looked at the button that completes the order on variant B.', evidence: '&ldquo;Confirm purchase&rdquo; sits about 180 px below the fold on the review step. Of the 9 agents who reached that step, 0 fixated it; on variant A the equivalent button was fixated by 9 of 9, median 2.3 s in.', aoi: 'review / complete', n: 9, attr: 'product', goto: 'attention' },
+  { sev: 'critical', variant: 'b', claim: 'A $9.95 service fee appears only after payment details are entered, and 4 of 9 agents left within 5 s of fixating it.', evidence: 'The fee row holds 610 ms on first fixation and 2.4 revisits &mdash; the highest revisit count in the run. The total changes from $129.00 to $147.95 between the payment and review steps.', aoi: 'review / fee-row', n: 4, attr: 'product', goto: 'attention' },
+  { sev: 'high', variant: 'b', claim: 'The promo banner takes the first fixation in 9 of 10 sessions, a median 1.3 s before any form field.', evidence: 'Dwell 3.1 s with 1.8 revisits, against 1.2 s on the primary action beneath it. No agent applied the code: the banner costs attention without being used.', aoi: 'payment / promo', n: 9, attr: 'product', goto: 'attention' },
+  { sev: 'medium', variant: 'b', claim: 'The payment step&rsquo;s button says &ldquo;Place order&rdquo; but only advances to review, and 3 of 11 agents stopped there believing they had bought the boots.', evidence: 'All three show a confirmation-seeking fixation pattern on the next screen (summary, then support link) and no further action. Their outcome is a failure with no order placed, not an abandonment.', aoi: 'payment / primary', n: 3, attr: 'product', goto: 'sessions' },
+  { sev: 'low', variant: 'a', claim: 'On variant A, 2 of 11 agents abandoned at the cart after re-reading the shipping line.', evidence: 'Both were the price-sensitive scanner persona; $8.95 shipping on a $129.00 order drew 2 revisits before they left. Reported for symmetry: variant A is the cleaner variant, not a perfect one.', aoi: 'cart / cart-total', n: 2, attr: 'product', goto: 'sessions' },
+  { sev: 'info', variant: 'both', claim: '2 of 24 sessions ended in an automation failure and are excluded from both scores.', evidence: 'Playwright selector timeout on the card-number iframe (S-09 on variant A, S-23 on variant B) after one retry each. This is a weakness of the simulation, never evidence against a variant.', aoi: 'payment / card', n: 2, attr: 'automation', goto: 'sessions' }
+];
+
+const PERSONAS = [
+  { id: 'rushed', name: 'Rushed buyer', device: 'mobile' },
+  { id: 'careful', name: 'Careful comparer', device: 'desktop' },
+  { id: 'firsttime', name: 'First-time visitor', device: 'desktop' },
+  { id: 'price', name: 'Price-sensitive scanner', device: 'mobile' }
+];
+
+/* [persona, variant, seed, outcome, seconds, fixations, attribution, where] */
+const SESSIONS = [
+  ['rushed','a',1,'success',22.4,31,null,'Confirmation'],
+  ['rushed','a',2,'success',24.1,34,null,'Confirmation'],
+  ['rushed','a',3,'success',21.8,29,null,'Confirmation'],
+  ['careful','a',1,'success',38.6,52,null,'Confirmation'],
+  ['careful','a',2,'success',41.2,56,null,'Confirmation'],
+  ['careful','a',3,'success',39.4,54,null,'Confirmation'],
+  ['firsttime','a',1,'success',28.7,44,null,'Confirmation'],
+  ['firsttime','a',2,'success',31.0,47,null,'Confirmation'],
+  ['firsttime','a',3,'automation',12.2,18,'automation','Payment &mdash; selector timeout on the card iframe'],
+  ['price','a',1,'success',33.9,49,null,'Confirmation'],
+  ['price','a',2,'abandoned',19.5,27,'product','Cart &mdash; re-read $8.95 shipping, then left'],
+  ['price','a',3,'abandoned',18.1,25,'product','Cart &mdash; re-read $8.95 shipping, then left'],
+  ['rushed','b',1,'failed',26.3,33,'product','Review &mdash; believed &ldquo;Place order&rdquo; had bought it; no order placed'],
+  ['rushed','b',2,'failed',25.8,31,'product','Review &mdash; believed &ldquo;Place order&rdquo; had bought it; no order placed'],
+  ['rushed','b',3,'abandoned',38.0,23,'product','Review &mdash; service fee revealed, left without ordering'],
+  ['careful','b',1,'success',58.4,71,null,'Confirmation'],
+  ['careful','b',2,'abandoned',49.7,63,'product','Review &mdash; service fee revealed, 3 revisits, then left'],
+  ['careful','b',3,'abandoned',46.2,59,'product','Review &mdash; service fee revealed, then left'],
+  ['firsttime','b',1,'failed',44.1,58,'product','Review &mdash; believed &ldquo;Place order&rdquo; had bought it; no order placed'],
+  ['firsttime','b',2,'abandoned',36.5,41,'product','Payment &mdash; never fixated the primary action, gave up'],
+  ['firsttime','b',3,'success',52.8,66,null,'Confirmation'],
+  ['price','b',1,'abandoned',29.4,37,'product','Cart &mdash; &ldquo;calculated later&rdquo; distrusted, left'],
+  ['price','b',2,'automation',15.6,21,'automation','Payment &mdash; selector timeout on the card iframe'],
+  ['price','b',3,'abandoned',41.0,52,'product','Review &mdash; service fee revealed, left without ordering']
+];
+
+/* The replayed session: S-15 = Rushed buyer, variant B, seed 3. */
+const REPLAY = {
+  id: 'S-15', total: 38, fixations: 23,
+  screens: [
+    { step: 'cart', from: 1, to: 7, t0: 0, t1: 9,
+      intent: 'See what the boots cost in total before I put a card in.',
+      events: [ ['0:00','loaded','Cart &middot; 390 &times; 844 &middot; mobile'], ['0:01','read','Promo banner &mdash; first fixation of the session'], ['0:04','read','Cart total: shipping says &ldquo;calculated later&rdquo;'], ['0:08','click','&ldquo;Checkout&rdquo;'] ] },
+    { step: 'payment', from: 8, to: 19, t0: 9, t1: 27,
+      intent: 'Pay as fast as possible, the card is saved.',
+      events: [ ['0:09','loaded','Payment'], ['0:11','read','Promo banner again &mdash; 2 revisits'], ['0:14','type','Card number (autofilled)'], ['0:19','read','Shipping row: &ldquo;calculated at next step&rdquo;'], ['0:23','hesitate','1.9 s with no fixation on any control'], ['0:26','click','&ldquo;Place order &middot; $129.00&rdquo; &mdash; believed this completed the purchase'] ] },
+    { step: 'review', from: 20, to: 23, t0: 27, t1: 38,
+      intent: 'I thought I had paid. Why is the total higher than it was?',
+      events: [ ['0:28','read','Total $147.95 &mdash; it was $129.00 one screen ago'], ['0:31','read','Service fee $9.95 &mdash; 610 ms, the longest fixation of the session'], ['0:34','read','Total again &mdash; 3rd revisit'], ['0:37','read','&ldquo;Need help?&rdquo;'], ['0:38','abandon','Left without placing the order'] ] }
+  ]
+};
+
+/* ===== Rendering ======================================================== */
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+/* Score bands come from tokens.css, so the thresholds are stated once. */
+function band(score) {
+  const css = getComputedStyle(document.documentElement);
+  const good = parseFloat(css.getPropertyValue('--score-threshold-good'));
+  const bad = parseFloat(css.getPropertyValue('--score-threshold-bad'));
+  return score <= good ? 'good' : score >= bad ? 'bad' : 'warn';
+}
+
+/* ---- navigation ---- */
+const CHROME_OFF = new Set(['empty', 'newrun', 'newrun-invalid', 'running', 'error']);
+const TAB_OF = { comparison: 'comparison', attention: 'attention', sessions: 'sessions', 'sessions-empty': 'sessions', replay: 'sessions' };
+
+function go(name) {
+  if (!$('#screen-' + name)) name = 'comparison';
+  $$('.screen').forEach(s => { s.hidden = s.id !== 'screen-' + name; });
+  const bare = CHROME_OFF.has(name);
+  $('#tabbar').hidden = bare;
+  $$('#chrome .runpick, #chrome .sim-badge').forEach(el => { el.style.visibility = bare ? 'hidden' : 'visible'; });
+  $$('.tab').forEach(t => t.setAttribute('aria-current', t.dataset.go === TAB_OF[name] ? 'page' : 'false'));
+  if (name === 'attention') renderAttention();
+  if (name === 'replay') renderReplay();
+  window.scrollTo(0, 0);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-go]');
+  if (!t) return;
+  e.preventDefault();
+  go(t.dataset.go);
+});
+
+$('#themebtn').addEventListener('click', () => {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  $('#themebtn').textContent = dark ? 'Dark mode' : 'Light mode';
+});
+
+/* ---- comparison ---- */
+function renderFindings() {
+  $('#findings').innerHTML = FINDINGS.slice().sort((x, y) => SEV_RANK[x.sev] - SEV_RANK[y.sev]).map((f, i) => `
+    <button class="finding" data-sev="${f.sev}" data-go="${f.goto}">
+      <span class="rank">${i + 1}</span>
+      <span>
+        <span class="claim">${f.claim}</span>
+        <span class="evidence">${f.evidence}</span>
+        <span class="meta">
+          <span class="tag tag-${f.sev}">${f.sev}</span>
+          ${f.variant === 'both' ? '<span class="tag tag-info">both variants</span>' : `<span class="tag tag-${f.variant}">variant ${f.variant.toUpperCase()}</span>`}
+          <span class="tag tag-${f.attr}">${f.attr === 'product' ? 'product at fault' : 'automation at fault &middot; excluded'}</span>
+          <span class="aoi">${f.aoi}</span>
+        </span>
+      </span>
+      <span class="side">
+        <span class="microlabel">${f.n} sessions</span>
+        <span class="faint" style="font-size: var(--text-xs)">open evidence &rarr;</span>
+      </span>
+    </button>`).join('');
+}
+
+function renderSegments() {
+  const rows = [];
+  PERSONAS.forEach(p => {
+    ['a', 'b'].forEach(v => {
+      const mine = SESSIONS.filter(s => s[0] === p.id && s[1] === v);
+      const c = { success: 0, abandoned: 0, failed: 0, automation: 0 };
+      mine.forEach(s => c[s[3]]++);
+      const n = mine.length;
+      rows.push(`<div class="segbar">
+        <span><span class="tag tag-${v}">${v.toUpperCase()}</span> ${p.name} <span class="faint">${p.device}</span></span>
+        <div class="stack">
+          <i class="s" style="width:${c.success / n * 100}%"></i>
+          <i class="ab" style="width:${c.abandoned / n * 100}%"></i>
+          <i class="f" style="width:${c.failed / n * 100}%"></i>
+          <i class="au" style="width:${c.automation / n * 100}%"></i>
+        </div>
+        <span class="num faint">${c.success}/${n} success</span>
+      </div>`);
+    });
+  });
+  $('#segments').innerHTML = rows.join('');
+}
+
+/* ---- overlays: areas of interest are measured off the real elements, so a
+   fixation anchored to an area always lands on it at any frame size. ---- */
+function aoiBoxes(frame, page) {
+  const fb = frame.getBoundingClientRect();
+  const out = {};
+  $$('[data-aoi]', page).forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    out[el.dataset.aoi] = {
+      x: (r.left - fb.left) / fb.width * 100, y: (r.top - fb.top) / fb.height * 100,
+      w: r.width / fb.width * 100, h: r.height / fb.height * 100
+    };
+  });
+  return out;
+}
+
+function resolve(fixations, boxes) {
+  return fixations.map((f, i) => {
+    const b = boxes[f.aoi];
+    if (!b) return null;
+    return { n: i + 1, aoi: f.aoi, dur: f.dur, x: b.x + b.w * f.ox, y: b.y + b.h * f.oy };
+  }).filter(Boolean);
+}
+
+function heatHTML(pts) {
+  return pts.map(p => {
+    const r = 6 + p.dur / 1000 * 9;
+    return `<i style="left:${p.x}%; top:${p.y}%; width:${r * 2}%; height:${r * 3.1}%;
+      background: radial-gradient(circle, var(--heat-5) 0%, var(--heat-4) 32%, var(--heat-3) 55%, var(--heat-2) 76%, var(--heat-1) 100%)"></i>`;
+  }).join('');
+}
+
+function vectorHTML(pts, opts = {}) {
+  const { scan = true, aoi = false, boxes = {}, active = null, activeEmpty = false, current = null } = opts;
+  let s = '<svg viewBox="0 0 100 100" preserveAspectRatio="none">';
+  if (aoi) {
+    for (const [id, b] of Object.entries(boxes)) {
+      const cls = active === id ? (activeEmpty ? 'aoibox empty' : 'aoibox active') : 'aoibox';
+      s += `<rect class="${cls}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" vector-effect="non-scaling-stroke"/>`;
+      s += `<text class="aoilabel" x="${b.x + 0.6}" y="${b.y - 0.8}" style="font-size:2.6px">${id}</text>`;
+    }
+  }
+  if (scan && pts.length) {
+    for (let i = 1; i < pts.length; i++) {
+      s += `<line x1="${pts[i - 1].x}" y1="${pts[i - 1].y}" x2="${pts[i].x}" y2="${pts[i].y}"
+        stroke="var(--gaze-saccade)" stroke-width="var(--gaze-saccade-width)" vector-effect="non-scaling-stroke"/>`;
+    }
+    pts.forEach(p => {
+      const r = 1.6 + p.dur / 1000 * 1.9;
+      const isNow = current === p.n;
+      s += `<ellipse cx="${p.x}" cy="${p.y}" rx="${r}" ry="${r * 1.6}"
+        fill="${isNow ? 'var(--gaze-fixation-current)' : 'var(--gaze-fixation)'}" opacity="${isNow ? 1 : 0.85}"/>`;
+      s += `<text class="fx-num" x="${p.x}" y="${p.y + 1.1}" text-anchor="middle" style="font-size:3px">${p.n}</text>`;
+    });
+  }
+  return s + '</svg>';
+}
+
+/* ---- attention screen ---- */
+const att = { variant: 'b', step: 'review', active: null };
+
+function renderFilmstrip() {
+  $('#filmstrip').innerHTML = STEPS.map(s => {
+    const n = s.reach[att.variant];
+    return `<button class="step" data-step="${s.id}" aria-pressed="${s.id === att.step}">
+      <span class="microlabel">${s.name}</span>
+      <span class="reach ${n === 0 ? 'zero' : ''}">${n} of ${SCORED} reached it</span>
+    </button>`;
+  }).join('');
+  $$('#filmstrip .step').forEach(b => b.addEventListener('click', () => { att.step = b.dataset.step; att.active = null; renderAttention(); }));
+}
+
+function renderAttention() {
+  const key = att.variant + '-' + att.step;
+  renderFilmstrip();
+  $$('#variant-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.variant === att.variant)));
+
+  const page = $('#att-page'), frame = $('#att-frame');
+  page.dataset.variant = att.variant;
+  page.innerHTML = PAGES[att.step];
+
+  const boxes = aoiBoxes(frame, page);
+  const pts = resolve(FIX[key] || [], boxes);
+  const showHeat = $('#t-heat').checked, showScan = $('#t-scan').checked, showAoi = $('#t-aoi').checked;
+
+  /* Is the isolated area one that no agent ever fixated? That is a result. */
+  let activeEmpty = false;
+  if (att.active && boxes[att.active]) {
+    const b = boxes[att.active];
+    activeEmpty = !pts.some(p => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+  }
+  const shown = att.active ? pts.filter(p => p.aoi === att.active) : pts;
+
+  if (!pts.length) {
+    frame.classList.remove('dim');
+    $('#att-heat').innerHTML = '';
+    $('#att-vec').innerHTML = '';
+    page.innerHTML = `<div class="empty" style="position:absolute; inset:var(--space-4); border-radius:var(--radius-md)">
+        <h2>No session reached this step on variant ${att.variant.toUpperCase()}</h2>
+        <p>There is no attention to show here, and that is the result: every scored session ended earlier.</p>
+        <div class="actions"><button class="btn btn-sm" data-go="sessions">See where they ended</button></div>
+      </div>`;
+    $('#att-caption').innerHTML = '';
+    $('#att-stats').innerHTML = '<dt>Fixations</dt><dd>none</dd>';
+  } else {
+    frame.classList.add('dim');
+    $('#att-heat').innerHTML = showHeat ? heatHTML(shown) : '';
+    $('#att-vec').innerHTML = vectorHTML(shown, { scan: showScan, aoi: showAoi || !!att.active, boxes, active: att.active, activeEmpty });
+    const metric = (AOI_METRICS[att.step].find(m => m.id === att.active) || {})[att.variant];
+    let caption = STEP_CAPTION[key] || '';
+    if (att.active) {
+      caption = activeEmpty
+        ? `<span class="nofix">No fixation ever landed in &ldquo;${att.active}&rdquo; on variant ${att.variant.toUpperCase()}.</span> ` +
+          `0 of ${STEPS.find(s => s.id === att.step).reach[att.variant]} agents who reached this step looked at it. Nothing is missing from the data: the area was simply never seen.`
+        : `Isolated to &ldquo;${att.active}&rdquo;: ${shown.length} fixations of the ${pts.length} on this step. ${caption}`;
+    }
+    $('#att-caption').innerHTML = caption;
+    const dwell = shown.reduce((a, p) => a + p.dur, 0) / 1000;
+    const first = AOI_METRICS[att.step]
+      .filter(m => m[att.variant] && m[att.variant].ttff !== null)
+      .sort((x, y) => x[att.variant].ttff - y[att.variant].ttff)[0];
+    $('#att-stats').innerHTML = `
+      <dt>Fixations</dt><dd class="num">${shown.length} median per session</dd>
+      <dt>Total dwell</dt><dd class="num">${dwell.toFixed(1)} s</dd>
+      <dt>Earliest area</dt><dd>${first ? first.label.replace(/ &mdash;.*/, '') : '&mdash;'}</dd>
+      <dt>Reached this step</dt><dd class="num">${STEPS.find(s => s.id === att.step).reach[att.variant]} of ${SCORED}</dd>
+      <dt>Isolated</dt><dd>${att.active ? att.active : '<span class="faint">all areas</span>'}</dd>`;
+  }
+  renderAoiRows();
+}
+
+function renderAoiRows() {
+  const rows = AOI_METRICS[att.step].map(m => {
+    const d = m[att.variant];
+    if (d === null) {
+      return `<tr><td>${m.label}</td><td class="faint">${m.src}</td>
+        <td colspan="7" class="faint">Not present in variant ${att.variant.toUpperCase()} &mdash; nothing to compare</td></tr>`;
+    }
+    const never = d.ttff === null;
+    return `<tr data-click data-aoi="${m.id}" aria-selected="${att.active === m.id}">
+      <td>${m.label}</td>
+      <td class="faint">${m.src}</td>
+      <td class="n">${never ? '<span class="never">never</span>' : d.ttff.toFixed(1) + ' s'}</td>
+      <td class="n">${never ? '<span class="faint">&mdash;</span>' : d.ffd + ' ms'}</td>
+      <td class="n">${d.dwell.toFixed(1)} s</td>
+      <td class="n">${d.fix.toFixed(1)}</td>
+      <td class="n">${d.rev.toFixed(1)}</td>
+      <td class="n ${d.seen === 0 ? 'never' : ''}">${d.seen}%</td>
+      <td><a href="#" data-go="${d.seen === 0 ? 'sessions-empty' : 'sessions'}">sessions &rarr;</a></td>
+    </tr>`;
+  });
+  $('#aoi-rows').innerHTML = rows.join('');
+  $$('#aoi-rows tr[data-click]').forEach(tr => tr.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    att.active = att.active === tr.dataset.aoi ? null : tr.dataset.aoi;
+    renderAttention();
+  }));
+}
+
+$$('#variant-seg button').forEach(b => b.addEventListener('click', () => { att.variant = b.dataset.variant; att.active = null; renderAttention(); }));
+['t-heat', 't-scan', 't-aoi'].forEach(id => $('#' + id).addEventListener('change', renderAttention));
+
+/* ---- sessions ---- */
+function sessionId(i) { return 'S-' + String(i + 1).padStart(2, '0'); }
+
+function renderSessions() {
+  $('#session-rows').innerHTML = SESSIONS.map((s, i) => {
+    const [pid, v, seed, outcome, secs, fix, attr, where] = s;
+    const p = PERSONAS.find(x => x.id === pid);
+    const outLabel = outcome === 'automation' ? 'Automation failure' : outcome[0].toUpperCase() + outcome.slice(1);
+    const outClass = outcome === 'automation' ? 'automation' : outcome;
+    return `<tr data-click data-go="replay">
+      <td class="mono">${sessionId(i)}</td>
+      <td>${p.name} <span class="faint">seed ${seed}</span></td>
+      <td><span class="tag tag-${v}">${v.toUpperCase()}</span></td>
+      <td class="faint">${p.device}</td>
+      <td><span class="tag tag-${outClass}">${outLabel}</span></td>
+      <td class="n">${secs.toFixed(1)} s</td>
+      <td class="n">${fix}</td>
+      <td>${attr ? `<span class="tag tag-${attr}">${attr === 'product' ? 'product' : 'automation'}</span>` : '<span class="faint">&mdash;</span>'}</td>
+      <td class="muted">${where}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---- replay ---- */
+let rpFix = 12;
+
+function screenOf(n) { return REPLAY.screens.find(s => n >= s.from && n <= s.to) || REPLAY.screens[0]; }
+
+function renderReplay() {
+  const sc = screenOf(rpFix);
+  const page = $('#rp-page'), frame = $('#rp-frame');
+  page.dataset.variant = 'b';
+  page.innerHTML = PAGES[sc.step];
+  const all = resolve(FIX['b-' + sc.step] || [], aoiBoxes(frame, page));
+  const local = rpFix - sc.from;
+  /* Fixation numbers are continuous across the session, not per screen. */
+  const shown = all.slice(0, Math.max(1, Math.min(all.length, local + 1)))
+    .map(p => ({ ...p, n: p.n + sc.from - 1 }));
+  $('#rp-vec').innerHTML = vectorHTML(shown, { scan: true, current: shown.length ? shown[shown.length - 1].n : null });
+
+  const t = Math.round(sc.t0 + (sc.t1 - sc.t0) * (local / Math.max(1, sc.to - sc.from)));
+  $('#rp-clock').textContent = `0:${String(t).padStart(2, '0')} / 0:${REPLAY.total}`;
+  $('#rp-fixlabel').textContent = `fixation ${rpFix} of ${REPLAY.fixations}`;
+  $('#rp-range').value = rpFix;
+
+  $('#rp-timeline').innerHTML = REPLAY.screens.map((s, i) => `
+    <div class="tl-screen" data-active="${s === sc}">
+      <header>
+        <span class="microlabel">Screen ${i + 1} of ${REPLAY.screens.length} &middot; ${s.step}</span>
+        <span class="faint" style="font-size: var(--text-xs)">fixations ${s.from}&ndash;${s.to} &middot; 0:${String(s.t0).padStart(2, '0')}&ndash;0:${String(s.t1).padStart(2, '0')}</span>
+      </header>
+      <p class="intent">${s.intent}</p>
+      <ul class="events">${s.events.map(([t, kind, what]) => `<li><span class="t">${t}</span><span><span class="kind">${kind}</span> &middot; ${what}</span></li>`).join('')}</ul>
+    </div>`).join('') + `
+    <div class="outcome-card">
+      <h3>Abandoned at 0:38 &middot; the product was at fault</h3>
+      <p>The agent entered payment details believing the total was $129.00, clicked a button that said &ldquo;Place order&rdquo;, and landed on a review step where the total had become $147.95. It re-read the total three times, looked for help, and left. &ldquo;Confirm purchase&rdquo; was never fixated: it sits below the fold on this viewport.</p>
+      <dl class="kv">
+        <dt>Supports findings</dt><dd><a href="#" data-go="comparison">#2 service fee revealed after payment details</a> &middot; <a href="#" data-go="comparison">#4 &ldquo;Place order&rdquo; only advances to review</a></dd>
+        <dt>Automation integrity</dt><dd><span class="tag tag-automation">no selector failures</span> every action resolved, so the outcome is the product&rsquo;s and not the harness&rsquo;s</dd>
+        <dt>Reproduce</dt><dd class="mono">personavision replay runs/2026-10-24-1402-northwind-demo/sessions/S-15.json</dd>
+      </dl>
+    </div>`;
+}
+
+$('#rp-range').addEventListener('input', e => { rpFix = +e.target.value; renderReplay(); });
+$('#rp-prev').addEventListener('click', () => { rpFix = Math.max(1, rpFix - 1); renderReplay(); });
+$('#rp-next').addEventListener('click', () => { rpFix = Math.min(REPLAY.fixations, rpFix + 1); renderReplay(); });
+
+/* ---- boot ---- */
+renderFindings();
+renderSegments();
+renderSessions();
+go(location.hash ? location.hash.slice(1) : 'comparison');
+window.addEventListener('resize', () => {
+  if (!$('#screen-attention').hidden) renderAttention();
+  if (!$('#screen-replay').hidden) renderReplay();
+});
+</script>
+</body>
+</html>
