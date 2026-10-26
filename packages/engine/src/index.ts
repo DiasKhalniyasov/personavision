@@ -44,6 +44,21 @@ export { relevanceByArea } from './relevance.js';
 export type { RelevanceArea, RelevanceHints, RelevanceInput } from './relevance.js';
 
 export {
+  SALIENCE_TERMS,
+  readScreenshotPixels,
+  salienceByArea,
+  salienceTermsByArea,
+} from './salience.js';
+export type {
+  AreaSalience,
+  PageBox,
+  SalienceInput,
+  SalienceTerm,
+  SalienceTerms,
+  ScreenshotPixels,
+} from './salience.js';
+
+export {
   drawFixationDurationMs,
   drawLandingPoint,
   drawSaccadeAmplitudePx,

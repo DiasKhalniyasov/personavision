@@ -91,6 +91,8 @@ const EXPECTED_LEAF_KEYS = [
   'salience.rolePriors.tab',
   'salience.rolePriors.text',
   'salience.rolePriors.textbox',
+  'salience.surround.minRingPx',
+  'salience.surround.ringShare',
   'salience.weights.centreBias',
   'salience.weights.colourContrast',
   'salience.weights.luminanceContrast',

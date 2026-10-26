@@ -34,6 +34,7 @@ unannounced.
 | `alpha` `beta` `gamma` | The softmax weights of `P(area) ∝ exp(alpha·salience + beta·relevance + gamma·history)`                |
 | `salience.weights`     | Local luminance contrast, colour contrast, relative area, centre bias, top bias, role prior            |
 | `salience.rolePriors`  | The role prior per element role, with `other` as the fallback                                          |
+| `salience.surround`    | The ring of pixels an area's contrast is read against: its thickness, and its minimum                  |
 | `relevance`            | Lexical match weights, the role weight, the hint weight, the floor, and the role weights per goal verb |
 | `fixationDuration`     | The log-normal median and sigma, and the bounds a duration is clamped to                               |
 | `saccade`              | Amplitude median and sigma; duration as `baseMs + msPerPixel · amplitude`, clamped                     |
@@ -145,6 +146,47 @@ fits these as data, and `tests/distributions.test.ts` holds the distributional p
 Each draw is a pure function of its inputs, the persona's sampling parameters and the
 generator it is handed, consumes a fixed number of values from it, and caches nothing
 between calls, so two runs on one seed produce byte-identical sequences.
+
+## Bottom-up salience
+
+`src/salience.ts` answers how much each area of interest stands out _before_ anything is
+known about the agent's goal — the bottom-up half of
+`P(area) ∝ exp(alpha·salience + beta·relevance + gamma·history)`. Six explainable image
+statistics, deliberately not a pretrained saliency network: SAM's role in this project is
+segmentation, and calibration has to be able to fit these terms.
+
+| Term                | What it reads                                                        |
+| ------------------- | -------------------------------------------------------------------- |
+| `luminanceContrast` | the area's mean luminance against the ring of pixels around it       |
+| `colourContrast`    | the same ring in opponent colour, so hue counts apart from lightness |
+| `relativeArea`      | how much of the page the area occupies                               |
+| `centreBias`        | how near the page's centre it sits                                   |
+| `topBias`           | how near the top of the page it sits                                 |
+| `rolePrior`         | that a button is not a paragraph, scaled by interface familiarity    |
+
+- `salienceByArea({ screenshot, page, aois, traits, config })` → `Map<aoiId, number>`, each
+  value on **0..1 inclusive**: the weighted mean of the six terms, the weighted sum over the
+  total weight. Normalising is what makes the value comparable rather than merely ordered,
+  since the sampler weighs it against relevance; it survives a negative weight if
+  calibration fits one, and zeroing a term's weight leaves the other terms' values alone.
+- `salienceTermsByArea(…)` → `Map<aoiId, { salience, terms }>`, the same with the six terms
+  each value came from, for a screen or a benchmark that has to say _why_.
+- `readScreenshotPixels(bytes)` decodes a screenshot **once**. A caller scoring several
+  personas over one capture passes the result back in as `screenshot`, so a run of
+  twenty-four sessions decodes each capture once rather than once per persona per area.
+
+`page` is `{ width: capture.viewport.width, height: capture.pageHeight }` — page space, the
+space an area's `bbox` is in — and the screenshot's own pixel dimensions carry the device
+pixel ratio, so a 2× screenshot needs no second argument. The module is pure in the sense
+this README's first section means it: the bytes are handed to it, it resolves no path, and
+it opens nothing. Values are deterministic across machines, because pixels are summed in
+row-major order and only operations IEEE-754 rounds exactly get between a pixel and a value.
+
+An area with no interior (a zero-width or zero-height element) and an area whose ring is
+clipped away (one that fills the screenshot) report no contrast rather than an invented
+number, and stay inside the range. `tests/salience.test.ts` holds the range over every such
+area, reads one term at a time with the other weights zeroed, and fails on any numeric
+literal in the module that is not a definition.
 
 ## The published input types
 
