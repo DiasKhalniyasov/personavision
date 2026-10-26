@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from './setup';
-import { assertTokensLoaded, readScoreThreshold, scoreBand } from '../src/tokens';
+import {
+  assertTokensLoaded,
+  readCompletionThreshold,
+  readScoreThreshold,
+  scoreBand,
+} from '../src/tokens';
 
 describe('the score-band thresholds come from the design tokens', () => {
   it('reads the committed values out of docs/design/tokens.css', () => {
@@ -25,6 +30,28 @@ describe('the score-band thresholds come from the design tokens', () => {
   });
 });
 
+describe('the completion thresholds come from the design tokens', () => {
+  it('reads the committed values out of docs/design/tokens.css', () => {
+    loadDesignTokens();
+
+    expect(readCompletionThreshold('good')).toBe(0.6);
+    expect(readCompletionThreshold('bad')).toBe(0.3);
+  });
+
+  it('follows an override of the custom property instead of returning a literal', () => {
+    loadDesignTokens();
+    document.documentElement.style.setProperty('--completion-threshold-good', '0.72');
+    document.documentElement.style.setProperty('--completion-threshold-bad', '0.25');
+
+    expect(readCompletionThreshold('good')).toBe(0.72);
+    expect(readCompletionThreshold('bad')).toBe(0.25);
+  });
+
+  it('throws when the token does not resolve, rather than inventing a default', () => {
+    expect(() => readCompletionThreshold('good')).toThrow('--completion-threshold-good');
+  });
+});
+
 describe('assertTokensLoaded', () => {
   it('passes once the tokens are in the document', () => {
     loadDesignTokens();
@@ -40,9 +67,16 @@ describe('assertTokensLoaded', () => {
     loadDesignTokens();
     document.documentElement.style.setProperty('--score-threshold-bad', 'auto');
 
-    // Checking both thresholds is what catches this at boot rather than at the first
-    // score a screen tries to band.
+    // Checking every threshold is what catches this at boot rather than at the first
+    // figure a screen tries to band.
     expect(() => assertTokensLoaded()).toThrow('--score-threshold-bad');
+  });
+
+  it('checks the completion thresholds too, not only the score’s', () => {
+    loadDesignTokens();
+    document.documentElement.style.setProperty('--completion-threshold-bad', 'none');
+
+    expect(() => assertTokensLoaded()).toThrow('--completion-threshold-bad');
   });
 });
 

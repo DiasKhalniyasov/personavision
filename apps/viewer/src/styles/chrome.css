@@ -1,0 +1,217 @@
+/* =============================================================================
+   The product chrome: `#chrome` and `#tabbar` of `docs/design/prototype.html`.
+
+   The signed-in chrome of a hosted platform — the product name, the workspace,
+   the test being read, the simulated-audience badge, New test, the account menu,
+   and the tabs under them.
+
+   Every value is a custom property from `docs/design/tokens.css`. The controls
+   themselves are shadcn primitives; what is here is the bar they sit in.
+   ========================================================================== */
+
+.appbar {
+  display: flex;
+  align-items: center;
+  min-height: var(--header-height);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.appbar .wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--header-height);
+  gap: var(--space-4);
+}
+
+.logo {
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+/* The wordmark is a link here — the prototype's is a span — so it says plainly that it is
+   not one of the teal links. */
+.logo:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* ---- The workspace ----------------------------------------------------- */
+
+.wsname {
+  display: inline-flex;
+  align-items: center;
+  padding-left: var(--space-4);
+  border-left: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+
+.wsname strong {
+  color: var(--color-text);
+  font-weight: var(--weight-bold);
+}
+
+/* ---- The test being read ----------------------------------------------- */
+
+/* The prototype's row — name, then date and people — and it takes the space
+   between the workspace and the badge rather than sizing itself to the name:
+   the placeholder below then holds exactly the same room, so the bar does not
+   move when a long test name arrives. */
+.runpick {
+  display: flex;
+  min-width: var(--space-0);
+  max-width: var(--layout-max-narrow);
+  flex: 1;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+
+.runpick strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runpick span {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* The two lines, held at their own height so the bar does not shift when the
+   test resolves. */
+.runpick [data-slot='skeleton'] {
+  height: var(--text-sm);
+}
+
+.runpick .runpick-name {
+  flex: 1;
+}
+
+.runpick .runpick-meta {
+  width: var(--space-20);
+  flex: none;
+}
+
+/* ---- The simulated-audience badge -------------------------------------- */
+
+.sim-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--sev-info-border);
+  border-radius: var(--radius-full);
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  gap: var(--space-2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sim-badge .dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex: none;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+/* The one pulse, on a live badge only. */
+.sim-badge[data-live='true'] .dot {
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
+
+/* ---- The account corner ------------------------------------------------ */
+
+.avatar {
+  display: inline-flex;
+  width: var(--space-8);
+  height: var(--space-8);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.avatar:hover {
+  border-color: var(--color-text-faint);
+  text-decoration: none;
+}
+
+/* ---- The tabs ---------------------------------------------------------- */
+
+.tabs {
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.tabs .wrap {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.tab {
+  padding: var(--space-4) var(--space-1);
+  border-bottom: var(--border-width-strong) solid transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  transition: color var(--duration-base) var(--ease);
+}
+
+.tab:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* Lime is the action colour: it underlines the tab you are on. */
+.tab[aria-current='page'] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-heading);
+  font-weight: var(--weight-bold);
+}
+
+/* ---- Narrow windows ---------------------------------------------------
+   The prototype's own breakpoint: the bar wraps onto a second line rather than
+   squashing, and the tabs scroll sideways rather than stacking. */
+
+@media (max-width: 640px) {
+  .appbar .wrap {
+    flex-wrap: wrap;
+    padding-block: var(--space-3);
+  }
+
+  .wsname {
+    padding-left: var(--space-0);
+    border-left: 0;
+  }
+
+  .tabs .wrap {
+    overflow-x: auto;
+    gap: var(--space-4);
+  }
+}

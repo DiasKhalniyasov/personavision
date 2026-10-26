@@ -1,0 +1,312 @@
+/* =============================================================================
+   The shared primitives of `docs/design/prototype.html`, as the product's own.
+
+   A screen is a stack of **strips**, and whitespace rather than rules separates
+   them. Everything a screen needs to lay itself out is here, so a screen ticket
+   writes layout for what is new on its screen and nothing else.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which
+   this app imports and never copies. No colour, size or spacing value is
+   restated, and there is no second palette: light and dark both come from that
+   file's own dark-mode block.
+
+   What is deliberately **not** here: `.btn`. Every control in this product is a
+   shadcn primitive (`src/components/ui/`), themed from the tokens through
+   `theme.css`; a second button in CSS would be the fork `docs/FLOW.md`
+   section 10 forbids.
+   ========================================================================== */
+
+/* ---- Width and rhythm -------------------------------------------------- */
+
+.wrap {
+  max-width: var(--layout-max);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+}
+
+.wrap-narrow {
+  max-width: var(--layout-max-narrow);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+}
+
+.strip {
+  padding-block: var(--section-pad-y);
+}
+
+.strip-sm {
+  padding-block: var(--space-12);
+}
+
+.strip-lg {
+  padding-block: var(--section-pad-y-lg);
+}
+
+/* One tinted section and one dark band per screen, never more. */
+.strip-tint {
+  background: var(--color-canvas-alt);
+}
+
+.strip-dark {
+  background: var(--color-canvas-dark);
+  color: var(--color-on-canvas-dark);
+}
+
+/* The palette carries no muted-text colour for a dark band, and declaring one here
+   would be a second palette. Quieter text on the band is therefore the band's own
+   text colour, carried at less than full strength: one colour, correct in both
+   modes, and no value of the tokens' restated. */
+.strip-dark .lede,
+.strip-dark .footnote,
+.strip-dark .faint,
+.strip-dark .microlabel {
+  color: var(--color-on-canvas-dark);
+  opacity: 0.66;
+}
+
+.section {
+  margin-top: var(--space-12);
+}
+
+.section > h2 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.section > .lede {
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+/* ---- Headings and prose ------------------------------------------------ */
+
+.pagehead {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: var(--space-3);
+  gap: var(--space-4);
+}
+
+.pagehead h1 {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.lede {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+.breadcrumb {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+.footnote {
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-8);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.faint {
+  color: var(--color-text-faint);
+}
+
+/* Uppercase overline labels are set in the mono family, at --tracking-wide. */
+.microlabel {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* A figure is compared, so its digits line up. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Panels ------------------------------------------------------------ */
+
+.card {
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.card-lg {
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--sev-high-border);
+  border-radius: var(--radius-md);
+  background: var(--sev-high-bg);
+  color: var(--sev-high);
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+}
+
+.notice.info {
+  border-color: var(--sev-info-border);
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+}
+
+.notice a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* An empty, not-found or nothing-matched state: the one card on the screen. */
+.empty {
+  display: grid;
+  padding: var(--space-16) var(--space-6);
+  border: var(--border-width) dashed var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  gap: var(--space-4);
+  place-items: center;
+  text-align: center;
+}
+
+.empty h2 {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.empty p {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+/* ---- Chips ------------------------------------------------------------
+   Every chip is fully rounded, and a colour is never the only carrier of
+   meaning: the word is always beside it. */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.tag-critical {
+  border-color: var(--sev-critical-border);
+  background: var(--sev-critical-bg);
+  color: var(--sev-critical);
+}
+
+.tag-high {
+  border-color: var(--sev-high-border);
+  background: var(--sev-high-bg);
+  color: var(--sev-high);
+}
+
+.tag-medium {
+  border-color: var(--sev-medium-border);
+  background: var(--sev-medium-bg);
+  color: var(--sev-medium);
+}
+
+.tag-low {
+  border-color: var(--sev-low-border);
+  background: var(--sev-low-bg);
+  color: var(--sev-low);
+}
+
+.tag-info {
+  border-color: var(--sev-info-border);
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+}
+
+.tag-success {
+  background: var(--outcome-success-bg);
+  color: var(--outcome-success);
+}
+
+.tag-abandoned {
+  background: var(--outcome-abandoned-bg);
+  color: var(--outcome-abandoned);
+}
+
+.tag-failed {
+  background: var(--outcome-failed-bg);
+  color: var(--outcome-failed);
+}
+
+.tag-product {
+  background: var(--attr-product-bg);
+  color: var(--attr-product);
+}
+
+.tag-automation {
+  background: var(--attr-automation-bg);
+  color: var(--attr-automation);
+}
+
+/* The two versions keep one identity everywhere A and B appear. */
+.tag-a {
+  background: var(--variant-a-bg);
+  color: var(--variant-a);
+}
+
+.tag-b {
+  background: var(--variant-b-bg);
+  color: var(--variant-b);
+}
+
+/* ---- Filling a row ----------------------------------------------------- */
+
+.grow {
+  flex: 1;
+}
+
+/* ---- Narrow windows ---------------------------------------------------
+   The prototype's own breakpoint. A breakpoint is not a token: the design
+   contract states its three in `prototype.html`, because a media query cannot
+   read a custom property. */
+
+@media (max-width: 640px) {
+  .wrap,
+  .wrap-narrow {
+    padding-inline: var(--layout-gutter-narrow);
+  }
+
+  .strip {
+    padding-block: var(--space-10);
+  }
+}

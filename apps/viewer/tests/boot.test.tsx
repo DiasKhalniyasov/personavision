@@ -1,47 +1,36 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/dom';
 import { act } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from './setup';
-import { Boot } from '../src/boot';
+import { forgetRuns, serveRunData } from './app';
 import { mount } from '../src/mount';
-
-describe('the boot placeholder', () => {
-  it('shows the product name and one line saying no run is loaded', () => {
-    render(<Boot />);
-
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('PersonaVision');
-    expect(screen.getByText('No run has been loaded yet.')).toBeTruthy();
-  });
-
-  it('is the whole of the app: no chrome, no tab bar, no screen', () => {
-    const { container } = render(<Boot />);
-
-    expect(container.querySelectorAll('nav, header, [role="tablist"]')).toHaveLength(0);
-    expect(container.querySelectorAll('h1, p')).toHaveLength(2);
-  });
-});
 
 describe('mounting the app', () => {
   let container: HTMLElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await serveRunData();
     container = document.createElement('div');
     container.id = 'root';
     container.textContent = 'The app did not start.';
     document.body.append(container);
   });
 
-  it('replaces the boot fallback with the placeholder once the tokens are there', async () => {
+  afterEach(forgetRuns);
+
+  it('replaces the boot fallback with the product chrome once the tokens are there', async () => {
     loadDesignTokens();
 
     await act(async () => {
       mount(container);
     });
 
-    expect(container.textContent).toContain('PersonaVision');
-    expect(container.textContent).toContain('No run has been loaded yet.');
     expect(container.textContent).not.toContain('did not start');
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'PersonaVision' })).toBeTruthy();
+    });
+    expect(screen.getByRole('navigation', { name: 'This test' })).toBeTruthy();
   });
 
   it('says so in words when there is no #root at all, rather than rendering blank', async () => {

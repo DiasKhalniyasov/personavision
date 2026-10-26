@@ -11,6 +11,11 @@
     "types": ["node", "vite/client"],
     "jsx": "react-jsx",
 
+    // The alias the shadcn registry's own files import `@/lib/utils` through.
+    // `vite.config.ts` declares the same one for the bundler.
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
+
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,

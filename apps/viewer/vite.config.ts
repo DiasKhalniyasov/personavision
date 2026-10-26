@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
@@ -38,7 +39,12 @@ const runData = (): Plugin => ({
 });
 
 export default defineConfig({
-  plugins: [react(), runData()],
+  plugins: [react(), tailwindcss(), runData()],
+  resolve: {
+    // The alias the shadcn registry's own files import `@/lib/utils` through,
+    // declared for TypeScript in `tsconfig.json` as well.
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     fs: {
       allow: [designDir],

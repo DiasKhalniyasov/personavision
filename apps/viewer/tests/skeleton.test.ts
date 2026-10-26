@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { build } from 'vite';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { buildApp } from './built';
+import type { BuiltApp } from './built';
 
 const appDir = fileURLToPath(new URL('..', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -29,10 +29,19 @@ const appSource = (): string[] =>
 const appStylesheets = (): string[] =>
   filesUnder(appDir).filter((path) => extname(path) === '.css');
 
-/** The two custom properties `docs/design/tokens.css` declares the score bands with. */
+/** The Tailwind theme, which maps Tailwind's names onto the tokens and declares no value. */
+const themeMapping = join(appDir, 'src/styles/theme.css');
+
+/** The registry's own primitive files, which carry Tailwind classes and no stylesheet. */
+const primitives = (): string[] =>
+  filesUnder(join(appDir, 'src/components/ui')).filter((path) => extname(path) === '.tsx');
+
+/** The four custom properties `docs/design/tokens.css` declares the bands with. */
 const THRESHOLD = {
-  good: '--score-threshold-good',
-  bad: '--score-threshold-bad',
+  scoreGood: '--score-threshold-good',
+  scoreBad: '--score-threshold-bad',
+  completionGood: '--completion-threshold-good',
+  completionBad: '--completion-threshold-bad',
 } as const;
 
 describe('the app imports the design tokens and never copies them', () => {
@@ -52,10 +61,10 @@ describe('the app imports the design tokens and never copies them', () => {
     expect(copies).toEqual([]);
   });
 
-  it('declares neither threshold itself, not even partially', () => {
-    // A declaration, not a mention: `src/tokens.ts` names both properties in order to read
-    // them, which is the point. What must not exist is a value assigned to one.
-    const declaration = new RegExp(`(?:${THRESHOLD.good}|${THRESHOLD.bad})\\s*:`);
+  it('declares none of the thresholds itself, not even partially', () => {
+    // A declaration, not a mention: `src/tokens.ts` names all four in order to read them,
+    // which is the point. What must not exist is a value assigned to one.
+    const declaration = new RegExp(`(?:${Object.values(THRESHOLD).join('|')})\\s*:`);
 
     const declaring = appSource()
       .filter((path) => declaration.test(read(path)))
@@ -65,11 +74,20 @@ describe('the app imports the design tokens and never copies them', () => {
   });
 
   it('declares no custom property of its own, so the tokens are the only source', () => {
-    // Guards the three stylesheet checks below from passing on an empty list.
+    // Guards the checks below from passing on an empty list.
     expect(appStylesheets().length).toBeGreaterThan(0);
 
     for (const stylesheet of appStylesheets()) {
-      const declarations = read(stylesheet).match(/^\s*--[\w-]+\s*:/gm) ?? [];
+      // The Tailwind theme mapping is the one exception, and a narrow one: inside its
+      // `@theme` blocks it may name a Tailwind theme variable, and every value it gives
+      // one is a `var(--…)` reference to a token — never a value of its own. That is
+      // asserted against a production build in `theme.test.ts`, which also asserts that
+      // nothing the app ships declares a token's own name.
+      const source =
+        stylesheet === themeMapping
+          ? read(stylesheet).replace(/@theme[^{]*\{[^}]*\}/g, '')
+          : read(stylesheet);
+      const declarations = source.match(/^\s*--[\w-]+\s*:/gm) ?? [];
       expect(declarations, relative(repoRoot, stylesheet)).toEqual([]);
     }
   });
@@ -89,13 +107,33 @@ describe('the app imports the design tokens and never copies them', () => {
     ];
 
     for (const stylesheet of appStylesheets()) {
-      // A file's own header explains the rule; a comment is not a declaration.
-      const declarations = read(stylesheet).replace(/\/\*[\s\S]*?\*\//g, '');
+      const declarations = read(stylesheet)
+        // A file's own header explains the rule; a comment is not a declaration.
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        // A breakpoint is not a token: a media query cannot read a custom property, which
+        // is why `docs/design/prototype.html` states its own three. What the rule is about
+        // is a value the tokens own.
+        .replace(/@media[^{]*/g, '@media');
       for (const pattern of restated) {
         expect(declarations, `${relative(repoRoot, stylesheet)} ${String(pattern)}`).not.toMatch(
           pattern,
         );
       }
+    }
+  });
+
+  it('restates no colour in the registry’s primitives either', () => {
+    // Their lengths are a primitive's own geometry — a focus ring, an arrow's nudge — but
+    // a colour is always the theme's, and so always a token's.
+    expect(primitives().length).toBeGreaterThan(0);
+
+    for (const primitive of primitives()) {
+      const source = read(primitive);
+      expect(source, relative(repoRoot, primitive)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source, relative(repoRoot, primitive)).not.toMatch(/\b(?:rgba?|hsla?|oklch|lab)\(/);
+      // And no duration of its own: the theme maps the transition onto `--duration-base`,
+      // which the tokens zero under `prefers-reduced-motion`.
+      expect(source, relative(repoRoot, primitive)).not.toMatch(/\bduration-\d/);
     }
   });
 
@@ -108,62 +146,74 @@ describe('the app imports the design tokens and never copies them', () => {
   });
 });
 
-describe('the skeleton owns the document shell and nothing else', () => {
-  it("stubs none of the prototype's screens, so no later step has to unpick one", () => {
-    const ids = [
-      'tabbar',
-      'screen-empty',
-      'screen-newrun',
-      'screen-running',
-      'screen-error',
-    ].concat(['screen-comparison', 'screen-attention', 'screen-sessions', 'screen-replay']);
-    const sources = appSource().map((path) => [relative(repoRoot, path), read(path)] as const);
+describe('the shell publishes one file per screen, so screen tickets do not collide', () => {
+  it('gives each Verdict section its own file', () => {
+    const sections = [
+      'AudienceLine',
+      'ExcludedBanner',
+      'Headline',
+      'CompletionFigures',
+      'Reasons',
+      'HeroEvidence',
+      'HeadlineFindings',
+      'DetailDoors',
+    ];
 
-    const owned = sources.flatMap(([path, source]) =>
-      ids.filter((id) => source.includes(id)).map((id) => `${path}: ${id}`),
-    );
+    for (const section of sections) {
+      const file = join(appDir, `src/screens/verdict/${section}.tsx`);
+      expect(statSync(file).isFile(), section).toBe(true);
+      // The page composes them; a section never reaches into a sibling.
+      for (const other of sections.filter((name) => name !== section)) {
+        expect(read(file), `${section} imports ${other}`).not.toContain(`./${other}`);
+      }
+    }
+  });
 
-    expect(owned).toEqual([]);
+  it('gives each screen of the route table its own file', () => {
+    for (const screen of [
+      'src/screens/verdict/VerdictPage.tsx',
+      'src/screens/breakdown/BreakdownPage.tsx',
+      'src/screens/attention/AttentionPage.tsx',
+      'src/screens/sessions/SessionsPage.tsx',
+      'src/screens/sessions/SessionReplayPage.tsx',
+      'src/screens/signin/SignInPage.tsx',
+      'src/screens/audience/AudiencesPage.tsx',
+      'src/screens/audience/AudienceSetupPage.tsx',
+      'src/screens/newtest/NewTestPage.tsx',
+      'src/screens/landing/LandingPage.tsx',
+      'src/screens/demo/DemoPage.tsx',
+      'src/screens/empty/NoTestsScreen.tsx',
+      'src/screens/runstatus/RunningScreen.tsx',
+      'src/screens/runstatus/RunFailedScreen.tsx',
+    ]) {
+      expect(statSync(join(appDir, screen)).isFile(), screen).toBe(true);
+    }
+  });
+
+  it('reads a run in one place, which every screen goes through', () => {
+    // No screen fetches or parses a run file itself: `useRun` is the one module that asks
+    // the server for anything, and it parses what comes back with the contract's schemas.
+    const asking = appSource()
+      .filter((path) => /\bfetch\s*\(/.test(read(path).replace(/\/\*[\s\S]*?\*\//g, '')))
+      .map((path) => relative(appDir, path));
+
+    expect(asking).toEqual([join('src', 'shell', 'useRun.ts')]);
   });
 });
 
 describe('the build output', () => {
-  let outDir: string;
-  let html: string;
-  let css: string;
+  let built: BuiltApp;
 
   beforeAll(async () => {
-    outDir = mkdtempSync(join(tmpdir(), 'personavision-viewer-'));
-
-    await build({
-      root: appDir,
-      configFile: join(appDir, 'vite.config.ts'),
-      logLevel: 'silent',
-      build: { outDir, emptyOutDir: true },
-    });
-
-    const assets = filesUnder(outDir).map((path) => ({
-      extension: extname(path),
-      source: read(path),
-    }));
-    const joined = (extension: string): string =>
-      assets
-        .filter((asset) => asset.extension === extension)
-        .map((asset) => asset.source)
-        .join('\n');
-
-    html = joined('.html');
-    css = joined('.css');
+    built = await buildApp();
   }, 180_000);
 
-  afterAll(() => {
-    if (outDir) rmSync(outDir, { recursive: true, force: true });
-  });
-
-  it('carries the score-band thresholds, so nobody can hard-code one', () => {
+  it('carries the band thresholds, so nobody can hard-code one', () => {
     // Whitespace-tolerant: the minifier closes the gap after the colon.
-    expect(css).toMatch(new RegExp(`${THRESHOLD.good}:\\s*25\\b`));
-    expect(css).toMatch(new RegExp(`${THRESHOLD.bad}:\\s*60\\b`));
+    expect(built.css).toMatch(new RegExp(`${THRESHOLD.scoreGood}:\\s*25\\b`));
+    expect(built.css).toMatch(new RegExp(`${THRESHOLD.scoreBad}:\\s*60\\b`));
+    expect(built.css).toMatch(new RegExp(`${THRESHOLD.completionGood}:\\s*0?\\.6\\b`));
+    expect(built.css).toMatch(new RegExp(`${THRESHOLD.completionBad}:\\s*0?\\.3\\b`));
   });
 
   it('carries the rest of the design tokens, group by group', () => {
@@ -183,34 +233,36 @@ describe('the build output', () => {
       '--variant-a',
       '--gaze-fixation',
       '--heat-5',
+      '--moment-ticker-duration',
     ]) {
-      expect(css, token).toContain(`${token}:`);
+      expect(built.css, token).toContain(`${token}:`);
     }
   });
 
   it("carries the tokens' own dark-mode block, and the app adds no palette beside it", () => {
-    expect(css).toContain('prefers-color-scheme');
+    expect(built.css).toContain('prefers-color-scheme');
     // The minifier may drop the quotes around the attribute value.
-    expect(css).toMatch(/\[data-theme=["']?dark["']?\]/);
+    expect(built.css).toMatch(/\[data-theme=["']?dark["']?\]/);
   });
 
   it('leaves the boot failure wording on the page, so a failed boot is never blank', () => {
-    expect(html).toContain('The app did not start.');
-    expect(html).toContain('needs JavaScript to run');
+    expect(built.html).toContain('The app did not start.');
+    expect(built.html).toContain('needs JavaScript to run');
   });
 
   it('fetches no font, script or stylesheet from a network', () => {
     const remote = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
-    const references = [...html.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/g)].map(
+    const references = [...built.html.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/g)].map(
       (match) => match[1] ?? '',
     );
     expect(references.length).toBeGreaterThan(0);
     expect(references.filter((reference) => remote.test(reference))).toEqual([]);
 
-    expect(css).not.toContain('@import');
+    expect(built.css).not.toContain('@import');
     // A bundled or inlined asset is not a network fetch; only a remote one is.
-    const urls = [...css.matchAll(/url\(\s*['"]?([^'")]*)/g)].map((match) => match[1] ?? '');
+    const urls = [...built.css.matchAll(/url\(\s*['"]?([^'")]*)/g)].map((match) => match[1] ?? '');
+    expect(urls.length).toBeGreaterThan(0);
     expect(urls.filter((url) => remote.test(url))).toEqual([]);
   });
 });
