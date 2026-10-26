@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,8 @@ const read = (relativePath: string): string => readFileSync(join(repoRoot, relat
 const readJson = (relativePath: string): Record<string, unknown> =>
   JSON.parse(read(relativePath)) as Record<string, unknown>;
 
-const trackedFiles = (): string[] =>
+/** Every file git knows about, plus any new file not yet ignored. */
+const sourceFiles = (): string[] =>
   execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
     cwd: repoRoot,
     encoding: 'utf8',
@@ -41,7 +42,7 @@ describe('the toolchain is pinned', () => {
 
   it('pins the same major in engines.node', () => {
     const engines = readJson('package.json')['engines'] as Record<string, string>;
-    expect(engines['node']).toBe('>=22.0.0 <23.0.0');
+    expect(engines['node']).toBe('>=22.13.0 <23.0.0');
   });
 
   it('names pnpm as the package manager', () => {
@@ -127,7 +128,7 @@ describe('CI gates every root check', () => {
     expect(workflow).toContain('node-version-file: .nvmrc');
   });
 
-  for (const check of ['typecheck', 'lint', 'test', 'build']) {
+  for (const check of ['typecheck', 'lint', 'format:check', 'test', 'build']) {
     it(`runs pnpm ${check}`, () => {
       expect(workflow).toMatch(new RegExp(`^\\s*-\\s*run:\\s*pnpm ${check}\\s*$`, 'm'));
     });
@@ -135,21 +136,52 @@ describe('CI gates every root check', () => {
 });
 
 describe('nothing in the repository reads a credential', () => {
-  // The patterns are assembled from fragments so that this test cannot match itself
-  // and quietly pass while a real credential read sits a line away.
+  // Every pattern is assembled from fragments, and the comments below describe each shape
+  // rather than spelling one out, so that this test cannot match itself and quietly pass
+  // while a real credential read sits a line away.
   const SECRETISH = ['KEY', 'TOKEN', 'SECRET', 'PASSWORD', 'CREDENTIAL'];
-  const ENV_READ = new RegExp(`process\\.env\\.[A-Z0-9_]*(?:${SECRETISH.join('|')})\\b`);
-  const ACTIONS_SECRET = new RegExp(['\\$\\{\\{\\s*', 'sec', 'rets\\.'].join(''));
-  const SCANNED = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.sh', '.yml', '.yaml']);
+  const NAME = `[A-Z0-9_]*(?:${SECRETISH.join('|')})`;
 
-  const offenders = trackedFiles()
-    .filter((path) => SCANNED.has(extname(path)))
-    .filter((path) => {
-      const source = read(path);
-      return ENV_READ.test(source) || ACTIONS_SECRET.test(source);
-    });
+  const PATTERNS = [
+    // A dot read of an environment variable whose name ends in one of those words.
+    new RegExp(`process\\.env\\.${NAME}\\b`),
+    // The same read through a bracket with a quoted literal name.
+    new RegExp(`process\\.env\\[\\s*['"\`]${NAME}`),
+    // The same name destructured straight out of the environment.
+    new RegExp(`\\{[^}]*\\b${NAME}\\b[^}]*\\}\\s*=\\s*process\\.env`),
+    // a registry auth line in an .npmrc
+    new RegExp(['_auth', '(?:Token)?\\s*='].join('')),
+    // a CI secret reference in a workflow
+    new RegExp(['\\$\\{\\{\\s*', 'sec', 'rets\\.'].join('')),
+  ];
 
-  it('reads no API key from the environment and no CI secret', () => {
+  const SCANNED_EXTENSIONS = new Set([
+    '.ts',
+    '.tsx',
+    '.js',
+    '.mjs',
+    '.cjs',
+    '.json',
+    '.sh',
+    '.yml',
+    '.yaml',
+  ]);
+
+  // Files whose whole name carries no extension, and which are exactly where a
+  // credential tends to land: an .npmrc auth token above all.
+  const SCANNED_NAMES = new Set(['.npmrc', '.yarnrc', '.env.example', 'Dockerfile', 'Makefile']);
+
+  it('reads no API key from the environment and holds no CI secret', () => {
+    const offenders = sourceFiles()
+      .filter((path) => SCANNED_EXTENSIONS.has(extname(path)) || SCANNED_NAMES.has(basename(path)))
+      // `git ls-files --cached` still lists a file deleted from the working tree without
+      // `git rm`, and reading it would throw.
+      .filter((path) => existsSync(join(repoRoot, path)))
+      .filter((path) => {
+        const source = read(path);
+        return PATTERNS.some((pattern) => pattern.test(source));
+      });
+
     expect(offenders).toEqual([]);
   });
 });

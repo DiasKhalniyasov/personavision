@@ -9,7 +9,9 @@ Node 22 and pnpm. `.nvmrc` pins the Node version, `package.json` pins the pnpm v
 ```sh
 nvm use            # or any Node 22; the version is pinned in .nvmrc
 corepack enable    # pnpm, at the version package.json pins
-pnpm install       # no API key, no account, nothing to provision
+pnpm install       # no API key, no account, nothing to provision;
+                   # its prepare step builds the packages, so every
+                   # package's public entry point resolves from here on
 pnpm typecheck
 pnpm lint
 pnpm test          # makes no network call and reads no credential

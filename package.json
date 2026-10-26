@@ -7,10 +7,11 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.17.1",
   "engines": {
-    "node": ">=22.0.0 <23.0.0",
+    "node": ">=22.13.0 <23.0.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "prepare": "pnpm -r build",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
