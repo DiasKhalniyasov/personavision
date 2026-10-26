@@ -1,0 +1,44 @@
+{
+  "step": "card-grid-unexplained",
+  "screenshot": "screenshots/A/card-grid-unexplained.png",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "pageHeight": 360,
+  "foldY": 360,
+  "elements": [
+    {
+      "id": "heading-catalogue",
+      "source": "dom",
+      "role": "heading",
+      "name": "Boots for every trail",
+      "text": "Boots for every trail",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 240,
+        "height": 26
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#heading-catalogue"
+    },
+    {
+      "id": "link-filter",
+      "source": "dom",
+      "role": "link",
+      "name": "Filter by size",
+      "text": "Filter by size",
+      "bbox": {
+        "x": 336,
+        "y": 30,
+        "width": 128,
+        "height": 16
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#link-filter"
+    }
+  ]
+}

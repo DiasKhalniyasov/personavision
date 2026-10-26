@@ -1,0 +1,60 @@
+{
+  "step": "plain-text-control",
+  "screenshot": "screenshots/A/plain-text-control.png",
+  "viewport": {
+    "width": 400,
+    "height": 300
+  },
+  "pageHeight": 300,
+  "foldY": 300,
+  "elements": [
+    {
+      "id": "copy-paragraph-one",
+      "source": "dom",
+      "role": "text",
+      "name": "Our boots are made in the same workshop they were in 1974.",
+      "text": "Our boots are made in the same workshop they were in 1974.",
+      "bbox": {
+        "x": 16,
+        "y": 12,
+        "width": 368,
+        "height": 86
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#copy-paragraph-one"
+    },
+    {
+      "id": "copy-paragraph-two",
+      "source": "dom",
+      "role": "text",
+      "name": "Every pair is resoled rather than replaced.",
+      "text": "Every pair is resoled rather than replaced.",
+      "bbox": {
+        "x": 16,
+        "y": 108,
+        "width": 368,
+        "height": 86
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#copy-paragraph-two"
+    },
+    {
+      "id": "copy-paragraph-three",
+      "source": "dom",
+      "role": "text",
+      "name": "The leather comes from one tannery in Tuscany.",
+      "text": "The leather comes from one tannery in Tuscany.",
+      "bbox": {
+        "x": 16,
+        "y": 204,
+        "width": 368,
+        "height": 86
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#copy-paragraph-three"
+    }
+  ]
+}

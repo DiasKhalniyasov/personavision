@@ -1,0 +1,92 @@
+{
+  "step": "high-contrast-banner",
+  "screenshot": "screenshots/A/high-contrast-banner.png",
+  "viewport": {
+    "width": 480,
+    "height": 320
+  },
+  "pageHeight": 320,
+  "foldY": 320,
+  "elements": [
+    {
+      "id": "banner-promo",
+      "source": "dom",
+      "role": "img",
+      "name": "Spring sale — 40% off every boot",
+      "text": "Spring sale — 40% off every boot",
+      "bbox": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#banner-promo"
+    },
+    {
+      "id": "heading-product",
+      "source": "dom",
+      "role": "heading",
+      "name": "Ridgeline hiking boots",
+      "text": "Ridgeline hiking boots",
+      "bbox": {
+        "x": 24,
+        "y": 96,
+        "width": 320,
+        "height": 22
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#heading-product"
+    },
+    {
+      "id": "copy-product",
+      "source": "dom",
+      "role": "text",
+      "name": "A waterproof three-season boot with a rubber toe cap.",
+      "text": "A waterproof three-season boot with a rubber toe cap.",
+      "bbox": {
+        "x": 24,
+        "y": 136,
+        "width": 420,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#copy-product"
+    },
+    {
+      "id": "cta-add-to-cart",
+      "source": "dom",
+      "role": "button",
+      "name": "Add to cart",
+      "text": "Add to cart",
+      "bbox": {
+        "x": 24,
+        "y": 216,
+        "width": 160,
+        "height": 40
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#cta-add-to-cart"
+    },
+    {
+      "id": "link-size-guide",
+      "source": "dom",
+      "role": "link",
+      "name": "Size guide",
+      "text": "Size guide",
+      "bbox": {
+        "x": 208,
+        "y": 228,
+        "width": 96,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#link-size-guide"
+    }
+  ]
+}
