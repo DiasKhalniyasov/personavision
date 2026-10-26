@@ -316,6 +316,13 @@ const competingFirstFixation: VariantRule = (reading) => {
  * anybody saw it they had already committed to the earlier ones. An area the other version
  * does not have on the same step is preferred, because that is the difference the test was
  * run to find; returns then decide, and the area's id breaks a remaining tie.
+ *
+ * The limitation, stated rather than hidden: with **one** version in the run there is no
+ * other version to compare against, and a block that legitimately belongs to a late step —
+ * an order summary — looks the same to this rule as a charge that was not disclosed
+ * earlier. It then reports the most re-read new area on the step, which is a weaker claim
+ * than the two-version case. Telling the two apart needs the money a step showed, which
+ * the run artifact does not carry (decision 16).
  */
 const valueChangedBetweenSteps: VariantRule = (reading, run) => {
   const [firstStep] = reading.steps;
@@ -350,17 +357,27 @@ const valueChangedBetweenSteps: VariantRule = (reading, run) => {
   const { aoi } = found;
   const onStep = reading.areas.filter((area) => area.aoi.step === aoi.step);
   const mostReRead = onStep.every((area) => area.returns <= found.returns);
-  const left = reading.outcomes
-    .filter((outcome) => reading.steps.indexOf(outcome.step) >= reading.steps.indexOf(aoi.step))
-    .flatMap((outcome) => [...outcome.abandonedBy, ...outcome.failedBy]);
+  // Who it cost us: everybody who gave up or failed at this step or past it. A run where
+  // the late charge is re-read and nobody leaves over it is a real result, and the claim
+  // then says what did happen rather than reporting nought of eleven.
+  const left = [
+    ...new Set(
+      reading.outcomes
+        .filter((outcome) => reading.steps.indexOf(outcome.step) >= reading.steps.indexOf(aoi.step))
+        .flatMap((outcome) => [...outcome.abandonedBy, ...outcome.failedBy]),
+    ),
+  ].sort();
 
   return {
     ruleId: 'value-changed-between-steps',
     variant: reading.variant,
     step: aoi.step,
     aoiId: aoi.id,
-    sessionIds: [...new Set(left)].sort(),
-    claim: `${quoted(aoi.label)} appears for the first time on ${stepSaid(aoi.step)}, once people have already committed, and ${outOf(new Set(left).size, found.reachedBy.length)} who got that far left without ordering.`,
+    sessionIds: left.length === 0 ? found.lookedBy : left,
+    claim:
+      left.length === 0
+        ? `${quoted(aoi.label)} appears for the first time on ${stepSaid(aoi.step)}, once people have already committed, and the ${people(found.lookedBy.length)} who saw it had to read it again ${timesSaid(found.returns)} each.`
+        : `${quoted(aoi.label)} appears for the first time on ${stepSaid(aoi.step)}, once people have already committed, and ${outOf(left.length, found.reachedBy.length)} who got that far left without ordering.`,
     evidence: said(
       found.firstLookMs === null
         ? undefined

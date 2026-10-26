@@ -459,6 +459,7 @@ describe('a claim is written for a business reader', () => {
       'before they look at anything that moves the task on',
       'ever looked at it',
       'left without ordering',
+      'had to read it again',
       'instead of going on',
       'leaving was not their choice',
       'time they spent on everything around it instead',
