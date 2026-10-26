@@ -26,11 +26,21 @@ export type { SeededWorkspace } from './seed.js';
 export { DEFAULT_HOST, DEFAULT_PORT, startPlatformServer } from './server/server.js';
 export type { PlatformServer, PlatformServerOptions } from './server/server.js';
 
-export { routeMount } from './server/router.js';
+export { sessionGuard, safeNextPath, SIGNIN_PATH } from './auth/guard.js';
+export type { GuardOptions } from './auth/guard.js';
+
+export { signIn } from './auth/signin.js';
+export type { Credentials, SignedIn, SignInOptions } from './auth/signin.js';
+
+export { workspaceForAccount } from './workspace/membership.js';
+
+export { isNavigation, routeMount } from './server/router.js';
 export { notImplemented, sendJson } from './server/routes/types.js';
 export type { Middleware, Route } from './server/routes/types.js';
 
 export {
+  clearedSessionCookieHeader,
+  isSecureRequest,
   readSessionId,
   SESSION_COOKIE,
   sessionCookieHeader,

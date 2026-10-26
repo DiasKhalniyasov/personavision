@@ -1,10 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 import { resolve } from 'node:path';
+import { sessionGuard } from './auth/guard.js';
 import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
 import { authRoutes } from './server/routes/auth.js';
-import type { Route } from './server/routes/types.js';
+import type { Middleware, Route } from './server/routes/types.js';
 import { readSessionId, sessionCookieHeader, signSessionId } from './server/session.js';
 import { openFileStore } from './store/file-store.js';
 import type { PlatformStore, SessionRecord } from './store/types.js';
@@ -35,6 +36,12 @@ export interface Platform {
   runsRoot: string;
   store: PlatformStore;
   routes: Route[];
+  /**
+   * Signed out means `/signin`: in front of the routes, the run data and the app. A page
+   * request is redirected carrying where it was going, a data request gets 401, and the
+   * public pages of `docs/FLOW.md` section 3 pass straight through (#101).
+   */
+  guard: Middleware;
   /**
    * Non-null exactly when this start seeded the data directory, and the only place the
    * generated password exists. A restart against the same directory returns `null`.
@@ -72,11 +79,27 @@ export const createPlatform = async ({ dataDir, runsRoot }: PlatformOptions): Pr
     return sessionId === null ? null : await store.sessions.byId(sessionId);
   };
 
+  const signSession = (sessionId: string): string => signSessionId(sessionId, settings.signingKey);
+  const sessionCookie = (sessionId: string, { secure }: { secure: boolean }): string =>
+    sessionCookieHeader(signSession(sessionId), {
+      secure,
+      maxAgeSeconds: SESSION_LIFETIME_SECONDS,
+    });
+
   return {
     dataDir: resolvedDataDir,
     runsRoot: resolvedRunsRoot,
     store,
-    routes: [...authRoutes, ...audienceRoutes],
+    routes: [
+      ...authRoutes({
+        store,
+        readSession,
+        sessionCookie,
+        lifetimeSeconds: SESSION_LIFETIME_SECONDS,
+      }),
+      ...audienceRoutes,
+    ],
+    guard: sessionGuard({ readSession }),
     seeded,
     visibleRuns: async (request) => {
       const session = await readSession(request);
@@ -85,11 +108,7 @@ export const createPlatform = async ({ dataDir, runsRoot }: PlatformOptions): Pr
       return workspace?.runIds ?? [];
     },
     readSession,
-    signSession: (sessionId) => signSessionId(sessionId, settings.signingKey),
-    sessionCookie: (sessionId, { secure }) =>
-      sessionCookieHeader(signSessionId(sessionId, settings.signingKey), {
-        secure,
-        maxAgeSeconds: SESSION_LIFETIME_SECONDS,
-      }),
+    signSession,
+    sessionCookie,
   };
 };

@@ -57,6 +57,18 @@ export const readSessionId = (request: IncomingMessage, signingKey: string): str
 };
 
 /**
+ * `true` when the request reached this server over HTTPS, which is what decides whether
+ * the session cookie is marked `Secure`.
+ *
+ * The connection is asked, not the request: a header such as `x-forwarded-proto` is
+ * written by whoever is on the other end, and a cookie attribute a client can set is not
+ * a protection. Honouring a reverse proxy's own header belongs with the hosted deployment
+ * the owner deferred on 2026-10-27, which is where a proxy is trusted on purpose.
+ */
+export const isSecureRequest = (request: IncomingMessage): boolean =>
+  (request.socket as { encrypted?: boolean }).encrypted === true;
+
+/**
  * The `set-cookie` value for a session. `Secure` is set when the request reached the
  * server over HTTPS — a self-hosted server on loopback is reached over HTTP, and a cookie
  * marked `Secure` there would never come back.
@@ -73,3 +85,11 @@ export const sessionCookieHeader = (
     `Max-Age=${String(maxAgeSeconds)}`,
     ...(secure ? ['Secure'] : []),
   ].join('; ');
+
+/**
+ * The `set-cookie` value that ends a session in the browser: the same cookie, emptied and
+ * expired. It is sent on signing out beside deleting the record, and on a cookie this
+ * server cannot verify, so a browser holding one stops sending it.
+ */
+export const clearedSessionCookieHeader = (options: { secure: boolean }): string =>
+  sessionCookieHeader('', { ...options, maxAgeSeconds: 0 });

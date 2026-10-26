@@ -56,7 +56,7 @@ plus **one generated listing**:
 
 - `GET /runs/index.json` → `[{ runId, name, createdAt }]`, sorted newest first.
 
-There is no other endpoint and no server-side computation. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally requires a signed-in session and scopes the mount to the workspace that owns the run; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
+There is no other endpoint and no server-side computation. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally scopes the mount to the workspace that owns the run — a signed-out request reaches only the seeded demo run, which the public landing page and `/demo` read, and a run of another workspace is 404 rather than 403; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
 
 ### 2. `docs/design/tokens.css` is imported by the app, never copied and never restated
 

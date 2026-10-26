@@ -21,6 +21,12 @@ export const DEFAULT_PORT = 5176;
 export const DEFAULT_HOST = '127.0.0.1';
 
 export interface PlatformServerOptions {
+  /**
+   * `createPlatform`'s own guard: signed out means `/signin`, in front of everything
+   * below. Required rather than defaulted, so a server cannot be composed unprotected by
+   * leaving an argument out.
+   */
+  guard: Middleware;
   routes: readonly Route[];
   /** `runDataMount` from `@personavision/cli`, scoped by the platform's `visibleRuns`. */
   runData: Middleware;
@@ -39,6 +45,7 @@ export interface PlatformServer {
 }
 
 export const startPlatformServer = async ({
+  guard,
   routes,
   runData,
   viewer,
@@ -47,11 +54,13 @@ export const startPlatformServer = async ({
 }: PlatformServerOptions): Promise<PlatformServer> => {
   const platformRoutes = routeMount(routes);
   const server: Server = createServer((request, response) => {
-    platformRoutes(request, response, () => {
-      runData(request, response, () => {
-        viewer(request, response, () => {
-          response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-          response.end('Not found.\n');
+    guard(request, response, () => {
+      platformRoutes(request, response, () => {
+        runData(request, response, () => {
+          viewer(request, response, () => {
+            response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+            response.end('Not found.\n');
+          });
         });
       });
     });
