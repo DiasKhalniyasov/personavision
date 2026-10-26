@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readArchiveDirectory } from '../src/dataset/archive.js';
+import type { ArchiveEntry } from '../src/dataset/archive.js';
 import type { CacheEnvironment } from '../src/dataset/cache.js';
 import { DatasetFetchError, fetchDataset, withoutSecrets } from '../src/dataset/fetch.js';
 import type { FetchDatasetOptions } from '../src/dataset/fetch.js';
@@ -24,7 +25,8 @@ import type {
   ManifestFile,
   RecordedChecksum,
 } from '../src/dataset/manifest.js';
-import { formatJsonDocument } from '../src/dataset/verify.js';
+import { loadManifest } from '../src/dataset/manifest.js';
+import { compareArchiveLayout, formatJsonDocument } from '../src/dataset/verify.js';
 import { makeZip } from './helpers/make-zip.js';
 import { startStubOrigin } from './helpers/stub-origin.js';
 import type { StubOrigin } from './helpers/stub-origin.js';
@@ -718,6 +720,40 @@ describe('the archive reader', () => {
 });
 
 describe('the committed manifest', () => {
+  /** An archive entry as a zip's own directory would report it. */
+  const entryFor = (path: string, kind: 'file' | 'directory'): ArchiveEntry => ({
+    path,
+    kind,
+    sizeBytes: 0,
+    compressedBytes: 0,
+    method: 0,
+    crc32: 0,
+    localHeaderOffset: 0,
+  });
+
+  it('declares a layout the comparison accepts, wrapped in a directory or at the root', () => {
+    const { layout } = loadManifest();
+    const real = layout.entries.map((entry) => entry.path);
+
+    expect(
+      compareArchiveLayout(
+        layout,
+        real.map((path, position) => entryFor(path, layout.entries[position]?.kind ?? 'directory')),
+      ),
+    ).toEqual({ root: { state: 'root' }, differences: [] });
+
+    // The same tree under one wrapping directory, which the manifest's `unknown` root does
+    // not contradict: it is resolved and stripped, not reported.
+    expect(
+      compareArchiveLayout(
+        layout,
+        real.map((path, position) =>
+          entryFor(`UEyes_dataset/${path}`, layout.entries[position]?.kind ?? 'directory'),
+        ),
+      ),
+    ).toEqual({ root: { state: 'directory', path: 'UEyes_dataset' }, differences: [] });
+  });
+
   it('is printed by the recorder exactly as this repository formats it', async () => {
     const path = fileURLToPath(new URL('../src/dataset/manifest.json', import.meta.url));
     const text = await readFile(path, 'utf8');
