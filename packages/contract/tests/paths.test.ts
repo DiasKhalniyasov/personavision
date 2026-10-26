@@ -29,6 +29,13 @@ describe('the run-directory layout', () => {
       `/tmp/runs/2026-10-24-1402-northwind-demo/${layout.session('S-02')}`,
     );
   });
+
+  it('spells one file one way, whether or not the run directory was given with a slash', () => {
+    expect(runPaths('/tmp/runs/2026-10-24-1402-northwind-demo/').run).toBe(
+      runPaths('/tmp/runs/2026-10-24-1402-northwind-demo').run,
+    );
+    expect(runPaths('/').run).toBe(`/${layout.run}`);
+  });
 });
 
 describe('a run directory is named for when the run was created', () => {

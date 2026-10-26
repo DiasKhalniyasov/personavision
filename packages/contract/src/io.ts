@@ -586,3 +586,28 @@ export const appendFinishedSession = async (
   await writeFile(paths.run, serialize(next));
   return next;
 };
+
+/** `2026-10-24-1402-northwind-demo` — the name of a run directory, and the run's id. */
+const RUN_DIR_NAME = /^\d{4}-\d{2}-\d{2}-\d{4}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * The run directories under a runs root, newest first. The names sort as dates do, so the
+ * order is the names reversed; a directory that is not named like a run is left out, and a
+ * missing runs root is no runs rather than an error.
+ *
+ * It sits here rather than with the layout in `paths.ts` because it reads a directory, and
+ * the layout is addressed from a browser too.
+ */
+export const listRunDirs = async (runsRoot: string): Promise<string[]> => {
+  let entries;
+  try {
+    entries = await readdir(runsRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.isDirectory() && RUN_DIR_NAME.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+};
