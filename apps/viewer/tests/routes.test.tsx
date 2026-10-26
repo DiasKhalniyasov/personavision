@@ -129,7 +129,7 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
   it('resolves each one without falling through to the not-found page', async () => {
     const { runIds } = await serveRunData();
     const runId = runIds[0] as string;
-    const expected: [string, string][] = [
+    const expected: [string, string | RegExp][] = [
       [paths.signIn, 'Sign in'],
       [paths.demo, 'Demo'],
       [paths.audiences, 'Audiences'],
@@ -139,7 +139,8 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
       [paths.breakdown(runId), 'Score breakdown'],
       [paths.attention(runId, 'B', 'review'), 'Attention'],
       [paths.sessions(runId), 'Sessions'],
-      [paths.session(runId, 'S-01'), 'Session replay'],
+      // The replay's heading names the person, not the screen: `S-01 · Rushed buyer · …`.
+      [paths.session(runId, 'S-01'), /^S-01 · /],
     ];
 
     for (const [path, heading] of expected) {

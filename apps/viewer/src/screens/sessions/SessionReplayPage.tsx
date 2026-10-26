@@ -1,11 +1,13 @@
-import { ScreenPlaceholder } from '@/shell/ScreenPlaceholder';
+import { ReplayPage } from '@/screens/replay/ReplayPage';
 
 /**
- * `/runs/:runId/sessions/:sessionId` — one person's gaze, intent, actions and outcome, on a scrubber.
+ * `/runs/:runId/sessions/:sessionId` — one person's gaze, intent, actions and outcome, on a
+ * scrubber.
  *
- * A placeholder on the route table, so that **#22** fills this file and touches neither
- * the router nor a sibling screen.
+ * The route table mounts this file; the screen itself lives in `src/screens/replay/`, so
+ * **#24** and **#25** fill the column beside it without touching the router or the Sessions
+ * list.
  */
 export function SessionReplayPage() {
-  return <ScreenPlaceholder screen="Session replay" ticket="#22" />;
+  return <ReplayPage />;
 }

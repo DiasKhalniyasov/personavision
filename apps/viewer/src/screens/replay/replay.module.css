@@ -1,0 +1,182 @@
+/* =============================================================================
+   The Session replay's own layout: the device frame, the gaze layer and the
+   scrubber, as `#screen-replay` draws them in `docs/design/prototype.html`.
+
+   Every value here is a custom property from `docs/design/tokens.css`. What is
+   **not** here is anything measured: where the page sits behind the frame, where
+   the fold falls and where a fixation lands are read out of the run artifact and
+   set inline by the components, because they are data and not design.
+
+   A CSS module, as the other screens' stylesheets are: the prototype's generic
+   names — `.frame`, `.page`, `.layer` — then belong to this screen and cannot
+   reach another. The one global it reaches for is `.footnote`, which
+   `src/styles/base.css` owns and which this screen only re-spaces.
+   ========================================================================== */
+
+.replay {
+  display: grid;
+  /* The prototype's left column is 420px, a width the tokens do not name; the
+     ratio says the same thing without restating it. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--space-8);
+  align-items: start;
+  margin-top: var(--space-6);
+}
+
+/* ---- The device frame -------------------------------------------------- */
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--frame-ratio-desktop);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.frame.mobile {
+  aspect-ratio: var(--frame-ratio-mobile);
+  max-width: var(--frame-width-mobile);
+  margin-inline: auto;
+}
+
+/* The screenshot, dimmed so the gaze marks read on top of it. */
+.page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page img {
+  position: absolute;
+  left: 0;
+  display: block;
+  width: 100%;
+}
+
+.frame.dim .page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--screenshot-scrim);
+}
+
+/* A screenshot that will not load leaves the frame in place and says so. */
+.missing {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* ---- The fold ---------------------------------------------------------- */
+
+.fold {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  border-top: var(--border-width) dashed var(--color-border-strong);
+  pointer-events: none;
+}
+
+/* The label sits above the line: at an unscrolled screen the fold is the frame's
+   own bottom edge, where the prototype's placement below the line is clipped. */
+.fold span {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-1);
+  padding-inline: var(--space-1);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* ---- The gaze layer ---------------------------------------------------- */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.layer svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: 100%;
+}
+
+/* The gaze tokens, and nothing else: a fixation's size is its dwell, which is
+   data, and the current one is told apart by its own colour rather than by a
+   second treatment. */
+.saccade {
+  stroke: var(--gaze-saccade);
+  stroke-width: var(--gaze-saccade-width);
+}
+
+.fixation {
+  fill: var(--gaze-fixation);
+}
+
+.fixation[data-current] {
+  fill: var(--gaze-fixation-current);
+}
+
+/* The label's size is a `viewBox` length and is set on the element itself; what the
+   stylesheet gives it is the family, the weight and the gaze tokens' own label colour. */
+.layer text {
+  fill: var(--gaze-fixation-label);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+}
+
+/* ---- The scrubber ------------------------------------------------------ */
+
+.scrub {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.scrub [data-slot='slider'] {
+  flex: 1;
+}
+
+.clock {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.scrub :global(.footnote) {
+  margin-top: 0;
+}
+
+/* The column #24 and #25 fill. */
+.timeline {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* The prototype's own breakpoint for this screen: below it the two columns
+   stack, and the frame keeps the width the device gives it. */
+@media (max-width: 1000px) {
+  .replay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
