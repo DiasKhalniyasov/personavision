@@ -32,6 +32,14 @@ const STALL_TARGET = 'shared/card-frame.html';
 const STALL_PARAM = 'stall';
 const STALL_VALUE = '1';
 
+/**
+ * The top-level directories the shop serves. The root holds the package's own files too —
+ * `serve.ts`, `package.json`, `test/` — and a shop that served its own server's source
+ * would be a poor stand-in for a customer's site. `b` is listed now so that variant B needs
+ * no change here, as `demo/README.md` promises.
+ */
+const SERVED_DIRECTORIES: ReadonlySet<string> = new Set(['a', 'b', 'shared']);
+
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -74,20 +82,27 @@ const contentTypeFor = (filePath: string): string =>
   CONTENT_TYPES[extname(filePath).toLowerCase()] ?? FALLBACK_CONTENT_TYPE;
 
 /**
- * The file a request path names, or `null` when it names nothing inside the root. Returns
- * `null` rather than throwing for a path that escapes the root, so traversal is a 403 and
- * not a stack trace.
+ * A request path with its percent-encoding removed, or `null` when it cannot be decoded or
+ * smuggles a NUL. Decoding is separate from resolving because a `%2f` survives WHATWG URL
+ * normalisation, so an encoded slash is the traversal vector this server has to catch
+ * itself rather than inherit.
  */
-const fileForRequest = (root: string, pathname: string): string | null => {
-  let decoded: string;
+const decodePathname = (pathname: string): string | null => {
   try {
-    decoded = decodeURIComponent(pathname);
+    const decoded = decodeURIComponent(pathname);
+    return decoded.includes('\0') ? null : decoded;
   } catch {
     return null;
   }
-  if (decoded.includes('\0')) return null;
+};
 
-  const full = resolve(root, `.${decoded.startsWith('/') ? decoded : `/${decoded}`}`);
+/**
+ * The file a decoded request path names, or `null` when it names nothing inside the root.
+ * Returns `null` rather than throwing for a path that escapes the root, so traversal is a
+ * 403 and not a stack trace.
+ */
+const fileForRequest = (root: string, pathname: string): string | null => {
+  const full = resolve(root, `.${pathname.startsWith('/') ? pathname : `/${pathname}`}`);
   const within = relative(root, full);
   if (within === '' || within.startsWith('..') || isAbsolute(within)) return null;
   return full;
@@ -139,18 +154,36 @@ const handle = async (root: string, req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
-  const filePath = fileForRequest(root, requested.pathname);
+  const pathname = decodePathname(requested.pathname);
+  if (pathname === null) {
+    sendText(res, 403, 'Forbidden\n');
+    return;
+  }
+
+  // A URL path is a file path, so there are no directories to land on. Without this,
+  // `resolve` would drop the trailing slash and answer `/a/cart.html/` with the cart page,
+  // whose relative links and stylesheet would then all resolve one level too deep: a
+  // driver would get a page that looks like a success and cannot advance.
+  if (pathname.endsWith('/')) {
+    sendText(res, 404, 'Not found\n');
+    return;
+  }
+
+  const filePath = fileForRequest(root, pathname);
   if (filePath === null) {
     sendText(res, 403, 'Forbidden\n');
     return;
   }
 
+  const within = rootRelativePath(root, filePath);
+  if (!SERVED_DIRECTORIES.has(within.split('/')[0])) {
+    sendText(res, 404, 'Not found\n');
+    return;
+  }
+
   // The stall switch. The request is accepted — the connection stays open and no response
   // is written — so a driver waiting on a selector inside the frame times out for real.
-  if (
-    rootRelativePath(root, filePath) === STALL_TARGET &&
-    requested.searchParams.get(STALL_PARAM) === STALL_VALUE
-  ) {
+  if (within === STALL_TARGET && requested.searchParams.get(STALL_PARAM) === STALL_VALUE) {
     return;
   }
 
@@ -198,6 +231,13 @@ export const serveDemoShop = async (options: ServeDemoShopOptions = {}): Promise
     };
     const onListening = (): void => {
       server.off('error', onError);
+      // From here an `error` is an accept failure such as EMFILE, not a failure to bind.
+      // With no listener at all it would be an uncaught exception and would take down the
+      // whole test worker or driver instead of one request, so it is reported and the shop
+      // stays up.
+      server.on('error', (error: Error) => {
+        process.stderr.write(`northwind demo shop: ${error.message}\n`);
+      });
       started();
     };
     server.once('error', onError);
@@ -212,8 +252,12 @@ export const serveDemoShop = async (options: ServeDemoShopOptions = {}): Promise
   }
   const boundPort = address.port;
 
+  // An IPv6 literal has to be bracketed or the origin does not parse: `http://::1:5173`
+  // is not a URL, `http://[::1]:5173` is.
+  const hostInUrl = host.includes(':') ? `[${host}]` : host;
+
   return {
-    url: `http://${host}:${boundPort}`,
+    url: `http://${hostInUrl}:${boundPort}`,
     port: boundPort,
     close: () =>
       new Promise<void>((closed, failed) => {

@@ -181,10 +181,18 @@ await shop.close();
 - `close()` stops listening, destroys open connections and resolves once the port is free.
 - Correct content types, from the file extension; unknown extensions are
   `application/octet-stream`.
-- `GET` and `HEAD` only; anything else is `405`. A path that escapes the root is `403`, a
-  missing file or a directory is `404`. There is no directory listing and no index fallback.
-- Options: `{ port, host, root }`. `root` defaults to `demo/northwind/`, which is why
-  variant B will need no change here.
+- `GET` and `HEAD` only; anything else is `405`. A path that escapes the root is `403`.
+  There is no directory listing and no index fallback.
+- **A URL path is a file path.** A directory-shaped path is `404`, not the file above it:
+  `/a/cart.html/` would otherwise answer with the cart page, whose relative links and
+  stylesheet would then all resolve one level too deep — a page that looks to a driver like
+  a success and cannot advance.
+- **Only `a/`, `b/` and `shared/` are served.** The root also holds the package's own files,
+  and a shop that served its own server's source would be a poor stand-in for a customer's
+  site, so `/serve.ts`, `/package.json` and `/test/…` are all `404`.
+- Options: `{ port, host, root }`. `root` defaults to `demo/northwind/`, and `b` is already
+  in the served set, so variant B needs no change here. An IPv6 `host` comes back bracketed
+  (`http://[::1]:53412`) so the origin parses.
 
 Because the shop ships as source, `demo/northwind` emits no `dist/`: its `build` script is a
 type-check, and `serve.ts` is run through Vitest or `tsx`.

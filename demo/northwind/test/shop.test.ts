@@ -323,7 +323,10 @@ describe('the payment step', () => {
     const html = page('/a/payment.html');
     const cardAt = html.indexOf('data-aoi="card"');
     const frameAt = html.indexOf('src="../shared/card-frame.html"');
-    const nextRegionAt = html.indexOf('data-aoi=', cardAt + 1);
+    // `indexOf` is -1 when the card region is the last one on the page, which would make
+    // the comparison below fail for the wrong reason if payment.html were ever reordered.
+    const after = html.indexOf('data-aoi=', cardAt + 1);
+    const nextRegionAt = after === -1 ? html.length : after;
 
     expect(cardAt).toBeGreaterThan(-1);
     expect(frameAt, 'the card frame is embedded').toBeGreaterThan(cardAt);
@@ -423,6 +426,23 @@ describe('serveDemoShop', () => {
     expect((await get('/a/..%2f..%2fpnpm-workspace.yaml')).status).toBe(403);
   });
 
+  it('answers a directory-shaped path with 404 rather than the page one level up', async () => {
+    // `/a/cart.html/` would otherwise resolve to the cart page, whose relative links and
+    // stylesheet would then all be one level too deep — a page that looks like a success
+    // and cannot advance.
+    expect((await get('/a/cart.html/')).status).toBe(404);
+    expect((await get('/a/')).status).toBe(404);
+  });
+
+  it('serves only the shop, not the package around it', async () => {
+    for (const path of ['/serve.ts', '/package.json', '/tsconfig.json', '/test/shop.test.ts']) {
+      expect((await get(path)).status, `${path} is not part of the shop`).toBe(404);
+    }
+    // ...and the shop's own directories still answer.
+    expect((await get('/a/cart.html')).status).toBe(200);
+    expect((await get('/shared/shop.css')).status).toBe(200);
+  });
+
   it('refuses a method other than GET or HEAD', async () => {
     expect((await get('/a/cart.html', { method: 'POST' })).status).toBe(405);
   });
@@ -444,6 +464,17 @@ describe('serveDemoShop', () => {
     const url = own.url;
     await own.close();
     await expect(fetch(`${url}/a/cart.html`)).rejects.toThrow();
+  });
+
+  it('brackets an IPv6 host so the origin it reports parses', async () => {
+    const own = await serveDemoShop({ host: '::1' });
+    try {
+      expect(own.url).toBe(`http://[::1]:${own.port}`);
+      // The point of the brackets: this throws on an unbracketed literal.
+      expect((await fetch(`${own.url}/a/cart.html`)).status).toBe(200);
+    } finally {
+      await own.close();
+    }
   });
 
   it('runs two instances side by side without colliding', async () => {
