@@ -26,6 +26,20 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(cleanup);
 
+/**
+ * jsdom implements no `ResizeObserver`, and the shadcn primitives that measure themselves —
+ * the slider's thumb among them — construct one as they mount. A screen built out of the
+ * registry's own controls would otherwise be untestable, so the stub lives here with the
+ * rest of the DOM setup rather than in each suite.
+ */
+if (!('ResizeObserver' in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  } as unknown as typeof ResizeObserver;
+}
+
 afterEach(() => {
   document.head.replaceChildren();
   document.body.replaceChildren();

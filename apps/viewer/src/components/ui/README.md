@@ -23,10 +23,11 @@ Tailwind theme in `../../styles/theme.css` maps every one of those onto
 20px card radius, and a token edit moves the whole product. `apps/viewer/tests/theme.test.ts`
 asserts that.
 
-## The four departures from the registry's own classes
+## The five departures from the registry's own files
 
-`docs/FLOW.md` section 10 asks for things the registry does not do by default. Each is a
-class, not a rewrite, so these files still track the registry:
+`docs/FLOW.md` section 10 asks for things the registry does not do by default. The first
+four are a class, not a rewrite, and the fifth forwards three attributes that were being
+dropped — so these files still track the registry:
 
 1. **`button.tsx`: `rounded-md` → `rounded-full`.** Every button, chip and tag in this
    product is fully rounded; it is one of the direction's most visible fingerprints.
@@ -45,3 +46,12 @@ class, not a rewrite, so these files still track the registry:
    heading-strength text and collides with nothing. `tests/theme.test.ts` asserts that the
    app declares no token's name, so a primitive added later that reaches for `bg-accent`
    fails there rather than quietly washing the product in lime.
+
+5. **`slider.tsx`: `aria-label`, `aria-labelledby` and `aria-valuetext` reach the thumb.**
+   The element carrying `role="slider"` is the thumb, and the registry's wrapper spreads
+   every prop onto the root instead, where a screen reader never sees them — so a
+   single-thumb slider has no accessible name at all (Radix only names a thumb when there
+   are two or more) and cannot announce its position. The replay's scrubber (#22) is that
+   slider, and `aria-valuetext` is how it says _fixation 12 of 23, 0:15 of 0:38_. Three
+   attributes are destructured out of the root's props and passed to each thumb; nothing
+   else changes, and a slider that passes none renders exactly as before.
