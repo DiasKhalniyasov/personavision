@@ -158,3 +158,66 @@ space, the same space `run.json`'s `aois[].bbox` uses.
 A field renamed on either side stops satisfying these types with no compile error in either
 package, so the names are binding on both: `tests/types.test.ts` asserts the browser step's
 shape against them at compile time.
+
+## The fixture captures
+
+The step's shared test material: five synthetic captures in `tests/fixtures/`, each a
+screenshot plus a capture JSON shaped as the published input above. They are synthetic
+rather than browser output because the engine is pure and must run thousands of times
+cheaply, and because this step owns its fixtures — nothing here waits on the browser step.
+Every later ticket tests against these five pages instead of inventing its own.
+
+| Fixture                     | The property it exists for                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `high-contrast-banner`      | A saturated promotional banner above ordinary text, so bottom-up salience has a target            |
+| `below-fold-primary-action` | A tall page whose primary action sits below `foldY`, so the never-fixated case can be produced    |
+| `price-and-fees`            | A total, a line price and a service fee for a goal like "find the cheapest option" to pull toward |
+| `card-grid-unexplained`     | Image-like cards with no elements reported, so the segmenter has unexplained area                 |
+| `plain-text-control`        | Low contrast, evenly spread, no primary action — the null case, no strong preference              |
+
+A test names a fixture and never builds a path:
+
+```ts
+const { capture, screenshotPath } = loadFixture('high-contrast-banner');
+```
+
+`loadFixture` throws on an unknown name, listing the ones that exist, and
+`loadAllFixtures()` returns all five in declaration order. `capture.screenshot` is the
+run-directory-relative path the type promises; `screenshotPath` is where the committed
+image actually is.
+
+The committed files are compared against the generator on every test run — the capture
+JSON field for field, the screenshot pixel for pixel — so they cannot drift from it
+unnoticed. Everything a fixture paints lies inside a declared element box, with one
+deliberate exception: the card grid, whose ink is the unexplained area the segmenter is
+there to partition.
+
+**The fixtures do not draw the fold line.** A real page screenshot carries it
+(`docs/FLOW.md` section 8, and the browser step draws it), but a full-width line at `foldY`
+is an annotation for a human reader, and painting one into the engine's image input would
+feed a strong artificial edge to the salience terms this step is calibrating. The fold is
+in the capture as `foldY`, which is what the engine reads it from. A ticket that wants to
+know how a drawn fold line changes salience needs a real capture, not these five.
+
+`tests/fixtures.test.ts` asserts the invariants a later ticket should not have to re-check
+— boxes inside the page, `belowFold` consistent with `foldY`, element ids unique and the
+ones later tickets name, at most one declared primary action — and asserts each fixture's
+reason for existing _from the image_, so a salience ticket is testing a real difference:
+the banner's mean luminance is more than 60 levels from its surroundings, and the
+plain-text page is the most uniform of the five by tile spread.
+
+### Regenerating them
+
+```sh
+pnpm -F @personavision/engine fixtures
+```
+
+`scripts/make-fixtures.ts` is the generator, and it is deterministic: solid rectangles
+painted into a raw buffer, no fonts, no randomness, no metadata and no timestamps in the
+PNG. Regenerating leaves the working tree clean, which is what proves the committed bytes
+are the generator's output. Add a fixture by adding its name to `tests/fixtures/index.ts`
+— the generator keys its specs by that union, so a name without a spec fails to compile.
+
+**Size.** The whole set is **16,960 bytes** (five PNGs, 933–2,208 B each, and five capture
+JSON files). The budget is **32 KiB in all**, asserted in `tests/fixtures.test.ts`: these
+files are read by every session in the step, so an oversized image costs all of them.

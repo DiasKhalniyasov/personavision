@@ -1,0 +1,92 @@
+{
+  "step": "below-fold-primary-action",
+  "screenshot": "screenshots/A/below-fold-primary-action.png",
+  "viewport": {
+    "width": 360,
+    "height": 240
+  },
+  "pageHeight": 760,
+  "foldY": 240,
+  "elements": [
+    {
+      "id": "heading-order-review",
+      "source": "dom",
+      "role": "heading",
+      "name": "Review your order",
+      "text": "Review your order",
+      "bbox": {
+        "x": 24,
+        "y": 24,
+        "width": 240,
+        "height": 22
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#heading-order-review"
+    },
+    {
+      "id": "copy-order-summary",
+      "source": "dom",
+      "role": "text",
+      "name": "One pair of Ridgeline hiking boots, size 43.",
+      "text": "One pair of Ridgeline hiking boots, size 43.",
+      "bbox": {
+        "x": 24,
+        "y": 64,
+        "width": 312,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#copy-order-summary"
+    },
+    {
+      "id": "copy-shipping-terms",
+      "source": "dom",
+      "role": "text",
+      "name": "Delivery takes three to five working days.",
+      "text": "Delivery takes three to five working days.",
+      "bbox": {
+        "x": 24,
+        "y": 288,
+        "width": 312,
+        "height": 280
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#copy-shipping-terms"
+    },
+    {
+      "id": "cta-place-order",
+      "source": "dom",
+      "role": "button",
+      "name": "Place order",
+      "text": "Place order",
+      "bbox": {
+        "x": 24,
+        "y": 620,
+        "width": 200,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": true,
+      "selector": "#cta-place-order"
+    },
+    {
+      "id": "link-help",
+      "source": "dom",
+      "role": "link",
+      "name": "Need help?",
+      "text": "Need help?",
+      "bbox": {
+        "x": 24,
+        "y": 696,
+        "width": 140,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#link-help"
+    }
+  ]
+}
