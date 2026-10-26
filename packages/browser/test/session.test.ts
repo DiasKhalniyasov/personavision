@@ -196,7 +196,9 @@ describeWithChromium('a browser session', () => {
     it('carries nothing the neutral seams have yet to produce, and does not throw', () => {
       expect(captured.screenshot).toBeNull();
       expect(captured.step).toBeNull();
-      expect(captured.elements).toEqual([]);
+      // Extraction has landed, so a capture carries elements; `elements.test.ts` holds
+      // what they are, against the fixture site's own record.
+      expect(captured.elements.length).toBeGreaterThan(0);
     });
 
     it(
@@ -232,9 +234,11 @@ describeWithChromium('a browser session', () => {
       await closeSession(handle);
     });
 
-    it('extracts no elements yet', async () => {
+    it('extracts the elements of the page it is on', async () => {
       const geometry = await readGeometry(handle);
-      await expect(extractElements(handle, geometry, 'cart')).resolves.toEqual([]);
+      // What extraction finds is `elements.test.ts`'s subject, against `LANDMARKS.md`.
+      // Here it is enough that the seam is filled: the cart has candidates.
+      await expect(extractElements(handle, geometry, 'cart')).resolves.not.toEqual([]);
     });
 
     // The screenshot seam is filled (#46) and asserted as files on disk in
@@ -364,10 +368,12 @@ describe('the seams that need no browser', () => {
 
 describe('stable element ids', () => {
   const parts = {
+    variant: 'control',
+    step: 'cart' as string | null,
     source: 'dom' as const,
     role: 'button',
     name: 'Checkout',
-    bbox: { x: 16, y: 1200, width: 358, height: 48 },
+    path: '0/1/11',
   };
 
   it('is the same id for the same element of the same screen', () => {
@@ -381,9 +387,11 @@ describe('stable element ids', () => {
     );
   });
 
-  it('is a different id for a different box, role, source or ordinal', () => {
+  it('is a different id for a different position, role, source, screen or ordinal', () => {
     const baseline = stableElementId(parts);
-    expect(stableElementId({ ...parts, bbox: { ...parts.bbox, y: 1201 } })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, path: '0/1/12' })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, variant: 'treatment' })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, step: 'review' })).not.toBe(baseline);
     expect(stableElementId({ ...parts, role: 'link' })).not.toBe(baseline);
     expect(stableElementId({ ...parts, source: 'a11y' })).not.toBe(baseline);
     expect(stableElementId({ ...parts, ordinal: 1 })).not.toBe(baseline);

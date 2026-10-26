@@ -40,6 +40,24 @@ The viewport is read as the page's `innerWidth`/`innerHeight`, which include the
 gutter and so are the emulated device's viewport exactly. `documentElement.clientWidth` would
 be narrower by a scrollbar and would make a box's `x` disagree with the image it is drawn on.
 
+## Two sources for one page
+
+`extractElements` reads a page twice. The **DOM** pass reads what the markup says: the role a
+tag implies, and the text an element holds itself. The **accessibility** pass reads what
+Chromium computed — the role and the accessible name a screen reader would announce, with
+`aria-label`, `<label for>` and `alt` already resolved — over the DevTools protocol, because
+an accessible name is the browser's answer and not a rule this module could restate. Roles are
+reported in ARIA's spelling whichever pass found them.
+
+The two disagree, and the disagreement is the point: a button that reads `Save` and is named
+`Save the canvas tote for later` is one control and two candidates, told apart by `source`.
+Neither is dropped, and no element is reported twice from one source.
+
+An element's **id** is minted from the variant, the step, the source, the role, the accessible
+name and the element's position **in the document** — never from its box, which moves with the
+viewport, and never from a hash of the page, which moves with any edit. That is what lets
+area-of-interest metrics be aggregated over sessions that do not share a seed or a viewport.
+
 ## The published surface
 
 `src/index.ts` is the whole of it, and nine tickets of the browser-driving step fill one
@@ -71,7 +89,6 @@ tests and captures.
 
 | Seam                                     | Until its ticket lands        |
 | ---------------------------------------- | ----------------------------- |
-| `extractElements`                        | no elements                   |
 | `detectStep`                             | `null`                        |
 | `resolvePrimaryAction`                   | the elements, unchanged       |
 | `act`                                    | throws `act: not implemented` |
@@ -80,10 +97,10 @@ tests and captures.
 | `withCache`                              | always a miss                 |
 | `createFixtureSource` `createLiveSource` | throw                         |
 
-A capture with only these in place is real geometry and a real content hash, a `null`
-screenshot, a `null` step and no elements — and it does not throw. The screenshot is `null`
-there because the step is: `writeScreenshot` has landed, and an unrecognised screen has no
-name to write an image under.
+A capture with only these in place is real geometry, a real content hash and the page's
+elements, a `null` screenshot and a `null` step — and it does not throw. The screenshot is
+`null` there because the step is: `writeScreenshot` has landed, and an unrecognised screen
+has no name to write an image under.
 
 ## `capture()` is composed once
 
