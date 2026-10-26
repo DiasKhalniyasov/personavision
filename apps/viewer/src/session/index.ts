@@ -14,7 +14,7 @@
  * Everything it reads is addressed and parsed through `@personavision/contract`.
  */
 
-export { openRun } from './reading.js';
+export { openRun, runSessions } from './reading.js';
 export type { RunSessions, RunSource } from './reading.js';
 
 export { sessionTimeline } from './timeline.js';

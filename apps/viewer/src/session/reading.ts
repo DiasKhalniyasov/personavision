@@ -89,6 +89,20 @@ export async function openRun(source: RunSource): Promise<RunSessions> {
   const base = runBase(source.baseUrl);
   const from = source.fetch ?? globalThis.fetch;
   const run = await read(from, new URL(LAYOUT.run, base), (value) => runSchema.parse(value));
+  return runSessions(run, source);
+}
+
+/**
+ * The same, for a run already in hand: `openRun` is this plus the read of `run.json`.
+ *
+ * The viewer reads a run in exactly one place (`src/shell/useRun.ts`), so a screen that
+ * has the run from there asks for its sessions through this rather than through `openRun`,
+ * which would fetch `run.json` a second time. Nothing else differs: the manifest, the
+ * per-session caching and the paths are the ones above.
+ */
+export function runSessions(run: Run, source: RunSource): RunSessions {
+  const base = runBase(source.baseUrl);
+  const from = source.fetch ?? globalThis.fetch;
 
   const sessions = new Map<string, Promise<Session>>();
   let findings: Promise<Findings> | undefined;

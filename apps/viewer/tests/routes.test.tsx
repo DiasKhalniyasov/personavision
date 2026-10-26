@@ -138,7 +138,7 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
       [paths.newTest, 'New test'],
       [paths.breakdown(runId), 'Score breakdown'],
       [paths.attention(runId, 'B', 'review'), 'Attention'],
-      [paths.sessions(runId), 'Sessions'],
+      [paths.sessions(runId), 'What happened to each person'],
       // The replay's heading names the person, not the screen: `S-01 · Rushed buyer · …`.
       [paths.session(runId, 'S-01'), /^S-01 · /],
     ];
