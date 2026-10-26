@@ -56,7 +56,8 @@ describe('the Sessions screen', () => {
     expect(
       screen.getByText('One row per generated person × version × seed. Open one to watch it back.'),
     ).toBeTruthy();
-    expect(screen.getByText(/Every number here is simulated for this audience\./)).toBeTruthy();
+    // The shell's one disclaimer carries it, so the sentence is written once for the product.
+    expect(await screen.findByText(/is simulated, for the audience named at the top/)).toBeTruthy();
   });
 
   it('lists one row per session in run.json, in that order, named S-01 … S-NN', async () => {
@@ -217,7 +218,7 @@ describe('a run the screen cannot list', () => {
   });
 
   it('keeps the row of a session whose file cannot be read, and says so in place of its numbers', async () => {
-    await serveRunData({ files: { [`/runs/${SEED}/sessions/S-15.json`]: null } });
+    await serveRunData({ files: { [`/runs/${SEED}/sessions/S-15.json`]: '{ not a session' } });
     mountApp(paths.sessions(SEED));
 
     const rows = await dataRows();

@@ -72,8 +72,7 @@ export function SessionsScreen({ run }: { run: Run }) {
           When our own browser automation breaks, that is our fault and never your checkout's: those
           people are excluded from every figure, including the friction score and each area's
           numbers. Somebody giving up, somebody ending without the task done, and our automation
-          breaking are three different things and are never merged. Every number here is simulated
-          for this audience.
+          breaking are three different things and are never merged.
         </p>
         <SimulatedDisclaimer />
       </div>
