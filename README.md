@@ -31,11 +31,21 @@ A fresh clone passes all four checks. A package's public entry point is its buil
 | `pnpm seed:example-run` | Generates the committed seed example run under `runs/`.                  |
 | `pnpm open`             | `personavision open` — the local web app on the most recent run.         |
 
-## Two commands that do not work yet
+## The command line
 
-`personavision open` starts the local web app and opens the most recent run under `./runs/`. **It arrives in a later ticket of this step** ("Run artifact contract and app skeleton"); until then `pnpm open` exits non-zero and says so. `pnpm seed:example-run` behaves the same way until the seed-example-run ticket lands. Both root scripts already point at the files those tickets write, so neither ticket touches the workspace manifest, the lockfile or the tool configuration.
+`personavision` is this repository's command line. **`personavision serve` is the product's entry point**: it starts the hosted platform, with sign-in and workspace scoping, and arrives in the hosted-platform step. The three commands below are **internal tools** — how the team regenerates fixtures, checks an artifact in CI and debugs one by eye. None of them signs anybody in or scopes anything to a workspace, so none of them is how a customer uses PersonaVision.
 
-`pnpm dev` runs the dev server of every app that declares one. There is no app yet — `apps/viewer` arrives in its own ticket — so today it does nothing and exits cleanly.
+| Command                              | What it is for                                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `personavision validate <runDir>`    | Every schema violation in a run directory, each at the JSON path of the offending value. Exits non-zero if there is one, zero if there is none — which is what CI and a fixture regeneration check against.                                                                                |
+| `personavision run --url … --task …` | The arguments the New test form submits, parsed into the `RunRequest` the contract declares, and rejected the way the form rejects them. The decision engine is a later step, so a valid request exits non-zero naming that step and writes no run directory.                              |
+| `personavision open`                 | The viewer and `./runs` on localhost, with the most recent test opened in a browser: for a developer debugging an artifact. It builds the viewer when `apps/viewer/dist` is missing — `--no-build` fails instead — and `--no-open` starts the server without a browser, `--port` moves it. |
+
+`personavision open --help`, and each subcommand's `--help`, names its flags.
+
+All three serve or read the one run-data interface `CONTEXT.md` publishes: `GET /runs/index.json` and the run's own files, read-only, mirroring the directory. That mount is implemented once in `packages/cli`, exported, and mounted by `personavision serve`, by `personavision open` and by `apps/viewer`'s dev server — so `pnpm dev` reads the identical URLs the shipped app does.
+
+`pnpm dev` runs the dev server of every app that declares one, which today is `apps/viewer`.
 
 ## Where to read next
 

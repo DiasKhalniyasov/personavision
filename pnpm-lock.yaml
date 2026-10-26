@@ -48,6 +48,9 @@ importers:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
     devDependencies:
+      '@personavision/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -107,6 +110,13 @@ importers:
       sirv:
         specifier: ^3.0.2
         version: 3.0.2
+    devDependencies:
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/contract:
     dependencies:
