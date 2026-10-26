@@ -277,87 +277,87 @@
       "index": 19,
       "screenIndex": 1,
       "tMs": 12706,
-      "durationMs": 255,
-      "x": 125.7,
-      "y": 135,
-      "pageX": 125.7,
-      "pageY": 135,
-      "aoiId": "A-payment-email"
+      "durationMs": 186,
+      "x": 301.3,
+      "y": 611,
+      "pageX": 301.3,
+      "pageY": 611,
+      "aoiId": "A-payment-support"
     },
     {
       "index": 20,
       "screenIndex": 1,
       "tMs": 13307,
-      "durationMs": 443,
-      "x": 161,
-      "y": 202.4,
-      "pageX": 161,
-      "pageY": 202.4,
-      "aoiId": "A-payment-card"
+      "durationMs": 240,
+      "x": 125.2,
+      "y": 136.4,
+      "pageX": 125.2,
+      "pageY": 136.4,
+      "aoiId": "A-payment-email"
     },
     {
       "index": 21,
       "screenIndex": 1,
       "tMs": 14067,
-      "durationMs": 215,
-      "x": 107.1,
-      "y": 262.9,
-      "pageX": 107.1,
-      "pageY": 262.9,
-      "aoiId": "A-payment-expiry"
+      "durationMs": 469,
+      "x": 164.8,
+      "y": 196.9,
+      "pageX": 164.8,
+      "pageY": 196.9,
+      "aoiId": "A-payment-card"
     },
     {
       "index": 22,
       "screenIndex": 1,
       "tMs": 14660,
-      "durationMs": 204,
-      "x": 287.4,
+      "durationMs": 224,
+      "x": 100.4,
       "y": 265.7,
-      "pageX": 287.4,
+      "pageX": 100.4,
       "pageY": 265.7,
-      "aoiId": "A-payment-cvc"
+      "aoiId": "A-payment-expiry"
     },
     {
       "index": 23,
       "screenIndex": 1,
       "tMs": 15184,
-      "durationMs": 287,
-      "x": 261.8,
-      "y": 465.1,
-      "pageX": 261.8,
-      "pageY": 465.1,
-      "aoiId": "A-payment-summary"
+      "durationMs": 191,
+      "x": 283.7,
+      "y": 261.3,
+      "pageX": 283.7,
+      "pageY": 261.3,
+      "aoiId": "A-payment-cvc"
     },
     {
       "index": 24,
       "screenIndex": 1,
       "tMs": 15872,
-      "durationMs": 365,
-      "x": 281.8,
-      "y": 539.7,
-      "pageX": 281.8,
-      "pageY": 539.7,
+      "durationMs": 267,
+      "x": 263.9,
+      "y": 473.1,
+      "pageX": 263.9,
+      "pageY": 473.1,
       "aoiId": "A-payment-summary"
     },
     {
       "index": 25,
       "screenIndex": 1,
       "tMs": 16384,
-      "durationMs": 506,
-      "x": 198.2,
-      "y": 327.4,
-      "pageX": 198.2,
-      "pageY": 327.4,
-      "aoiId": "A-payment-primary"
+      "durationMs": 371,
+      "x": 287.7,
+      "y": 529.8,
+      "pageX": 287.7,
+      "pageY": 529.8,
+      "aoiId": "A-payment-summary"
     },
     {
       "index": 26,
       "screenIndex": 1,
       "tMs": 17060,
-      "durationMs": 229,
-      "x": 135.4,
+      "durationMs": 533,
+      "x": 189.1,
       "y": 330.3,
-      "pageX": 135.4,
+      "pageX": 189.1,
       "pageY": 330.3,
       "aoiId": "A-payment-primary"
     },
@@ -365,12 +365,12 @@
       "index": 27,
       "screenIndex": 1,
       "tMs": 17699,
-      "durationMs": 246,
-      "x": 115.9,
-      "y": 126.1,
-      "pageX": 115.9,
-      "pageY": 126.1,
-      "aoiId": "A-payment-email"
+      "durationMs": 227,
+      "x": 133.8,
+      "y": 326.1,
+      "pageX": 133.8,
+      "pageY": 326.1,
+      "aoiId": "A-payment-primary"
     },
     {
       "index": 28,
@@ -661,62 +661,62 @@
     {
       "fromFixation": 18,
       "toFixation": 19,
-      "amplitudePx": 194.4,
-      "durationMs": 26
+      "amplitudePx": 322.6,
+      "durationMs": 31
     },
     {
       "fromFixation": 19,
       "toFixation": 20,
-      "amplitudePx": 76.1,
-      "durationMs": 21
+      "amplitudePx": 506.2,
+      "durationMs": 38
     },
     {
       "fromFixation": 20,
       "toFixation": 21,
-      "amplitudePx": 81,
+      "amplitudePx": 72.3,
       "durationMs": 21
     },
     {
       "fromFixation": 21,
       "toFixation": 22,
-      "amplitudePx": 180.3,
-      "durationMs": 25
+      "amplitudePx": 94.2,
+      "durationMs": 22
     },
     {
       "fromFixation": 22,
       "toFixation": 23,
-      "amplitudePx": 201,
-      "durationMs": 26
+      "amplitudePx": 183.4,
+      "durationMs": 25
     },
     {
       "fromFixation": 23,
       "toFixation": 24,
-      "amplitudePx": 77.2,
-      "durationMs": 21
+      "amplitudePx": 212.7,
+      "durationMs": 27
     },
     {
       "fromFixation": 24,
       "toFixation": 25,
-      "amplitudePx": 228.2,
-      "durationMs": 27
+      "amplitudePx": 61.5,
+      "durationMs": 20
     },
     {
       "fromFixation": 25,
       "toFixation": 26,
-      "amplitudePx": 62.9,
-      "durationMs": 21
+      "amplitudePx": 222.5,
+      "durationMs": 27
     },
     {
       "fromFixation": 26,
       "toFixation": 27,
-      "amplitudePx": 205.1,
-      "durationMs": 26
+      "amplitudePx": 55.5,
+      "durationMs": 20
     },
     {
       "fromFixation": 27,
       "toFixation": 28,
-      "amplitudePx": 43.8,
-      "durationMs": 20
+      "amplitudePx": 197.3,
+      "durationMs": 26
     },
     {
       "fromFixation": 28,

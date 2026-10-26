@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@personavision/contract": "workspace:*",
+    "@personavision/engine": "workspace:*",
     "@types/node": "^22.20.5",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",

@@ -107,21 +107,21 @@
       "index": 5,
       "screenIndex": 0,
       "tMs": 3509,
-      "durationMs": 285,
-      "x": 130.7,
-      "y": 140.2,
-      "pageX": 130.7,
-      "pageY": 140.2,
-      "aoiId": "A-cart-cart-line"
+      "durationMs": 166,
+      "x": 202.3,
+      "y": 400.2,
+      "pageX": 202.3,
+      "pageY": 400.2,
+      "aoiId": "A-cart-keep-shopping"
     },
     {
       "index": 6,
       "screenIndex": 0,
       "tMs": 4266,
-      "durationMs": 214,
-      "x": 322.7,
+      "durationMs": 276,
+      "x": 125.8,
       "y": 136.3,
-      "pageX": 322.7,
+      "pageX": 125.8,
       "pageY": 136.3,
       "aoiId": "A-cart-cart-line"
     },
@@ -217,34 +217,34 @@
       "index": 15,
       "screenIndex": 1,
       "tMs": 10318,
-      "durationMs": 285,
-      "x": 116.4,
-      "y": 127.3,
-      "pageX": 116.4,
-      "pageY": 127.3,
-      "aoiId": "A-payment-email"
+      "durationMs": 208,
+      "x": 292,
+      "y": 603.3,
+      "pageX": 292,
+      "pageY": 603.3,
+      "aoiId": "A-payment-support"
     },
     {
       "index": 16,
       "screenIndex": 1,
       "tMs": 10940,
-      "durationMs": 514,
-      "x": 166.9,
-      "y": 198.9,
-      "pageX": 166.9,
-      "pageY": 198.9,
-      "aoiId": "A-payment-card"
+      "durationMs": 278,
+      "x": 131.1,
+      "y": 132.9,
+      "pageX": 131.1,
+      "pageY": 132.9,
+      "aoiId": "A-payment-email"
     },
     {
       "index": 17,
       "screenIndex": 1,
       "tMs": 11639,
-      "durationMs": 239,
-      "x": 108.3,
-      "y": 261.2,
-      "pageX": 108.3,
-      "pageY": 261.2,
-      "aoiId": "A-payment-expiry"
+      "durationMs": 521,
+      "x": 166,
+      "y": 195.2,
+      "pageX": 166,
+      "pageY": 195.2,
+      "aoiId": "A-payment-card"
     }
   ],
   "saccades": [
@@ -275,20 +275,20 @@
     {
       "fromFixation": 4,
       "toFixation": 5,
-      "amplitudePx": 216.8,
-      "durationMs": 27
+      "amplitudePx": 53.8,
+      "durationMs": 20
     },
     {
       "fromFixation": 5,
       "toFixation": 6,
-      "amplitudePx": 192,
-      "durationMs": 26
+      "amplitudePx": 274.8,
+      "durationMs": 29
     },
     {
       "fromFixation": 6,
       "toFixation": 7,
-      "amplitudePx": 203,
-      "durationMs": 26
+      "amplitudePx": 11.1,
+      "durationMs": 18
     },
     {
       "fromFixation": 7,
@@ -335,19 +335,19 @@
     {
       "fromFixation": 14,
       "toFixation": 15,
-      "amplitudePx": 207,
-      "durationMs": 26
+      "amplitudePx": 307.1,
+      "durationMs": 30
     },
     {
       "fromFixation": 15,
       "toFixation": 16,
-      "amplitudePx": 87.6,
-      "durationMs": 22
+      "amplitudePx": 497.2,
+      "durationMs": 38
     },
     {
       "fromFixation": 16,
       "toFixation": 17,
-      "amplitudePx": 85.5,
+      "amplitudePx": 71.4,
       "durationMs": 21
     }
   ],

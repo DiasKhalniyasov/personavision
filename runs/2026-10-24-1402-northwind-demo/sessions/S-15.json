@@ -478,6 +478,14 @@
       "ok": true
     },
     {
+      "tMs": 28922,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "696",
+      "ok": true
+    },
+    {
       "tMs": 38000,
       "type": "abandon",
       "target": null,

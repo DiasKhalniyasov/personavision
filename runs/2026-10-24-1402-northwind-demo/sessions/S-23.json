@@ -272,12 +272,12 @@
       "index": 20,
       "screenIndex": 1,
       "tMs": 14789,
-      "durationMs": 540,
+      "durationMs": 218,
       "x": 202.1,
-      "y": 94.2,
+      "y": 699.8,
       "pageX": 202.1,
-      "pageY": 94.2,
-      "aoiId": "B-payment-promo"
+      "pageY": 699.8,
+      "aoiId": "B-payment-trust"
     }
   ],
   "saccades": [
@@ -398,8 +398,8 @@
     {
       "fromFixation": 19,
       "toFixation": 20,
-      "amplitudePx": 323,
-      "durationMs": 31
+      "amplitudePx": 282.8,
+      "durationMs": 29
     }
   ],
   "actions": [

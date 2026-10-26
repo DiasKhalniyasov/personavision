@@ -310,87 +310,87 @@
       "index": 22,
       "screenIndex": 1,
       "tMs": 16704,
-      "durationMs": 260,
-      "x": 124.1,
-      "y": 135.3,
-      "pageX": 124.1,
-      "pageY": 135.3,
-      "aoiId": "A-payment-email"
+      "durationMs": 200,
+      "x": 195.7,
+      "y": 611.3,
+      "pageX": 195.7,
+      "pageY": 611.3,
+      "aoiId": "A-payment-trust"
     },
     {
       "index": 23,
       "screenIndex": 1,
       "tMs": 17292,
-      "durationMs": 511,
-      "x": 164.6,
-      "y": 194,
-      "pageX": 164.6,
-      "pageY": 194,
-      "aoiId": "A-payment-card"
+      "durationMs": 277,
+      "x": 128.8,
+      "y": 128,
+      "pageX": 128.8,
+      "pageY": 128,
+      "aoiId": "A-payment-email"
     },
     {
       "index": 24,
       "screenIndex": 1,
       "tMs": 17907,
-      "durationMs": 227,
-      "x": 96.3,
-      "y": 263.7,
-      "pageX": 96.3,
-      "pageY": 263.7,
-      "aoiId": "A-payment-expiry"
+      "durationMs": 495,
+      "x": 154,
+      "y": 197.7,
+      "pageX": 154,
+      "pageY": 197.7,
+      "aoiId": "A-payment-card"
     },
     {
       "index": 25,
       "screenIndex": 1,
       "tMs": 18593,
-      "durationMs": 188,
-      "x": 288.2,
+      "durationMs": 207,
+      "x": 101.2,
       "y": 263.9,
-      "pageX": 288.2,
+      "pageX": 101.2,
       "pageY": 263.9,
-      "aoiId": "A-payment-cvc"
+      "aoiId": "A-payment-expiry"
     },
     {
       "index": 26,
       "screenIndex": 1,
       "tMs": 19374,
-      "durationMs": 264,
-      "x": 264.2,
-      "y": 465.8,
-      "pageX": 264.2,
-      "pageY": 465.8,
-      "aoiId": "A-payment-summary"
+      "durationMs": 176,
+      "x": 286.1,
+      "y": 262,
+      "pageX": 286.1,
+      "pageY": 262,
+      "aoiId": "A-payment-cvc"
     },
     {
       "index": 27,
       "screenIndex": 1,
       "tMs": 20065,
-      "durationMs": 408,
-      "x": 282.1,
-      "y": 533.7,
-      "pageX": 282.1,
-      "pageY": 533.7,
+      "durationMs": 299,
+      "x": 264.2,
+      "y": 467.1,
+      "pageX": 264.2,
+      "pageY": 467.1,
       "aoiId": "A-payment-summary"
     },
     {
       "index": 28,
       "screenIndex": 1,
       "tMs": 20817,
-      "durationMs": 589,
-      "x": 197.1,
-      "y": 326.1,
-      "pageX": 197.1,
-      "pageY": 326.1,
-      "aoiId": "A-payment-primary"
+      "durationMs": 431,
+      "x": 286.6,
+      "y": 528.5,
+      "pageX": 286.6,
+      "pageY": 528.5,
+      "aoiId": "A-payment-summary"
     },
     {
       "index": 29,
       "screenIndex": 1,
       "tMs": 21610,
-      "durationMs": 266,
-      "x": 135.9,
+      "durationMs": 621,
+      "x": 189.6,
       "y": 335.7,
-      "pageX": 135.9,
+      "pageX": 189.6,
       "pageY": 335.7,
       "aoiId": "A-payment-primary"
     },
@@ -398,56 +398,56 @@
       "index": 30,
       "screenIndex": 1,
       "tMs": 22285,
-      "durationMs": 279,
-      "x": 116.7,
-      "y": 136.3,
-      "pageX": 116.7,
-      "pageY": 136.3,
-      "aoiId": "A-payment-email"
+      "durationMs": 257,
+      "x": 134.6,
+      "y": 336.3,
+      "pageX": 134.6,
+      "pageY": 336.3,
+      "aoiId": "A-payment-primary"
     },
     {
       "index": 31,
       "screenIndex": 1,
       "tMs": 23013,
-      "durationMs": 461,
-      "x": 159,
-      "y": 201.4,
-      "pageX": 159,
-      "pageY": 201.4,
-      "aoiId": "A-payment-card"
+      "durationMs": 192,
+      "x": 194.8,
+      "y": 611.4,
+      "pageX": 194.8,
+      "pageY": 611.4,
+      "aoiId": "A-payment-trust"
     },
     {
       "index": 32,
       "screenIndex": 1,
       "tMs": 23515,
-      "durationMs": 197,
-      "x": 93.5,
-      "y": 261.1,
-      "pageX": 93.5,
-      "pageY": 261.1,
-      "aoiId": "A-payment-expiry"
+      "durationMs": 233,
+      "x": 115.4,
+      "y": 129.1,
+      "pageX": 115.4,
+      "pageY": 129.1,
+      "aoiId": "A-payment-email"
     },
     {
       "index": 33,
       "screenIndex": 1,
       "tMs": 24303,
-      "durationMs": 187,
-      "x": 288.3,
-      "y": 266.4,
-      "pageX": 288.3,
-      "pageY": 266.4,
-      "aoiId": "A-payment-cvc"
+      "durationMs": 449,
+      "x": 159,
+      "y": 200.4,
+      "pageX": 159,
+      "pageY": 200.4,
+      "aoiId": "A-payment-card"
     },
     {
       "index": 34,
       "screenIndex": 1,
       "tMs": 24976,
-      "durationMs": 290,
-      "x": 259,
-      "y": 470.9,
-      "pageX": 259,
-      "pageY": 470.9,
-      "aoiId": "A-payment-summary"
+      "durationMs": 213,
+      "x": 93.9,
+      "y": 267.1,
+      "pageX": 93.9,
+      "pageY": 267.1,
+      "aoiId": "A-payment-expiry"
     },
     {
       "index": 35,
@@ -811,86 +811,86 @@
     {
       "fromFixation": 21,
       "toFixation": 22,
-      "amplitudePx": 197.3,
-      "durationMs": 26
+      "amplitudePx": 284.6,
+      "durationMs": 29
     },
     {
       "fromFixation": 22,
       "toFixation": 23,
-      "amplitudePx": 71.3,
-      "durationMs": 21
+      "amplitudePx": 487.9,
+      "durationMs": 38
     },
     {
       "fromFixation": 23,
       "toFixation": 24,
-      "amplitudePx": 97.6,
-      "durationMs": 22
+      "amplitudePx": 74.1,
+      "durationMs": 21
     },
     {
       "fromFixation": 24,
       "toFixation": 25,
-      "amplitudePx": 191.9,
-      "durationMs": 26
+      "amplitudePx": 84.7,
+      "durationMs": 21
     },
     {
       "fromFixation": 25,
       "toFixation": 26,
-      "amplitudePx": 203.3,
-      "durationMs": 26
+      "amplitudePx": 184.9,
+      "durationMs": 25
     },
     {
       "fromFixation": 26,
       "toFixation": 27,
-      "amplitudePx": 70.2,
-      "durationMs": 21
+      "amplitudePx": 206.3,
+      "durationMs": 26
     },
     {
       "fromFixation": 27,
       "toFixation": 28,
-      "amplitudePx": 224.3,
-      "durationMs": 27
+      "amplitudePx": 65.4,
+      "durationMs": 21
     },
     {
       "fromFixation": 28,
       "toFixation": 29,
-      "amplitudePx": 61.9,
-      "durationMs": 20
+      "amplitudePx": 215.8,
+      "durationMs": 27
     },
     {
       "fromFixation": 29,
       "toFixation": 30,
-      "amplitudePx": 200.3,
-      "durationMs": 26
+      "amplitudePx": 55,
+      "durationMs": 20
     },
     {
       "fromFixation": 30,
       "toFixation": 31,
-      "amplitudePx": 77.6,
-      "durationMs": 21
+      "amplitudePx": 281.6,
+      "durationMs": 29
     },
     {
       "fromFixation": 31,
       "toFixation": 32,
-      "amplitudePx": 88.6,
-      "durationMs": 22
+      "amplitudePx": 488.8,
+      "durationMs": 38
     },
     {
       "fromFixation": 32,
       "toFixation": 33,
-      "amplitudePx": 194.9,
-      "durationMs": 26
+      "amplitudePx": 83.6,
+      "durationMs": 21
     },
     {
       "fromFixation": 33,
       "toFixation": 34,
-      "amplitudePx": 206.6,
-      "durationMs": 26
+      "amplitudePx": 93.2,
+      "durationMs": 22
     },
     {
       "fromFixation": 34,
       "toFixation": 35,
-      "amplitudePx": 356,
-      "durationMs": 32
+      "amplitudePx": 149.3,
+      "durationMs": 24
     },
     {
       "fromFixation": 35,

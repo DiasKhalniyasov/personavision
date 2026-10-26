@@ -16,9 +16,19 @@
  * genuine artifact replaces it in place, at this path and under this schema, so nothing
  * here says "this is fake" beyond `engine.version: "seed-fixture"`.
  *
+ * The per-area numbers in `run.aoiMetrics` are not transcribed: they are computed from
+ * this run's own session files by `@personavision/engine`'s `aggregate`, the one place in
+ * the project where per-area numbers are made. So the committed artifact is exactly what
+ * the engine produces from it, and the screens are calibrated on numbers the genuine
+ * artifact will reproduce. The prototype's `AOI_METRICS` table still fixes every area's
+ * label and source, and its readings are what the anchors below are shaped to approach.
+ * One reading it prints cannot be reproduced: its time to first fixation counts from the
+ * moment a step appeared, and a session carries no per-step onset, so `aggregate` counts
+ * from the start of the session. #57 owns that.
+ *
  * Two deliberate departures from a genuine run, both named on the ticket:
  *
- * - The screenshots are rendered placeholders — the demo shop does not exist yet. They are
+ * - The screenshots are rendered placeholders rather than captures of the demo shop. They are
  *   drawn at one viewport, the mobile 390 x 844 the demo's replay session uses, because
  *   `run.json` records one screenshot per variant and step and the areas of interest have
  *   to register to that image. A desktop persona keeps its own device in the session file;
@@ -33,6 +43,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { createSeededRandom, runDirName, runPaths, writeRun } from '@personavision/contract';
+import { aggregate } from '@personavision/engine';
 import type { Findings, Run, Session } from '@personavision/contract';
 
 /* ===== the run's fixed shape =============================================== */
@@ -64,9 +75,14 @@ const TASK = {
 
 type VariantId = 'A' | 'B';
 
+/**
+ * The two versions of the checkout, named as the Comparison screen names them. The urls
+ * are the entry pages `demo/northwind/serve.ts` serves — it binds an ephemeral port and
+ * prints it, so the port here is only a placeholder; variant B's pages arrive with #10.
+ */
 const VARIANTS: Array<{ id: VariantId; name: string; url: string }> = [
-  { id: 'A', name: 'Current checkout', url: 'http://localhost:4173/checkout-a' },
-  { id: 'B', name: 'Redesign candidate', url: 'http://localhost:4173/checkout-b' },
+  { id: 'A', name: 'Current checkout', url: 'http://localhost:4173/a/cart.html' },
+  { id: 'B', name: 'Redesign candidate', url: 'http://localhost:4173/b/cart.html' },
 ];
 
 type StepId = 'cart' | 'payment' | 'review' | 'confirm';
@@ -272,6 +288,32 @@ const REPLAY_STEPS: Array<{ step: StepId; fixations: number; fromMs: number; toM
  */
 const NEVER_FIXATED: Record<string, Partial<Record<StepId, string[]>>> = {
   'S-20': { payment: ['promo', 'primary'] },
+};
+
+/**
+ * Areas the prototype's table reports as glanced at by a minority of sessions — the trust
+ * badges, the "Need help?" link, the "Keep shopping" escape. They are off the canonical
+ * scanpath, so a session looks at one only when its own draw falls under the share the
+ * prototype prints. Without them the table would report attention nobody paid; with them
+ * every non-zero reading has a fixation behind it, and `never` stays rare enough on
+ * variant B's completing action to read as the finding it is.
+ *
+ * `share` is the share the prototype's table prints. It is the draw's threshold, not the
+ * reading: what `run.json` ends up carrying is measured off the fixations like every other
+ * per-area number, so a short scanpath can leave an area at a lower share, or at none.
+ */
+const PERIPHERAL: Record<string, Array<Anchor & { share: number }>> = {
+  'A-cart': [{ aoi: 'keep-shopping', ox: 0.5, oy: 0.5, dur: 180, share: 0.27 }],
+  'B-cart': [{ aoi: 'keep-shopping', ox: 0.5, oy: 0.5, dur: 190, share: 0.36 }],
+  'A-payment': [
+    { aoi: 'trust', ox: 0.5, oy: 0.5, dur: 200, share: 0.36 },
+    { aoi: 'support', ox: 0.5, oy: 0.5, dur: 190, share: 0.18 },
+  ],
+  'B-payment': [
+    { aoi: 'trust', ox: 0.5, oy: 0.5, dur: 210, share: 0.41 },
+    { aoi: 'support', ox: 0.5, oy: 0.5, dur: 280, share: 0.58 },
+  ],
+  'A-review': [{ aoi: 'support', ox: 0.5, oy: 0.5, dur: 180, share: 0.09 }],
 };
 
 /** An agent who gives up on variant B's review step looks for help before leaving. */
@@ -554,6 +596,7 @@ const layOut = (blocks: Block[]): PageLayout => {
 /* ===== the areas of interest, from the prototype's AOI_METRICS ============= */
 
 /** `null` where the area does not exist in that variant; `ttff: null` where none ever did. */
+/** Only `label` and `src` are read: the readings are the shape the anchors aim at. */
 interface MetricReading {
   ttff: number | null;
   ffd: number | null;
@@ -818,29 +861,6 @@ const buildAois = (): Run['aois'] => {
   return aois;
 };
 
-const buildAoiMetrics = (): Run['aoiMetrics'] => {
-  const metrics: Run['aoiMetrics'] = [];
-  for (const step of STEPS) {
-    for (const row of AOI_METRICS[step.id]) {
-      for (const variant of VARIANTS) {
-        const reading = row[variant.id];
-        if (reading === null) continue;
-        metrics.push({
-          aoiId: aoiKey(variant.id, step.id, row.id),
-          timeToFirstFixationMs: reading.ttff === null ? null : Math.round(reading.ttff * 1000),
-          firstFixationDurationMs: reading.ffd,
-          totalDwellMs: Math.round(reading.dwell * 1000),
-          fixationCount: reading.fix,
-          revisits: reading.rev,
-          lookedAtShare: round6(reading.seen / 100),
-          sessionCount: REACH[variant.id][step.id],
-        });
-      }
-    }
-  }
-  return metrics;
-};
-
 const buildScore = (variant: VariantId, rows: SessionRow[]): Run['scores'][number] => {
   const scored = rows.filter((row) => row.status !== 'automation_failure');
   const counted = (status: SessionRow['status']): number =>
@@ -922,6 +942,11 @@ const allocate = (total: number, weights: number[]): number[] => {
   }
   while (left < 0) {
     const fullest = given.indexOf(Math.max(...given));
+    // A step a session reached shows at least one fixation, so a total too small to go
+    // round is refused rather than quietly dropping a step out of the filmstrip.
+    if (given[fullest] <= 1) {
+      throw new Error(`allocate: ${total} does not go round ${weights.length} steps`);
+    }
     given[fullest] -= 1;
     left += 1;
   }
@@ -962,12 +987,22 @@ const buildSession = (row: SessionRow, index: number): Session => {
           });
         })();
 
+  // One draw per peripheral area, taken outside the fixation loop so that the canonical
+  // scanpath's jitter does not depend on which glances this session happens to make.
+  const glance = createSeededRandom(1402 + index * 31 + 7);
+
   const raw: RawFixation[] = [];
   for (const window of plan) {
     const skipped = NEVER_FIXATED[sessionId]?.[window.step] ?? [];
-    const anchors = CANONICAL[`${row.variant}-${window.step}`].filter(
-      (anchor) => !skipped.includes(anchor.aoi),
-    );
+    const key = `${row.variant}-${window.step}`;
+    const anchors = CANONICAL[key].filter((anchor) => !skipped.includes(anchor.aoi));
+    for (const peripheral of PERIPHERAL[key] ?? []) {
+      const drawn = glance() < peripheral.share;
+      if (drawn && !skipped.includes(peripheral.aoi)) anchors.push(peripheral);
+    }
+    if (anchors.length === 0) {
+      throw new Error(`${sessionId}: every anchor on ${key} was skipped, so it has no gaze`);
+    }
     for (let position = 0; position < window.fixations; position += 1) {
       const last =
         window.step === row.endedAt &&
@@ -1098,9 +1133,35 @@ const buildSession = (row: SessionRow, index: number): Session => {
     };
   });
 
+  /**
+   * Every change of offset is a scroll, the scroll back to the top included: a replay
+   * driven by this log has to land on the crop its screenshot was taken at. Derived from
+   * the screens rather than written by hand, so the hand-written replay log below cannot
+   * disagree with the offsets its own screens record.
+   */
+  const scrollActions = (): Session['actions'] => {
+    const built: Session['actions'] = [];
+    let offset = 0;
+    for (const screen of screens) {
+      if (screen.scrollY === offset) continue;
+      offset = screen.scrollY;
+      const first = fixations.find((fixation) => fixation.screenIndex === screen.index);
+      built.push({
+        tMs: Math.max(0, (first?.tMs ?? 0) - 120),
+        type: 'scroll',
+        target: 'window',
+        aoiId: null,
+        value: String(screen.scrollY),
+        ok: true,
+      });
+    }
+    return built;
+  };
+
   const actions: Session['actions'] =
     sessionId === REPLAY_SESSION_ID
       ? [
+          ...scrollActions(),
           {
             tMs: 8000,
             type: 'click',
@@ -1136,19 +1197,7 @@ const buildSession = (row: SessionRow, index: number): Session => {
           },
         ]
       : (() => {
-          const built: Session['actions'] = [];
-          for (const screen of screens) {
-            if (screen.scrollY === 0) continue;
-            const first = fixations.find((fixation) => fixation.screenIndex === screen.index);
-            built.push({
-              tMs: Math.max(0, (first?.tMs ?? 0) - 120),
-              type: 'scroll',
-              target: 'window',
-              aoiId: null,
-              value: String(screen.scrollY),
-              ok: true,
-            });
-          }
+          const built: Session['actions'] = scrollActions();
           for (const window of plan) {
             const failedHere = row.status === 'automation_failure' && window.step === row.endedAt;
             if (window.step === 'payment') {
@@ -1182,8 +1231,9 @@ const buildSession = (row: SessionRow, index: number): Session => {
               ok: true,
             });
           }
-          return built.sort((left, right) => left.tMs - right.tMs);
+          return built;
         })();
+  actions.sort((left, right) => left.tMs - right.tMs);
 
   return {
     schemaVersion: 1,
@@ -1358,6 +1408,7 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
 };
 
 const buildRun = (sessions: ReadonlyArray<Session>): Run => {
+  const aois = buildAois();
   const scores = VARIANTS.map((variant) =>
     buildScore(
       variant.id,
@@ -1414,8 +1465,10 @@ const buildRun = (sessions: ReadonlyArray<Session>): Run => {
         };
       }),
     ),
-    aois: buildAois(),
-    aoiMetrics: buildAoiMetrics(),
+    aois,
+    // Computed, never transcribed: the engine is the one place per-area numbers are made,
+    // so the committed fixture is exactly what it produces from the sessions beside it.
+    aoiMetrics: aggregate(sessions, aois),
     scores,
     verdict: {
       harderVariant: harder.variant,
@@ -1478,8 +1531,34 @@ const pageSvg = (variant: VariantId, label: string, page: PageLayout): string =>
  * Writes the seed example run under `runsRoot` and returns its directory. Everything goes
  * through the contract: `writeRun` for the JSON it has parsed, `runPaths` for every name.
  */
+/**
+ * The sessions reach each step as often as the prototype's filmstrip prints, over the
+ * sessions that count towards a score. The generator refuses to write an artifact that
+ * disagrees, so a change to an anchor or a fixation budget cannot quietly move a reach
+ * count the Attention screen reads out.
+ */
+const checkReach = (sessions: ReadonlyArray<Session>): void => {
+  for (const variant of VARIANTS) {
+    for (const step of STEPS) {
+      const reached = sessions.filter(
+        (session) =>
+          session.variant === variant.id &&
+          !session.outcome.excludedFromScores &&
+          session.screens.some((screen) => screen.step === step.id),
+      ).length;
+      const wanted = REACH[variant.id][step.id as StepId];
+      if (reached !== wanted) {
+        throw new Error(
+          `variant ${variant.id}, ${step.id}: ${reached} sessions reached it, not the ${wanted} the prototype prints`,
+        );
+      }
+    }
+  }
+};
+
 export const writeSeedRun = async (runsRoot: string): Promise<string> => {
   const sessions = SESSION_ROWS.map(buildSession);
+  checkReach(sessions);
   const run = buildRun(sessions);
   const findings = buildFindings(sessions);
   const runDir = join(runsRoot, RUN_ID);

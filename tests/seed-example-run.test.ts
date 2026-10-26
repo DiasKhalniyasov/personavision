@@ -6,6 +6,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runPaths, validate } from '@personavision/contract';
+import { aggregate } from '@personavision/engine';
 import type { Findings, Run, Session } from '@personavision/contract';
 import { RUN_ID, writeSeedRun } from '../scripts/seed-example-run.js';
 
@@ -177,8 +178,10 @@ describe('the required reading of docs/FLOW.md section 5', () => {
       };
       expect(band(clean).high).toBeLessThan(band(defective).low);
     }
-    expect(clean.perSeedGroup.map((entry) => entry.frictionScore).sort()).toEqual([19, 22, 25]);
-    expect(defective.perSeedGroup.map((entry) => entry.frictionScore).sort()).toEqual([63, 67, 71]);
+    const ascending = (score: Run['scores'][number]): number[] =>
+      score.perSeedGroup.map((entry) => entry.frictionScore).sort((left, right) => left - right);
+    expect(ascending(clean)).toEqual([19, 22, 25]);
+    expect(ascending(defective)).toEqual([63, 67, 71]);
   });
 
   it('states the verdict the Comparison screen reads out', () => {
@@ -360,6 +363,29 @@ describe('the sessions', () => {
     }
   });
 
+  it('logs a scroll for every change of offset its own screens record', () => {
+    for (const session of sessions) {
+      let offset = 0;
+      const changes: number[] = [];
+      for (const screen of session.screens) {
+        if (screen.scrollY === offset) continue;
+        offset = screen.scrollY;
+        changes.push(screen.scrollY);
+      }
+      const scrolls = session.actions
+        .filter((action) => action.type === 'scroll')
+        .map((action) => Number(action.value));
+      expect(scrolls).toEqual(changes);
+    }
+  });
+
+  it('logs its actions in the order they happened', () => {
+    for (const session of sessions) {
+      const times = session.actions.map((action) => action.tMs);
+      expect(times).toEqual([...times].sort((left, right) => left - right));
+    }
+  });
+
   it('anchors every fixation to an area of interest this run declares', () => {
     const declared = new Set(run.aois.map((aoi) => aoi.id));
     for (const session of sessions) {
@@ -416,6 +442,9 @@ describe('the sessions', () => {
       'type',
       'hesitate',
       'click',
+      // The scroll that reveals the service fee, and leaves the completing action below
+      // the fold: the beat the replay exists to show.
+      'scroll',
       'abandon',
     ]);
     expect(replay.outcome.status).toBe('abandoned');
@@ -434,24 +463,48 @@ describe('the areas of interest', () => {
     }
   });
 
-  it('metres every area the prototype’s table lists, against the sessions that reached it', () => {
-    const declared = new Set(run.aois.map((aoi) => aoi.id));
-    for (const metric of run.aoiMetrics) {
-      expect(declared.has(metric.aoiId)).toBe(true);
+  it('metres one area per declared area, against the sessions that reached it', () => {
+    expect(run.aoiMetrics).toHaveLength(run.aois.length);
+    run.aoiMetrics.forEach((metric, index) => {
+      expect(metric.aoiId).toBe(run.aois[index].id);
       expect(metric.sessionCount).toBeGreaterThan(0);
       expect(metric.lookedAtShare).toBeGreaterThanOrEqual(0);
       expect(metric.lookedAtShare).toBeLessThanOrEqual(1);
-    }
-    const promo = run.aoiMetrics.find((metric) => metric.aoiId === 'B-payment-promo');
-    expect(promo).toMatchObject({
-      timeToFirstFixationMs: 400,
-      firstFixationDurationMs: 520,
-      totalDwellMs: 3100,
-      fixationCount: 4.2,
-      revisits: 1.8,
-      lookedAtShare: 0.92,
-      sessionCount: 10,
     });
+  });
+
+  // The one assertion that keeps the fixture honest: the engine is the only place in the
+  // project where a per-area number is made, so the committed artifact has to be exactly
+  // what it produces from the sessions committed beside it. Without this, a hand-written
+  // table can claim attention no fixation ever paid and nothing fails.
+  it('carries exactly what the engine computes from the sessions beside it', () => {
+    expect(run.aoiMetrics).toEqual(aggregate(sessions, run.aois));
+  });
+
+  it('reports a reading only where a fixation backs it, and a null where none does', () => {
+    const fixated = new Set(
+      sessions
+        .filter((session) => !session.outcome.excludedFromScores)
+        .flatMap((session) => session.fixations.map((fixation) => fixation.aoiId)),
+    );
+    for (const metric of run.aoiMetrics) {
+      const looked = fixated.has(metric.aoiId);
+      expect(metric.lookedAtShare > 0).toBe(looked);
+      expect(metric.timeToFirstFixationMs !== null).toBe(looked);
+      expect(metric.firstFixationDurationMs !== null).toBe(looked);
+      if (!looked) {
+        expect(metric.totalDwellMs).toBe(0);
+        expect(metric.fixationCount).toBe(0);
+        expect(metric.revisits).toBe(0);
+      }
+    }
+  });
+
+  it('counts a fixation and a revisit as whole numbers, as the engine floors them', () => {
+    for (const metric of run.aoiMetrics) {
+      expect(Number.isInteger(metric.fixationCount)).toBe(true);
+      expect(Number.isInteger(metric.revisits)).toBe(true);
+    }
   });
 
   it('captions every variant and step for the Attention screen', () => {

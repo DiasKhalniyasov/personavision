@@ -307,34 +307,34 @@
       "index": 21,
       "screenIndex": 1,
       "tMs": 16756,
-      "durationMs": 469,
+      "durationMs": 190,
       "x": 191.7,
-      "y": 90.3,
+      "y": 695.9,
       "pageX": 191.7,
-      "pageY": 90.3,
-      "aoiId": "B-payment-promo"
+      "pageY": 695.9,
+      "aoiId": "B-payment-trust"
     },
     {
       "index": 22,
       "screenIndex": 1,
       "tMs": 17728,
-      "durationMs": 301,
-      "x": 220.3,
-      "y": 125.5,
-      "pageX": 220.3,
-      "pageY": 125.5,
+      "durationMs": 522,
+      "x": 202.4,
+      "y": 95.1,
+      "pageX": 202.4,
+      "pageY": 95.1,
       "aoiId": "B-payment-promo"
     },
     {
       "index": 23,
       "screenIndex": 1,
-      "tMs": 18254,
-      "durationMs": 224,
-      "x": 119.9,
-      "y": 220.8,
-      "pageX": 119.9,
-      "pageY": 220.8,
-      "aoiId": "B-payment-email"
+      "tMs": 18290,
+      "durationMs": 280,
+      "x": 209.4,
+      "y": 121.6,
+      "pageX": 209.4,
+      "pageY": 121.6,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 24,
@@ -560,26 +560,26 @@
     {
       "fromFixation": 20,
       "toFixation": 21,
-      "amplitudePx": 325.7,
-      "durationMs": 31
+      "amplitudePx": 280.1,
+      "durationMs": 29
     },
     {
       "fromFixation": 21,
       "toFixation": 22,
-      "amplitudePx": 45.4,
-      "durationMs": 20
+      "amplitudePx": 600.9,
+      "durationMs": 42
     },
     {
       "fromFixation": 22,
       "toFixation": 23,
-      "amplitudePx": 138.4,
-      "durationMs": 24
+      "amplitudePx": 27.4,
+      "durationMs": 19
     },
     {
       "fromFixation": 23,
       "toFixation": 24,
-      "amplitudePx": 977.8,
-      "durationMs": 57
+      "amplitudePx": 1072.9,
+      "durationMs": 61
     },
     {
       "fromFixation": 24,
@@ -661,6 +661,14 @@
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 22588,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {

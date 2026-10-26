@@ -123,21 +123,21 @@
       "index": 5,
       "screenIndex": 0,
       "tMs": 4186,
-      "durationMs": 281,
-      "x": 119.9,
-      "y": 136,
-      "pageX": 119.9,
-      "pageY": 136,
-      "aoiId": "A-cart-cart-line"
+      "durationMs": 163,
+      "x": 191.5,
+      "y": 396,
+      "pageX": 191.5,
+      "pageY": 396,
+      "aoiId": "A-cart-keep-shopping"
     },
     {
       "index": 6,
       "screenIndex": 0,
       "tMs": 4819,
-      "durationMs": 267,
-      "x": 328,
+      "durationMs": 345,
+      "x": 131.1,
       "y": 143.8,
-      "pageX": 328,
+      "pageX": 131.1,
       "pageY": 143.8,
       "aoiId": "A-cart-cart-line"
     },
@@ -145,56 +145,56 @@
       "index": 7,
       "screenIndex": 0,
       "tMs": 5435,
-      "durationMs": 385,
-      "x": 304.6,
-      "y": 276.9,
-      "pageX": 304.6,
-      "pageY": 276.9,
-      "aoiId": "A-cart-cart-total"
+      "durationMs": 220,
+      "x": 322.5,
+      "y": 138.9,
+      "pageX": 322.5,
+      "pageY": 138.9,
+      "aoiId": "A-cart-cart-line"
     },
     {
       "index": 8,
       "screenIndex": 0,
       "tMs": 6197,
-      "durationMs": 344,
+      "durationMs": 402,
       "x": 304.8,
-      "y": 294.7,
+      "y": 276.7,
       "pageX": 304.8,
-      "pageY": 294.7,
+      "pageY": 276.7,
       "aoiId": "A-cart-cart-total"
     },
     {
       "index": 9,
       "screenIndex": 0,
       "tMs": 6944,
-      "durationMs": 536,
-      "x": 197.3,
-      "y": 352.1,
-      "pageX": 197.3,
-      "pageY": 352.1,
-      "aoiId": "A-cart-cart-checkout"
+      "durationMs": 371,
+      "x": 304.7,
+      "y": 300.1,
+      "pageX": 304.7,
+      "pageY": 300.1,
+      "aoiId": "A-cart-cart-total"
     },
     {
       "index": 10,
       "screenIndex": 0,
-      "tMs": 7520,
-      "durationMs": 334,
-      "x": 118.4,
-      "y": 143.1,
-      "pageX": 118.4,
-      "pageY": 143.1,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 7468,
+      "durationMs": 560,
+      "x": 190,
+      "y": 351.1,
+      "pageX": 190,
+      "pageY": 351.1,
+      "aoiId": "A-cart-cart-checkout"
     },
     {
       "index": 11,
       "screenIndex": 0,
       "tMs": 8203,
-      "durationMs": 247,
-      "x": 325.2,
-      "y": 137.2,
-      "pageX": 325.2,
-      "pageY": 137.2,
-      "aoiId": "A-cart-cart-line"
+      "durationMs": 185,
+      "x": 199.9,
+      "y": 397.2,
+      "pageX": 199.9,
+      "pageY": 397.2,
+      "aoiId": "A-cart-keep-shopping"
     },
     {
       "index": 12,
@@ -665,50 +665,50 @@
     {
       "fromFixation": 4,
       "toFixation": 5,
-      "amplitudePx": 225.8,
-      "durationMs": 27
+      "amplitudePx": 46.1,
+      "durationMs": 20
     },
     {
       "fromFixation": 5,
       "toFixation": 6,
-      "amplitudePx": 208.2,
-      "durationMs": 26
+      "amplitudePx": 259.3,
+      "durationMs": 28
     },
     {
       "fromFixation": 6,
       "toFixation": 7,
-      "amplitudePx": 135.1,
-      "durationMs": 23
+      "amplitudePx": 191.5,
+      "durationMs": 26
     },
     {
       "fromFixation": 7,
       "toFixation": 8,
-      "amplitudePx": 17.8,
-      "durationMs": 19
+      "amplitudePx": 138.9,
+      "durationMs": 24
     },
     {
       "fromFixation": 8,
       "toFixation": 9,
-      "amplitudePx": 121.9,
-      "durationMs": 23
+      "amplitudePx": 23.4,
+      "durationMs": 19
     },
     {
       "fromFixation": 9,
       "toFixation": 10,
-      "amplitudePx": 223.4,
-      "durationMs": 27
+      "amplitudePx": 125.5,
+      "durationMs": 23
     },
     {
       "fromFixation": 10,
       "toFixation": 11,
-      "amplitudePx": 206.9,
-      "durationMs": 26
+      "amplitudePx": 47.2,
+      "durationMs": 20
     },
     {
       "fromFixation": 11,
       "toFixation": 12,
-      "amplitudePx": 198,
-      "durationMs": 26
+      "amplitudePx": 273.5,
+      "durationMs": 29
     },
     {
       "fromFixation": 12,

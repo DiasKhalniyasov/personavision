@@ -153,22 +153,22 @@
       "index": 7,
       "screenIndex": 0,
       "tMs": 5956,
-      "durationMs": 429,
+      "durationMs": 170,
       "x": 199.2,
-      "y": 92.8,
+      "y": 486.6,
       "pageX": 199.2,
-      "pageY": 92.8,
-      "aoiId": "B-cart-promo"
+      "pageY": 486.6,
+      "aoiId": "B-cart-keep-shopping"
     },
     {
       "index": 8,
       "screenIndex": 0,
       "tMs": 6797,
-      "durationMs": 289,
+      "durationMs": 533,
       "x": 198.9,
-      "y": 122.9,
+      "y": 96.3,
       "pageX": 198.9,
-      "pageY": 122.9,
+      "pageY": 96.3,
       "aoiId": "B-cart-promo"
     },
     {
@@ -454,20 +454,20 @@
     {
       "fromFixation": 6,
       "toFixation": 7,
-      "amplitudePx": 345.9,
-      "durationMs": 32
+      "amplitudePx": 49,
+      "durationMs": 20
     },
     {
       "fromFixation": 7,
       "toFixation": 8,
-      "amplitudePx": 30.1,
-      "durationMs": 19
+      "amplitudePx": 390.3,
+      "durationMs": 34
     },
     {
       "fromFixation": 8,
       "toFixation": 9,
-      "amplitudePx": 38.7,
-      "durationMs": 20
+      "amplitudePx": 14.2,
+      "durationMs": 19
     },
     {
       "fromFixation": 9,
@@ -627,6 +627,14 @@
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 22654,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {

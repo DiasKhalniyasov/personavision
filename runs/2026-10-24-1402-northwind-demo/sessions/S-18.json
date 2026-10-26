@@ -400,166 +400,166 @@
       "index": 28,
       "screenIndex": 1,
       "tMs": 22492,
-      "durationMs": 488,
+      "durationMs": 197,
       "x": 200.9,
-      "y": 92.6,
+      "y": 698.2,
       "pageX": 200.9,
-      "pageY": 92.6,
-      "aoiId": "B-payment-promo"
+      "pageY": 698.2,
+      "aoiId": "B-payment-trust"
     },
     {
       "index": 29,
       "screenIndex": 1,
       "tMs": 23185,
-      "durationMs": 267,
-      "x": 214.1,
-      "y": 125.3,
-      "pageX": 214.1,
-      "pageY": 125.3,
+      "durationMs": 462,
+      "x": 196.2,
+      "y": 94.9,
+      "pageX": 196.2,
+      "pageY": 94.9,
       "aoiId": "B-payment-promo"
     },
     {
       "index": 30,
       "screenIndex": 1,
       "tMs": 23987,
-      "durationMs": 247,
-      "x": 126.2,
-      "y": 216.7,
-      "pageX": 126.2,
-      "pageY": 216.7,
-      "aoiId": "B-payment-email"
+      "durationMs": 309,
+      "x": 215.7,
+      "y": 117.5,
+      "pageX": 215.7,
+      "pageY": 117.5,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 31,
       "screenIndex": 1,
       "tMs": 24519,
-      "durationMs": 488,
-      "x": 161.8,
-      "y": 289.2,
-      "pageX": 161.8,
-      "pageY": 289.2,
-      "aoiId": "B-payment-card"
+      "durationMs": 254,
+      "x": 126,
+      "y": 223.2,
+      "pageX": 126,
+      "pageY": 223.2,
+      "aoiId": "B-payment-email"
     },
     {
       "index": 32,
       "screenIndex": 1,
       "tMs": 25410,
-      "durationMs": 200,
-      "x": 98,
-      "y": 350.9,
-      "pageX": 98,
-      "pageY": 350.9,
-      "aoiId": "B-payment-expiry"
+      "durationMs": 437,
+      "x": 155.7,
+      "y": 284.9,
+      "pageX": 155.7,
+      "pageY": 284.9,
+      "aoiId": "B-payment-card"
     },
     {
       "index": 33,
       "screenIndex": 1,
       "tMs": 26254,
-      "durationMs": 206,
-      "x": 288.3,
+      "durationMs": 228,
+      "x": 101.3,
       "y": 346.1,
-      "pageX": 288.3,
+      "pageX": 101.3,
       "pageY": 346.1,
-      "aoiId": "B-payment-cvc"
+      "aoiId": "B-payment-expiry"
     },
     {
       "index": 34,
       "screenIndex": 1,
       "tMs": 26906,
-      "durationMs": 307,
-      "x": 220.5,
-      "y": 545.4,
-      "pageX": 220.5,
-      "pageY": 545.4,
-      "aoiId": "B-payment-summary"
+      "durationMs": 209,
+      "x": 296.1,
+      "y": 356.4,
+      "pageX": 296.1,
+      "pageY": 356.4,
+      "aoiId": "B-payment-cvc"
     },
     {
       "index": 35,
       "screenIndex": 1,
       "tMs": 27606,
-      "durationMs": 390,
-      "x": 136.7,
-      "y": 560.6,
-      "pageX": 136.7,
-      "pageY": 560.6,
-      "aoiId": "B-payment-shipping-row"
+      "durationMs": 287,
+      "x": 219.8,
+      "y": 539.6,
+      "pageX": 219.8,
+      "pageY": 539.6,
+      "aoiId": "B-payment-summary"
     },
     {
       "index": 36,
       "screenIndex": 1,
       "tMs": 28503,
-      "durationMs": 433,
-      "x": 303.8,
-      "y": 640.2,
-      "pageX": 303.8,
-      "pageY": 640.2,
-      "aoiId": "B-payment-summary"
+      "durationMs": 374,
+      "x": 131.2,
+      "y": 568,
+      "pageX": 131.2,
+      "pageY": 568,
+      "aoiId": "B-payment-shipping-row"
     },
     {
       "index": 37,
       "screenIndex": 1,
       "tMs": 28997,
-      "durationMs": 336,
-      "x": 293.6,
-      "y": 567.4,
-      "pageX": 293.6,
-      "pageY": 567.4,
-      "aoiId": "B-payment-shipping-row"
+      "durationMs": 422,
+      "x": 303.2,
+      "y": 639.7,
+      "pageX": 303.2,
+      "pageY": 639.7,
+      "aoiId": "B-payment-summary"
     },
     {
       "index": 38,
       "screenIndex": 1,
       "tMs": 29864,
-      "durationMs": 239,
-      "x": 195.8,
-      "y": 99.1,
-      "pageX": 195.8,
-      "pageY": 99.1,
-      "aoiId": "B-payment-promo"
+      "durationMs": 363,
+      "x": 293.6,
+      "y": 563.1,
+      "pageX": 293.6,
+      "pageY": 563.1,
+      "aoiId": "B-payment-shipping-row"
     },
     {
       "index": 39,
       "screenIndex": 1,
       "tMs": 30700,
-      "durationMs": 373,
+      "durationMs": 204,
       "x": 198.1,
-      "y": 414.3,
+      "y": 92.3,
       "pageX": 198.1,
-      "pageY": 414.3,
-      "aoiId": "B-payment-primary"
+      "pageY": 92.3,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 40,
       "screenIndex": 1,
       "tMs": 31371,
-      "durationMs": 538,
+      "durationMs": 434,
       "x": 195.9,
-      "y": 85.8,
+      "y": 415.4,
       "pageX": 195.9,
-      "pageY": 85.8,
-      "aoiId": "B-payment-promo"
+      "pageY": 415.4,
+      "aoiId": "B-payment-primary"
     },
     {
       "index": 41,
       "screenIndex": 1,
       "tMs": 32282,
-      "durationMs": 271,
-      "x": 216.7,
-      "y": 118.7,
-      "pageX": 216.7,
-      "pageY": 118.7,
-      "aoiId": "B-payment-promo"
+      "durationMs": 190,
+      "x": 198.8,
+      "y": 693.9,
+      "pageX": 198.8,
+      "pageY": 693.9,
+      "aoiId": "B-payment-trust"
     },
     {
       "index": 42,
       "screenIndex": 1,
       "tMs": 32791,
-      "durationMs": 265,
-      "x": 130.6,
-      "y": 215.4,
-      "pageX": 130.6,
-      "pageY": 215.4,
-      "aoiId": "B-payment-email"
+      "durationMs": 575,
+      "x": 202.2,
+      "y": 85.8,
+      "pageX": 202.2,
+      "pageY": 85.8,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 43,
@@ -904,98 +904,98 @@
     {
       "fromFixation": 27,
       "toFixation": 28,
-      "amplitudePx": 328.4,
-      "durationMs": 31
+      "amplitudePx": 277.2,
+      "durationMs": 29
     },
     {
       "fromFixation": 28,
       "toFixation": 29,
-      "amplitudePx": 35.3,
-      "durationMs": 19
+      "amplitudePx": 603.3,
+      "durationMs": 42
     },
     {
       "fromFixation": 29,
       "toFixation": 30,
-      "amplitudePx": 126.8,
-      "durationMs": 23
+      "amplitudePx": 29.8,
+      "durationMs": 19
     },
     {
       "fromFixation": 30,
       "toFixation": 31,
-      "amplitudePx": 80.8,
-      "durationMs": 21
+      "amplitudePx": 138.6,
+      "durationMs": 24
     },
     {
       "fromFixation": 31,
       "toFixation": 32,
-      "amplitudePx": 88.8,
-      "durationMs": 22
+      "amplitudePx": 68.5,
+      "durationMs": 21
     },
     {
       "fromFixation": 32,
       "toFixation": 33,
-      "amplitudePx": 190.4,
-      "durationMs": 26
+      "amplitudePx": 81.9,
+      "durationMs": 21
     },
     {
       "fromFixation": 33,
       "toFixation": 34,
-      "amplitudePx": 210.5,
+      "amplitudePx": 195.1,
       "durationMs": 26
     },
     {
       "fromFixation": 34,
       "toFixation": 35,
-      "amplitudePx": 85.2,
-      "durationMs": 21
+      "amplitudePx": 198.5,
+      "durationMs": 26
     },
     {
       "fromFixation": 35,
       "toFixation": 36,
-      "amplitudePx": 185.1,
-      "durationMs": 25
+      "amplitudePx": 93,
+      "durationMs": 22
     },
     {
       "fromFixation": 36,
       "toFixation": 37,
-      "amplitudePx": 73.5,
-      "durationMs": 21
+      "amplitudePx": 186.3,
+      "durationMs": 25
     },
     {
       "fromFixation": 37,
       "toFixation": 38,
-      "amplitudePx": 478.4,
-      "durationMs": 37
+      "amplitudePx": 77.2,
+      "durationMs": 21
     },
     {
       "fromFixation": 38,
       "toFixation": 39,
-      "amplitudePx": 315.2,
-      "durationMs": 31
+      "amplitudePx": 480.4,
+      "durationMs": 37
     },
     {
       "fromFixation": 39,
       "toFixation": 40,
-      "amplitudePx": 328.5,
+      "amplitudePx": 323.1,
       "durationMs": 31
     },
     {
       "fromFixation": 40,
       "toFixation": 41,
-      "amplitudePx": 38.9,
-      "durationMs": 20
+      "amplitudePx": 278.5,
+      "durationMs": 29
     },
     {
       "fromFixation": 41,
       "toFixation": 42,
-      "amplitudePx": 129.5,
-      "durationMs": 23
+      "amplitudePx": 608.1,
+      "durationMs": 42
     },
     {
       "fromFixation": 42,
       "toFixation": 43,
-      "amplitudePx": 985.5,
-      "durationMs": 57
+      "amplitudePx": 1111.8,
+      "durationMs": 62
     },
     {
       "fromFixation": 43,
@@ -1122,11 +1122,27 @@
       "ok": true
     },
     {
+      "tMs": 37187,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
+      "ok": true
+    },
+    {
       "tMs": 37924,
       "type": "scroll",
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 42418,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {

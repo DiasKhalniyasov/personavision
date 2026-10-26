@@ -408,166 +408,166 @@
       "index": 28,
       "screenIndex": 1,
       "tMs": 22979,
-      "durationMs": 507,
-      "x": 187.4,
-      "y": 88.6,
-      "pageX": 187.4,
-      "pageY": 88.6,
-      "aoiId": "B-payment-promo"
+      "durationMs": 273,
+      "x": 291.4,
+      "y": 694.2,
+      "pageX": 291.4,
+      "pageY": 694.2,
+      "aoiId": "B-payment-support"
     },
     {
       "index": 29,
       "screenIndex": 1,
       "tMs": 23733,
-      "durationMs": 326,
-      "x": 220.4,
-      "y": 120.4,
-      "pageX": 220.4,
-      "pageY": 120.4,
+      "durationMs": 566,
+      "x": 202.5,
+      "y": 90,
+      "pageX": 202.5,
+      "pageY": 90,
       "aoiId": "B-payment-promo"
     },
     {
       "index": 30,
       "screenIndex": 1,
-      "tMs": 24295,
-      "durationMs": 267,
-      "x": 118.9,
-      "y": 216.1,
-      "pageX": 118.9,
-      "pageY": 216.1,
-      "aoiId": "B-payment-email"
+      "tMs": 24339,
+      "durationMs": 334,
+      "x": 208.4,
+      "y": 116.9,
+      "pageX": 208.4,
+      "pageY": 116.9,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 31,
       "screenIndex": 1,
       "tMs": 24997,
-      "durationMs": 407,
-      "x": 162.7,
-      "y": 291.1,
-      "pageX": 162.7,
-      "pageY": 291.1,
-      "aoiId": "B-payment-card"
+      "durationMs": 212,
+      "x": 126.9,
+      "y": 225.1,
+      "pageX": 126.9,
+      "pageY": 225.1,
+      "aoiId": "B-payment-email"
     },
     {
       "index": 32,
       "screenIndex": 1,
       "tMs": 25804,
-      "durationMs": 226,
-      "x": 100.1,
-      "y": 352.2,
-      "pageX": 100.1,
-      "pageY": 352.2,
-      "aoiId": "B-payment-expiry"
+      "durationMs": 495,
+      "x": 157.8,
+      "y": 286.2,
+      "pageX": 157.8,
+      "pageY": 286.2,
+      "aoiId": "B-payment-card"
     },
     {
       "index": 33,
       "screenIndex": 1,
       "tMs": 26659,
-      "durationMs": 168,
-      "x": 288.1,
+      "durationMs": 186,
+      "x": 101.1,
       "y": 350.5,
-      "pageX": 288.1,
+      "pageX": 101.1,
       "pageY": 350.5,
-      "aoiId": "B-payment-cvc"
+      "aoiId": "B-payment-expiry"
     },
     {
       "index": 34,
       "screenIndex": 1,
       "tMs": 27421,
-      "durationMs": 288,
-      "x": 210.6,
-      "y": 542.5,
-      "pageX": 210.6,
-      "pageY": 542.5,
-      "aoiId": "B-payment-summary"
+      "durationMs": 196,
+      "x": 286.2,
+      "y": 353.5,
+      "pageX": 286.2,
+      "pageY": 353.5,
+      "aoiId": "B-payment-cvc"
     },
     {
       "index": 35,
       "screenIndex": 1,
       "tMs": 28323,
-      "durationMs": 413,
-      "x": 127.5,
-      "y": 556.3,
-      "pageX": 127.5,
-      "pageY": 556.3,
-      "aoiId": "B-payment-shipping-row"
+      "durationMs": 304,
+      "x": 210.6,
+      "y": 535.3,
+      "pageX": 210.6,
+      "pageY": 535.3,
+      "aoiId": "B-payment-summary"
     },
     {
       "index": 36,
       "screenIndex": 1,
       "tMs": 28973,
-      "durationMs": 448,
-      "x": 301.4,
-      "y": 631.3,
-      "pageX": 301.4,
-      "pageY": 631.3,
-      "aoiId": "B-payment-summary"
+      "durationMs": 387,
+      "x": 128.8,
+      "y": 559.1,
+      "pageX": 128.8,
+      "pageY": 559.1,
+      "aoiId": "B-payment-shipping-row"
     },
     {
       "index": 37,
       "screenIndex": 1,
       "tMs": 29764,
-      "durationMs": 373,
-      "x": 297.8,
-      "y": 566.3,
-      "pageX": 297.8,
-      "pageY": 566.3,
-      "aoiId": "B-payment-shipping-row"
+      "durationMs": 469,
+      "x": 307.4,
+      "y": 638.5,
+      "pageX": 307.4,
+      "pageY": 638.5,
+      "aoiId": "B-payment-summary"
     },
     {
       "index": 38,
       "screenIndex": 1,
       "tMs": 30401,
-      "durationMs": 245,
-      "x": 201.6,
-      "y": 101.4,
-      "pageX": 201.6,
-      "pageY": 101.4,
-      "aoiId": "B-payment-promo"
+      "durationMs": 372,
+      "x": 299.4,
+      "y": 565.4,
+      "pageX": 299.4,
+      "pageY": 565.4,
+      "aoiId": "B-payment-shipping-row"
     },
     {
       "index": 39,
       "screenIndex": 1,
       "tMs": 31200,
-      "durationMs": 463,
+      "durationMs": 253,
       "x": 198.2,
-      "y": 418.5,
+      "y": 96.5,
       "pageX": 198.2,
-      "pageY": 418.5,
-      "aoiId": "B-payment-primary"
+      "pageY": 96.5,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 40,
       "screenIndex": 1,
       "tMs": 32197,
-      "durationMs": 557,
+      "durationMs": 450,
       "x": 191.2,
-      "y": 92.3,
+      "y": 421.9,
       "pageX": 191.2,
-      "pageY": 92.3,
-      "aoiId": "B-payment-promo"
+      "pageY": 421.9,
+      "aoiId": "B-payment-primary"
     },
     {
       "index": 41,
       "screenIndex": 1,
       "tMs": 32952,
-      "durationMs": 328,
-      "x": 220.8,
-      "y": 115.4,
-      "pageX": 220.8,
-      "pageY": 115.4,
-      "aoiId": "B-payment-promo"
+      "durationMs": 307,
+      "x": 306.9,
+      "y": 690.6,
+      "pageX": 306.9,
+      "pageY": 690.6,
+      "aoiId": "B-payment-support"
     },
     {
       "index": 42,
       "screenIndex": 1,
       "tMs": 33513,
-      "durationMs": 266,
-      "x": 120.5,
-      "y": 216.3,
-      "pageX": 120.5,
-      "pageY": 216.3,
-      "aoiId": "B-payment-email"
+      "durationMs": 577,
+      "x": 192.1,
+      "y": 86.7,
+      "pageX": 192.1,
+      "pageY": 86.7,
+      "aoiId": "B-payment-promo"
     },
     {
       "index": 43,
@@ -989,98 +989,98 @@
     {
       "fromFixation": 27,
       "toFixation": 28,
-      "amplitudePx": 334.4,
-      "durationMs": 31
+      "amplitudePx": 287.9,
+      "durationMs": 30
     },
     {
       "fromFixation": 28,
       "toFixation": 29,
-      "amplitudePx": 45.8,
-      "durationMs": 20
+      "amplitudePx": 610.7,
+      "durationMs": 42
     },
     {
       "fromFixation": 29,
       "toFixation": 30,
-      "amplitudePx": 139.5,
-      "durationMs": 24
+      "amplitudePx": 27.5,
+      "durationMs": 19
     },
     {
       "fromFixation": 30,
       "toFixation": 31,
-      "amplitudePx": 86.9,
-      "durationMs": 21
+      "amplitudePx": 135.5,
+      "durationMs": 23
     },
     {
       "fromFixation": 31,
       "toFixation": 32,
-      "amplitudePx": 87.5,
-      "durationMs": 22
+      "amplitudePx": 68.5,
+      "durationMs": 21
     },
     {
       "fromFixation": 32,
       "toFixation": 33,
-      "amplitudePx": 188,
-      "durationMs": 26
+      "amplitudePx": 85.7,
+      "durationMs": 21
     },
     {
       "fromFixation": 33,
       "toFixation": 34,
-      "amplitudePx": 207.1,
-      "durationMs": 26
+      "amplitudePx": 185.1,
+      "durationMs": 25
     },
     {
       "fromFixation": 34,
       "toFixation": 35,
-      "amplitudePx": 84.2,
-      "durationMs": 21
+      "amplitudePx": 196.9,
+      "durationMs": 26
     },
     {
       "fromFixation": 35,
       "toFixation": 36,
-      "amplitudePx": 189.4,
-      "durationMs": 26
+      "amplitudePx": 85.2,
+      "durationMs": 21
     },
     {
       "fromFixation": 36,
       "toFixation": 37,
-      "amplitudePx": 65.1,
-      "durationMs": 21
+      "amplitudePx": 195.5,
+      "durationMs": 26
     },
     {
       "fromFixation": 37,
       "toFixation": 38,
-      "amplitudePx": 474.7,
-      "durationMs": 37
+      "amplitudePx": 73.5,
+      "durationMs": 21
     },
     {
       "fromFixation": 38,
       "toFixation": 39,
-      "amplitudePx": 317.1,
-      "durationMs": 31
+      "amplitudePx": 479.7,
+      "durationMs": 37
     },
     {
       "fromFixation": 39,
       "toFixation": 40,
-      "amplitudePx": 326.3,
+      "amplitudePx": 325.5,
       "durationMs": 31
     },
     {
       "fromFixation": 40,
       "toFixation": 41,
-      "amplitudePx": 37.5,
-      "durationMs": 20
+      "amplitudePx": 292.6,
+      "durationMs": 30
     },
     {
       "fromFixation": 41,
       "toFixation": 42,
-      "amplitudePx": 142.3,
-      "durationMs": 24
+      "amplitudePx": 614.7,
+      "durationMs": 43
     },
     {
       "fromFixation": 42,
       "toFixation": 43,
-      "amplitudePx": 978.1,
-      "durationMs": 57
+      "amplitudePx": 1103.4,
+      "durationMs": 62
     },
     {
       "fromFixation": 43,
@@ -1249,11 +1249,27 @@
       "ok": true
     },
     {
+      "tMs": 37955,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
+      "ok": true
+    },
+    {
       "tMs": 38803,
       "type": "scroll",
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 43277,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {
@@ -1270,6 +1286,14 @@
       "target": "Confirm purchase · $147.95",
       "aoiId": "B-review-complete",
       "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 47688,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     }
   ],

@@ -1334,11 +1334,27 @@
       "ok": true
     },
     {
+      "tMs": 42467,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
+      "ok": true
+    },
+    {
       "tMs": 43287,
       "type": "scroll",
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 47833,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {
@@ -1355,6 +1371,14 @@
       "target": "Confirm purchase · $147.95",
       "aoiId": "B-review-complete",
       "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 53325,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     }
   ],

@@ -1105,11 +1105,27 @@
       "ok": true
     },
     {
+      "tMs": 36091,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
+      "ok": true
+    },
+    {
       "tMs": 36919,
       "type": "scroll",
       "target": "window",
       "aoiId": null,
       "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 41123,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
       "ok": true
     },
     {
