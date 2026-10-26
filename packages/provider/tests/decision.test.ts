@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FREE_USAGE, sumUsage, validateDecision } from '../src/decision.js';
+import { FREE_USAGE, totalUsage, validateDecision } from '../src/decision.js';
+import { ZERO_USAGE } from '@personavision/contract';
 import type { Decision, DecisionUsage } from '../src/types.js';
 import { contextOf } from './fixtures.js';
 
@@ -7,8 +8,8 @@ const usage = (overrides: Partial<DecisionUsage> = {}): DecisionUsage => ({
   inputTokens: 1200,
   cachedInputTokens: 1024,
   outputTokens: 182,
-  reasoningOutputTokens: 172,
-  estimatedPriceUsd: 0.0009,
+  reasoningTokens: 172,
+  estimatedCostUsd: 0.0009,
   ...overrides,
 });
 
@@ -25,26 +26,29 @@ describe('usage', () => {
       inputTokens: 0,
       cachedInputTokens: 0,
       outputTokens: 0,
-      reasoningOutputTokens: 0,
-      estimatedPriceUsd: 0,
+      reasoningTokens: 0,
+      estimatedCostUsd: 0,
     });
     expect(Object.isFrozen(FREE_USAGE)).toBe(true);
   });
 
-  it('adds up a run field by field, cached and reasoning included', () => {
-    expect(sumUsage([usage(), usage({ cachedInputTokens: 0, estimatedPriceUsd: 0.0011 })])).toEqual(
-      {
-        inputTokens: 2400,
-        cachedInputTokens: 1024,
-        outputTokens: 364,
-        reasoningOutputTokens: 344,
-        estimatedPriceUsd: 0.0009 + 0.0011,
-      },
-    );
+  it('adds up a run field by field, with the calls, cached and reasoning included', () => {
+    expect(
+      totalUsage([usage(), usage({ cachedInputTokens: 0, estimatedCostUsd: 0.0011 })]),
+    ).toEqual({
+      calls: 2,
+      inputTokens: 2400,
+      cachedInputTokens: 1024,
+      outputTokens: 364,
+      reasoningTokens: 344,
+      estimatedCostUsd: 0.0009 + 0.0011,
+    });
   });
 
-  it('totals nothing to five zeroes', () => {
-    expect(sumUsage([])).toEqual(FREE_USAGE);
+  it('totals an offline run to what the contract calls a run that spent nothing', () => {
+    // `ZERO_USAGE` is the artifact's own zero, so an offline run records zero truthfully
+    // rather than leaving its cost unknown.
+    expect(totalUsage([])).toEqual(ZERO_USAGE);
   });
 });
 
@@ -125,9 +129,7 @@ describe('validating a decision against its context', () => {
       validateDecision(context, decision({ usage: usage({ cachedInputTokens: 2000 }) })).join(' '),
     ).toContain('cached input tokens are part of the input tokens');
     expect(
-      validateDecision(context, decision({ usage: usage({ reasoningOutputTokens: 400 }) })).join(
-        ' ',
-      ),
+      validateDecision(context, decision({ usage: usage({ reasoningTokens: 400 }) })).join(' '),
     ).toContain('reasoning tokens are part of the output tokens');
     expect(
       validateDecision(context, decision({ usage: usage({ inputTokens: -1 }) })).join(' '),

@@ -23,6 +23,8 @@
  * therefore satisfies them with no adapter, and nothing in this package imports either.
  */
 
+import type { RunUsage } from '@personavision/contract';
+
 /** Which decision layer ran, as `run.json`'s `engine.mode` records it. */
 export type ProviderMode = 'offline' | 'model';
 
@@ -144,7 +146,11 @@ export interface DecisionContext {
 }
 
 /**
- * What one `decide` call cost.
+ * What one `decide` call cost: the five figures `run.json` totals, per call.
+ *
+ * It is the contract's own `RunUsage` without the `calls` count, so that a decision's usage
+ * cannot drift from what the artifact records — `packages/contract` is the only place a
+ * field of the artifact is named (#32), and these five are its names.
  *
  * Five figures, because the owner's model mode bills in five: `muse-spark-1.3` with cached
  * input reports `usage.input_tokens_details.cached_tokens`, and it spends reasoning tokens
@@ -152,18 +158,7 @@ export interface DecisionContext {
  * counted only input and output would overstate a cached run and understate a reasoning
  * one. All five are zero for a provider that costs nothing.
  */
-export interface DecisionUsage {
-  /** Input tokens billed, cached ones included. */
-  readonly inputTokens: number;
-  /** How many of `inputTokens` were served from the prompt cache. */
-  readonly cachedInputTokens: number;
-  /** Output tokens billed, reasoning ones included. */
-  readonly outputTokens: number;
-  /** How many of `outputTokens` were spent on reasoning. */
-  readonly reasoningOutputTokens: number;
-  /** The call's estimated price in US dollars, as the provider's own rates price it. */
-  readonly estimatedPriceUsd: number;
-}
+export type DecisionUsage = Omit<RunUsage, 'calls'>;
 
 /**
  * A relevance hint per element, keyed by `FixatedElement.id`, each on `[0, 1]`.

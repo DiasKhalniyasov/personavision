@@ -1,3 +1,4 @@
+import type { RunUsage } from '@personavision/contract';
 import { DECISION_ACTION_KINDS } from './types.js';
 import type { Decision, DecisionContext, DecisionUsage } from './types.js';
 
@@ -22,33 +23,42 @@ export const FREE_USAGE: DecisionUsage = Object.freeze({
   inputTokens: 0,
   cachedInputTokens: 0,
   outputTokens: 0,
-  reasoningOutputTokens: 0,
-  estimatedPriceUsd: 0,
+  reasoningTokens: 0,
+  estimatedCostUsd: 0,
 });
 
-/** The run-level total of a session's or a run's calls, field by field (#32). */
-export const sumUsage = (usages: Iterable<DecisionUsage>): DecisionUsage => {
-  let inputTokens = 0;
-  let cachedInputTokens = 0;
-  let outputTokens = 0;
-  let reasoningOutputTokens = 0;
-  let estimatedPriceUsd = 0;
+/**
+ * What a session's or a run's decisions cost in total, as `run.json`'s `usage` block
+ * records it (#32): the number of calls, and the five figures added up field by field.
+ * Typed as the contract's `RunUsage`, so a field renamed on either side stops compiling
+ * rather than quietly halving a run's bill.
+ */
+export const totalUsage = (usages: Iterable<DecisionUsage>): RunUsage => {
+  const total: RunUsage = {
+    calls: 0,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    reasoningTokens: 0,
+    estimatedCostUsd: 0,
+  };
   for (const usage of usages) {
-    inputTokens += usage.inputTokens;
-    cachedInputTokens += usage.cachedInputTokens;
-    outputTokens += usage.outputTokens;
-    reasoningOutputTokens += usage.reasoningOutputTokens;
-    estimatedPriceUsd += usage.estimatedPriceUsd;
+    total.calls += 1;
+    total.inputTokens += usage.inputTokens;
+    total.cachedInputTokens += usage.cachedInputTokens;
+    total.outputTokens += usage.outputTokens;
+    total.reasoningTokens += usage.reasoningTokens;
+    total.estimatedCostUsd += usage.estimatedCostUsd;
   }
-  return { inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens, estimatedPriceUsd };
+  return total;
 };
 
 const USAGE_FIELDS = [
   'inputTokens',
   'cachedInputTokens',
   'outputTokens',
-  'reasoningOutputTokens',
-  'estimatedPriceUsd',
+  'reasoningTokens',
+  'estimatedCostUsd',
 ] as const satisfies readonly (keyof DecisionUsage)[];
 
 /** The action kinds that are aimed at an element the agent looked at. */
@@ -139,9 +149,9 @@ export const validateDecision = (
         `cached input tokens are part of the input tokens: ${usage.cachedInputTokens} of ${usage.inputTokens}`,
       );
     }
-    if (usage.reasoningOutputTokens > usage.outputTokens) {
+    if (usage.reasoningTokens > usage.outputTokens) {
       violations.push(
-        `reasoning tokens are part of the output tokens: ${usage.reasoningOutputTokens} of ${usage.outputTokens}`,
+        `reasoning tokens are part of the output tokens: ${usage.reasoningTokens} of ${usage.outputTokens}`,
       );
     }
   }

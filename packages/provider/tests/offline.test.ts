@@ -192,8 +192,8 @@ describe('the offline deterministic provider', () => {
       inputTokens: 0,
       cachedInputTokens: 0,
       outputTokens: 0,
-      reasoningOutputTokens: 0,
-      estimatedPriceUsd: 0,
+      reasoningTokens: 0,
+      estimatedCostUsd: 0,
     });
   });
 });

@@ -27,7 +27,7 @@ export type {
   RelevanceHints,
 } from './types.js';
 
-export { FREE_USAGE, sumUsage, validateDecision } from './decision.js';
+export { FREE_USAGE, totalUsage, validateDecision } from './decision.js';
 
 export { createOfflineDeterministicProvider, OFFLINE_PROVIDER_NAME } from './offline.js';
 export type { OfflineProviderOptions } from './offline.js';
