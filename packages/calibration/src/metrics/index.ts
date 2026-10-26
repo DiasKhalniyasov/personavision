@@ -1,6 +1,7 @@
 /**
- * The metrics this step scores a prediction with: the four saliency metrics here (#83), and
- * the two scanpath metrics (#84) exporting from this file when they land.
+ * The metrics this step scores a prediction with: the four saliency metrics (#83), which read
+ * where attention landed, and the two scanpath metrics (#84), which read the order it landed
+ * in.
  *
  * One figure's worth of vocabulary lives in one place, so #88 imports the metrics from here
  * and #89 prints a figure next to the direction it reads in.
@@ -28,3 +29,32 @@ export type {
   SaliencyMetricInputs,
   SaliencyScores,
 } from './saliency.js';
+
+export {
+  SCANPATH_CHANCE,
+  SCANPATH_METRIC_IDS,
+  SCANPATH_METRIC_PARAMETERS,
+  SCANPATH_METRICS,
+  SCANPATH_REGION_COUNT,
+  ScanpathMetricError,
+  needlemanWunsch,
+  regionOfFixation,
+  scanMatch,
+  scanMatchLetters,
+  scanMatchSubstitutionMatrix,
+  scanpathMetric,
+  scoreScanpath,
+  scoreScanpathAgainstHumans,
+  sequenceScore,
+  visitedRegions,
+} from './scanpath.js';
+export type {
+  AlignedPair,
+  Alignment,
+  ScanpathAgreement,
+  ScanpathGroundTruth,
+  ScanpathMetricDescriptor,
+  ScanpathMetricId,
+  ScanpathMetricInputs,
+  ScanpathScores,
+} from './scanpath.js';
