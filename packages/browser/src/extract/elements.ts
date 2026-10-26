@@ -24,6 +24,11 @@
  *
  * `isPrimaryAction` is left `false` here. The task declares its primary action by selector
  * and `resolvePrimaryAction` sets the flag on the element it resolves to.
+ *
+ * The variant in an element's id is the session's — `page.variant.id`, the variant the page
+ * was opened under — because that is what this seam is given. A caller that captured one
+ * open session under some other variant label would disagree with it, which is a reason not
+ * to do that rather than a reason for this seam to take a fourth argument.
  */
 
 /// <reference lib="dom" />
@@ -96,6 +101,19 @@ const CANDIDATE_SELECTOR = [
   'iframe',
   'section',
   'form',
+  'table',
+  'caption',
+  'th',
+  'td',
+  'ul',
+  'ol',
+  'dl',
+  'dt',
+  'dd',
+  'blockquote',
+  'figure',
+  'figcaption',
+  'pre',
   'main',
   'nav',
   'header',
@@ -133,16 +151,33 @@ const SKIPPED_AX_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Chromium's spellings, as ARIA spells them. `fixtures/site/LANDMARKS.md`'s role table
- * records the two that differ, and the roles this module reports are the ARIA names, so a
- * role means the same thing whichever source produced it.
+ * Chromium's spellings, as ARIA spells them, so that a role from the accessibility pass
+ * means what the same role from the DOM pass means. `fixtures/site/LANDMARKS.md`'s role
+ * table records the two that differ on those pages; the rest are the Chromium names that
+ * have an ARIA equivalent at all.
+ *
+ * A Chromium role with no ARIA name — `MenuListPopup`, `Video`, `Legend` — is reported as
+ * Chromium spells it. Inventing an ARIA name for it would be worse than passing the
+ * browser's own answer through, and a consumer that filters on ARIA roles sees it is not
+ * one of them.
  */
 const ARIA_ROLE_BY_AX_ROLE: Readonly<Record<string, string>> = {
-  image: 'img',
+  DescriptionList: 'list',
+  DescriptionListDetail: 'definition',
+  DescriptionListTerm: 'term',
+  DisclosureTriangle: 'button',
+  Figcaption: 'caption',
   Iframe: 'iframe',
+  SvgRoot: 'graphics-document',
+  image: 'img',
 };
 
-/** Collapses whitespace; an empty name is `null`, which is what an unnamed element has. */
+/**
+ * Collapses whitespace; an empty name is `null`, which is what an unnamed element has.
+ *
+ * The describer has its own copy of this, because code that runs in the page cannot close
+ * over anything in this module.
+ */
 const collapse = (value: string | null | undefined): string | null => {
   const text = (value ?? '').replace(/\s+/g, ' ').trim();
   return text.length > 0 ? text : null;
@@ -168,7 +203,13 @@ const installDescriber = async (page: Page): Promise<void> => {
     const ROLE_BY_TAG: Record<string, string> = {
       article: 'article',
       aside: 'complementary',
+      blockquote: 'blockquote',
       button: 'button',
+      caption: 'caption',
+      dd: 'definition',
+      dl: 'list',
+      dt: 'term',
+      figure: 'figure',
       footer: 'contentinfo',
       form: 'form',
       h1: 'heading',
@@ -186,7 +227,10 @@ const installDescriber = async (page: Page): Promise<void> => {
       ol: 'list',
       p: 'paragraph',
       summary: 'button',
+      table: 'table',
+      td: 'cell',
       textarea: 'textbox',
+      th: 'columnheader',
       ul: 'list',
     };
 
@@ -242,8 +286,8 @@ const installDescriber = async (page: Page): Promise<void> => {
       return indexes.join('/');
     };
 
-    /** A selector that resolves to this element and to nothing else, or `null`. */
-    const selectorFor = (element: Element): string | null => {
+    /** A selector that resolves to this element and to nothing else. */
+    const selectorFor = (element: Element): string => {
       const byId = element.id.length > 0 ? `#${CSS.escape(element.id)}` : null;
       if (byId !== null && document.querySelectorAll(byId).length === 1) {
         return byId;
@@ -259,8 +303,19 @@ const installDescriber = async (page: Page): Promise<void> => {
             : `${tag}:nth-child(${Array.from(parent.children).indexOf(node) + 1})`,
         );
       }
-      const path = steps.join(' > ');
-      return document.querySelectorAll(path).length === 1 ? path : null;
+      // A chain of `nth-child` steps from the root matches one node by construction, so
+      // it needs no verifying query — and a query per element is the cost that grows with
+      // the size of the document.
+      return steps.join(' > ');
+    };
+
+    /** `transparent`, or `rgba(…, 0)` in any colour: a background that paints nothing. */
+    const paintsNothing = (colour: string): boolean => {
+      if (colour === 'transparent') {
+        return true;
+      }
+      const alpha = /^rgba?\([^)]*,\s*([\d.]+)\s*\)$/.exec(colour)?.[1];
+      return alpha !== undefined && Number(alpha) === 0;
     };
 
     window.__personavisionDescribeElement = (element: Element) => {
@@ -271,41 +326,76 @@ const installDescriber = async (page: Page): Promise<void> => {
         return null;
       }
 
+      const tag = element.tagName.toLowerCase();
+      // The document and its body are the page, not areas of it. A `<body tabindex="-1">`
+      // — the ordinary focus-management pattern — would otherwise be a page-sized
+      // candidate that every fixation falls inside.
+      if (tag === 'html' || tag === 'body') {
+        return null;
+      }
+
       const rect = element.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) {
         return null;
       }
 
+      // Laid out is not the same as visible: an `opacity: 0` block and the contents of a
+      // collapsed `<details>` both have boxes, and neither can be looked at. The browser
+      // already knows which is which, so it is asked rather than second-guessed.
+      if (
+        !element.checkVisibility({
+          contentVisibilityAuto: true,
+          opacityProperty: true,
+          visibilityProperty: true,
+        })
+      ) {
+        return null;
+      }
+
       const style = window.getComputedStyle(element);
-      if (style.visibility === 'hidden' || style.display === 'none') {
-        return null;
-      }
-
-      const selector = selectorFor(element);
-      if (selector === null) {
-        return null;
-      }
-
       const text = ownText(element);
-      const transparent =
-        style.backgroundColor === 'transparent' || style.backgroundColor === 'rgba(0, 0, 0, 0)';
+      const role = roleOf(element);
+      const painted =
+        text === null &&
+        rect.width * rect.height >= minPaintedRegionArea &&
+        (style.backgroundImage !== 'none' || !paintsNothing(style.backgroundColor));
+
+      // What makes an element a candidate, for both passes: it says something of its own,
+      // it *is* something — a control or a landmark rather than a plain box — or it is a
+      // painted region, which is the hand-off segmentation fills in. A wrapper that is
+      // none of the three is the scaffolding around the elements that already are.
+      if (
+        text === null &&
+        (role === null || role === 'generic') &&
+        !painted &&
+        !element.hasAttribute('tabindex')
+      ) {
+        return null;
+      }
+
+      // A fixed element is anchored to the viewport rather than to the document: it paints
+      // where it sits whatever the scroll, and a screenshot of this project is taken at
+      // scroll 0, so its client rect already is its page-space box. Adding the scroll
+      // offset would walk it down the page by however far the session had scrolled.
+      //
+      // A `position: sticky` element is the case this does not cover: its box is a
+      // document box until it sticks and a viewport box after, and which it is cannot be
+      // read off the element. It is reported as a document box here.
+      const anchoredToViewport = style.position === 'fixed';
 
       return {
-        tag: element.tagName.toLowerCase(),
+        tag,
         path: documentPath(element),
-        selector,
-        role: roleOf(element),
+        selector: selectorFor(element),
+        role,
         name: normalise(element.getAttribute('alt')) ?? text,
         text,
-        painted:
-          text === null &&
-          rect.width * rect.height >= minPaintedRegionArea &&
-          (style.backgroundImage !== 'none' || !transparent),
+        painted,
         bbox: {
           // Page space: the client rect is relative to the viewport, the scroll offset puts
           // it back in the document.
-          x: rect.x + window.scrollX,
-          y: rect.y + window.scrollY,
+          x: rect.x + (anchoredToViewport ? 0 : window.scrollX),
+          y: rect.y + (anchoredToViewport ? 0 : window.scrollY),
           width: rect.width,
           height: rect.height,
         },
@@ -319,29 +409,18 @@ const describeDomCandidates = async (page: Page): Promise<PageElement[]> =>
   page.evaluate((selector: string) => {
     const describe = window.__personavisionDescribeElement;
     if (describe === undefined) {
-      return [];
+      // The describer was installed moments ago, so it is gone only because the page is:
+      // it navigated out from under this extraction. That is a failure of our own browsing
+      // and is raised as one, rather than recorded as a screen with nothing on it.
+      throw new Error('element extraction: the page navigated away mid-extraction');
     }
 
     const described: PageElement[] = [];
     for (const element of Array.from(document.querySelectorAll(selector))) {
       const candidate = describe(element);
-      if (candidate === null) {
-        continue;
+      if (candidate !== null) {
+        described.push(candidate);
       }
-
-      // A plain box is a candidate only when it holds words of its own or is a painted
-      // region; otherwise it is the scaffolding around the elements that already are.
-      const plain =
-        (candidate.tag === 'div' ||
-          candidate.tag === 'span' ||
-          (candidate.tag === 'a' && !element.hasAttribute('href'))) &&
-        !element.hasAttribute('role') &&
-        !element.hasAttribute('tabindex');
-      if (plain && candidate.text === null && !candidate.painted) {
-        continue;
-      }
-
-      described.push(candidate);
     }
     return described;
   }, CANDIDATE_SELECTOR);
@@ -353,18 +432,31 @@ interface A11yCandidate {
   element: PageElement;
 }
 
-/** Describes the DOM node an accessibility-tree node was computed from. */
+/** The object group every node resolved for one extraction belongs to. */
+const AX_OBJECT_GROUP = 'personavision-extract';
+
+/**
+ * Describes the DOM node an accessibility-tree node was computed from.
+ *
+ * The tree is one snapshot and its nodes are read one at a time afterwards, so a page that
+ * changes in between — a carousel, a lazily loaded image, a toast that fades — can have
+ * dropped a node before it is reached. That node is no longer on the screen and is skipped;
+ * it is not a reason to fail the capture of everything else.
+ */
 const describeBackendNode = async (
   cdp: CDPSession,
   backendNodeId: number,
 ): Promise<PageElement | null> => {
-  const resolved = await cdp.send('DOM.resolveNode', { backendNodeId });
-  const objectId = resolved.object.objectId;
-  if (objectId === undefined) {
-    return null;
-  }
-
   try {
+    const resolved = await cdp.send('DOM.resolveNode', {
+      backendNodeId,
+      objectGroup: AX_OBJECT_GROUP,
+    });
+    const objectId = resolved.object.objectId;
+    if (objectId === undefined) {
+      return null;
+    }
+
     const { result } = await cdp.send('Runtime.callFunctionOn', {
       objectId,
       functionDeclaration:
@@ -372,8 +464,8 @@ const describeBackendNode = async (
       returnByValue: true,
     });
     return (result.value as PageElement | null) ?? null;
-  } finally {
-    await cdp.send('Runtime.releaseObject', { objectId });
+  } catch {
+    return null;
   }
 };
 
@@ -402,8 +494,7 @@ const describeA11yCandidates = async (handle: PageHandle): Promise<A11yCandidate
       }
 
       const element = await describeBackendNode(cdp, node.backendDOMNodeId);
-      // The document and its body are the page, not areas of it.
-      if (element === null || element.tag === 'html' || element.tag === 'body') {
+      if (element === null) {
         continue;
       }
 
@@ -416,6 +507,8 @@ const describeA11yCandidates = async (handle: PageHandle): Promise<A11yCandidate
     }
     return candidates;
   } finally {
+    // Both at once: the handles taken for the nodes above, and the session that took them.
+    await cdp.send('Runtime.releaseObjectGroup', { objectGroup: AX_OBJECT_GROUP }).catch(() => {});
     await cdp.detach();
   }
 };

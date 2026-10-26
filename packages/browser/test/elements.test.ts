@@ -452,8 +452,8 @@ describeWithChromium('candidate elements', () => {
     describe(`at ${device.name} (${device.viewport.width}x${device.viewport.height})`, () => {
       for (const page of STEP_PAGES) {
         describe(page.path, () => {
-          let handle: PageHandle;
-          let elements: readonly CaptureElement[];
+          let handle: PageHandle | undefined;
+          let elements: readonly CaptureElement[] = [];
 
           beforeAll(async () => {
             handle = await open(device, page.path);
@@ -461,8 +461,19 @@ describeWithChromium('candidate elements', () => {
           }, BROWSER_TIMEOUT_MS);
 
           afterAll(async () => {
-            await closeSession(handle);
+            // Only if it opened: a session that never did would otherwise be reported as a
+            // teardown error instead of as the launch failure it is.
+            if (handle !== undefined) {
+              await closeSession(handle);
+            }
           });
+
+          const opened = (): PageHandle => {
+            if (handle === undefined) {
+              throw new Error('the session never opened');
+            }
+            return handle;
+          };
 
           it.each(page.landmarks)('finds $id from both sources', (landmark: Landmark) => {
             const fromA11y = sole(elements, landmark.id, 'a11y');
@@ -507,7 +518,7 @@ describeWithChromium('candidate elements', () => {
           it(
             'gives every element a selector that resolves to exactly one node',
             async () => {
-              const counts = await handle.page.evaluate(
+              const counts = await opened().page.evaluate(
                 (selectors: string[]) =>
                   selectors.map((selector) => document.querySelectorAll(selector).length),
                 elements.map((element) => element.selector),
@@ -533,6 +544,28 @@ describeWithChromium('candidate elements', () => {
     afterAll(async () => {
       await closeSession(handle);
     });
+
+    it(
+      'reads an element that the handle has lost mid-extraction as gone, not as a crash',
+      async () => {
+        // The accessibility tree is one snapshot and its nodes are read one at a time
+        // afterwards, so a page that changes in between can have dropped a node before it
+        // is reached. A carousel doing that must not fail the capture of the rest.
+        const other = await open(MOBILE, '/cart.html');
+        try {
+          await other.page.evaluate(() => {
+            const card = document.querySelector('#cart-upsell-card');
+            setTimeout(() => card?.remove(), 0);
+          });
+          const geometry = await readGeometry(other);
+          const found = await extractElements(other, geometry, 'cart');
+          expect(sole(found, 'cart-checkout', 'a11y').name).toBe('Checkout');
+        } finally {
+          await closeSession(other);
+        }
+      },
+      BROWSER_TIMEOUT_MS,
+    );
 
     it('names the aria-label-only control from the accessibility tree', () => {
       const fromA11y = sole(elements, 'cart-save-tote', 'a11y');
@@ -625,6 +658,94 @@ describeWithChromium('candidate elements', () => {
     },
     BROWSER_TIMEOUT_MS * 3,
   );
+
+  describe('a page the fixture site does not have', () => {
+    /**
+     * The cases `LANDMARKS.md` says to bring your own fixture for. Every landmark on that
+     * site is an opaque, statically positioned box, and these are the four kinds of element
+     * that are not: one anchored to the viewport, one laid out but invisible, one painted
+     * with nothing, and text in a table.
+     */
+    const PAGE = [
+      '<!doctype html><html><head><style>',
+      'body { margin: 0; height: 3000px; }',
+      '#bar { position: fixed; top: 0; left: 0; width: 320px; height: 60px; background: #222 }',
+      '#ghost { opacity: 0 }',
+      '#glass { width: 300px; height: 300px; background: rgba(255, 0, 0, 0) }',
+      '</style></head><body tabindex="-1">',
+      '<div id="bar">Checkout</div>',
+      '<p id="ghost">Prose nobody can see</p>',
+      '<div id="glass"></div>',
+      '<details id="faq"><summary id="ask">Shipping</summary><p id="answer">Two days</p></details>',
+      '<table><caption id="cap">Order</caption><tbody><tr><td id="cell">Tote 48.00</td></tr></tbody></table>',
+      '</body></html>',
+    ].join('');
+
+    let handle: PageHandle;
+    let elements: readonly CaptureElement[];
+
+    beforeAll(async () => {
+      handle = await openSession(
+        { id: VARIANT_ID, url: `data:text/html;charset=utf-8,${encodeURIComponent(PAGE)}` },
+        MOBILE,
+      );
+      elements = await extract(handle, null);
+    }, BROWSER_TIMEOUT_MS);
+
+    afterAll(async () => {
+      if (handle !== undefined) {
+        await closeSession(handle);
+      }
+    });
+
+    const selectors = (): string[] => elements.map((element) => element.selector);
+
+    it(
+      'leaves an element anchored to the viewport where it paints',
+      async () => {
+        const bar = sole(elements, 'bar', 'dom');
+        expect(bar.bbox).toEqual({ x: 0, y: 0, width: 320, height: 60 });
+
+        await handle.page.evaluate(() => {
+          window.scrollTo(0, 600);
+        });
+        expect((await readSessionState(handle)).scrollY).toBe(600);
+
+        // A fixed element's box is not the document's: adding the scroll offset would walk
+        // it 600 pixels down a page it never moved on, and past the fold with it.
+        const after = await extractElements(handle, await readGeometry(handle), null);
+        expect(sole(after, 'bar', 'dom').bbox).toEqual(bar.bbox);
+        expect(sole(after, 'bar', 'dom').belowFold).toBe(false);
+      },
+      BROWSER_TIMEOUT_MS,
+    );
+
+    it('leaves out what is laid out and cannot be seen', () => {
+      // `opacity: 0` prose, and the answer inside a collapsed `<details>`.
+      expect(selectors()).not.toContain('#ghost');
+      expect(selectors()).not.toContain('#answer');
+    });
+
+    it('leaves out a box that paints nothing', () => {
+      // `rgba(255, 0, 0, 0)` is as transparent as `rgba(0, 0, 0, 0)`, and a 300x300 phantom
+      // handed to segmentation as a region the DOM cannot explain would be a region that
+      // is not there.
+      expect(selectors()).not.toContain('#glass');
+    });
+
+    it('leaves out the page itself', () => {
+      // `<body tabindex="-1">` is matched by the candidate selector, and a page-sized area
+      // of interest would swallow every fixation on the page.
+      expect(selectors()).not.toContain('html > body:nth-child(2)');
+      expect(elements.every((element) => element.bbox.height < 3_000)).toBe(true);
+    });
+
+    it('finds the text a table holds', () => {
+      expect(sole(elements, 'cell', 'dom').text).toBe('Tote 48.00');
+      expect(sole(elements, 'cell', 'a11y').role).toBe('cell');
+      expect(sole(elements, 'cap', 'dom').text).toBe('Order');
+    });
+  });
 
   it(
     'carries the elements into a capture',

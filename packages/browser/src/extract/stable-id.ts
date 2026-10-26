@@ -19,6 +19,12 @@
  * The document position is what tells two otherwise identical controls apart — the fixture
  * site's two `Remove` buttons are the same role and the same name in two places — and it
  * changes only when the markup around the element changes.
+ *
+ * The name is in the material because a control is partly what it is called, and that has a
+ * cost worth stating: a DOM-sourced candidate is named by the words it holds, so a price, a
+ * quantity or a countdown that changes mid-session is a new id from that source. The
+ * accessibility-sourced candidate for the same control keeps its id as long as the browser's
+ * accessible name holds, which is what the aggregated metrics are keyed on.
  */
 
 import { createHash } from 'node:crypto';
