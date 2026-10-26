@@ -30,7 +30,7 @@ export type { ScreenshotTarget, WriteScreenshot } from './screenshot.js';
 export { toAoiEntries, toScreenshotEntries } from './run-projection.js';
 export type { ToAoiEntries, ToScreenshotEntries } from './run-projection.js';
 
-export { detectStep, resolvePrimaryAction } from './steps.js';
+export { detectStep, resolvePrimaryAction, taskStep } from './steps.js';
 export type { DetectStep, ResolvePrimaryAction } from './steps.js';
 
 export { act } from './act.js';

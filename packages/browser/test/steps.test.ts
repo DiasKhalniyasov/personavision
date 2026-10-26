@@ -20,17 +20,23 @@
 // `measuredCandidates` runs inside the page, not in Node, so this file needs the DOM types.
 
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   AutomationFailure,
+  capture,
   closeSession,
   detectStep,
   openSession,
   resolvePrimaryAction,
+  taskStep,
 } from '../src/index.js';
 import type {
   Box,
+  CaptureContext,
   CaptureElement,
   Device,
   PageHandle,
@@ -96,9 +102,10 @@ const TASK: TaskDefinition = {
   ],
 };
 
+/** A step of the task, through the package's own lookup rather than a second copy of it. */
 const stepNamed = (id: string): TaskStep => {
-  const step = TASK.steps.find((candidate) => candidate.id === id);
-  if (step === undefined) throw new Error(`the task declares no ${id} step`);
+  const step = taskStep(TASK, id);
+  if (step === null) throw new Error(`the task declares no ${id} step`);
   return step;
 };
 
@@ -357,6 +364,62 @@ describeWithChromium('step detection', () => {
   );
 
   it(
+    'raises a plain error, naming the step, for a URL pattern that is not a pattern',
+    async () => {
+      const handle = await open('/cart.html');
+      try {
+        const broken: TaskDefinition = {
+          ...TASK,
+          steps: [
+            {
+              ...stepNamed('cart'),
+              match: { ...stepNamed('cart').match, urlPattern: '/cart(.html' },
+            },
+          ],
+        };
+
+        const failure = await failureFrom(detectStep(handle, broken));
+
+        expect(failure).toBeInstanceOf(Error);
+        expect(failure).not.toBeInstanceOf(AutomationFailure);
+        expect((failure as Error).message).toContain('cart');
+        expect((failure as Error).message).toContain('/cart(.html');
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'raises a plain error, naming the step, for a required element it cannot parse',
+    async () => {
+      const handle = await open('/cart.html');
+      try {
+        const broken: TaskDefinition = {
+          ...TASK,
+          steps: [
+            {
+              ...stepNamed('cart'),
+              // Playwright's own locator syntax, which no page can resolve as CSS.
+              match: { ...stepNamed('cart').match, requiredSelector: 'text=Your cart' },
+            },
+          ],
+        };
+
+        const failure = await failureFrom(detectStep(handle, broken));
+
+        expect(failure).toBeInstanceOf(Error);
+        expect(failure).not.toBeInstanceOf(AutomationFailure);
+        expect((failure as Error).message).toContain('text=Your cart');
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'labels nothing when the task declares no steps at all',
     async () => {
       const handle = await open('/cart.html');
@@ -541,7 +604,13 @@ describeWithChromium('primary-action resolution', () => {
     async () => {
       const handle = await open(CART.path);
       try {
-        const candidates = candidatesFor(CART);
+        // Seeded with a mark, so that "marks nothing" is a claim about this call rather than
+        // about a list that happened to arrive unmarked.
+        const candidates = [
+          candidate(CART.decoy.id, CART.decoy.bbox, { isPrimaryAction: true }),
+          candidate(CART.primary.id, CART.primary.bbox),
+        ];
+        const asGiven = structuredClone(candidates);
         const unresolvable: TaskStep = {
           ...stepNamed('cart'),
           primaryAction: { selector: '#cart-checkout-that-is-not-there' },
@@ -551,7 +620,34 @@ describeWithChromium('primary-action resolution', () => {
 
         expect(failure).toBeInstanceOf(AutomationFailure);
         expect((failure as AutomationFailure).reason).toBe('selector_not_found');
-        expect(markedIds(candidates)).toEqual([]);
+        expect(candidates).toEqual(asGiven);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'raises selector_not_found when the declared control is on the page but not rendered',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        // A control taken out of the rendering reports a box of zeros, which is no box at
+        // all: it cannot be looked at, so it is not a primary action that resolved.
+        await handle.page.evaluate(() => {
+          document
+            .querySelector<HTMLElement>('#cart-checkout')
+            ?.style.setProperty('display', 'none');
+        });
+
+        const failure = await failureFrom(
+          resolvePrimaryAction(handle, candidatesFor(CART), stepNamed('cart')),
+        );
+
+        expect(failure).toBeInstanceOf(AutomationFailure);
+        expect((failure as AutomationFailure).reason).toBe('selector_not_found');
+        expect((failure as AutomationFailure).message).toContain('not-rendered');
       } finally {
         await closeSession(handle);
       }
@@ -564,7 +660,8 @@ describeWithChromium('primary-action resolution', () => {
     async () => {
       const handle = await open(CART.path);
       try {
-        const candidates = [candidate(CART.decoy.id, CART.decoy.bbox)];
+        const candidates = [candidate(CART.decoy.id, CART.decoy.bbox, { isPrimaryAction: true })];
+        const asGiven = structuredClone(candidates);
 
         const failure = await failureFrom(
           resolvePrimaryAction(handle, candidates, stepNamed('cart')),
@@ -572,7 +669,54 @@ describeWithChromium('primary-action resolution', () => {
 
         expect(failure).toBeInstanceOf(AutomationFailure);
         expect((failure as AutomationFailure).reason).toBe('selector_not_found');
-        expect(markedIds(candidates)).toEqual([]);
+        expect(candidates).toEqual(asGiven);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'marks the box nearest the declared control, not the first within the tolerance',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        const near = { ...CART.primary.bbox, y: CART.primary.bbox.y + 0.6 };
+
+        const resolved = await resolvePrimaryAction(
+          handle,
+          [candidate('near', near), candidate('exact', CART.primary.bbox)],
+          stepNamed('cart'),
+        );
+
+        expect(markedIds(resolved)).toEqual(['exact']);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'raises a plain error, naming the step, for a selector it cannot parse',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        const gibberish: TaskStep = {
+          ...stepNamed('cart'),
+          // Playwright's own locator syntax, which no page can resolve as CSS.
+          primaryAction: { selector: 'text=Checkout' },
+        };
+
+        const failure = await failureFrom(
+          resolvePrimaryAction(handle, candidatesFor(CART), gibberish),
+        );
+
+        expect(failure).toBeInstanceOf(Error);
+        expect(failure).not.toBeInstanceOf(AutomationFailure);
+        expect((failure as Error).message).toContain('cart');
+        expect((failure as Error).message).toContain('text=Checkout');
       } finally {
         await closeSession(handle);
       }
@@ -611,4 +755,104 @@ describeWithChromium('primary-action resolution', () => {
     },
     BROWSER_TIMEOUT_MS,
   );
+});
+
+/**
+ * What the two seams do to a capture, through `capture()` itself.
+ *
+ * The composition is written once in `src/capture.ts` and is where these two meet: the step
+ * it detects is the label the `Capture` carries and part of the cache key, and a step whose
+ * declared control cannot be resolved now fails the whole capture, which is how a session is
+ * excluded rather than scored as a zero.
+ */
+describeWithChromium('a capture of a page on a step', () => {
+  let site: FixtureSite;
+  /** A capture of a page on a step writes its screenshot: into a temporary run directory. */
+  let runDir: string;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite();
+    runDir = await mkdtemp(join(tmpdir(), 'personavision-steps-'));
+  });
+
+  afterAll(async () => {
+    await site.close();
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const open = (path: string): Promise<PageHandle> =>
+    openSession({ id: 'v-desktop', url: `${site.url}${path}` }, DESKTOP);
+
+  const contextFor = (task: TaskDefinition): CaptureContext => ({
+    variant: 'v-desktop',
+    device: DESKTOP,
+    task,
+    runDir,
+  });
+
+  it(
+    'is labelled with the step, not with a guess at the URL',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        expect((await capture(handle, contextFor(TASK))).step).toBe('cart');
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'carries no label at all on a page the task does not declare',
+    async () => {
+      const handle = await open('/no-control.html');
+      try {
+        expect((await capture(handle, contextFor(TASK))).step).toBeNull();
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'fails as ours when the step declares a control the page does not have',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        const swapped: TaskDefinition = {
+          ...TASK,
+          steps: [
+            { ...stepNamed('cart'), primaryAction: { selector: '#cart-checkout-out-of-stock' } },
+          ],
+        };
+
+        const failure = await failureFrom(capture(handle, contextFor(swapped)));
+
+        expect(failure).toBeInstanceOf(AutomationFailure);
+        expect((failure as AutomationFailure).reason).toBe('selector_not_found');
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+});
+
+/** The one part of this that needs no browser: reading a detected id back as a declaration. */
+describe('the step a detected id names', () => {
+  it('is the step the task declares under that id', () => {
+    expect(taskStep(TASK, 'review')).toBe(stepNamed('review'));
+  });
+
+  it('is no step when nothing was detected', () => {
+    expect(taskStep(TASK, null)).toBeNull();
+  });
+
+  it('says so for an id the task does not declare, rather than resolving to no step', () => {
+    // Resolving to `null` here would hand `resolvePrimaryAction` a page with no declaration
+    // and mark nothing on it — the silent zero this module exists to avoid.
+    expect(() => taskStep(TASK, 'checkout-v2')).toThrow('checkout-v2');
+  });
 });

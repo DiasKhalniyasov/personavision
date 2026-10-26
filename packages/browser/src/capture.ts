@@ -11,7 +11,9 @@
  * hold a swarm up.
  *
  * With only the remaining neutral seams in place a capture is real geometry, a real content
- * hash and a real step label, a `null` screenshot and no elements — and it does not throw.
+ * hash and a real step label, a `null` screenshot and no elements. It raises one thing: a
+ * page on one of the task's steps whose declared primary action cannot be resolved is an
+ * automation failure, which excludes the session rather than scoring it as a zero.
  */
 
 /// <reference lib="dom" />
