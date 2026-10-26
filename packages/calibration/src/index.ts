@@ -11,8 +11,9 @@
  * the cache policy, and #82 the committed synthetic corpus every later ticket tests against.
  * #83 adds the four saliency metrics a predicted map is compared with a human one by, and
  * #84 the two scanpath metrics that read the order attention was paid in rather than only
- * where it landed. The download, the conversion, the baselines, the scoring and the fit
- * arrive as later tickets and export from here.
+ * where it landed. #85 brings the real benchmark onto the machine: one resumable,
+ * checksum-verified download into the cache outside this repository. The conversion, the
+ * baselines, the scoring and the fit arrive as later tickets and export from here.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and may later
  * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -133,3 +134,22 @@ export {
   isDatasetId,
 } from './dataset/cache.js';
 export type { CacheEnvironment, DatasetCachePaths } from './dataset/cache.js';
+
+// The download (#85). The command is one function; the zip reader, the quarantine and the
+// manifest edit `--record-checksums` makes are its own business and are reached through it.
+export {
+  DEFAULT_CHECKSUM_ALGORITHM,
+  VerificationError,
+  hashFile,
+  verifyFile,
+} from './dataset/verify.js';
+export type { ChecksumVerdict, ManifestChecksumChange } from './dataset/verify.js';
+
+export { COMMITTED_MANIFEST_PATH, DatasetFetchError, fetchDataset } from './dataset/fetch.js';
+export type {
+  ExtractionOutcome,
+  FetchDatasetOptions,
+  FetchDatasetResult,
+  FetchFailure,
+  FileOutcome,
+} from './dataset/fetch.js';

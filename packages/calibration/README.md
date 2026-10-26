@@ -9,9 +9,9 @@ UI category against two baselines, and fits the engine's configuration to them. 
 reads the result, so an honest low number is better than a flattering one — and a run by an engine that has never
 been calibrated says _not calibrated_ rather than showing a number at all.
 
-Step #11 builds this package over twelve tickets. This ticket (#81) is the ground the other eleven stand on: the
-vocabulary, the dataset manifest, and the cache and licence policy. Nothing is measured here and nothing is
-downloaded here.
+Step #11 builds this package over twelve tickets. #81 laid the ground the other eleven stand on — the vocabulary,
+the dataset manifest, and the cache and licence policy — and #85 added the download: one command that brings the
+real benchmark onto the machine, resumably and verifiably, into a cache outside this repository.
 
 ## What UEyes is and where it comes from
 
@@ -42,9 +42,11 @@ has to name the bytes it was measured against. The authors' own code and the arc
 All of this is committed data in [`src/dataset/manifest.json`](src/dataset/manifest.json), loaded and validated by
 [`src/dataset/manifest.ts`](src/dataset/manifest.ts). **No later ticket writes a URL, an archive path or a checksum
 in code.** The MD5 above was read from the Zenodo record's own file metadata on 2026-10-26 — it is the publisher's
-claim about the bytes, not a hash computed here, and the manifest says so. The download (#85) is the first code able
-to confirm it; the archive layout in the manifest is likewise the authors' documentation and is marked
-`verifiedAgainstArchive: false` until that ticket reads the real tree.
+claim about the bytes, not a hash computed here, and the manifest says so. The download confirms it the first time
+it runs, and `--record-checksums` then rewrites the entry as a locally computed one. The archive layout in the
+manifest is likewise the authors' documentation and is marked `verifiedAgainstArchive: false`: the download compares
+the archive's real tree with it and **fails naming the difference** rather than unpacking something else, so the
+layout is corrected by hand, in a reviewed change, by whoever first runs it against the real archive.
 
 ## The licence, and what it forbids
 
@@ -111,11 +113,12 @@ they were given.
 
 Within one dataset's directory (`<cache root>/ueyes`):
 
-| Directory     | Holds                                                                            |
-| ------------- | -------------------------------------------------------------------------------- |
-| `downloads/`  | archives as fetched from the publisher                                           |
-| `dataset/`    | the unpacked tree, in the layout the manifest describes                          |
-| `quarantine/` | a file that failed its checksum, kept out of the way rather than silently reused |
+| Directory     | Holds                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `downloads/`  | archives as fetched, each with its `.part` while in flight and its verification receipt |
+| `dataset/`    | the unpacked tree, in the layout the manifest describes                                 |
+| `quarantine/` | a file that failed its checksum, kept out of the way rather than silently reused        |
+| `.staging/`   | an archive part-way out of its zip; moved onto `dataset/` only once it is whole         |
 
 [`src/dataset/cache.ts`](src/dataset/cache.ts) is the only place these paths are decided. The helpers are pure path
 arithmetic: they create no directory, read no file and open no socket, and they refuse a path that would climb out of
@@ -124,6 +127,47 @@ control character or a segment a platform would silently rewrite — so neither 
 archive member can write outside it. `.gitignore` covers `.cache/`, which catches the one in-repo cache a mistake
 realistically creates; an override naming some other in-repo directory is not ignored and would show up in a pull
 request, where it is meant to be noticed.
+
+## Downloading the dataset
+
+One command brings the benchmark onto the machine. Its code is `src/dataset/fetch.ts`; the command-line wrapper
+arrives with the CLI (#91), and until then the entry point is the function:
+
+```ts
+import { fetchDataset } from '@personavision/calibration';
+
+await fetchDataset(); // fetch, verify and unpack into the cache
+await fetchDataset({ recordChecksums: true }); // and write a locally computed checksum into the manifest
+```
+
+**What you are accepting by running it.** The command prints all of this before it fetches a byte, because
+downloading the dataset is accepting it:
+
+- **The licence.** CC BY 4.0, as above. Credit the creators and link the licence wherever you publish a figure
+  measured on this data; the string to use is `dataset.licence.attribution`. The licence does not cover the
+  third-party interfaces the screenshots depict, and it is not permission to imply that the authors endorse this
+  product.
+- **The disk.** 12.9 GB of archive plus its unpacked tree, under the cache root above and never inside this
+  repository. Point `PERSONAVISION_CALIBRATION_CACHE` somewhere with room if your home directory has none.
+- **The participants.** The gaze data carries the consent the original study obtained and no more.
+
+No account, credential, API key or payment is involved, and none is read: the dataset is open access. A download
+link can carry a token in its query string, so **no URL query string is ever written to the output** — the log and
+every error name the origin and the path and nothing else.
+
+**What the command does, and what it refuses to do.**
+
+|                                   |                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resumes**                       | An interrupted transfer continues from the bytes already on disk with an HTTP range request, rather than starting over; progress is reported per file in bytes and percent. An origin that ignores the range makes it start again rather than append to the middle of a file.                                                                  |
+| **Verifies**                      | Every file is hashed and compared with the manifest's checksum. A mismatch is a named failure: the file is moved to `quarantine/`, nothing is marked verified, and a second run fetches it again.                                                                                                                                              |
+| **Refuses what it cannot verify** | A file the manifest records as `unverified` is refused before anything is fetched. `--record-checksums` hashes a fresh copy and writes the result into `manifest.json` as a change you review and commit — it prints the change, and it will not write over a recorded checksum that the bytes contradict. Verification never silently passes. |
+| **Checks the layout first**       | The archive's own directory is read before a byte is unpacked and compared with `layout` in the manifest. A tree that contradicts it fails naming the difference; an `unknown` root is not a difference, and the directory the entries really sit under is reported and stripped.                                                              |
+| **Does nothing twice**            | A verified file leaves a receipt beside it, so a second run over a complete cache downloads nothing, unpacks nothing and says so. A file touched since is hashed again rather than trusted on its name.                                                                                                                                        |
+| **Leaves no half-extracted tree** | Every file is fetched and verified before anything is unpacked, and an archive is unpacked into `.staging/` and moved onto `dataset/` only once it is whole. A failed run exits non-zero naming the files it could not fetch, and keeps the part-downloads so the next run resumes.                                                            |
+
+A hostile archive cannot write outside the cache: every member path goes through the containment rule in
+`cache.ts`, and an absolute, `..`, drive-relative or symbolic-link member is refused by name rather than followed.
 
 ## The vocabulary
 
@@ -171,8 +215,9 @@ pnpm typecheck                            # builds every workspace package, then
 pnpm lint
 ```
 
-Everything in this package is green with **no network and no API key**. The one ticket that downloads (#85) tests
-against a stub origin on loopback; nothing in CI fetches the real dataset.
+Everything in this package is green with **no network and no API key**. The download is tested against a stub
+origin served from the test process over loopback, on whatever port the operating system hands it; nothing in CI
+fetches the real dataset, and no test writes outside a temporary cache root it removes afterwards.
 
 ## This package's docs
 
