@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   evaluateAgainstPlantedDefects,
   FINDING_RULE_IDS,
-  findings,
   score,
   scoringConfig,
   verdict,
@@ -664,12 +663,11 @@ describe("section 5's acceptance table, over the committed fixtures", () => {
 });
 
 describe('the functions this package has agreed to export but has not built', () => {
+  // The findings generator was one of these until #28 built it; `test/findings.test.ts`
+  // now holds it to the contract instead of to an error message.
+
   it('names the ticket that fills the verdict', () => {
     expect(() => verdict([], [], {} as never)).toThrow(/#27/);
-  });
-
-  it('names the ticket that fills the findings generator', () => {
-    expect(() => findings([], [], [], [])).toThrow(/#28/);
   });
 
   it('names the ticket that fills the planted-defect evaluation', () => {

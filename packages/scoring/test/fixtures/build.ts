@@ -31,6 +31,17 @@ export interface StepSpec {
   readonly primaryAfterSeconds: number | null;
   /** Returns on this step to an area that does not advance the task. */
   readonly deadEndReturns: number;
+  /**
+   * Extra looks at the area the step opens on, taken one after another before the gaze
+   * moves anywhere else. Defaults to none.
+   *
+   * This is how "a banner holds the attention of the step" is written in the data, which
+   * the competing-first-fixation rule needs and taking the first look alone does not say:
+   * a heading at the top of a page is looked at first too, and costs nothing. Consecutive
+   * looks at one area are **one visit**, so they add time spent and fixations and add no
+   * return — the friction score's dead-end component reads exactly what it read before.
+   */
+  readonly lingerFixations?: number;
 }
 
 export interface SessionSpec {
@@ -151,12 +162,13 @@ const fixationOrder = (
   deadEnds: readonly Aoi[],
 ): Aoi[] => {
   const [first, second] = deadEnds;
+  const linger = Array.from({ length: spec.lingerFixations ?? 0 }, () => first);
   const opening =
     primary === undefined || spec.primaryAfterSeconds === null
-      ? [first, second]
+      ? [first, ...linger, second]
       : spec.primaryAfterSeconds === 0
-        ? [primary, first, second]
-        : [first, second, primary];
+        ? [primary, first, ...linger, second]
+        : [first, ...linger, second, primary];
   const returns = Array.from({ length: spec.deadEndReturns }, (_, index) =>
     index % 2 === 0 ? first : second,
   );

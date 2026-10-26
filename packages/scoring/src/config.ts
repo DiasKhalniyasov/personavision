@@ -42,6 +42,16 @@ export const FINDING_RULE_IDS = [
   'value-changed-between-steps',
   /** One step is where sessions give up. */
   'high-abandonment-at-step',
+  /**
+   * One step is where the task fails outright, with the product at fault.
+   *
+   * Added by #28. The starting set #9 lists has an id for giving up and none for failing,
+   * and `docs/FLOW.md` section 8 is explicit that *abandoned* and *failed* are never
+   * merged: somebody who chose to leave and somebody who believed they had finished and
+   * had not are two results with two different fixes. The committed example run's
+   * fourth finding is this situation and no other id could carry it.
+   */
+  'task-failure-at-step',
   /** The primary action was found, but slowly. */
   'slow-primary-action-fixation',
   /** An area the task needs was looked at by few of the sessions that reached it. */
@@ -140,6 +150,7 @@ export const scoringConfig: ScoringConfig = {
     'competing-first-fixation': 'high',
     'value-changed-between-steps': 'high',
     'high-abandonment-at-step': 'high',
+    'task-failure-at-step': 'medium',
     'slow-primary-action-fixation': 'medium',
     'low-looked-at-share': 'medium',
     'informational-note': 'info',

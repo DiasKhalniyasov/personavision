@@ -24,8 +24,12 @@ import { buildAoiMetrics, buildSession, FIXTURE_PERSONAS, type SessionSpec } fro
  * 2. **A fee appears after the payment details, and people keep going back to the total.**
  *    The review step of B carries `b-review-fee-row` beside `b-review-total`, and B's
  *    sessions return between the two three to six times each.
- * 3. **A promo banner takes the first fixation.** `b-cart-promo` is the first area the cart
- *    step of B declares, which is the area its sessions open on.
+ * 3. **A promo banner takes the first fixation and then holds the step.** `b-cart-promo` is
+ *    the first area the cart step of B declares, which is the area its sessions open on,
+ *    and `BANNER_LINGER` extra consecutive looks at it make it hold two thirds of
+ *    everything the step's gaze spends — which is what separates a banner that competes
+ *    from a heading that merely sits at the top of a page. Consecutive looks at one area
+ *    are one visit, so this adds no dead-end return and the friction scores are unchanged.
  */
 
 const box = (y: number, width: number, height: number): Aoi['bbox'] => ({
@@ -197,6 +201,14 @@ interface Row {
 
 const STEPS = ['cart', 'payment', 'review', 'confirm'] as const;
 
+/**
+ * How many extra consecutive looks the promo banner of B's cart takes. Three, which puts
+ * it at two thirds of the step's attention against the control beneath it — comfortably
+ * over `scoringConfig.thresholds.competingDwellShare` — while leaving the control's own
+ * reading of 1.9–2.2 s room to happen after them.
+ */
+const BANNER_LINGER = 3;
+
 const toSpec = (variant: string, row: Row): SessionSpec => {
   const reached = STEPS.slice(0, STEPS.indexOf(row.upTo) + 1);
   return {
@@ -209,6 +221,7 @@ const toSpec = (variant: string, row: Row): SessionSpec => {
       step,
       primaryAfterSeconds: row.seconds[index] ?? null,
       deadEndReturns: step === 'review' ? row.returns : 0,
+      lingerFixations: variant === 'B' && step === 'cart' ? BANNER_LINGER : 0,
     })),
   };
 };
