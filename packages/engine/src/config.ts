@@ -71,6 +71,17 @@ export interface EngineConfig {
       readonly rolePrior: number;
     };
     readonly rolePriors: RolePriors;
+    /**
+     * The ring of pixels an area's contrast is measured against — "local" is this
+     * thickness and nothing else, so what counts as the surroundings of a button is a
+     * number calibration can fit rather than one the salience module writes down.
+     */
+    readonly surround: {
+      /** The ring's thickness as a share of the area's shorter side. */
+      readonly ringShare: number;
+      /** …and at least this many pixels, so a one-pixel rule still has a surround. */
+      readonly minRingPx: number;
+    };
   };
 
   readonly relevance: {
@@ -210,6 +221,7 @@ export const defaultEngineConfig: EngineConfig = {
       control: 0.6,
       other: 0.25,
     },
+    surround: { ringShare: 0.5, minRingPx: 8 },
   },
 
   relevance: {
