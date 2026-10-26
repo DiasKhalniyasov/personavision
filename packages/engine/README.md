@@ -491,3 +491,74 @@ are the generator's output. Add a fixture by adding its name to `tests/fixtures/
 **Size.** The whole set is **16,960 bytes** (five PNGs, 933–2,208 B each, and five capture
 JSON files). The budget is **32 KiB in all**, asserted in `tests/fixtures.test.ts`: these
 files are read by every session in the step, so an oversized image costs all of them.
+
+## The credibility harness
+
+The suite that tests the project's _claims_ rather than its parts. Every other suite in
+this package tests one term — that salience reads the pixels it says it reads, that the
+distributions have the shape they advertise, that the sampler consumes its generator in the
+documented order. These two test what the product says out loud, end to end over the
+published entry point: a capture goes in, a scanpath comes out, and the properties a
+designer would expect hold. They are the suite a change to any term has to keep green.
+
+| File                        | What it holds                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `tests/harness.ts`          | The session-level path the claims are made over, and the shared personas and seeds |
+| `tests/behaviour.test.ts`   | One named test per behavioural claim, with its expectation in the test name        |
+| `tests/statistical.test.ts` | The shares and medians a _run_ produces, each inside a stated band                 |
+
+**The claims.** A high-contrast banner is among the first three fixations in more than half
+the sessions, and takes more of a run's fixations than the low-contrast paragraph below it.
+A control below the fold is fixated later than a heading above it — and, for a persona that
+never scrolls to it, by no session at all, which the metrics carry through as a `null` and a
+`0` rather than a near-zero. A goal that names the total raises the share of fixations on
+the total over the same page with an unrelated goal. A scanning persona makes more and
+shorter fixations than a reading one on the same page and seed. Two personas reach a
+different set of areas on 10 of the 24 seeds and diverge in order on 5, and no seed gives
+the two of them the same scanpath.
+
+**What the suite says about the uncalibrated defaults.** The salience preference is real but
+_small_: the banner clears a chance baseline of about 0.49 by a session and a half, and its
+lead in fixations over the quietest area on the page is 0.02. That is arithmetic, not a
+defect — the six salience terms are normalised to 0..1 and averaged, which compresses this
+page's range to 0.30 against 0.468, and `alpha` is 1, so one draw is a factor of 1.18. The
+suite therefore states each of those claims at the strength the defaults support and proves
+the direction with the weight: at `alpha` 0 the banner's lead is gone (−0.01), at 1 it is
++0.02, at 6 it is +0.12. Sharpening it is calibration's (#11) job, and these tests are what
+will show it happened.
+
+**Nothing here can flake.** Every claim runs over one fixed set of twenty-four seeds — a
+run's worth of sessions — through a sampler whose only randomness is the seed it is handed,
+so a share is an exact number on every machine rather than a sample. The bands are
+tolerances on _the engine_: each one states the mechanism that puts it where it is and
+leaves room for calibration (#11) to refit the weights, so narrowing one is a decision
+somebody takes in a diff that says so. Three tests prove the suite is sensitive to what it
+tests: raising `beta` raises the share on the area the goal names (0.33 → 0.61), raising
+`alpha` widens the banner's lead over the quietest area on its page, and raising `gamma`
+pushes a revisit further out (4.40 → 4.87 fixations between two looks at one area).
+
+**Determinism is asserted end to end**, not just in the sampler: a fixed capture, persona,
+goal and seed produce byte-identical fixations in this process — with the harness's memo
+tables cleared between the two, so the screenshot is decoded and rescored both times — and
+in a second process through `tests/session.child.ts`.
+
+**Time budget: 5 seconds** of wall time for the two suites together, measured at **0.7 s**
+on a laptop (0.4 s of test time, of which the second process is 0.17 s). The headroom is
+there because the cost is seeds × captures: `buildAois`, the screenshot decode and the
+salience map are memoised per capture in the harness, so twenty-four sessions decode one
+image once, and a claim that needs a new persona pays only for a new salience map.
+
+**Two rules in the harness are the harness's, not the engine's**, and they are stated in
+its docblock because a later ticket will move them into the run loop (#44): an area is on a
+screen when its box meets the viewport band that screen is scrolled to, and an agent at
+least as persistent as the median one (`screenPersistenceScale >= 1`) scrolls the page
+through while a hurried one stays on the first screen. The engine does no geometry of its
+own and decides no scroll — `sampleFixations` takes "the areas on this screen" — so a
+harness that handed it a whole tall page as one screen would be claiming the engine can
+fixate pixels nobody has scrolled to.
+
+**No API key and no network.** `buildAois` runs the offline heuristic segmenter, relevance
+is lexical and role-based, and the only bytes read are the committed fixtures'. A test in
+`behaviour.test.ts` holds that line over the suite's own sources: they import the engine
+only through its published entry point, and reach for nothing of the platform but files,
+paths and the one child process the determinism check spawns.
