@@ -163,6 +163,13 @@ const headlineOf = (findings: readonly Finding[]): Finding[] =>
  * failure. A duplicate clause is dropped, because the same words twice under "Why" is one
  * reason printed twice.
  *
+ * The reasons under a headline that says *ship this one* are reasons **about the other
+ * one**, so a headline finding about a version that is not being shipped is taken first and
+ * one about the preferred version only fills a place left over. Both come from the same
+ * three headline findings and in their own rank order; what changes is which of them leads.
+ * Without that, the demo's second reason is a note about the version the headline has just
+ * recommended, which reads as an argument against it.
+ *
  * When nothing is left — an empty findings list, or headline findings that are all ours —
  * the completion figures are the reason. The contract refuses an empty `reasons`, and the
  * figures are what the screen leads with anyway.
@@ -172,11 +179,14 @@ const reasonsOf = (
   preferred: VariantScore,
   other: VariantScore | null,
 ): string[] => {
+  const product = headline.filter((finding) => finding.attribution === 'product');
+  const aboutPreferred = (finding: Finding): boolean => finding.variant === preferred.variant;
   const fromFindings = [
     ...new Set(
-      headline
-        .filter((finding) => finding.attribution === 'product')
-        .map((finding) => reasonFrom(finding)),
+      [
+        ...product.filter((finding) => !aboutPreferred(finding)),
+        ...product.filter(aboutPreferred),
+      ].map((finding) => reasonFrom(finding)),
     ),
   ].slice(0, MAX_REASONS);
   return fromFindings.length > 0 ? fromFindings : [completionReason(preferred, other)];

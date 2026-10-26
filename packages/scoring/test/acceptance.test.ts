@@ -1,14 +1,13 @@
 import { runSchema, verdictSchema, type Audience } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import { acceptanceThresholds, bandOf, bandsDisjoint } from '../src/bands.js';
-import { score, verdict, type Finding, type VariantScore } from '../src/index.js';
+import { findings, score, verdict, type VariantScore } from '../src/index.js';
 import {
   buildFixtureRun,
   fixtureAoiMetrics,
   fixtureAois,
   fixtureSessions,
   fixtureTask,
-  plantedDefects,
 } from './fixtures/index.js';
 
 /**
@@ -20,10 +19,15 @@ import {
  * at least 0.6 of the clean variant's scored sessions finished the task, at most 0.3 of the
  * defective one's, and the variant to ship is the clean one.
  *
- * It runs the **real** `score()` over the sessions #26 committed and the real `verdict()`
- * over what comes back. A build that cannot separate the two by this margin has not
- * worked, whatever the individual subsystems do, and this test is where that is said: it is
- * part of `pnpm test`, so it fails CI when it fails.
+ * It is measured end to end over the sessions #26 committed: the real `score()`, the real
+ * `findings()` and the real `verdict()` over what both return. A build that cannot separate
+ * the two by this margin has not worked, whatever the individual subsystems do, and this
+ * test is where that is said: it is part of `pnpm test`, so it fails CI when it fails.
+ *
+ * What is asserted about the words is only what **this** ticket decides — which findings
+ * become the headline, which of them become the reasons and which area the hero evidence
+ * points at. The wording of a claim is #28's and is held to the contract in
+ * `test/findings.test.ts`; repeating it here would make one edit fail in two places.
  *
  * The thresholds are `acceptanceThresholds`, which mirrors `docs/design/tokens.css` — the
  * one place in this package that writes them down.
@@ -51,43 +55,9 @@ const AUDIENCE: Audience = {
   generatedFrom: { seed: 1, generatorVersion: 'fixture-1' },
 };
 
-/**
- * The claims the stand-in findings carry, in the prototype's wording for the same three
- * situations. The fixture's own `description` is the evidence line under each.
- */
-const CLAIMS: Record<string, string> = {
-  'D-1': 'Nobody in your audience ever looked at the button that places the order on B.',
-  'D-2':
-    'A $9.95 service fee only appears after the card is entered, and people leave when they see it.',
-  'D-3': 'A sale banner takes the first look on the basket step, before anything else on the page.',
-};
-
-/**
- * The findings the gate's verdict is written over.
- *
- * `findings()` is #28's and still throws, so the three planted defects stand in for what it
- * will produce: one finding per defect, ranked as the fixture plants them. That keeps this
- * test about the **gate** — the scores, the gap and the bands, all measured for real —
- * rather than about wording #28 owns. When `findings()` lands, this list is what it
- * replaces, and the assertions below do not change.
- */
-const standInFindings: Finding[] = plantedDefects.map((defect, index) => ({
-  id: `F-${index + 1}`,
-  rank: index + 1,
-  severity: index === 0 ? 'critical' : 'high',
-  claim: CLAIMS[defect.id] ?? defect.description,
-  evidence: defect.description,
-  variant: defect.variant,
-  step: defect.step,
-  aoiId: defect.aoiId,
-  sessionIds: ['S-13', 'S-14'],
-  sessionCount: 2,
-  attribution: 'product',
-  evidence_link: { screen: 'attention', params: { variant: defect.variant, step: defect.step } },
-}));
-
 const scores = score(fixtureSessions, fixtureAois, fixtureAoiMetrics, fixtureTask);
-const written = verdict(scores, standInFindings, AUDIENCE);
+const runFindings = findings(fixtureSessions, fixtureAois, fixtureAoiMetrics, scores);
+const written = verdict(scores, runFindings, AUDIENCE);
 
 const forVariant = (variant: string): VariantScore => {
   const found = scores.find((candidate) => candidate.variant === variant);
@@ -163,17 +133,32 @@ describe('what the gate hands to the screens', () => {
     expect(written.audienceSentence).toBe('Outdoor-gear shoppers buy a tent on A, not on B.');
   });
 
-  it('leads with one or two reasons, drawn from the headline findings', () => {
-    expect(written.reasons).toEqual([
-      'Nobody in your audience ever looked at the button that places the order on B.',
-      'A $9.95 service fee only appears after the card is entered.',
+  it('names the three findings the generator ranked highest, as its own ids', () => {
+    expect(written.headlineFindingIds).toEqual([
+      'never-fixated-primary-action@B',
+      'competing-first-fixation@A',
+      'competing-first-fixation@B',
     ]);
+    const ids = new Set(runFindings.map((finding) => finding.id));
+    for (const id of written.headlineFindingIds) expect(ids.has(id)).toBe(true);
   });
 
-  it('names at most three headline findings, each of them a finding this run has', () => {
-    const ids = new Set(standInFindings.map((finding) => finding.id));
-    expect(written.headlineFindingIds).toHaveLength(3);
-    for (const id of written.headlineFindingIds) expect(ids.has(id)).toBe(true);
+  it('leads with two reasons, both of them about the version it is not shipping', () => {
+    const headline = runFindings.filter((finding) =>
+      written.headlineFindingIds.includes(finding.id),
+    );
+    expect(written.reasons).toHaveLength(2);
+
+    for (const reason of written.reasons) {
+      // The reason is the claim's own leading clause, so a headline finding's claim starts
+      // with it — the words on the lead screen and the words in the findings list are one.
+      const source = headline.find((finding) =>
+        finding.claim.startsWith(reason.replace(/\.$/, '')),
+      );
+      expect(source, `no headline finding produced "${reason}"`).toBeDefined();
+      expect(source?.variant).toBe('B');
+      expect(source?.attribution).toBe('product');
+    }
   });
 
   it('points the one heatmap at the area the verdict turns on', () => {

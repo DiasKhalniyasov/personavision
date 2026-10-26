@@ -77,13 +77,14 @@ const findingOf = (spec: {
   readonly claim: string;
   readonly severity?: Finding['severity'];
   readonly attribution?: Finding['attribution'];
+  readonly variant?: string | null;
 }): Finding => ({
   id: spec.id,
   rank: spec.rank,
   severity: spec.severity ?? 'critical',
   claim: spec.claim,
   evidence: `The numbers behind ${spec.id}.`,
-  variant: 'B',
+  variant: spec.variant === undefined ? 'B' : spec.variant,
   step: 'review',
   aoiId: 'b-review-place-order',
   sessionIds: ['S-13'],
@@ -281,6 +282,44 @@ describe('reasons: one or two, each cut from a headline finding’s own claim', 
       // The reason is the claim's own leading clause, so the claim still starts with it.
       expect(source?.claim.startsWith(reason.replace(/\.$/, ''))).toBe(true);
     }
+  });
+
+  it('leads with the version it is not shipping, not with a note about the one it is', () => {
+    // The real demo run ranks a finding about the current checkout second, between two
+    // about the redesign. A "Why ship A" list that led with a complaint about A would read
+    // as an argument against the headline above it.
+    const aboutPreferred = findingOf({
+      id: 'F-A',
+      rank: 2,
+      variant: 'A',
+      severity: 'high',
+      claim: '“Order total” takes the first look on the current checkout.',
+    });
+    const alsoAboutB = findingOf({
+      id: 'F-3',
+      rank: 3,
+      severity: 'high',
+      claim: 'The sale banner takes the first look on the redesign.',
+    });
+    const written = write([CLEAN, DEFECTIVE], [PROTOTYPE_FINDINGS[0], aboutPreferred, alsoAboutB]);
+
+    expect(written.headlineFindingIds).toEqual(['F-1', 'F-A', 'F-3']);
+    expect(written.reasons).toEqual([
+      'Nobody in your audience ever looked at the button that completes the order on the redesign.',
+      'The sale banner takes the first look on the redesign.',
+    ]);
+  });
+
+  it('takes a reason about the preferred version when it is the only one left', () => {
+    const onlyAboutPreferred = findingOf({
+      id: 'F-A',
+      rank: 1,
+      variant: 'A',
+      claim: 'Two people gave up at the basket on the current checkout.',
+    });
+    expect(write([CLEAN, DEFECTIVE], [onlyAboutPreferred]).reasons).toEqual([
+      'Two people gave up at the basket on the current checkout.',
+    ]);
   });
 
   it('does not offer our own automation failure as a reason to ship anything', () => {
