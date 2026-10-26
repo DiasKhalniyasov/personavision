@@ -129,8 +129,8 @@ const readFindings = async (runId: string): Promise<FindingsState> => {
  * One person a run excluded from its figures.
  *
  * `excludedFromScores` and `attribution` are stored on each session and were decided once,
- * by the pipeline. Nothing here re-derives exclusion from an outcome status, and the three
- * outcome statuses stay three.
+ * together, by the pipeline (`packages/swarm/src/outcome.ts`). Nothing here re-derives
+ * exclusion from an outcome status, and the three outcome statuses stay three.
  */
 const isExcluded = (session: Session): boolean =>
   session.outcome.excludedFromScores && session.outcome.attribution === 'automation';
@@ -152,25 +152,27 @@ const readSession = async (runId: string, sessionId: string): Promise<SessionRea
 /**
  * Who this run excluded, from the sessions themselves.
  *
- * No run-level field counts them — `run.json` carries the manifest and the scores, and the
- * two fields that decide exclusion sit on each session — so every session the manifest
- * names is read. One session that cannot be read makes the whole count unreadable rather
- * than short.
+ * The two fields that decide exclusion sit on each session, so every session the manifest
+ * names is read. The run's scores do carry a per-status count — `outcomeCounts`, which an
+ * automation failure lands in — but counting from that is deciding exclusion from an
+ * outcome status a second time, which this screen does not do. One session that cannot be
+ * read makes the whole count unreadable rather than short.
  */
-const readExcluded = async (run: Run): Promise<ExcludedState> => {
-  const read = await Promise.all(
-    run.sessionIds.map((sessionId) => readSession(run.runId, sessionId)),
-  );
+const readExcluded = async (
+  runId: string,
+  sessionIds: readonly string[],
+): Promise<ExcludedState> => {
+  const read = await Promise.all(sessionIds.map((sessionId) => readSession(runId, sessionId)));
   for (const entry of read) {
     if (!entry.ok) {
-      return { status: 'unreadable', runId: run.runId, url: entry.url, problem: entry.problem };
+      return { status: 'unreadable', runId, url: entry.url, problem: entry.problem };
     }
   }
   return {
     status: 'ready',
     people: read.flatMap((entry) =>
       entry.ok && isExcluded(entry.session)
-        ? [{ sessionId: entry.session.sessionId, reason: entry.session.outcome.reason }]
+        ? [{ sessionId: entry.session.sessionId, step: entry.session.outcome.step }]
         : [],
     ),
   };
@@ -227,8 +229,8 @@ const loadRun = (runId: string): Promise<RunState> =>
 const loadFindings = (runId: string): Promise<FindingsState> =>
   findingsCache.get(runId) ?? keep(runId, findingsCache, readFindings(runId));
 
-const loadExcluded = (run: Run): Promise<ExcludedState> =>
-  excludedCache.get(run.runId) ?? keep(run.runId, excludedCache, readExcluded(run));
+const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<ExcludedState> =>
+  excludedCache.get(runId) ?? keep(runId, excludedCache, readExcluded(runId, sessionIds));
 
 const loadLatestRunId = (): Promise<LatestRunState> => {
   latestRun ??= readLatestRunId().then((state) => {
@@ -264,11 +266,11 @@ export type FindingsState =
       readonly problem: string;
     };
 
-/** One person a run excluded from its figures, and why their session ended. */
+/** One person a run excluded from its figures, and where their session stopped. */
 export interface ExcludedPerson {
   readonly sessionId: string;
-  /** In the pipeline's words, as the session stores it. */
-  readonly reason: string;
+  /** The step it ended on, as stored. `run.steps` holds the label a reader sees. */
+  readonly step: string;
 }
 
 export type ExcludedState =
@@ -290,17 +292,20 @@ export type ExcludedState =
  */
 export function useExcluded(run: Run): ExcludedState {
   const [state, setState] = useState<ExcludedState>({ status: 'loading' });
+  // The two the read is made of, so that another `Run` object for the same test does not
+  // re-fire the effect: every other hook here takes an id for the same reason.
+  const { runId, sessionIds } = run;
 
   useEffect(() => {
     let live = true;
     setState({ status: 'loading' });
-    void loadExcluded(run).then((next) => {
+    void loadExcluded(runId, sessionIds).then((next) => {
       if (live) setState(next);
     });
     return () => {
       live = false;
     };
-  }, [run]);
+  }, [runId, sessionIds]);
 
   return state;
 }

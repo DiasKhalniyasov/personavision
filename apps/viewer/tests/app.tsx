@@ -41,9 +41,13 @@ const RUN_FILE = /^\/runs\/([^/]+)\/(.+)$/;
 /** The files of a run, under the contract's own names, and nothing else. */
 const layout = runPaths('');
 /** `sessions/<id>.json`: one file per person, as `runPaths` spells it. */
-const SESSION_FILE = new RegExp(`^${layout.sessionsDir}/[^/]+\\.json$`);
+const isSessionFile = (file: string): boolean => {
+  if (!file.startsWith(`${layout.sessionsDir}/`) || !file.endsWith('.json')) return false;
+  const name = file.slice(layout.sessionsDir.length + 1);
+  return name !== '' && !name.includes('/');
+};
 const serves = (file: string): boolean =>
-  file === layout.run || file === layout.findings || SESSION_FILE.test(file);
+  file === layout.run || file === layout.findings || isSessionFile(file);
 
 export interface ServedRunData {
   /** The run directories the listing holds, newest first. */

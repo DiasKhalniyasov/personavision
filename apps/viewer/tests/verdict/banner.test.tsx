@@ -72,8 +72,40 @@ describe('the excluded-people banner', () => {
     expect(banner.textContent).toContain(`${EXCLUDED.length} of the 24 people`);
     expect(banner.textContent).toContain('excluded from both figures');
     expect(banner.textContent).toContain('not counted against either version');
-    // What broke, in the words the pipeline stored on those sessions.
-    expect(banner.textContent).toContain('Payment — selector timeout on the card iframe');
+    // Where it broke, named by the label the run gives that step.
+    expect(banner.textContent).toContain('our own browser automation broke on the Payment step');
+  });
+
+  it("leaves the pipeline's own words for the screen one click deeper", async () => {
+    // `docs/FLOW.md` section 8: on the Verdict screen the words are the user's. The reason
+    // the pipeline stores is a sentence of its own, which would state the banner's claim
+    // twice inside its own sentence.
+    const stored =
+      'Our own browsing broke on the "payment" step: selector timeout on the card iframe.';
+    await serveRunData({
+      files: Object.fromEntries(
+        EXCLUDED.map((sessionId) => [
+          sessionUrl(sessionId),
+          withOutcome(sessionId, { reason: stored }),
+        ]),
+      ),
+    });
+    mountApp(paths.run(SEED));
+
+    const banner = await find('.notice[data-section="excluded-banner"]');
+    expect(banner.textContent).toContain('our own browser automation broke on the Payment step');
+    expect(banner.textContent).not.toContain('Our own browsing broke');
+  });
+
+  it('names no step when the excluded people stopped in different places', async () => {
+    await serveRunData({
+      files: { [sessionUrl('S-09')]: withOutcome('S-09', { step: 'cart' }) },
+    });
+    mountApp(paths.run(SEED));
+
+    const banner = await find('.notice[data-section="excluded-banner"]');
+    expect(banner.textContent).toContain('our own browser automation broke. They are');
+    expect(banner.textContent).toContain('2 of the 24 people');
   });
 
   it('links to the Sessions route filtered to exactly those sessions', async () => {

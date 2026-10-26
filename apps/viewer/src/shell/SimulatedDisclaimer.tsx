@@ -1,5 +1,5 @@
 import type { Run } from '@personavision/contract';
-import { useCurrentRun } from './useRun';
+import { useCurrentRunId, useOptionalRun } from './useRun';
 
 /**
  * The line every results screen ends with: the numbers rank versions for this audience and
@@ -25,7 +25,9 @@ const calibrationSentence = (calibration: Run['calibration']): string =>
     : `Similarity to real human gaze on the ${calibration.benchmark} benchmark: CC ${metric(calibration.cc)} / NSS ${metric(calibration.nss)} / ScanMatch ${metric(calibration.scanMatch)}.`;
 
 export function SimulatedDisclaimer() {
-  const state = useCurrentRun();
+  // The run the route is about, and no other: on a route about no test this names no
+  // audience rather than the workspace's most recent one.
+  const state = useOptionalRun(useCurrentRunId());
   const run = state?.status === 'ready' ? state.run : null;
 
   return (
