@@ -13,9 +13,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@personavision/contract": "workspace:*"
+    "@personavision/contract": "workspace:*",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
   }
 }
