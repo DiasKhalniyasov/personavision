@@ -1,5 +1,5 @@
 import { scoringConfig, type FindingRuleId } from '../config.js';
-import { areaOf, type AreaReading, type RunReading, type VariantReading } from './readings.js';
+import { controlOf, type AreaReading, type RunReading, type VariantReading } from './readings.js';
 import {
   millisecondsSaid,
   onVariant,
@@ -142,7 +142,7 @@ const counterpartSentence = (
 ): string | undefined => {
   const other = theOtherVariant(reading, run);
   if (other === undefined) return undefined;
-  const control = areaOf(other, step, true);
+  const control = controlOf(other, step);
   if (control === undefined || control.neverLookedAt || control.secondsToFirstLook === null)
     return undefined;
   return `On variant ${other.variant} the same control was seen by ${control.lookedBy.length} of ${control.reachedBy.length}, after ${secondsSaid(control.secondsToFirstLook)}.`;
@@ -197,7 +197,7 @@ const neverFixatedPrimaryAction: VariantRule = (reading, run) => {
       aoi.belowFold
         ? `On ${stepSaid(aoi.step)}, ${quoted(aoi.label)} sits below the fold.`
         : `On ${stepSaid(aoi.step)}, ${quoted(aoi.label)} was on the page the whole time.`,
-      `Of the ${people(found.reachedBy.length)} who got that far, 0 looked at it.`,
+      `Of the ${people(found.reachedBy.length)} who got that far, ${found.lookedBy.length} looked at it.`,
       counterpartSentence(reading, run, aoi.step),
     ),
     attribution: 'product',
@@ -256,10 +256,10 @@ const primaryActionBelowFold: VariantRule = (reading) => {
 const competingFirstFixation: VariantRule = (reading) => {
   const candidates = reading.areas.filter((area) => {
     if (area.aoi.isPrimaryAction || area.reachedBy.length === 0) return false;
-    const control = areaOf(reading, area.aoi.step, true);
+    const control = controlOf(reading, area.aoi.step);
     return (
       area.firstLookOfStepBy.length * 2 > area.reachedBy.length &&
-      area.shareOfStepAttention >= thresholds.competingDwellShare &&
+      area.shareOfStepAttention > thresholds.competingDwellShare &&
       area.totalLookMs > (control?.totalLookMs ?? 0)
     );
   });
@@ -272,7 +272,7 @@ const competingFirstFixation: VariantRule = (reading) => {
   if (found === undefined) return undefined;
 
   const { aoi } = found;
-  const control = areaOf(reading, aoi.step, true);
+  const control = controlOf(reading, aoi.step);
   // The head start it had: the gap between when the step's control was first looked at and
   // when this area was. `null` when the control was never looked at at all — that session
   // has no gap, it has the critical rule above — and the clause is then left off rather
@@ -326,10 +326,13 @@ const competingFirstFixation: VariantRule = (reading) => {
  */
 const valueChangedBetweenSteps: VariantRule = (reading, run) => {
   const [firstStep] = reading.steps;
+  // Every other version in the run, not only the one `counterpartSentence` compares
+  // against: an area that version C also has on this step is not the difference the test
+  // was run to find, however A and B read.
   const elsewhere = new Set(
-    (theOtherVariant(reading, run)?.areas ?? []).map(
-      (area) => `${area.aoi.step}/${area.aoi.label}`,
-    ),
+    run.variants
+      .filter((other) => other.variant !== reading.variant)
+      .flatMap((other) => other.areas.map((area) => `${area.aoi.step}/${area.aoi.label}`)),
   );
   const labelsBefore = (step: string): Set<string> =>
     new Set(
@@ -342,7 +345,12 @@ const valueChangedBetweenSteps: VariantRule = (reading, run) => {
     (area) =>
       !area.aoi.isPrimaryAction &&
       area.aoi.step !== firstStep &&
-      area.returns >= thresholds.repeatedRevisitsPerSession &&
+      // Somebody has to have looked at it. The returns are read from the aggregate's row
+      // and the people behind the claim from the sessions, so a row reporting returns the
+      // handed-in sessions do not support would otherwise ship "the 0 people who saw it"
+      // with no sessions behind the finding at all.
+      !area.neverLookedAt &&
+      area.returns > thresholds.repeatedRevisitsPerSession &&
       !labelsBefore(area.aoi.step).has(area.aoi.label),
   );
   const found = worst(
@@ -448,7 +456,7 @@ const taskFailureAtStep: VariantRule = (reading) => {
     ruleId: 'task-failure-at-step',
     variant: reading.variant,
     step: found.step,
-    aoiId: areaOf(reading, found.step, true)?.aoi.id ?? null,
+    aoiId: controlOf(reading, found.step)?.aoi.id ?? null,
     sessionIds: found.failedBy,
     claim: `${outOf(found.failedBy.length, found.reachedBy.length)} who reached ${stepSaid(found.step)} ${onVariant(reading.variant)} ended there with no order placed, and leaving was not their choice.`,
     evidence: said(
@@ -563,10 +571,17 @@ const informationalNote = (run: RunReading): RuleHit | undefined => {
     ([stepA, nA], [stepB, nB]) => nB - nA || stepA.localeCompare(stepB),
   )[0][0];
 
+  // The per-version counts and the retries are the ones that belong to **that** step. A
+  // run whose exclusions are spread over several steps would otherwise describe all of
+  // them in a sentence that names one, and say of a session that broke on the basket that
+  // it broke on the payment step. The rest are counted, not described.
+  const onStep = sessions.filter((session) => session.outcome.step === step);
+  const elsewhere = sessions.length - onStep.length;
+
   const perVariant = new Map<string, number>();
-  for (const session of sessions)
+  for (const session of onStep)
     perVariant.set(session.variant, (perVariant.get(session.variant) ?? 0) + 1);
-  const retries = sessions.reduce((total, session) => total + session.integrity.retries, 0);
+  const retries = onStep.reduce((total, session) => total + session.integrity.retries, 0);
 
   return {
     ruleId: 'informational-note',
@@ -576,7 +591,7 @@ const informationalNote = (run: RunReading): RuleHit | undefined => {
     sessionIds: sessions.map((session) => session.sessionId).sort(),
     claim: `${outOf(sessions.length, totalSessionCount)} could not be simulated to the end, and are excluded from both figures.`,
     evidence: said(
-      `Our own browser automation gave up on ${stepSaid(step)} (${perVariantSaid(perVariant)})${retries === 0 ? '' : ` after ${retries === 1 ? 'one retry' : `${retries} retries`}`}.`,
+      `Our own browser automation gave up on ${stepSaid(step)} (${perVariantSaid(perVariant)})${retries === 0 ? '' : ` after ${retries === 1 ? 'one retry' : `${retries} retries`}`}${elsewhere === 0 ? '' : `, and on other steps for ${people(elsewhere)}`}.`,
       `This is a weakness of the simulation, never evidence against your checkout.`,
     ),
     attribution: 'automation',

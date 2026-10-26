@@ -288,10 +288,22 @@ export const readRun = (
   };
 };
 
-/** One area of a variant by id, for a rule comparing a control against the other version's. */
-export const areaOf = (
-  reading: VariantReading,
-  step: string,
-  primary: boolean,
-): AreaReading | undefined =>
-  reading.areas.find((area) => area.aoi.step === step && area.aoi.isPrimaryAction === primary);
+/**
+ * The control that advances one step, chosen the way the friction score chooses it.
+ *
+ * A step may declare more than one, and an agent only has to find one of them, so the step
+ * reads as its **best** control: found soonest, with a control nobody ever looked at
+ * coming last and the area's id breaking a remaining tie. That is `score.ts`'s rule, and
+ * it matters more here than there — a rule's *firing* depends on this area, so taking
+ * whichever control happened to be listed first in `aois` would make "this banner competes
+ * for attention" a fact about the order of an array.
+ */
+export const controlOf = (reading: VariantReading, step: string): AreaReading | undefined =>
+  reading.areas
+    .filter((area) => area.aoi.step === step && area.aoi.isPrimaryAction)
+    .sort(
+      (a, b) =>
+        Number(a.neverLookedAt) - Number(b.neverLookedAt) ||
+        (a.secondsToFirstLook ?? 0) - (b.secondsToFirstLook ?? 0) ||
+        a.aoi.id.localeCompare(b.aoi.id),
+    )[0];

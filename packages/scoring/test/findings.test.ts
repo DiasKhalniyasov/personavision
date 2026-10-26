@@ -270,6 +270,98 @@ describe('the sessions our own automation lost', () => {
   });
 });
 
+/**
+ * A run whose automation broke on two different steps.
+ *
+ * The note names one step — the one it cost us most — and the counts beside it have to be
+ * that step's, or the sentence says of a session that broke on the basket that it broke
+ * somewhere else. Four people, two of them lost, on two different steps.
+ */
+const SPREAD_AOIS: Aoi[] = ['shelf', 'basket'].flatMap((step) =>
+  [
+    { name: 'heading', label: `${step} heading`, role: 'heading', y: 80, primary: false },
+    { name: 'blurb', label: `${step} detail`, role: 'text', y: 200, primary: false },
+    { name: 'go', label: `${step} onwards`, role: 'button', y: 360, primary: true },
+  ].map((spec) => ({
+    id: `x-${step}-${spec.name}`,
+    variant: 'X',
+    step,
+    label: spec.label,
+    source: 'dom' as const,
+    role: spec.role,
+    bbox: { x: 24, y: spec.y, width: 300, height: 56 },
+    isPrimaryAction: spec.primary,
+    belowFold: false,
+  })),
+);
+
+const spreadSessions: Session[] = [
+  { id: 'S-01', upTo: 1, status: 'success' as const },
+  { id: 'S-02', upTo: 2, status: 'success' as const },
+  // Lost on the first step, and lost on the second: two steps, one exclusion each.
+  { id: 'S-03', upTo: 1, status: 'automation_failure' as const },
+  { id: 'S-04', upTo: 2, status: 'automation_failure' as const },
+].map((row, position) =>
+  buildSession(
+    {
+      sessionId: row.id,
+      variant: 'X',
+      seed: 1,
+      personaId: `P-${position + 1}`,
+      status: row.status,
+      steps: ['shelf', 'basket']
+        .slice(0, row.upTo)
+        .map((step) => ({ step, primaryAfterSeconds: 1, deadEndReturns: 0 })),
+    },
+    SPREAD_AOIS,
+  ),
+);
+const spreadAoiMetrics = buildAoiMetrics(spreadSessions, SPREAD_AOIS);
+const spread = findings(
+  spreadSessions,
+  SPREAD_AOIS,
+  spreadAoiMetrics,
+  score(spreadSessions, SPREAD_AOIS, spreadAoiMetrics, fixtureTask),
+);
+
+describe('the automation note when the exclusions are spread over steps', () => {
+  const note = byId(spread, 'informational-note@run');
+
+  it('counts every lost session in the claim', () => {
+    expect(note.claim).toBe(
+      '2 of 4 people could not be simulated to the end, and are excluded from both figures.',
+    );
+    expect(note.sessionIds).toEqual(['S-03', 'S-04']);
+  });
+
+  it('describes only the step it names, and counts the rest apart', () => {
+    // The step named is the one that cost us most, ties going to the earlier id. The
+    // per-version count beside it is that step's alone: saying "2 people on variant X"
+    // here would place a session on a step it never broke on.
+    expect(note.step).toBe('basket');
+    expect(note.evidence).toBe(
+      'Our own browser automation gave up on the basket step (1 person on variant X), and on other steps for 1 person. This is a weakness of the simulation, never evidence against your checkout.',
+    );
+  });
+});
+
+describe('the order the areas happen to be listed in', () => {
+  it('changes no finding, no sentence and no rank', () => {
+    // A step may declare more than one control, and `controlOf` picks the step's best one
+    // rather than the first in the array — because that area decides whether the
+    // competing-area rule fires at all, and prints numbers in two other rules. Reversing
+    // the list is the cheapest check that nothing reads it positionally.
+    expect(
+      findings(
+        fixtureSessions,
+        [...fixtureAois].reverse(),
+        fixtureAoiMetrics,
+        score(fixtureSessions, [...fixtureAois].reverse(), fixtureAoiMetrics, fixtureTask),
+      ),
+    ).toEqual(bothCheckouts);
+  });
+});
+
 describe('the evidence link', () => {
   /**
    * The two routes `docs/FLOW.md` section 3 gives the evidence screens:

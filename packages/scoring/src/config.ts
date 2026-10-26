@@ -105,9 +105,19 @@ export interface FindingThresholds {
   readonly highAbandonmentShare: number;
   /** Seconds to the primary action above which finding it counts as slow. */
   readonly slowPrimaryActionSeconds: number;
-  /** An area's share of a step's total dwell, above which it is competing for attention. */
+  /**
+   * An area's share of a step's total dwell, **above which** it is competing for
+   * attention — and it also has to hold more of that attention than the control the step
+   * is there to get somebody to use, or a heading at the top of a page would qualify.
+   */
   readonly competingDwellShare: number;
-  /** Returns per session to one area, above which going back there is a pattern. */
+  /**
+   * Returns per session to one area, **above which** going back there is a pattern.
+   *
+   * One, so two returns fire the rule: going back to the same thing once is reading, and
+   * going back twice is re-reading. Every threshold here is read exclusively, which is why
+   * the number is one and not the two returns it takes to trip it.
+   */
   readonly repeatedRevisitsPerSession: number;
 }
 
@@ -163,6 +173,6 @@ export const scoringConfig: ScoringConfig = {
     // so, while still being found — the full cap is the never-fixated case's.
     slowPrimaryActionSeconds: 3,
     competingDwellShare: 0.3,
-    repeatedRevisitsPerSession: 2,
+    repeatedRevisitsPerSession: 1,
   },
 };
