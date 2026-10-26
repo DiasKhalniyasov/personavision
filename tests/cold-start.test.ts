@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,16 +82,15 @@ const runToCompletion = (
   });
 
 interface ServedApp {
-  /** The address the command printed, with the port it was actually given. */
+  /** The address the command printed, on the port it was actually given. */
   base: string;
-  port: number;
   /** `true` once the process is gone. */
   exited: () => boolean;
   stop: () => Promise<void>;
 }
 
 /** The line `open` prints, and the only place this file learns which port it is on. */
-const URL_LINE = /^http:\/\/127\.0\.0\.1:(\d+)\/$/;
+const URL_LINE = /^http:\/\/127\.0\.0\.1:\d+\/$/;
 
 /**
  * `personavision open --no-open`, started the way the demo's first beat starts it, on a
@@ -109,9 +107,16 @@ const openTheApp = async (): Promise<ServedApp> => {
   let stdout = '';
   let stderr = '';
   let exited = false;
+  let failedToStart: Error | undefined;
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
   child.on('close', () => (exited = true));
+  // A spawn that never starts emits `error`, and an unheard one would take the whole test
+  // worker down with it rather than failing the start this function is reporting on.
+  child.on('error', (error: Error) => {
+    failedToStart = error;
+    exited = true;
+  });
 
   const stop = (): Promise<void> =>
     new Promise<void>((stopped) => {
@@ -138,29 +143,17 @@ const openTheApp = async (): Promise<ServedApp> => {
       }
       if (exited) {
         clearInterval(poll);
-        failed(
-          new Error(
-            `personavision open exited before printing its URL\nstdout:\n${stdout}\nstderr:\n${stderr}`,
-          ),
-        );
+        const why =
+          failedToStart === undefined
+            ? 'exited before printing its URL'
+            : `could not be started: ${failedToStart.message}`;
+        failed(new Error(`personavision open ${why}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
       }
     }, 25);
   });
 
-  return { base: line, port: Number(URL_LINE.exec(line)?.[1]), exited: () => exited, stop };
+  return { base: line, exited: () => exited, stop };
 };
-
-/** Whether anything still answers on the port: a command that stopped leaves nothing. */
-const accepts = (port: number): Promise<boolean> =>
-  new Promise((settled) => {
-    const socket = connect({ host: '127.0.0.1', port });
-    const answer = (listening: boolean): void => {
-      socket.destroy();
-      settled(listening);
-    };
-    socket.on('connect', () => answer(true));
-    socket.on('error', () => answer(false));
-  });
 
 const get = (base: string, path: string): Promise<Response> => fetch(new URL(path, base));
 
@@ -193,6 +186,22 @@ const readRunOverHttp = async (base: string): Promise<RunArtifact> => {
   return { run, sessions, findings };
 };
 
+/**
+ * One cold start, used and then stopped however it ends — including when an assertion
+ * inside it throws, which would otherwise leave a command running and a port held by a
+ * suite whose whole claim is that it leaves neither behind.
+ */
+const withTheApp = async <Read>(
+  use: (app: ServedApp) => Promise<Read>,
+): Promise<[Read, ServedApp]> => {
+  const app = await openTheApp();
+  try {
+    return [await use(app), app];
+  } finally {
+    await app.stop();
+  }
+};
+
 /** The build a new developer runs before anything can be served. */
 beforeAll(async () => {
   const built = await runToCompletion('pnpm', ['build']);
@@ -200,20 +209,25 @@ beforeAll(async () => {
 }, COLD_START_TIMEOUT);
 
 describe('a fresh clone builds, and the app opens on the committed example run', () => {
-  let app: ServedApp;
+  let served: ServedApp | undefined;
+  let base: string;
   let onDisk: RunArtifact;
 
   beforeAll(async () => {
     onDisk = await readRun(runDir);
-    app = await openTheApp();
+    served = await openTheApp();
+    base = served.base;
   }, COLD_START_TIMEOUT);
 
+  // `undefined` whenever the start above threw, which is one of the cases this suite
+  // exists to catch: the failure that matters is reported, rather than a second one
+  // about tearing down something that never came up.
   afterAll(async () => {
-    await app.stop();
+    await served?.stop();
   });
 
   it('serves the built viewer at /, and the bundle its document names', async () => {
-    const page = await get(app.base, '/');
+    const page = await get(base, '/');
 
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
@@ -225,23 +239,27 @@ describe('a fresh clone builds, and the app opens on the committed example run',
     const bundle = /<script[^>]+src="([^"]+)"/.exec(html)?.[1];
     if (bundle === undefined) throw new Error(`the page names no script:\n${html}`);
     expect(bundle).toMatch(/^\/assets\//);
-    expect((await get(app.base, bundle)).status).toBe(200);
+    expect((await get(base, bundle)).status).toBe(200);
   });
 
   it('lists the committed example run first at /runs/index.json', async () => {
-    const response = await get(app.base, 'runs/index.json');
+    const response = await get(base, 'runs/index.json');
 
     expect(response.status).toBe(200);
     const listing = (await response.json()) as RunListing[];
-    expect(listing[0]).toEqual({
+    expect(listing.find((entry) => entry.runId === RUN_ID)).toEqual({
       runId: RUN_ID,
       name: onDisk.run.task.prompt,
       createdAt: onDisk.run.createdAt,
     });
+    // First, because a fresh clone holds this run and no other, and the listing is ordered
+    // by each run's own `createdAt`. A developer who has since run a test of their own has
+    // a newer directory under `./runs`, and this is the assertion that says so.
+    expect(listing[0].runId).toBe(RUN_ID);
   });
 
   it('serves run.json, and the contract parses what comes back', async () => {
-    const response = await get(app.base, `runs/${RUN_ID}/${layout.run}`);
+    const response = await get(base, `runs/${RUN_ID}/${layout.run}`);
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
@@ -262,7 +280,7 @@ describe('a fresh clone builds, and the app opens on the committed example run',
     ];
 
     for (const [path, file, contentType] of cases) {
-      const response = await get(app.base, `runs/${RUN_ID}/${path}`);
+      const response = await get(base, `runs/${RUN_ID}/${path}`);
 
       expect(response.status, path).toBe(200);
       expect(response.headers.get('content-type'), path).toBe(contentType);
@@ -271,29 +289,27 @@ describe('a fresh clone builds, and the app opens on the committed example run',
   });
 
   it('serves the same artifact over HTTP as the contract reads from disk', async () => {
-    expect(await readRunOverHttp(app.base)).toEqual(onDisk);
+    expect(await readRunOverHttp(base)).toEqual(onDisk);
   });
 });
 
 describe('the command leaves nothing behind, so the cold start runs twice in a row', () => {
   it(
-    'frees its process and its port, and a second start serves the same listing',
+    'frees its process, and a second start serves the same listing',
     async () => {
-      const first = await openTheApp();
-      const listing = await getJson(first.base, 'runs/index.json');
-      await first.stop();
+      const read = (app: ServedApp): Promise<unknown> => getJson(app.base, 'runs/index.json');
+      const [listing, first] = await withTheApp(read);
 
+      // The listener is the process's own socket and nothing else holds it, so a command
+      // that is gone is a port that is free. The port itself is deliberately not probed:
+      // the operating system is free to hand a just-freed one to a sibling suite binding
+      // `--port 0` at that moment, which would fail on a perfectly healthy tree.
       expect(first.exited()).toBe(true);
-      expect(await accepts(first.port)).toBe(false);
 
-      const second = await openTheApp();
-      try {
-        expect(await getJson(second.base, 'runs/index.json')).toEqual(listing);
-      } finally {
-        await second.stop();
-      }
+      const [again, second] = await withTheApp(read);
+
+      expect(again).toEqual(listing);
       expect(second.exited()).toBe(true);
-      expect(await accepts(second.port)).toBe(false);
     },
     COLD_START_TIMEOUT,
   );
