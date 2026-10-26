@@ -693,6 +693,15 @@ describe('the archive reader', () => {
     await expect(readArchiveDirectory(path)).rejects.toThrow(/symbolic link/);
   });
 
+  it('refuses an archive that says it is split across disks', async () => {
+    const bytes = makeZip([{ path: 'info.csv', data: Buffer.from('a,b\n') }]);
+    // The disk number in the end-of-directory record, four bytes past its signature.
+    bytes.writeUInt16LE(1, bytes.length - 22 + 4);
+    const path = await writeArchive(bytes);
+
+    await expect(readArchiveDirectory(path)).rejects.toThrow(/split across disks/);
+  });
+
   it('refuses a file that is not a zip archive at all', async () => {
     const path = await writeArchive(Buffer.from('not a zip, just some bytes'));
 

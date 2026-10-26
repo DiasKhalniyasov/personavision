@@ -169,15 +169,25 @@ const locateDirectory = async (
 ): Promise<DirectoryLocation> => {
   const { record, position } = await findEndOfCentralDirectory(handle, fileSize);
 
-  if (record.readUInt16LE(4) !== 0 || record.readUInt16LE(6) !== 0) {
+  const split = (disk: number): boolean => disk !== 0 && disk !== NEEDS_ZIP64_16;
+  const thisDisk = record.readUInt16LE(4);
+  const directoryDisk = record.readUInt16LE(6);
+  if (split(thisDisk) || split(directoryDisk)) {
     throw new ArchiveError('this archive is split across disks, which this reader does not read');
   }
 
   const entries = record.readUInt16LE(10);
   const sizeBytes = record.readUInt32LE(12);
   const offset = record.readUInt32LE(16);
+  // A field left at its all-ones marker is stated in the zip64 record instead — including
+  // the disk numbers, which is why `split` above lets that value through rather than
+  // reading a 12.9 GB single-file archive as one spread over 65,535 floppy disks.
   const needsZip64 =
-    entries === NEEDS_ZIP64_16 || sizeBytes === NEEDS_ZIP64_32 || offset === NEEDS_ZIP64_32;
+    thisDisk === NEEDS_ZIP64_16 ||
+    directoryDisk === NEEDS_ZIP64_16 ||
+    entries === NEEDS_ZIP64_16 ||
+    sizeBytes === NEEDS_ZIP64_32 ||
+    offset === NEEDS_ZIP64_32;
   if (!needsZip64) return { offset, sizeBytes, entries };
 
   const locatorPosition = position - ZIP64_LOCATOR_SIZE;
@@ -193,6 +203,9 @@ const locateDirectory = async (
   const zip64 = await readAt(handle, zip64Position, 56);
   if (zip64.readUInt32LE(0) !== ZIP64_END_OF_CENTRAL_DIRECTORY) {
     throw new ArchiveError('the zip64 locator does not point at a zip64 end-of-directory record');
+  }
+  if (zip64.readUInt32LE(16) !== 0 || zip64.readUInt32LE(20) !== 0) {
+    throw new ArchiveError('this archive is split across disks, which this reader does not read');
   }
 
   return {
