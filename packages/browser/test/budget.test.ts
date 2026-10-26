@@ -8,22 +8,14 @@
  * `retries` are what the Sessions screen and the replay's integrity card read, so they count
  * failures and retries, not operations.
  *
- * The thrown errors below are hand-built in the shape Chromium's driver really throws.
- * `failures.test.ts` is what keeps that shape honest: it drives a real browser against the
- * fixture site and reads the errors it actually raises.
+ * The thrown errors come from `helpers/driver-errors.ts`, which holds the shapes Chromium's
+ * driver really raises. `failures.test.ts` is what keeps them honest: it drives a real
+ * browser against the fixture site and reads the errors it actually raises.
  */
 
 import { describe, expect, it } from 'vitest';
 import { AutomationFailure, DEFAULT_SESSION_BUDGET, SessionBudget } from '../src/index.js';
-
-/** A Playwright selector timeout, as `locator.waitFor` raises it. */
-const selectorTimeout = (selector: string): Error => {
-  const error = new Error(
-    `locator.waitFor: Timeout 300ms exceeded.\nCall log:\n  - waiting for locator('${selector}') to be visible\n`,
-  );
-  error.name = 'TimeoutError';
-  return error;
-};
+import { selectorTimeout } from './helpers/driver-errors.js';
 
 const delay = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
@@ -48,6 +40,62 @@ describe('a session budget', () => {
       maxRetries: 5,
       wallClockMs: DEFAULT_SESSION_BUDGET.wallClockMs,
     });
+  });
+
+  it('makes a cap that could not be reached into one that can', () => {
+    // A limit out of a configuration file or an arithmetic default: a fractional retry
+    // count counted down by one never reaches zero, and NaN compares false against
+    // everything, so neither would ever end a session.
+    expect(new SessionBudget({ maxRetries: 2.5 }).limits.maxRetries).toBe(2);
+    expect(new SessionBudget({ maxRetries: -1 }).limits.maxRetries).toBe(0);
+    expect(new SessionBudget({ maxRetries: Number.NaN }).limits.maxRetries).toBe(
+      DEFAULT_SESSION_BUDGET.maxRetries,
+    );
+    expect(new SessionBudget({ wallClockMs: -5 }).limits.wallClockMs).toBe(0);
+    expect(new SessionBudget({ wallClockMs: Number.POSITIVE_INFINITY }).limits.wallClockMs).toBe(
+      DEFAULT_SESSION_BUDGET.wallClockMs,
+    );
+  });
+
+  it('still ends the session on a retry cap that was given as a fraction', async () => {
+    const budget = new SessionBudget({ maxRetries: 2.5, wallClockMs: 5_000 });
+    let runs = 0;
+
+    const failure = await failureFrom(
+      budget.attempt(async () => {
+        runs += 1;
+        throw selectorTimeout('#cart-checkout');
+      }, 'waiting for the cart checkout link'),
+    );
+
+    // Three attempts: the first, then the two whole retries 2.5 was floored to. Without the
+    // flooring this spins until the wall clock runs out.
+    expect(runs).toBe(3);
+    expect(failure.message).toContain('retry cap');
+    expect(budget.sessionIntegrity()).toEqual({ selectorFailures: 3, retries: 2 });
+  });
+
+  it('starts its wall clock at the first attempt, not when it was built', async () => {
+    const budget = new SessionBudget({ maxRetries: 0, wallClockMs: 200 });
+    // A swarm that builds twenty-four budgets up front queues most of them for longer than
+    // this. A clock started at construction would refuse the first attempt outright.
+    await delay(260);
+
+    await expect(budget.attempt(async () => 'opened', 'opening the cart')).resolves.toBe('opened');
+    expect(budget.integrity().attempts).toBe(1);
+  });
+
+  it('hands the operation the wall clock it has left, to pass on as its own timeout', async () => {
+    const budget = new SessionBudget({ wallClockMs: 500 });
+    let given = -1;
+
+    await budget.attempt(async (remainingMs) => {
+      given = remainingMs;
+      return 'opened';
+    }, 'opening the cart');
+
+    expect(given).toBeGreaterThan(0);
+    expect(given).toBeLessThanOrEqual(500);
   });
 
   it('runs an operation that works once, and counts one attempt', async () => {
@@ -104,7 +152,10 @@ describe('a session budget', () => {
     expect(runs).toBe(2);
     expect(failure.reason).toBe('selector_not_found');
     expect(failure.message).toContain('retry cap');
-    expect(failure.message).toContain('waiting for the cart checkout link');
+    // `outcome.reason` is the one field a person reads, so the phrase appears once — and the
+    // failure we kept hitting is still named after it.
+    expect(failure.message.match(/waiting for the cart checkout link/g)).toHaveLength(1);
+    expect(failure.message).toContain('#cart-checkout');
     expect(budget.integrity()).toMatchObject({ attempts: 2, retries: 1, exhausted: true });
     expect(budget.sessionIntegrity()).toEqual({ selectorFailures: 2, retries: 1 });
   });
@@ -145,25 +196,51 @@ describe('a session budget', () => {
 
     expect(ranAgain).toBe(false);
     expect(second.message).toContain('retry cap');
+    // The refusal says what was asked for and what had already ended the session, each
+    // named once: "opening the payment step: waiting for the cart checkout link: the retry
+    // cap of 0 was reached — …".
+    expect(second.message.match(/opening the payment step/g)).toHaveLength(1);
+    expect(second.message.match(/waiting for the cart checkout link/g)).toHaveLength(1);
     expect(budget.integrity().attempts).toBe(1);
   });
 
-  it('refuses the first attempt when the wall clock is already spent', async () => {
-    const budget = new SessionBudget({ maxRetries: 2, wallClockMs: 20 });
-    await delay(60);
+  it('refuses an attempt when the wall clock ran out between operations', async () => {
+    const budget = new SessionBudget({ maxRetries: 2, wallClockMs: 80 });
+    await expect(budget.attempt(async () => 'opened', 'opening the cart')).resolves.toBe('opened');
+
+    // The session spent its minute thinking, not browsing — a model call between two page
+    // operations is where a swarm's wall clock really goes.
+    await delay(120);
 
     let ran = false;
     const failure = await failureFrom(
       budget.attempt(async () => {
         ran = true;
         return 'a page that was never opened';
-      }, 'opening the cart'),
+      }, 'opening the payment step'),
     );
 
     expect(ran).toBe(false);
     expect(failure.reason).toBe('timeout');
     expect(failure.message).toContain('wall-clock cap');
-    expect(budget.integrity()).toMatchObject({ attempts: 0, exhausted: true });
+    expect(failure.message).toContain('opening the payment step');
+    // One attempt ran; the refused one never did.
+    expect(budget.integrity()).toMatchObject({ attempts: 1, exhausted: true });
+  });
+
+  it('stops counting elapsed time once a cap has ended the session', async () => {
+    const budget = new SessionBudget({ maxRetries: 0, wallClockMs: 5_000 });
+
+    await failureFrom(
+      budget.attempt(async () => {
+        throw selectorTimeout('#cart-checkout');
+      }, 'waiting for the cart checkout link'),
+    );
+    const atTheEnd = budget.integrity().elapsedMs;
+
+    // Tearing a browser down and writing the artifact takes longer than the session did.
+    await delay(80);
+    expect(budget.integrity().elapsedMs).toBe(atTheEnd);
   });
 
   it('counts down the wall clock it has left, which is what a page operation is given', () => {

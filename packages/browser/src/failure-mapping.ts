@@ -93,8 +93,23 @@ const WAITING = /waiting for ((?:locator\(|selector ).+?)(?: to be [a-z ]+)?$/m;
 /** A lone locator, which reads better as the selector it holds than as the call. */
 const LONE_LOCATOR = /^locator\((['"`])([^'"`]*)\1\)$/;
 
+/**
+ * The call log line a locator writes **once it has found its element**. An operation that
+ * timed out after this is the operation timing out — a click on a covered button, a wait for
+ * a state the element never reached — and recording it as a selector that never existed
+ * would both read falsely and inflate the artifact's `selectorFailures`.
+ */
+const LOCATOR_RESOLVED = /locator resolved to/;
+
 /** Chromium's network error codes, which are what a navigation failure really says. */
 const NET_ERROR = /net::[A-Z_]+/;
+
+/**
+ * A request Chromium gave up on rather than failed: a frame taken out of the DOM, or one
+ * still in flight when the page navigated away or closed. It happens on healthy pages, so a
+ * frame watch that counted it would exclude sessions where nothing of ours broke.
+ */
+const ABORTED = /net::ERR_ABORTED/;
 
 /** A frame that went away under an operation, which Chromium reports in words. */
 const DETACHED_FRAME = /frames? (?:was|got) detached/i;
@@ -105,8 +120,11 @@ const INTERRUPTED = /is interrupted by another navigation/i;
 /** The lowest HTTP status a session cannot be driven on: a page that is an error, not a page. */
 const FIRST_ERROR_STATUS = 400;
 
-const readMessage = (error: unknown): string | null =>
-  error instanceof Error ? error.message.replace(ANSI, '') : null;
+/** The error, if it is one. Anything else is not ours to read, let alone to classify. */
+const asError = (error: unknown): Error | null => (error instanceof Error ? error : null);
+
+/** An error's message, with the driver's colour codes taken out. */
+const readMessage = (error: Error): string => error.message.replace(ANSI, '');
 
 /** The object the failing call was made on: `page`, `locator`, `frame`. */
 const readCallObject = (message: string): string | null => CALL.exec(message)?.[1] ?? null;
@@ -124,14 +142,18 @@ export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
   // caller may re-read anything it caught without a reason changing under it.
   if (error instanceof AutomationFailure) return error.reason;
 
-  const message = readMessage(error);
-  if (message === null) return null;
+  const raised = asError(error);
+  if (raised === null) return null;
+  const message = readMessage(raised);
 
   // A frame's own call is a frame failure whatever broke it: a page whose frame never
   // arrives is not a page that timed out, and the swarm's integrity counters say so.
   if (readCallObject(message) === 'frame' || DETACHED_FRAME.test(message)) return 'frame_error';
 
-  if (error instanceof Error && (error.name === 'TimeoutError' || TIMEOUT.test(message))) {
+  if (raised.name === 'TimeoutError' || TIMEOUT.test(message)) {
+    // A locator that found its element and then ran out of time is the operation timing
+    // out, not a selector that never resolved.
+    if (LOCATOR_RESOLVED.test(message)) return 'timeout';
     const waitedOnSelector =
       readSelector(message) !== null || readCallObject(message) === 'locator';
     return waitedOnSelector ? 'selector_not_found' : 'timeout';
@@ -182,7 +204,8 @@ export const toAutomationFailure: ToAutomationFailure = (error, attempting) => {
   if (reason === null) return null;
   if (error instanceof AutomationFailure) return error;
 
-  const message = readMessage(error) ?? '';
+  const raised = asError(error);
+  const message = raised === null ? '' : readMessage(raised);
   return new AutomationFailure(reason, `${attempting}: ${describeFailure(reason, message)}`, {
     cause: error,
   });
@@ -226,9 +249,12 @@ export const frameFailure = (
 /**
  * Watches an open page for the frame failures nothing throws.
  *
- * Only a **subframe's own document** counts. A failed subresource is not a frame failure,
- * and a failed request in the main frame is the page's navigation — which `page.goto` throws
- * for, and which is a `navigation_error` rather than ours to invent here.
+ * Only a **subframe's own document** counts, and only when Chromium failed it rather than
+ * aborted it. A failed subresource is not a frame failure, and a failed request in the main
+ * frame is the page's navigation — which `page.goto` throws for, and which is a
+ * `navigation_error` rather than ours to invent here. A frame that *answers* 4xx or 5xx
+ * fails no request at all, so it is not seen here either: that is the status-reading case,
+ * and a caller that needs it judged reads the frame's own response with `navigationFailure`.
  *
  * A watch reports what happens while it is open, so it is attached before the navigation
  * whose frames it is meant to judge. The one navigation it cannot have watched is the one
@@ -246,12 +272,12 @@ export const watchFrameFailures = (handle: PageHandle, attempting: string): Fram
     } catch {
       return;
     }
-    seen.push(
-      frameFailure(
-        { url: request.url(), errorText: request.failure()?.errorText ?? '' },
-        attempting,
-      ),
-    );
+    const errorText = request.failure()?.errorText ?? '';
+    // An abort is not a failure: it is what a frame taken out of the DOM, or one in flight
+    // when the page moved on, looks like. Counting it would exclude good sessions.
+    if (ABORTED.test(errorText)) return;
+
+    seen.push(frameFailure({ url: request.url(), errorText }, attempting));
   };
 
   handle.page.on('requestfailed', onRequestFailed);

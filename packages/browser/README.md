@@ -107,9 +107,9 @@ hand-off for regions the DOM cannot explain, so that a SAM-based segmenter can a
 
 ## Tests
 
-Four suites, all through the package's public entry point. The first three drive Chromium
-against the static fixture site in `test/fixtures/site/` (`test/helpers/static-site.ts`
-serves it from disk, with no dependency of its own); the last needs no browser at all:
+Every suite goes through the package's public entry point. Those that need a browser drive
+Chromium against the static fixture site in `test/fixtures/site/` (`test/helpers/static-site.ts`
+serves it from disk, with no dependency of its own):
 
 - `test/geometry.test.ts` — the viewport, the page height and the fold at a mobile and a
   desktop device, against the heights `test/fixtures/site/LANDMARKS.md` states.
@@ -118,9 +118,22 @@ serves it from disk, with no dependency of its own); the last needs no browser a
   behaves as the table above says.
 - `test/screenshot.test.ts` — the written PNG, read back from the run directory: its path,
   that it covers the whole document at the device's pixels, and that one screen is one file.
+- `test/failures.test.ts` — the four automation failures, each driven out of a real browser:
+  a selector the site has not, the never-answering `/slow` route, `/boom` and a vacated port,
+  and `broken-frame.html`'s frame that never arrives. Each has to be produced **inside the cap
+  its operation was given** rather than by hanging, and each outcome is parsed against the
+  contract's session schema.
+- `test/budget.test.ts` — the retry and wall-clock caps and the integrity counters. No browser.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
   captured is one row. No browser.
 
-No test asserts a Playwright internal. `test/fixture-site.test.ts` holds the fixture site to
-its own record and needs no browser at all.
+No test asserts a Playwright _object_ or reaches past the entry point for a result.
+`test/fixture-site.test.ts` holds the fixture site to its own record and needs no browser.
+
+**One thing is pinned to Playwright, deliberately.** The driver raises a single
+`TimeoutError` for a selector that never resolved and for a navigation that never completed,
+so `mapToAutomationFailure` reads its message and call log. Those shapes live in
+`test/helpers/driver-errors.ts` — written once, used by both suites — and `failures.test.ts`
+drives the same four failures out of a real browser, so a Playwright release that rewords
+them turns that suite red rather than silently recording our breakage as the product's.

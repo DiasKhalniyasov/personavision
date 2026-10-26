@@ -14,8 +14,7 @@
  * was given**, not by hanging until the test runner gives up.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import { SCHEMA_VERSION, sessionSchema } from '@personavision/contract';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -31,6 +30,13 @@ import {
   watchFrameFailures,
 } from '../src/index.js';
 import type { AutomationFailureOutcome, AutomationFailureReason, Device } from '../src/index.js';
+import {
+  frameLoadTimeout,
+  navigationRefused,
+  navigationTimeout,
+  resolvedLocatorTimeout,
+  selectorTimeout,
+} from './helpers/driver-errors.js';
 import { serveFixtureSite } from './helpers/static-site.js';
 import type { FixtureSite } from './helpers/static-site.js';
 
@@ -133,24 +139,24 @@ const waitUntil = async (ready: () => boolean, withinMs: number): Promise<boolea
 
 describe('a thrown error, read as one of ours', () => {
   it('reads the four reasons out of the errors Chromium raises', () => {
-    const selectorTimeout = new Error(
-      "locator.waitFor: Timeout 300ms exceeded.\nCall log:\n  - waiting for locator('#nope') to be visible\n",
+    expect(mapToAutomationFailure(selectorTimeout('#nope'))).toBe('selector_not_found');
+    expect(mapToAutomationFailure(navigationTimeout('http://127.0.0.1:5173/slow'))).toBe('timeout');
+    expect(mapToAutomationFailure(navigationRefused('http://127.0.0.1:5173/x'))).toBe(
+      'navigation_error',
     );
-    selectorTimeout.name = 'TimeoutError';
-    const navigationTimeout = new Error(
-      'page.goto: Timeout 300ms exceeded.\nCall log:\n  - navigating to "http://127.0.0.1:1/slow", waiting until "load"\n',
-    );
-    navigationTimeout.name = 'TimeoutError';
-    const refused = new Error(
-      'page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:65343/x\n',
-    );
-    const frameStalled = new Error('frame.waitForLoadState: Timeout 300ms exceeded.\n');
-    frameStalled.name = 'TimeoutError';
+    expect(mapToAutomationFailure(frameLoadTimeout())).toBe('frame_error');
+  });
 
-    expect(mapToAutomationFailure(selectorTimeout)).toBe('selector_not_found');
-    expect(mapToAutomationFailure(navigationTimeout)).toBe('timeout');
-    expect(mapToAutomationFailure(refused)).toBe('navigation_error');
-    expect(mapToAutomationFailure(frameStalled)).toBe('frame_error');
+  it('does not blame the selector for an operation that timed out on an element it found', () => {
+    // A click on a button something covers. The locator resolved — the call log says so —
+    // so this is the operation timing out, and counting it as a selector failure would both
+    // read falsely on the Sessions screen and inflate the artifact's `selectorFailures`.
+    const covered = resolvedLocatorTimeout('#btn');
+
+    expect(mapToAutomationFailure(covered)).toBe('timeout');
+    const failure = toAutomationFailure(covered, 'clicking Review order');
+    expect(failure?.message).toContain('the operation timed out');
+    expect(failure?.message).not.toContain('never resolved');
   });
 
   it('reads a failure of ours it is handed again as the reason it already carries', () => {
@@ -167,10 +173,7 @@ describe('a thrown error, read as one of ours', () => {
   });
 
   it('names what was being attempted, and the selector that never resolved', () => {
-    const timeout = new Error(
-      "locator.waitFor: Timeout 300ms exceeded.\nCall log:\n  - waiting for locator('#cart-checkout') to be visible\n",
-    );
-    timeout.name = 'TimeoutError';
+    const timeout = selectorTimeout('#cart-checkout');
 
     const failure = toAutomationFailure(timeout, 'waiting for the cart checkout link');
     expect(failure?.reason).toBe('selector_not_found');
@@ -240,21 +243,21 @@ describe('the session outcome a failure of ours produces', () => {
   });
 
   it('has no path to a product-attributed outcome, over the four reasons', () => {
-    // The vocabulary first: whatever the reason, the outcome is ours and excluded.
-    const attributions = REASONS.map(
-      (reason) =>
-        toAutomationFailureOutcome(new AutomationFailure(reason, `broke: ${reason}`), 'payment')
-          .attribution,
+    // Whatever the reason, and whatever a caller passes, the outcome is ours and excluded.
+    // `AutomationFailureOutcome` declares those three fields as type literals, so the other
+    // attribution is not a value this module can produce — a path to one would not compile,
+    // which is a stronger guarantee than any assertion here could be.
+    const outcomes = REASONS.map((reason) =>
+      toAutomationFailureOutcome(new AutomationFailure(reason, `broke: ${reason}`), 'payment'),
     );
-    expect(new Set(attributions)).toEqual(new Set(['automation']));
 
-    // And then the source, because an outcome is only as honest as the module that writes
-    // it: neither file this ticket fills can even spell the other attribution.
-    for (const file of ['../src/failure-mapping.ts', '../src/budget.ts']) {
-      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');
-      expect(source).not.toContain("'product'");
-      expect(source).not.toContain('excludedFromScores: false');
-    }
+    expect(new Set(outcomes.map((outcome) => outcome.status))).toEqual(
+      new Set(['automation_failure']),
+    );
+    expect(new Set(outcomes.map((outcome) => outcome.attribution))).toEqual(
+      new Set(['automation']),
+    );
+    expect(new Set(outcomes.map((outcome) => outcome.excludedFromScores))).toEqual(new Set([true]));
   });
 });
 
@@ -269,19 +272,29 @@ describe('the session outcome a failure of ours produces', () => {
  */
 describeWithChromium('the four failures, against the fixture site', () => {
   let site: FixtureSite;
-  let closedPort: number;
+
+  /**
+   * A port that was listening and is not any more, so a navigation there is refused at once.
+   * It is vacated immediately before it is used rather than once in `beforeAll`: the
+   * operating system hands these out, and sibling suites bind port 0 in parallel workers, so
+   * a number held for the length of a `beforeAll` can be given to somebody else.
+   */
+  const vacatedPort = async (): Promise<number> => {
+    const listening = await serveFixtureSite();
+    const { port } = listening;
+    await listening.close();
+    return port;
+  };
 
   beforeAll(async () => {
     site = await serveFixtureSite();
-    // A port that was listening and is not any more: a navigation there is refused at once.
-    const vacated = await serveFixtureSite();
-    closedPort = vacated.port;
-    await vacated.close();
   }, BROWSER_TIMEOUT_MS);
 
   afterAll(async () => {
-    await site.close();
-  });
+    // `site` is undefined if `beforeAll` failed to listen, and the listen error is what
+    // should be reported — not a TypeError from this hook on the way out.
+    await site?.close();
+  }, BROWSER_TIMEOUT_MS);
 
   it(
     'reads a selector the site does not have as selector_not_found, naming it',
@@ -320,8 +333,9 @@ describeWithChromium('the four failures, against the fixture site', () => {
   it(
     'reads a port nothing listens on as navigation_error',
     async () => {
+      const port = await vacatedPort();
       const failure = await failureOf('opening the variant', LAUNCHING_PATIENCE_MS, () =>
-        openSession({ id: 'control', url: `http://127.0.0.1:${closedPort}/cart.html` }, MOBILE, {
+        openSession({ id: 'control', url: `http://127.0.0.1:${port}/cart.html` }, MOBILE, {
           navigationTimeoutMs: CAP_MS,
         }),
       );
@@ -388,6 +402,13 @@ describeWithChromium('the four failures, against the fixture site', () => {
             excludedFromScores: true,
           });
         }
+
+        // The stalled frame's request is aborted rather than failed — when the page moves
+        // on, or when it closes. Nothing of ours broke there, so it is not recorded: a
+        // session excluded for an abort would be a session excluded for nothing.
+        const beforeLeaving = watch.seen().length;
+        await handle.page.goto(`${site.url}/cart.html`, { timeout: BROWSER_TIMEOUT_MS });
+        expect(await waitUntil(() => watch.seen().length > beforeLeaving, 500)).toBe(false);
       } finally {
         watch.stop();
         await closeSession(handle);
