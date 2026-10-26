@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment files. Nothing in this repository reads a credential, and
+# an accidental .env must never be committed.
+.env
+.env.*
+
+.DS_Store

@@ -1,0 +1,17 @@
+{
+  "name": "@personavision/personas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Persona definitions, trait sampling and the device mix",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

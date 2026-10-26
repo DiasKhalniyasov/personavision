@@ -1,0 +1,26 @@
+{
+  "name": "@personavision/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The personavision command line: open, run and validate",
+  "bin": {
+    "personavision": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@personavision/contract": "workspace:*",
+    "commander": "^15.0.0",
+    "open": "^11.0.4",
+    "sirv": "^3.0.2"
+  }
+}
