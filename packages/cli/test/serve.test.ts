@@ -224,21 +224,23 @@ describe('personavision serve', () => {
     });
   });
 
-  describe('the routes the next tickets fill in', () => {
-    it('answers the audience routes with 501 naming #102', async () => {
-      const saved = await fetch(new URL('/audiences', base), {
-        method: 'POST',
-        headers: { cookie: myCookie },
+  describe('the audience routes', () => {
+    it('answers them, scoped to the session, with the seeded workspace’s own audience', async () => {
+      // What they answer is #102's own suite; what is asserted here is that `serve` mounts
+      // them, behind the guard, over this data directory's store.
+      const listed = await fetch(new URL('/audiences', base), {
+        headers: { accept: 'application/json', cookie: myCookie },
       });
-      expect(saved.status).toBe(501);
-      expect(await saved.text()).toContain('#102');
+      expect(listed.status).toBe(200);
+      const { audiences } = (await listed.json()) as { audiences: { id: string }[] };
+      expect(audiences).toHaveLength(1);
+      expect(audiences[0]?.id).toBe(served.platform.seeded?.audienceId);
 
-      const read = await fetch(new URL('/audiences/outdoor-gear-shoppers', base), {
+      const read = await fetch(new URL(`/audiences/${audiences[0]?.id ?? ''}`, base), {
         method: 'GET',
         headers: { accept: 'application/json', cookie: myCookie },
       });
-      expect(read.status).toBe(501);
-      expect(await read.text()).toContain('#102');
+      expect(read.status).toBe(200);
     });
 
     it('leaves /audiences to the app when a browser navigates to it', async () => {

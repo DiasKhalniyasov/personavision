@@ -36,6 +36,36 @@ export const sendJson = (response: ServerResponse, status: number, body: unknown
   response.end(encoded);
 };
 
+/** A body larger than this is not a form submission, and is refused before it is read. */
+const MAX_BODY_BYTES = 64 * 1024;
+
+/**
+ * The request's body as JSON, or `null` for a body that is not JSON or is too large.
+ *
+ * `null` is "nothing was read", which a route answers 400 to: a body it could not parse is
+ * not a submission that failed validation, because nothing was validated. An empty body is
+ * `undefined` inside the box, so the two are told apart without a second return type.
+ */
+export const readJsonBody = async (
+  request: IncomingMessage,
+): Promise<{ value: unknown } | null> => {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    const buffer = chunk as Buffer;
+    bytes += buffer.byteLength;
+    if (bytes > MAX_BODY_BYTES) return null;
+    chunks.push(buffer);
+  }
+  const body = Buffer.concat(chunks).toString('utf8');
+  if (body === '') return { value: undefined };
+  try {
+    return { value: JSON.parse(body) };
+  } catch {
+    return null;
+  }
+};
+
 /**
  * A route whose ticket has not landed yet. It answers 501 naming the ticket, so that a
  * screen built against it fails loudly and the issue to read is in the message.
