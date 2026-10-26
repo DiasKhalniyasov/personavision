@@ -108,7 +108,7 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the corpus loader, the saliency metrics, the manifest loader and the cache-path helpers, and nothing else', () => {
+  it('exports the types, the corpus loader, the saliency and scanpath metrics, the manifest loader and the cache-path helpers, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
@@ -122,7 +122,13 @@ describe('the public entry point', () => {
       'SALIENCY_METRICS',
       'SALIENCY_METRIC_IDS',
       'SALIENCY_METRIC_PARAMETERS',
+      'SCANPATH_CHANCE',
+      'SCANPATH_METRICS',
+      'SCANPATH_METRIC_IDS',
+      'SCANPATH_METRIC_PARAMETERS',
+      'SCANPATH_REGION_COUNT',
       'SaliencyMetricError',
+      'ScanpathMetricError',
       'VIEWING_DURATIONS_SECONDS',
       'aucJudd',
       'cacheRoot',
@@ -136,14 +142,24 @@ describe('the public entry point', () => {
       'loadCorpusCategory',
       'loadCorpusRecord',
       'loadManifest',
+      'needlemanWunsch',
       'nss',
       'parseManifest',
       'poolFixations',
       'recordedChecksum',
+      'regionOfFixation',
       'resampleSaliencyMap',
       'saliencyMetric',
+      'scanMatch',
+      'scanMatchLetters',
+      'scanMatchSubstitutionMatrix',
+      'scanpathMetric',
       'scoreSaliency',
+      'scoreScanpath',
+      'scoreScanpathAgainstHumans',
+      'sequenceScore',
       'unverifiedFiles',
+      'visitedRegions',
     ]);
   });
 });
