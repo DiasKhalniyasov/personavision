@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { validateDecision } from './decision.js';
+import { DecisionSessionClosedError } from './session.js';
 import type {
   Decision,
   DecisionContext,
   DecisionProvider,
+  DecisionSession,
+  DecisionStep,
   FixatedElement,
+  PastAction,
   PersonaTraits,
 } from './types.js';
 
@@ -13,9 +17,15 @@ import type {
  *
  * Call `describeDecisionProviderContract` from one test file and the provider is held to
  * everything the interface promises — the action set, the knowledge boundary, the five
- * usage figures, and the behaviour that makes it a decision layer rather than a dice roll.
- * A new provider (#43's model provider, anything after it) adds a file of about five lines
- * and inherits the lot; what it may not do is weaken one of these.
+ * usage figures, the way one agent session behaves on its one handle, and the behaviour
+ * that makes it a decision layer rather than a dice roll. A new provider (#43's model
+ * provider, anything after it) adds a file of about five lines and inherits the lot; what
+ * it may not do is weaken one of these.
+ *
+ * The session guarantees are here rather than in each provider's own tests because they are
+ * what the rest of the system is built on: #139's trajectory file is opened and closed on a
+ * handle, and a handle that leaked state into another session, or wrote one more line after
+ * being closed, would corrupt a run's audit trail rather than fail a test.
  *
  * **Nothing here asserts a prompt string.** A provider's prompt is its own business and
  * changes whenever its model does. What is asserted is what a run can see: which element
@@ -61,6 +71,46 @@ export const contextOf = (overrides: Partial<DecisionContext> = {}): DecisionCon
   history: [],
   ...overrides,
 });
+
+/**
+ * Three screens of one session, in order, so that a handle is exercised the way a session
+ * uses it: more than one turn, and a growing action history behind each one.
+ */
+export const SESSION_STEPS: readonly DecisionStep[] = [
+  { id: 'land', index: 0, label: 'Land on the page' },
+  { id: 'browse', index: 1, label: 'Browse the catalogue' },
+  { id: 'product', index: 2, label: 'Open the product' },
+];
+
+/**
+ * Walks a session through `SESSION_STEPS` on its one handle, carrying its own history
+ * forward, and returns what it decided. Every screen is checked against the knowledge
+ * boundary as it goes, because a handle that remembered the wrong session would show up
+ * first as a decision aimed at an element of someone else's screen.
+ */
+export const walkSession = async (
+  session: DecisionSession,
+  steps: readonly DecisionStep[] = SESSION_STEPS,
+): Promise<readonly Decision[]> => {
+  const history: PastAction[] = [];
+  const decisions: Decision[] = [];
+
+  for (const step of steps) {
+    const context = contextOf({ step, history: [...history] });
+    const decision = await session.decide(context);
+
+    expect(validateDecision(context, decision)).toEqual([]);
+    decisions.push(decision);
+    history.push({
+      step: step.id,
+      kind: decision.action.kind,
+      targetElementId: decision.action.targetElementId,
+      ok: true,
+    });
+  }
+
+  return decisions;
+};
 
 /** A band of seeds, fixed, so that every assertion over it is reproducible, never flaky. */
 export const seedBand = (size: number): readonly number[] =>
@@ -170,6 +220,125 @@ export const describeDecisionProviderContract = (
 
       expect(targeted.length).toBeGreaterThan(0);
       expect(onMatch).toBeGreaterThan(onDistractor);
+    });
+
+    describe('one agent session, one handle', () => {
+      it('hands back a handle that carries the session’s persona and seed', async () => {
+        const session = options
+          .createProvider({ seed: 3 })
+          .beginSession({ personaId: 'p-anna', seed: 3 });
+
+        expect(session.personaId).toBe('p-anna');
+        expect(session.seed).toBe(3);
+
+        await session.close();
+      });
+
+      it('decides every screen of the session through that one handle', async () => {
+        const session = options
+          .createProvider({ seed: 5 })
+          .beginSession({ personaId: 'p-anna', seed: 5 });
+
+        // `walkSession` checks each decision against the screen it was made on.
+        const decisions = await walkSession(session);
+
+        expect(decisions).toHaveLength(SESSION_STEPS.length);
+        // The handle is the session's for its whole life: a provider that re-derived its
+        // identity per turn — from a fresh cache key, say — would drift from it here.
+        expect(session.personaId).toBe('p-anna');
+        expect(session.seed).toBe(5);
+
+        await session.close();
+      });
+
+      it('keeps two handles with a different persona or seed independent', async () => {
+        const provider = options.createProvider({ seed: 11 });
+        const first = provider.beginSession({ personaId: 'p-anna', seed: 11 });
+        const second = provider.beginSession({ personaId: 'p-boris', seed: 12 });
+
+        expect(first.personaId).not.toBe(second.personaId);
+        expect(first.seed).not.toBe(second.seed);
+
+        await walkSession(first);
+        await first.close();
+
+        // One session ending ends that session and no other: the second is still deciding
+        // after the first has been closed, flushed and refused.
+        await expect(first.decide(contextOf())).rejects.toBeInstanceOf(DecisionSessionClosedError);
+        expect(await walkSession(second)).toHaveLength(SESSION_STEPS.length);
+
+        await second.close();
+      });
+
+      it('refuses to decide once the session is closed, and names the session', async () => {
+        const session = options
+          .createProvider({ seed: 2 })
+          .beginSession({ personaId: 'p-anna', seed: 2 });
+
+        await session.decide(contextOf());
+        await session.close();
+
+        const refusal = await session.decide(contextOf()).then(
+          (decision) => decision,
+          (error: unknown) => error,
+        );
+
+        expect(refusal).toBeInstanceOf(DecisionSessionClosedError);
+        expect(refusal).toMatchObject({ personaId: 'p-anna', seed: 2 });
+      });
+
+      it('closes a session as often as asked without complaining', async () => {
+        const session = options
+          .createProvider({ seed: 2 })
+          .beginSession({ personaId: 'p-anna', seed: 2 });
+
+        await expect(session.close()).resolves.toBeUndefined();
+        await expect(session.close()).resolves.toBeUndefined();
+      });
+
+      if (options.deterministic) {
+        it('decides a session the same whether or not another session is running', async () => {
+          const provider = options.createProvider({ seed: 9 });
+          const identity = { personaId: 'p-anna', seed: 9 } as const;
+
+          const alone = await walkSession(provider.beginSession(identity));
+
+          // The same session again, turn for turn, with a second session's turns in
+          // between. Any state the two shared — a conversation, a cache key, a counter —
+          // would land in the wrong one and show up as a different decision here.
+          const watched = provider.beginSession(identity);
+          const other = provider.beginSession({ personaId: 'p-boris', seed: 10 });
+          const interleaved: Decision[] = [];
+          const watchedHistory: PastAction[] = [];
+          const otherHistory: PastAction[] = [];
+
+          for (const step of SESSION_STEPS) {
+            const otherContext = contextOf({ step, history: [...otherHistory] });
+            const otherDecision = await other.decide(otherContext);
+            otherHistory.push({
+              step: step.id,
+              kind: otherDecision.action.kind,
+              targetElementId: otherDecision.action.targetElementId,
+              ok: true,
+            });
+
+            const context = contextOf({ step, history: [...watchedHistory] });
+            const decision = await watched.decide(context);
+            interleaved.push(decision);
+            watchedHistory.push({
+              step: step.id,
+              kind: decision.action.kind,
+              targetElementId: decision.action.targetElementId,
+              ok: true,
+            });
+          }
+
+          expect(interleaved).toEqual(alone);
+
+          await watched.close();
+          await other.close();
+        });
+      }
     });
 
     if (options.deterministic) {
