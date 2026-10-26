@@ -6,8 +6,9 @@
  * customer's checkout, and every screenshot of it has to look like somebody else's site.
  * The values below are ordinary CSS, owned here.
  *
- * Shared by variant A (`../a/`) and, when it lands, variant B (`../b/`), so that B can be
- * an honest copy of the chrome with only its planted defects differing.
+ * Shared by variant A (`../a/`) and variant B (`../b/`), so that B can be an honest copy of
+ * the chrome with only its planted defects differing. Everything B needs that A does not is
+ * in the last section of this file, and nothing above that section is variant-specific.
  *
  * Layout rule, matching the prototype: `.body` is two columns from 768px up and one column
  * below it, so at 390x844 the step's primary action precedes the order summary in both
@@ -27,6 +28,16 @@
   --shop-accent-ink: #ffffff;
   --shop-good: #1c6b3a;
   --shop-good-bg: #e8f4ec;
+  /*
+   * Variant B only. The shop's own alarm and emphasis values, not borrowed from
+   * `docs/design/tokens.css`: a screenshot that used the product's `--sev-*` palette would
+   * tell the viewer what to think about a page the product is only supposed to photograph.
+   * Both clear WCAG AA on the surface they sit on (6.9:1 and 6.2:1).
+   */
+  --shop-alarm: #a3261d;
+  --shop-promo-ink: #8a4b08;
+  --shop-promo-bg: #fdf3e3;
+  --shop-promo-line: #e8c98a;
   --shop-radius: 6px;
   --shop-gap: 16px;
   --shop-font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -310,4 +321,53 @@ body.card-frame-body input {
   background: transparent;
   color: var(--shop-ink);
   font: inherit;
+}
+
+/* ======================================================= variant B: the planted defects */
+
+/*
+ * Nothing above this line is variant-specific. These four rules are, and each one is one of
+ * the three defects variant B carries on purpose. `demo/README.md` names them, the step they
+ * live on and the `data-aoi` region each one is measured as.
+ */
+
+/* Defect 3: the banner that takes the first look. Above the content, so it is the first
+   thing in the reading order on cart, payment and review; absent from the confirmation. */
+.promo {
+  margin: 12px 20px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--shop-promo-line);
+  border-radius: var(--shop-radius);
+  background: var(--shop-promo-bg);
+  color: var(--shop-promo-ink);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.promo small {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* Defect 2: the fee that arrives after the card. The alarm colour marks the row and the
+   total it changes, on the review step only — the confirmation's copy of the row is plain. */
+.summary .fee-new {
+  color: var(--shop-alarm);
+  font-weight: 500;
+}
+
+/*
+ * Defect 1: the spacer that puts the completing action below the fold.
+ *
+ * The height is measured, not guessed. Without it the completing action's top edge sits at
+ * 348 px; with it, at 1024 px — 180 px below the 844 px fold of the mobile viewport and 124 px
+ * below the 900 px fold of the desktop one, which is what the prototype's first finding
+ * claims. The prototype's own `.pushdown` is 150 px, but it is sized for a 9 px thumbnail and
+ * does not transfer. The arithmetic is written out in the variant-B section of
+ * `demo/README.md`, and a test keeps that number and this one in step.
+ */
+.pushdown {
+  height: 676px;
 }
