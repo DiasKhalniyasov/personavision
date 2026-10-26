@@ -10,6 +10,7 @@
 export {
   audienceSchema,
   findingsSchema,
+  modelModeSchema,
   personaSchema,
   runRequestSchema,
   runSchema,
@@ -23,6 +24,7 @@ export type {
   Audience,
   AudienceDevice,
   Findings,
+  ModelMode,
   Persona,
   Run,
   RunFailure,

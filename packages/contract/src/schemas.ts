@@ -147,6 +147,17 @@ const taskSchema = z.strictObject({ id: name, prompt: name });
 
 const engineModeSchema = z.enum(['offline', 'model']);
 
+/**
+ * Which of the two models a run was run on — the owner's per-run setting, not a provider
+ * detail. `contributor` is `muse-spark-1.3-contributor`: about twelve times cheaper, and
+ * Meta may use the content to train its models. `standard` is `muse-spark-1.3` at the
+ * published prices, and the content is not used for training. The two price rows and the
+ * mapping to those model ids live in the provider, not here: what the contract fixes is
+ * that a run records the mode it ran on, so a cost figure can be checked against the table
+ * that produced it and a customer can see which model their content went to.
+ */
+export const modelModeSchema = z.enum(['contributor', 'standard']);
+
 /** How an area of interest was found: the DOM, the accessibility tree, or segmentation. */
 const aoiSourceSchema = z.enum(['dom', 'a11y', 'sam']);
 
@@ -338,6 +349,14 @@ export const runSchema = z
     seedGroups: z.array(z.int()),
     engine: z.strictObject({
       mode: engineModeSchema,
+      /**
+       * Which model this run called, recorded beside what it cost. Optional with no
+       * default: absent means no model was used or none was recorded, and a mode nobody
+       * chose is never guessed at. A screen and a cost reader take this field rather than
+       * matching `models.decision` against a known id, so a new model id cannot quietly
+       * break them.
+       */
+      modelMode: modelModeSchema.optional(),
       provider: name.nullable(),
       models: z.strictObject({ decision: name, segmentation: name, planning: name }).nullable(),
       weights: z.strictObject({ alpha: z.number(), beta: z.number(), gamma: z.number() }),
@@ -596,6 +615,45 @@ export const runSchema = z
       }
     }
 
+    // Which model ran is part of a run's record: a cost figure cannot be checked without
+    // the price table that produced it, and a customer could not otherwise tell whether
+    // their content went to the model that may be trained on it. So a run that called a
+    // model says which one and names the ids it called, and an offline run — which paid for
+    // nothing and sent nothing anywhere — carries neither.
+    const { engine } = run;
+    if (engine.mode === 'model') {
+      if (engine.modelMode === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['engine', 'modelMode'],
+          message: `this run called a model, so it records which one it called: ${modelModeSchema.options.join(' or ')}`,
+        });
+      }
+      if (engine.models === null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['engine', 'models'],
+          message: 'this run called a model, so it records the model ids it called',
+        });
+      }
+    } else if (engine.mode === 'offline') {
+      if (engine.modelMode !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['engine', 'modelMode'],
+          message: `this run ran the offline deterministic engine, which calls no model, but records the "${engine.modelMode}" model mode`,
+        });
+      }
+      if (engine.models !== null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['engine', 'models'],
+          message:
+            'this run ran the offline deterministic engine, which calls no model, but names the model ids it called',
+        });
+      }
+    }
+
     // The headline findings are a ranked three at most, so naming one twice spends a place
     // the Verdict screen has only three of.
     const named = new Set<string>();
@@ -771,22 +829,42 @@ export const findingsSchema = z
  * The arguments a new run is started with. The CLI's `run` command and the web app's
  * New run form submit this same shape, so it is declared here once.
  */
-export const runRequestSchema = z.strictObject({
-  task: z.strictObject({ prompt: name }),
-  variants: z.array(variantSchema).min(1),
-  /**
-   * The audience the test is for, by id — the platform resolves it and the pipeline copies
-   * it into `run.json` by value as the test starts. There is no subset of personas to
-   * name: the personas are generated from the audience, and a run carries `audience.size`
-   * of them.
-   */
-  audienceId: name,
-  /** Sessions per persona per variant. */
-  repeats: z.int().positive(),
-  seed: z.int(),
-  engineMode: engineModeSchema,
-});
+export const runRequestSchema = z
+  .strictObject({
+    task: z.strictObject({ prompt: name }),
+    variants: z.array(variantSchema).min(1),
+    /**
+     * The audience the test is for, by id — the platform resolves it and the pipeline copies
+     * it into `run.json` by value as the test starts. There is no subset of personas to
+     * name: the personas are generated from the audience, and a run carries `audience.size`
+     * of them.
+     */
+    audienceId: name,
+    /** Sessions per persona per variant. */
+    repeats: z.int().positive(),
+    seed: z.int(),
+    engineMode: engineModeSchema,
+    /**
+     * Which model to run it on. Optional, and with no default here: the CLI defaults it to
+     * `contributor` and the platform resolves it from the workspace, because a default
+     * belongs where the caller is known. A request for `model` mode that names no model is
+     * invalid rather than resolved to the cheap one — a paying customer's run is never
+     * quietly downgraded. An `offline` request may carry one and simply not spend it, which
+     * is what the CLI's own defaults ask for.
+     */
+    modelMode: modelModeSchema.optional(),
+  })
+  .superRefine((request, ctx) => {
+    if (request.engineMode === 'model' && request.modelMode === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['modelMode'],
+        message: `a run on a model names the model it is to run on: ${modelModeSchema.options.join(' or ')}`,
+      });
+    }
+  });
 
+export type ModelMode = z.infer<typeof modelModeSchema>;
 export type Audience = z.infer<typeof audienceSchema>;
 export type AudienceDevice = z.infer<typeof audienceDeviceSchema>;
 export type Persona = z.infer<typeof personaSchema>;

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type {
   Audience,
   Findings,
+  ModelMode,
   Run,
   RunArtifact,
   RunProgress,
@@ -244,6 +245,25 @@ export const validRun = (): Run => ({
   },
   calibration: null,
 });
+
+/**
+ * The same run, run against a model: the engine block a non-zero bill and a recorded model
+ * mode belong to. The two model ids are the ones the owner's per-run mode chooses between,
+ * and `engine.modelMode` says which of them was called without anybody parsing the id.
+ */
+export const onTheModel = (run: Run, modelMode: ModelMode = 'standard'): Run => {
+  const decision = modelMode === 'contributor' ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3';
+  return {
+    ...run,
+    engine: {
+      ...run.engine,
+      mode: 'model',
+      provider: 'meta-model-api',
+      modelMode,
+      models: { decision, segmentation: decision, planning: decision },
+    },
+  };
+};
 
 export const validSession = (sessionId: string, variant: string): Session => ({
   schemaVersion: SCHEMA_VERSION,

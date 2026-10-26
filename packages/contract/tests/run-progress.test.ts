@@ -13,6 +13,7 @@ import {
   CONFIRM,
   finishedEntry,
   finishedProgress,
+  onTheModel,
   openRunArtifact,
   temporaryRunDir,
   validArtifact,
@@ -45,21 +46,6 @@ const MODEL_USAGE: RunUsage = {
   reasoningTokens: 172,
   estimatedCostUsd: 0.0042,
 };
-
-/** The same run, run against a model: the mode a non-zero bill belongs to. */
-const onTheModel = (run: Run): Run => ({
-  ...run,
-  engine: {
-    ...run.engine,
-    mode: 'model',
-    provider: 'meta-model-api',
-    models: {
-      decision: 'muse-spark-1.3',
-      segmentation: 'muse-spark-1.3',
-      planning: 'muse-spark-1.3',
-    },
-  },
-});
 
 describe('a run that is still open', () => {
   let dir: string;
