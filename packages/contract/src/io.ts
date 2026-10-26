@@ -1,8 +1,8 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { z } from 'zod';
 import { runPaths, sessionIdFromFileName } from './paths.js';
-import type { Findings, Run, Session } from './schemas.js';
-import { findingsSchema, runSchema, sessionSchema } from './schemas.js';
+import type { Findings, Run, RunProgress, RunUsage, Session, SessionProgress } from './schemas.js';
+import { findingsSchema, runSchema, sessionSchema, ZERO_USAGE } from './schemas.js';
 
 /**
  * Reading, writing and validating a whole run directory. A round trip through disk is
@@ -135,6 +135,30 @@ const checkReferences = (
       }
     });
   }
+  // The progress block names variants in two places, and the Running screen draws a bar
+  // and a log line from each: a variant the run never declared is a bar with no label.
+  run.progress?.perVariant.forEach((entry, index) => {
+    if (!declaredVariants.has(entry.variant)) {
+      violations.push(
+        at(
+          relative.run,
+          ['progress', 'perVariant', index, 'variant'],
+          danglingVariant(entry.variant),
+        ),
+      );
+    }
+  });
+  run.progress?.sessions.forEach((entry, index) => {
+    if (!declaredVariants.has(entry.variant)) {
+      violations.push(
+        at(
+          relative.run,
+          ['progress', 'sessions', index, 'variant'],
+          danglingVariant(entry.variant),
+        ),
+      );
+    }
+  });
   run.stepCaptions.forEach((caption, index) => {
     if (!declaredSteps.has(caption.step)) {
       violations.push(
@@ -253,6 +277,18 @@ const checkReferences = (
           relative.run,
           ['sessionIds', index],
           `run.json lists session "${sessionId}", but there is no ${relative.session(sessionId)}`,
+        ),
+      );
+    }
+  });
+  // A finished session in the log is a session of this run: the log line links to it.
+  run.progress?.sessions.forEach((entry, index) => {
+    if (!seen.has(entry.sessionId)) {
+      violations.push(
+        at(
+          relative.run,
+          ['progress', 'sessions', index, 'sessionId'],
+          `progress records session "${entry.sessionId}" as finished, but run.json lists no such session`,
         ),
       );
     }
@@ -410,4 +446,143 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
     (sessionId) => !sessions.some((session) => session.sessionId === sessionId),
   );
   await Promise.all(stale.map((sessionId) => rm(paths.session(sessionId), { force: true })));
+};
+
+/** A run's progress before it has recorded any: nobody finished, and nothing is claimed. */
+const NO_PROGRESS: RunProgress = {
+  totalSessions: 0,
+  finishedSessions: 0,
+  perVariant: [],
+  sessions: [],
+};
+
+const addUsage = (total: RunUsage, spent: RunUsage): RunUsage => ({
+  calls: total.calls + spent.calls,
+  inputTokens: total.inputTokens + spent.inputTokens,
+  cachedInputTokens: total.cachedInputTokens + spent.cachedInputTokens,
+  outputTokens: total.outputTokens + spent.outputTokens,
+  reasoningTokens: total.reasoningTokens + spent.reasoningTokens,
+  estimatedCostUsd: total.estimatedCostUsd + spent.estimatedCostUsd,
+});
+
+/**
+ * The progress block with one more finished session in it.
+ *
+ * The planner owns the totals and this owns the finished counts: a run that declared its
+ * per-variant plan keeps it, and a session the plan did not allow for is a violation rather
+ * than a total quietly raised. A run that declared no per-variant plan shows one bar, and
+ * this does not invent two — its overall total grows with the sessions that land.
+ */
+const withFinishedSession = (
+  progress: RunProgress,
+  entry: SessionProgress,
+  fail: (path: ReadonlyArray<PropertyKey>, message: string) => void,
+): RunProgress => {
+  const sessions = [...progress.sessions, entry];
+  if (progress.perVariant.length === 0) {
+    return {
+      ...progress,
+      totalSessions: Math.max(progress.totalSessions, sessions.length),
+      finishedSessions: sessions.length,
+      sessions,
+    };
+  }
+  const planned = progress.perVariant.find((row) => row.variant === entry.variant);
+  if (planned === undefined) {
+    fail(
+      ['progress', 'perVariant'],
+      `this run plans no sessions on variant "${entry.variant}", so ${entry.sessionId} has nowhere to be counted`,
+    );
+  } else if (planned.finishedSessions >= planned.totalSessions) {
+    fail(
+      ['progress', 'perVariant'],
+      `variant "${entry.variant}" planned ${planned.totalSessions} ${planned.totalSessions === 1 ? 'session' : 'sessions'} and that many have finished, so ${entry.sessionId} is one more than the run planned`,
+    );
+  }
+  return {
+    ...progress,
+    finishedSessions: sessions.length,
+    perVariant: progress.perVariant.map((row) =>
+      row.variant === entry.variant ? { ...row, finishedSessions: row.finishedSessions + 1 } : row,
+    ),
+    sessions,
+  };
+};
+
+/**
+ * One finished session, appended to an open run: its file written, its id listed, the
+ * progress block and the per-variant counts updated, and what it spent added to the run's
+ * totals. The swarm calls this as each session lands, so that the Running screen reads a
+ * run that is still open and the run directory validates before, during and after.
+ *
+ * The log entry is derived from the session and the run — the persona's name comes from
+ * the run's `personas` unless it is passed, for a real session that has no persona — so
+ * that nothing is stated twice and the artifact stores no display text. Returns the run as
+ * it now stands, and throws with every violation rather than writing one.
+ */
+export const appendFinishedSession = async (
+  runDir: string,
+  session: Session,
+  { personaName, usage }: { personaName?: string; usage?: RunUsage } = {},
+): Promise<Run> => {
+  const paths = runPaths(runDir);
+  const violations: Violation[] = [];
+  const runJson = await readJsonFile(paths.run, relative.run, violations);
+  const current =
+    runJson === undefined ? undefined : parse(runSchema, runJson, relative.run, violations);
+  const label = relative.session(session.sessionId);
+  const finished = parse(sessionSchema, session, label, violations);
+  if (current === undefined || finished === undefined) throw new Error(report(runDir, violations));
+
+  const named =
+    personaName ??
+    (finished.persona === null
+      ? undefined
+      : current.personas.find((persona) => persona.id === finished.persona?.id)?.name);
+  if (named === undefined) {
+    violations.push(
+      at(
+        label,
+        ['persona'],
+        `this run declares no persona "${finished.persona?.id ?? ''}", so the name for its log entry has to be passed in`,
+      ),
+    );
+    throw new Error(report(runDir, violations));
+  }
+
+  const entry: SessionProgress = {
+    sessionId: finished.sessionId,
+    personaName: named,
+    variant: finished.variant,
+    seed: finished.seed,
+    finishedAt: new Date(Date.parse(finished.startedAt) + finished.durationMs).toISOString(),
+    durationMs: finished.durationMs,
+    status: finished.outcome.status,
+    step: finished.outcome.step,
+    reason: finished.outcome.reason,
+    attribution: finished.outcome.attribution,
+  };
+  const fail = (path: ReadonlyArray<PropertyKey>, message: string): void => {
+    violations.push(at(relative.run, path, message));
+  };
+  const next = parse(
+    runSchema,
+    {
+      ...current,
+      sessionIds: [...current.sessionIds, finished.sessionId],
+      progress: withFinishedSession(current.progress ?? NO_PROGRESS, entry, fail),
+      usage: usage === undefined ? current.usage : addUsage(current.usage ?? ZERO_USAGE, usage),
+    },
+    relative.run,
+    violations,
+  );
+  if (next === undefined || violations.length > 0) throw new Error(report(runDir, violations));
+
+  // The session file first and the index second: between the two writes the directory holds
+  // a session run.json does not list yet, which is the shorter-lived of the two half-states
+  // and the one a reader can tell apart from a lost session.
+  await mkdir(paths.sessionsDir, { recursive: true });
+  await writeFile(paths.session(finished.sessionId), serialize(finished));
+  await writeFile(paths.run, serialize(next));
+  return next;
 };

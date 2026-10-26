@@ -103,6 +103,23 @@ describe('personavision validate', () => {
     expect(Number(/\((\d+) violations\)/.exec(stderr)?.[1])).toBeGreaterThanOrEqual(2);
   });
 
+  it("reports a violation in the run's progress and usage at its JSON path", async () => {
+    const file = runPaths(written.runDir).run;
+    const run = JSON.parse(await readFile(file, 'utf8')) as {
+      progress: { finishedSessions: number };
+      usage: { cachedInputTokens: number };
+    };
+    run.progress.finishedSessions = 9;
+    run.usage.cachedInputTokens = 5;
+    await writeFile(file, JSON.stringify(run, null, 2));
+
+    const { code, stderr } = await personavision(['validate', written.runDir], written.dir);
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain('run.json/progress/finishedSessions');
+    expect(stderr).toContain('run.json/usage/cachedInputTokens');
+  });
+
   it('fails with a message about the path, not a stack trace', async () => {
     const missing = `${written.runDir}-nope`;
 

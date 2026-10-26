@@ -1,8 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Audience, Findings, Run, RunArtifact, Session } from '../src/index.js';
-import { runPaths, SCHEMA_VERSION } from '../src/index.js';
+import type {
+  Audience,
+  Findings,
+  Run,
+  RunArtifact,
+  RunProgress,
+  Session,
+  SessionProgress,
+} from '../src/index.js';
+import { runPaths, SCHEMA_VERSION, ZERO_USAGE } from '../src/index.js';
 
 /**
  * A valid run artifact, built here rather than read from disk: the committed example run
@@ -82,10 +90,47 @@ const score = (variant: string, median: number) => ({
   perSeedGroup: [{ seed: 1, frictionScore: median }],
 });
 
+const STARTED_AT = '2026-10-24T14:02:05.000Z';
+const FINISHED_AT = '2026-10-24T14:03:30.000Z';
+
+/**
+ * One finished session as the run's progress log records it: the same person, seed and
+ * outcome as `validSession`, because the log is about the sessions that are on disk.
+ */
+export const finishedEntry = (sessionId: string, variant: string): SessionProgress => ({
+  sessionId,
+  personaName: 'Rushed buyer',
+  variant,
+  seed: 1,
+  finishedAt: '2026-10-24T14:02:48.000Z',
+  durationMs: 38_000,
+  status: 'success',
+  step: CONFIRM,
+  reason: 'Order placed.',
+  attribution: 'product',
+});
+
+/** Both sessions of `validArtifact`, finished: one per variant, and the counts to match. */
+export const finishedProgress = (): RunProgress => ({
+  totalSessions: 2,
+  finishedSessions: 2,
+  perVariant: [
+    { variant: 'A', totalSessions: 1, finishedSessions: 1 },
+    { variant: 'B', totalSessions: 1, finishedSessions: 1 },
+  ],
+  sessions: [finishedEntry('S-01', 'A'), finishedEntry('S-02', 'B')],
+});
+
 export const validRun = (): Run => ({
   schemaVersion: SCHEMA_VERSION,
   runId: RUN_ID,
   createdAt: '2026-10-24T14:02:00.000Z',
+  status: 'finished',
+  startedAt: STARTED_AT,
+  finishedAt: FINISHED_AT,
+  progress: finishedProgress(),
+  // The offline engine makes no model calls, and zero is recorded rather than left unknown.
+  usage: { ...ZERO_USAGE },
   task: { id: 'buy-boots', prompt: 'Buy the Ridgeline hiking boots in size 43.' },
   variants: [
     { id: 'A', name: 'Current checkout', url: 'https://example.test/a/cart' },
@@ -300,6 +345,35 @@ export const validArtifact = (): RunArtifact => ({
   sessions: [validSession('S-01', 'A'), validSession('S-02', 'B')],
   findings: validFindings(),
 });
+
+/**
+ * A run that has started and finished nothing: the empty state the Running screen renders,
+ * and what the appending writer is handed. Its plan is the two sessions of `validArtifact`,
+ * so appending both leaves a run that agrees with its own counts.
+ */
+export const openRunArtifact = (): RunArtifact => {
+  const run: Run = {
+    ...validRun(),
+    status: 'open',
+    startedAt: STARTED_AT,
+    progress: {
+      totalSessions: 2,
+      finishedSessions: 0,
+      perVariant: [
+        { variant: 'A', totalSessions: 1, finishedSessions: 0 },
+        { variant: 'B', totalSessions: 1, finishedSessions: 0 },
+      ],
+      sessions: [],
+    },
+    sessionIds: [],
+    // Nothing has been scored and nothing has been found yet: a run says what it has.
+    scores: [],
+    verdict: { ...validRun().verdict, headlineFindingIds: [] },
+  };
+  // An open run has not finished, so it records no finishing time at all.
+  delete run.finishedAt;
+  return { run, sessions: [], findings: { ...validFindings(), findings: [] } };
+};
 
 /** A temporary run directory, and the callback to throw it away again. */
 export const temporaryRunDir = async (): Promise<{ dir: string; cleanup: () => Promise<void> }> => {

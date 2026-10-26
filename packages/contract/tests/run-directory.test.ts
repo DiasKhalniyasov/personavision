@@ -4,6 +4,7 @@ import type { Violation } from '../src/index.js';
 import { readRun, runPaths, validate, writeRun } from '../src/index.js';
 import {
   CHECKOUT_AOI,
+  finishedEntry,
   temporaryRunDir,
   validArtifact,
   validFindings,
@@ -331,6 +332,14 @@ describe('the writer refuses an artifact that would not read back', () => {
       const shorter = validArtifact();
       shorter.run.sessionIds = ['S-01'];
       shorter.sessions = [validSession('S-01', 'A')];
+      // A run that lists one session has finished one: the progress block is the run's own
+      // account of the sessions it carries, so it shrinks with them.
+      shorter.run.progress = {
+        totalSessions: 1,
+        finishedSessions: 1,
+        perVariant: [{ variant: 'A', totalSessions: 1, finishedSessions: 1 }],
+        sessions: [finishedEntry('S-01', 'A')],
+      };
       shorter.findings.findings[0].sessionIds = ['S-01'];
       await writeRun(dir, shorter);
 
