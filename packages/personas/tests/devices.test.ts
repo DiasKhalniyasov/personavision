@@ -124,6 +124,29 @@ describe('a generated person carries the concrete device it ran on', () => {
     }
   });
 
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'resolves a class called %s to its own geometry, not to something the prototype answers for',
+    (name) => {
+      const odd = {
+        name,
+        viewport: { width: 1024, height: 768 },
+        deviceScaleFactor: 1,
+        touch: false,
+        share: 1,
+      };
+      const personas = generatePersonas(audienceWith({ size: 2, devices: [odd] }), { seed: 1 });
+
+      for (const persona of personas) {
+        expect(persona.device).toStrictEqual({
+          name,
+          viewport: odd.viewport,
+          deviceScaleFactor: odd.deviceScaleFactor,
+          touch: odd.touch,
+        });
+      }
+    },
+  );
+
   it('names the device class in the segment, so results group by how people browsed', () => {
     const personas = generatePersonas(audienceWith({ size: 4 }), { seed: 1 });
 

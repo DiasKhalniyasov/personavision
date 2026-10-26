@@ -56,7 +56,11 @@ const asItself = (device: AudienceDevice): ConcreteDevice => ({
 });
 
 export const concreteDeviceFor = (device: AudienceDevice): ConcreteDevice => {
-  const known = CONCRETE_DEVICES[device.name.toLowerCase()];
+  // A device class is named by whoever authored the audience, so the name is looked up as a
+  // key this table owns rather than as one the prototype chain might answer for: an audience
+  // with a device called `constructor` resolves to its own geometry, not to a function.
+  const name = device.name.toLowerCase();
+  const known = Object.hasOwn(CONCRETE_DEVICES, name) ? CONCRETE_DEVICES[name] : undefined;
   return known === undefined || known.touch !== device.touch ? asItself(device) : known;
 };
 
