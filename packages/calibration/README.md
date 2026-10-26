@@ -113,12 +113,12 @@ they were given.
 
 Within one dataset's directory (`<cache root>/ueyes`):
 
-| Directory     | Holds                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| `downloads/`  | archives as fetched, each with its `.part` while in flight and its verification receipt     |
-| `dataset/`    | the unpacked tree, in the layout the manifest describes                                     |
-| `quarantine/` | a file that failed its checksum, moved aside with its receipts rather than silently reused  |
-| `.staging/`   | the archives part-way out of their zips; it becomes `dataset/` in one move once it is whole |
+| Directory     | Holds                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `downloads/`  | archives as fetched, each with its `.part` while in flight and its verification receipt                                                                                                                                                     |
+| `dataset/`    | the unpacked tree, in the layout the manifest describes                                                                                                                                                                                     |
+| `quarantine/` | a file that failed its checksum, moved aside with its receipts rather than silently reused                                                                                                                                                  |
+| `.staging/`   | the archives part-way out of their zips; it becomes `dataset/` in one move once it is whole. The tree it replaces is held at `dataset.superseded` for the length of that move, and a run interrupted mid-swap clears both and unpacks again |
 
 [`src/dataset/cache.ts`](src/dataset/cache.ts) is the only place these paths are decided. The helpers are pure path
 arithmetic: they create no directory, read no file and open no socket, and they refuse a path that would climb out of
