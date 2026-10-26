@@ -12,17 +12,18 @@ It is not restated here. Read it there, and use those words in code, tests, issu
 
 ## Module map
 
-| Package                   | Owns                                                                                                              |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@personavision/contract` | The run artifact: zod schemas, the types inferred from them, the run-directory reader and writer, and `validate`. |
-| `@personavision/cli`      | The `personavision` binary — `open`, `run`, `validate` — and the read-only run-data mount.                        |
-| `@personavision/engine`   | Drives a persona through a variant and emits a session.                                                           |
-| `@personavision/browser`  | Browser driving, page screenshots with the fold drawn, area-of-interest extraction.                               |
-| `@personavision/scoring`  | The friction score, its component weights, the per-seed-group spread and the verdict.                             |
-| `@personavision/personas` | Persona definitions, trait sampling from a seed, and the device mix.                                              |
-| `@personavision/viewer`   | `apps/viewer` — the local web app. Added by its own ticket.                                                       |
+| Package                      | Owns                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@personavision/contract`    | The run artifact: zod schemas, the types inferred from them, the run-directory reader and writer, and `validate`.                                |
+| `@personavision/cli`         | The `personavision` binary — `open`, `run`, `validate` — and the read-only run-data mount.                                                       |
+| `@personavision/engine`      | Drives a persona through a variant and emits a session.                                                                                          |
+| `@personavision/browser`     | Browser driving, page screenshots with the fold drawn, area-of-interest extraction.                                                              |
+| `@personavision/scoring`     | The friction score, its component weights, the per-seed-group spread and the verdict.                                                            |
+| `@personavision/personas`    | Persona definitions, trait sampling from a seed, and the device mix.                                                                             |
+| `@personavision/calibration` | Scores the engine against the UEyes benchmark and fits its configuration. The only place a human-likeness figure is produced. Added by step #11. |
+| `@personavision/viewer`      | `apps/viewer` — the local web app. Added by its own ticket.                                                                                      |
 
-The binary is `personavision`. The library packages exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml`.
+The binary is `personavision`. The library packages above exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml` — `packages/*` already covers a new one. `@personavision/calibration` is the single exception: step #11 creates it, because nothing before it needed a home for the human-likeness figure. It depends on `@personavision/contract` and may depend on `@personavision/engine`; nothing in `packages/engine` or `apps/viewer` depends on it, because the engine is pure and the viewer only formats.
 
 ## `packages/contract` is the only place the artifact is declared
 
