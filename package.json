@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "build": "pnpm -r build",
+    "validate:example-run": "tsx --conditions=development packages/cli/src/cli.ts validate runs/2026-10-24-1402-northwind-demo",
     "dev": "pnpm -r --parallel --if-present dev",
     "seed:example-run": "tsx --conditions=development scripts/seed-example-run.ts",
     "open": "tsx --conditions=development packages/cli/src/cli.ts open"

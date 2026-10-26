@@ -7,29 +7,34 @@ A swarm of simulated users that produces Tobii-style eye tracking for websites: 
 Node 22 and pnpm. `.nvmrc` pins the Node version, `package.json` pins the pnpm version, and pnpm is the only package manager — its lockfile is committed and no npm or yarn lockfile exists.
 
 ```sh
-nvm use            # or any Node 22; the version is pinned in .nvmrc
-corepack enable    # pnpm, at the version package.json pins
-pnpm install       # no API key, no account, nothing to provision
+nvm use                     # or any Node 22; the version is pinned in .nvmrc
+corepack enable             # pnpm, at the version package.json pins
+pnpm install                # no API key, no account, nothing to provision
 pnpm typecheck
 pnpm lint
-pnpm test          # makes no network call and reads no credential
+pnpm test                   # makes no network call and reads no credential
 pnpm build
+pnpm validate:example-run   # the committed example run still matches the schemas
+pnpm open                   # the app, on that run, at http://127.0.0.1:5175/
 ```
 
-A fresh clone passes all four checks. A package's public entry point is its built output, so `pnpm typecheck` builds first; `pnpm test` does not need to, because Vitest reads each package's source through a `development` export condition and so never tests a stale build. CI runs the same four on Node 22 with a frozen lockfile.
+A fresh clone passes every one of those. A package's public entry point is its built output, so `pnpm typecheck` builds first; `pnpm test` does not need to, because Vitest reads each package's source through a `development` export condition and so never tests a stale build. CI runs the same sequence — type-check, lint, format, test, build, validate — on Node 22 with a frozen lockfile, with nothing in the environment and no step reaching a network other than the package registry during install.
+
+That sequence is a test rather than a claim. `tests/cold-start.test.ts` builds the workspace, starts the server `personavision open --no-open` starts, and asserts that the app's HTML and its bundle come back, that `GET /runs/index.json` names the committed example run first, that the run's own files are served at the documented paths, and that the artifact read over HTTP is the one `@personavision/contract` reads from disk. It runs the command with nothing in its environment but a path and a home, and stops it again leaving no process and no listener behind — so the whole sequence above is checked on every `pnpm test`.
 
 ## Every root script
 
-| Script                  | What it does                                                             |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `pnpm typecheck`        | Builds every package, then type-checks the root `tests/` and `scripts/`. |
-| `pnpm lint`             | ESLint with typescript-eslint over the whole workspace.                  |
-| `pnpm format`           | Prettier, writing in place. `pnpm format:check` only reports.            |
-| `pnpm test`             | Vitest once, over `tests/` and every package's own tests.                |
-| `pnpm build`            | `tsc` per package, into each package's `dist/`.                          |
-| `pnpm dev`              | Starts the dev server of every app that has one.                         |
-| `pnpm seed:example-run` | Generates the committed seed example run under `runs/`.                  |
-| `pnpm open`             | `personavision open` — the local web app on the most recent run.         |
+| Script                      | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`            | Builds every package, then type-checks the root `tests/` and `scripts/`.                    |
+| `pnpm lint`                 | ESLint with typescript-eslint over the whole workspace.                                     |
+| `pnpm format`               | Prettier, writing in place. `pnpm format:check` only reports.                               |
+| `pnpm test`                 | Vitest once, over `tests/` and every package's own tests.                                   |
+| `pnpm build`                | `tsc` per package, into each package's `dist/`.                                             |
+| `pnpm validate:example-run` | `personavision validate` over the committed example run — the gate CI runs after the build. |
+| `pnpm dev`                  | Starts the dev server of every app that has one.                                            |
+| `pnpm seed:example-run`     | Generates the committed seed example run under `runs/`.                                     |
+| `pnpm open`                 | `personavision open` — the local web app on the most recent run.                            |
 
 ## The command line
 

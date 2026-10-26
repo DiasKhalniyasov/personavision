@@ -7,7 +7,7 @@ on:
 
 jobs:
   check:
-    name: typecheck · lint · test · build
+    name: typecheck · lint · test · build · validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,3 +26,6 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+      # The committed example run, held to the schemas: a change that leaves the fixture
+      # behind fails the build here rather than breaking the demo.
+      - run: pnpm validate:example-run
