@@ -7,5 +7,7 @@
     "sourceMap": false,
     "resolveJsonModule": true
   },
-  "include": ["test"]
+  // The corpus generator is checked with the tests: it is this package's committed
+  // test material, and the corpus test imports it to compare against the committed bytes.
+  "include": ["test", "scripts"]
 }
