@@ -17,7 +17,7 @@ import './verdict.css';
  * audience itself.
  */
 
-/** The audience's own words for the two 0..1 dials, which the artifact stores as numbers. */
+/** The audience's own words for how much price matters, which the artifact stores as 0..1. */
 const PRICE_WORDS = {
   high: 'price-aware',
   middle: 'moderately price-aware',
@@ -25,12 +25,12 @@ const PRICE_WORDS = {
 };
 
 /**
- * Where a dial stops being the middle. The two bounds are the wording's, not the product's:
- * no figure is banded by them and nothing in `docs/design/tokens.css` declares them, so
- * they live beside the words they choose rather than pretending to be a threshold.
+ * Where that dial stops being the middle. The two bounds are the wording's, not the
+ * product's: no figure is banded by them and nothing in `docs/design/tokens.css` declares
+ * them, so they live beside the words they choose rather than pretending to be a threshold.
  */
-const HIGH = 0.6;
-const LOW = 0.4;
+const PRICE_HIGH = 0.6;
+const PRICE_LOW = 0.4;
 
 /** `25–45`, the span the personas' ages were drawn from. */
 const ages = ({ min, max }: Audience['ageRange']): string => `${min}–${max}`;
@@ -57,8 +57,8 @@ function places(regions: readonly string[]): string {
 
 /** How much price matters to them, in the three words the audience screens use. */
 function priceWords(priceSensitivity: number): string {
-  if (priceSensitivity >= HIGH) return PRICE_WORDS.high;
-  if (priceSensitivity <= LOW) return PRICE_WORDS.low;
+  if (priceSensitivity >= PRICE_HIGH) return PRICE_WORDS.high;
+  if (priceSensitivity <= PRICE_LOW) return PRICE_WORDS.low;
   return PRICE_WORDS.middle;
 }
 
