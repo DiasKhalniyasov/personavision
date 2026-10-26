@@ -1,0 +1,214 @@
+/* =============================================================================
+   The first strip of `#screen-verdict`: the audience line, the headline
+   sentence, the two completion figures and the reasons.
+
+   The prototype is the acceptance — same layout, same hierarchy, same wording —
+   and every value below is a custom property from `docs/design/tokens.css`,
+   which the app imports and never copies. No colour, size, spacing step or
+   duration is restated here, and the completion colours are the tokens'
+   `--completion-*` ramp, which is also where the band thresholds are declared.
+
+   The sections of this screen that other tickets own carry their own rules:
+   #14's banner is `.notice` in `styles/base.css`, and the heatmap's mat, the
+   findings and the doors arrive with #108 and #16.
+   ========================================================================== */
+
+/* ---- The audience the answer is true of --------------------------------- */
+
+.audbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--space-2) var(--space-4);
+}
+
+.audbar .who {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  gap: var(--space-2);
+}
+
+/* The chip is a link here — the prototype's is a span — so it keeps the chip's
+   own colour rather than reading as one of the teal links. */
+.audbar .who:hover {
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+/* The prototype draws a bullet glyph here; a drawn dot carries no character of
+   its own and is sized off the spacing scale, as the badge's dot is. */
+.audbar .who i {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+/* ---- The answer --------------------------------------------------------- */
+
+.hero h1 {
+  /* Two lines of the headline are always reserved, so the figures sit in the
+     same place before and after the run resolves, and a one-line sentence does
+     not move them up. The height is the headline's own line box — nothing of
+     the type scale is restated to get it. */
+  min-block-size: 2lh;
+  max-width: var(--layout-max-narrow);
+  font-size: var(--text-display);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+}
+
+/* A run with no stored sentence says so, and says it quietly: this is the one
+   state where the biggest text on the screen is not the answer. */
+.hero h1.hero-missing {
+  color: var(--color-text-muted);
+}
+
+.hero .sub {
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+/* ---- The two figures ---------------------------------------------------- */
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-10);
+  gap: var(--space-12);
+}
+
+.figure {
+  display: grid;
+  margin: var(--space-0);
+  gap: var(--space-1);
+}
+
+/* The caption is the figure's second and third lines: it carries the version's
+   name and the population, and keeps the three-line rhythm of the prototype. */
+.figure-caption {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.figure .figure-value {
+  font-size: var(--text-figure);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+}
+
+/* The *in 10* is the unit, not part of the number: it sits at a proportion of the
+   figure's own size — so it follows the figure at every breakpoint rather than
+   being set twice — and gives back the display tracking the figure takes. */
+.figure .figure-value small {
+  font-size: 42%;
+  font-weight: var(--weight-semibold);
+  letter-spacing: normal;
+}
+
+.figure .figure-label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.figure .figure-pop {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* A version with no figure: the dash is not a reading, so it is drawn as
+   quietly as the reason beside it, and the reason wraps at the prose measure
+   rather than stretching the row it shares with a real figure. */
+.figure-unavailable .figure-value {
+  color: var(--color-text-faint);
+}
+
+.figure-unavailable .figure-pop {
+  max-width: var(--layout-max-narrow);
+}
+
+.completion-good {
+  color: var(--completion-good);
+}
+
+.completion-warn {
+  color: var(--completion-warn);
+}
+
+.completion-bad {
+  color: var(--completion-bad);
+}
+
+/* ---- Why ---------------------------------------------------------------- */
+
+.reasons {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-10);
+  gap: var(--space-3);
+}
+
+.reason-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.reason {
+  display: flex;
+  align-items: baseline;
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+  gap: var(--space-3);
+}
+
+.reason i {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--sev-critical);
+  /* The optical nudge onto the first line's x-height, off the spacing scale. */
+  transform: translateY(calc(var(--space-1) / -2));
+}
+
+/* ---- Narrow windows ---------------------------------------------------
+   The prototype's own two breakpoints. A breakpoint is not a token: a media
+   query cannot read a custom property, so the design contract states them in
+   `prototype.html` and they are repeated — as numbers of pixels, never as a
+   colour or a size — here. */
+
+@media (max-width: 1000px) {
+  .hero h1 {
+    font-size: var(--text-display-sm);
+  }
+
+  /* The figures are a wrapping row: at this width they stack rather than
+     squash, and the gap closes to the step the prototype uses. */
+  .figures {
+    gap: var(--space-8);
+  }
+}
+
+@media (max-width: 640px) {
+  .hero h1 {
+    font-size: var(--text-xl);
+  }
+
+  .figure .figure-value {
+    font-size: var(--text-2xl);
+  }
+}
