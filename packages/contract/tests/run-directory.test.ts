@@ -177,6 +177,82 @@ describe('a mutated run directory is rejected at the path of the offending value
     expect(offenders(await validate(dir))).toContain(`${label.session('S-01')}/fixations/2/index`);
   });
 
+  it('rejects a session file whose name and sessionId disagree', async () => {
+    await writeFile(runPaths(dir).session('S-02'), asJson(validSession('S-01', 'A')));
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toContain(`${label.session('S-02')}/sessionId`);
+    expect(violations[0].message).toMatch(/named for session "S-02" but carries "S-01"/);
+  });
+
+  it('rejects a sessionId listed more than once', async () => {
+    const run = validRun();
+    run.sessionIds = ['S-01', 'S-01', 'S-02'];
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toContain(`${label.run}/sessionIds/1`);
+  });
+
+  it('rejects a variant that the run does not declare', async () => {
+    const run = validRun();
+    run.verdict.harderVariant = 'Z';
+    run.aois[0].variant = 'Z';
+    run.screenshots[0].variant = 'Z';
+    run.scores[0].variant = 'Z';
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toEqual(
+      expect.arrayContaining([
+        `${label.run}/aois/0/variant`,
+        `${label.run}/screenshots/0/variant`,
+        `${label.run}/scores/0/variant`,
+        `${label.run}/verdict/harderVariant`,
+      ]),
+    );
+  });
+
+  it('rejects a session on a variant that the run does not declare', async () => {
+    const session = validSession('S-01', 'Z');
+    await writeFile(runPaths(dir).session('S-01'), asJson(session));
+
+    expect(offenders(await validate(dir))).toContain(`${label.session('S-01')}/variant`);
+  });
+
+  it('rejects a finding that points at nothing in the run', async () => {
+    const findings = validFindings();
+    findings.findings[0].aoiId = 'no-such-area';
+    findings.findings[0].variant = 'Z';
+    findings.findings[0].sessionIds = ['S-77'];
+    await writeFile(runPaths(dir).findings, asJson(findings));
+
+    expect(offenders(await validate(dir))).toEqual([
+      `${label.findings}/findings/0/aoiId`,
+      `${label.findings}/findings/0/variant`,
+      `${label.findings}/findings/0/sessionIds/0`,
+    ]);
+  });
+
+  it("rejects a fixation whose screenIndex is past the session's screens", async () => {
+    const session = validSession('S-01', 'A');
+    session.fixations[0].screenIndex = 42;
+    await writeFile(runPaths(dir).session('S-01'), asJson(session));
+
+    expect(offenders(await validate(dir))).toContain(
+      `${label.session('S-01')}/fixations/0/screenIndex`,
+    );
+  });
+
+  it("rejects a saccade whose ends are past the session's fixations", async () => {
+    const session = validSession('S-01', 'A');
+    session.saccades[0].toFixation = 99;
+    await writeFile(runPaths(dir).session('S-01'), asJson(session));
+
+    expect(offenders(await validate(dir))).toContain(
+      `${label.session('S-01')}/saccades/0/toFixation`,
+    );
+  });
+
   it('rejects a session that run.json does not list', async () => {
     await writeFile(runPaths(dir).session('S-99'), asJson(validSession('S-99', 'A')));
 
@@ -245,10 +321,24 @@ describe('the writer refuses an artifact that would not read back', () => {
       const shorter = validArtifact();
       shorter.run.sessionIds = ['S-01'];
       shorter.sessions = [validSession('S-01', 'A')];
+      shorter.findings.findings[0].sessionIds = ['S-01'];
       await writeRun(dir, shorter);
 
       expect(await validate(dir)).toEqual([]);
       expect(await readRun(dir)).toEqual(shorter);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('accepts an area of interest whose box starts off the left or top edge', async () => {
+    const { dir, cleanup } = await temporaryRunDir();
+    try {
+      const artifact = validArtifact();
+      artifact.run.aois[0].bbox = { x: -120, y: -8, width: 220, height: 48 };
+      await writeRun(dir, artifact);
+
+      expect(await validate(dir)).toEqual([]);
     } finally {
       await cleanup();
     }

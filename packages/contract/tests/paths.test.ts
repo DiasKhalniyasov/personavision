@@ -37,6 +37,20 @@ describe('a run directory is named for when the run was created', () => {
       '2026-10-24-1402-northwind-demo',
     );
   });
+
+  it('still produces a name a runs root can be listed by when nothing in it survives slugging', async () => {
+    const named = runDirName(new Date('2026-10-24T14:02:33.000Z'), 'Проверка!');
+    const { dir, cleanup } = await temporaryRunDir();
+    const runsRoot = join(dir, '..');
+    try {
+      await mkdir(join(runsRoot, named), { recursive: true });
+
+      expect(named).toBe('2026-10-24-1402-run');
+      expect(await listRunDirs(runsRoot)).toEqual([named]);
+    } finally {
+      await cleanup();
+    }
+  });
 });
 
 describe('listing the run directories under a runs root', () => {

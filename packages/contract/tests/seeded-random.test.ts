@@ -32,6 +32,14 @@ describe('the seeded random helper', () => {
     expect(sequenceFromAnotherProcess(7, 8)).toEqual(here);
   });
 
+  it('is mulberry32, so a reimplementation elsewhere draws the same numbers', () => {
+    // Pinned against the reference algorithm, not against this implementation: a test that
+    // only compares the helper with itself cannot notice the recurrence drifting.
+    expect(take(createSeededRandom(7), 4)).toEqual([
+      0.011704753153026104, 0.06195825757458806, 0.97690763277933, 0.6990287057124078,
+    ]);
+  });
+
   it('draws a different sequence for a different seed', () => {
     expect(take(createSeededRandom(8), 8)).not.toEqual(take(createSeededRandom(7), 8));
   });

@@ -32,6 +32,12 @@ const relative = runPaths('');
 const pointer = (path: ReadonlyArray<PropertyKey>): string =>
   path.map((segment) => `/${String(segment).replace(/~/g, '~0').replace(/\//g, '~1')}`).join('');
 
+const at = (file: string, path: ReadonlyArray<PropertyKey>, message: string): Violation => ({
+  file,
+  path: pointer(path),
+  message,
+});
+
 const readJsonFile = async (
   file: string,
   label: string,
@@ -75,65 +81,118 @@ const parse = <Schema extends z.ZodType>(
 };
 
 /**
- * The checks that span more than one value: every area-of-interest reference names an area
- * declared in the same run, and `run.sessionIds` agrees with the sessions that exist.
+ * The checks that span more than one value: every reference out of one artifact file names
+ * something the run declares, and `run.sessionIds` agrees with the sessions that exist.
+ *
+ * Step ids are deliberately not checked: `run.steps` enumerates the task's own steps, and
+ * a session may legitimately end somewhere the run never planned to go.
  */
 const checkReferences = (
   run: Run,
   sessions: ReadonlyArray<Session>,
+  findings: Findings | undefined,
   violations: Violation[],
 ): void => {
-  const declared = new Set(run.aois.map((aoi) => aoi.id));
-  const dangling = (aoiId: string): string =>
+  const declaredAois = new Set(run.aois.map((aoi) => aoi.id));
+  const declaredVariants = new Set(run.variants.map((variant) => variant.id));
+  const danglingAoi = (aoiId: string): string =>
     `"${aoiId}" names no area of interest declared in this run's aois`;
+  const danglingVariant = (variant: string): string =>
+    `"${variant}" names no variant declared in this run's variants`;
 
   run.aoiMetrics.forEach((metric, index) => {
-    if (!declared.has(metric.aoiId)) {
-      violations.push({
-        file: relative.run,
-        path: pointer(['aoiMetrics', index, 'aoiId']),
-        message: dangling(metric.aoiId),
-      });
+    if (!declaredAois.has(metric.aoiId)) {
+      violations.push(at(relative.run, ['aoiMetrics', index, 'aoiId'], danglingAoi(metric.aoiId)));
     }
   });
+  const runVariantReferences: ReadonlyArray<[string, ReadonlyArray<{ variant: string }>]> = [
+    ['aois', run.aois],
+    ['screenshots', run.screenshots],
+    ['scores', run.scores],
+  ];
+  for (const [list, entries] of runVariantReferences) {
+    entries.forEach((entry, index) => {
+      if (!declaredVariants.has(entry.variant)) {
+        violations.push(at(relative.run, [list, index, 'variant'], danglingVariant(entry.variant)));
+      }
+    });
+  }
+  if (!declaredVariants.has(run.verdict.harderVariant)) {
+    violations.push(
+      at(relative.run, ['verdict', 'harderVariant'], danglingVariant(run.verdict.harderVariant)),
+    );
+  }
 
   for (const session of sessions) {
     const file = relative.session(session.sessionId);
     const check = (list: 'fixations' | 'actions'): void => {
       session[list].forEach((entry, index) => {
-        if (entry.aoiId !== null && !declared.has(entry.aoiId)) {
-          violations.push({
-            file,
-            path: pointer([list, index, 'aoiId']),
-            message: dangling(entry.aoiId),
-          });
+        if (entry.aoiId !== null && !declaredAois.has(entry.aoiId)) {
+          violations.push(at(file, [list, index, 'aoiId'], danglingAoi(entry.aoiId)));
         }
       });
     };
     check('fixations');
     check('actions');
+    if (!declaredVariants.has(session.variant)) {
+      violations.push(at(file, ['variant'], danglingVariant(session.variant)));
+    }
   }
 
   const present = new Set(sessions.map((session) => session.sessionId));
+  const seen = new Set<string>();
   run.sessionIds.forEach((sessionId, index) => {
+    if (seen.has(sessionId)) {
+      violations.push(
+        at(relative.run, ['sessionIds', index], `session "${sessionId}" is listed more than once`),
+      );
+    }
+    seen.add(sessionId);
     if (!present.has(sessionId)) {
-      violations.push({
-        file: relative.run,
-        path: pointer(['sessionIds', index]),
-        message: `run.json lists session "${sessionId}", but there is no ${relative.session(sessionId)}`,
-      });
+      violations.push(
+        at(
+          relative.run,
+          ['sessionIds', index],
+          `run.json lists session "${sessionId}", but there is no ${relative.session(sessionId)}`,
+        ),
+      );
     }
   });
-  const listed = new Set(run.sessionIds);
   for (const session of sessions) {
-    if (!listed.has(session.sessionId)) {
-      violations.push({
-        file: relative.session(session.sessionId),
-        path: pointer(['sessionId']),
-        message: `session "${session.sessionId}" is present but is not listed in run.json sessionIds`,
-      });
+    if (!seen.has(session.sessionId)) {
+      violations.push(
+        at(
+          relative.session(session.sessionId),
+          ['sessionId'],
+          `session "${session.sessionId}" is present but is not listed in run.json sessionIds`,
+        ),
+      );
     }
   }
+
+  findings?.findings.forEach((finding, index) => {
+    if (finding.aoiId !== null && !declaredAois.has(finding.aoiId)) {
+      violations.push(
+        at(relative.findings, ['findings', index, 'aoiId'], danglingAoi(finding.aoiId)),
+      );
+    }
+    if (!declaredVariants.has(finding.variant)) {
+      violations.push(
+        at(relative.findings, ['findings', index, 'variant'], danglingVariant(finding.variant)),
+      );
+    }
+    finding.sessionIds.forEach((sessionId, position) => {
+      if (!seen.has(sessionId)) {
+        violations.push(
+          at(
+            relative.findings,
+            ['findings', index, 'sessionIds', position],
+            `"${sessionId}" names no session listed in run.json sessionIds`,
+          ),
+        );
+      }
+    });
+  });
 };
 
 const readSessionIds = async (sessionsDir: string): Promise<string[]> => {
@@ -170,11 +229,24 @@ const collect = async (
     const label = relative.session(sessionId);
     const json = await readJsonFile(paths.session(sessionId), label, violations);
     const session = json === undefined ? undefined : parse(sessionSchema, json, label, violations);
-    if (session !== undefined) byId.set(session.sessionId, session);
+    if (session === undefined) continue;
+    // The file is addressed by its name, so a file carrying a different id would shadow
+    // the session it is named after rather than being a session of its own.
+    if (session.sessionId !== sessionId) {
+      violations.push(
+        at(
+          label,
+          ['sessionId'],
+          `the file is named for session "${sessionId}" but carries "${session.sessionId}"`,
+        ),
+      );
+      continue;
+    }
+    byId.set(session.sessionId, session);
   }
 
   if (run === undefined) return { artifact: undefined, violations };
-  checkReferences(run, [...byId.values()], violations);
+  checkReferences(run, [...byId.values()], findings, violations);
   if (findings === undefined || violations.length > 0) return { artifact: undefined, violations };
 
   // `run.sessionIds` is the authoritative order, and it agreed with disk above.
@@ -222,20 +294,21 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
     const session = parse(sessionSchema, candidate, label, violations);
     if (session !== undefined) sessions.push(session);
   }
-  if (run !== undefined) checkReferences(run, sessions, violations);
+  if (run !== undefined) checkReferences(run, sessions, findings, violations);
   if (violations.length > 0) throw new Error(report(runDir, violations));
 
   const paths = runPaths(runDir);
   await mkdir(paths.sessionsDir, { recursive: true });
-  // A run written over an older one must not inherit its sessions: a session file the
-  // new run.json does not list would make the directory invalid the moment it is read.
-  const stale = (await readSessionIds(paths.sessionsDir)).filter(
-    (sessionId) => !sessions.some((session) => session.sessionId === sessionId),
-  );
-  await Promise.all(stale.map((sessionId) => rm(paths.session(sessionId))));
   await writeFile(paths.run, serialize(run));
   await writeFile(paths.findings, serialize(findings));
   await Promise.all(
     sessions.map((session) => writeFile(paths.session(session.sessionId), serialize(session))),
   );
+  // The writer owns the sessions directory: a run written over an older one must not
+  // inherit its sessions, because a session file the new run.json does not list makes the
+  // directory invalid the moment it is read. Sweeping last leaves nothing half-written.
+  const stale = (await readSessionIds(paths.sessionsDir)).filter(
+    (sessionId) => !sessions.some((session) => session.sessionId === sessionId),
+  );
+  await Promise.all(stale.map((sessionId) => rm(paths.session(sessionId), { force: true })));
 };

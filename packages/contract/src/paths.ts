@@ -63,10 +63,13 @@ export const runDirName = (createdAt: Date, runName: string): string => {
     pad(createdAt.getUTCDate()),
     `${pad(createdAt.getUTCHours())}${pad(createdAt.getUTCMinutes())}`,
   ].join('-');
-  const slug = runName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+  // The slug has to leave a name `listRunDirs` recognises, so a name with nothing
+  // ASCII-alphanumeric in it falls back rather than producing a bare stamp.
+  const slug =
+    runName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'run';
   return `${stamp}-${slug}`;
 };
 

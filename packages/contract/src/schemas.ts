@@ -19,8 +19,10 @@ const points = z.number().min(0).max(100);
 const count = z.int().min(0);
 const milliseconds = z.number().min(0);
 const seconds = z.number().min(0);
-/** A page or viewport coordinate. Negative is meaningless on a rendered page. */
+/** A length, or a point on a rendered page: never negative. */
 const pixels = z.number().min(0);
+/** A box's origin, which is negative when the element sits off the left or top edge. */
+const coordinate = z.number();
 /** Timestamps are ISO 8601; an offset is accepted so an imported real session keeps its own. */
 const timestamp = z.iso.datetime({ offset: true });
 
@@ -128,7 +130,7 @@ export const runSchema = z.object({
       label: name,
       source: aoiSourceSchema,
       role: z.string().nullable(),
-      bbox: z.object({ x: pixels, y: pixels, width: pixels, height: pixels }),
+      bbox: z.object({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
       isPrimaryAction: z.boolean(),
       belowFold: z.boolean(),
     }),
@@ -231,7 +233,17 @@ export const sessionSchema = z
   })
   .superRefine((session, ctx) => {
     // `index` is the ordering key and runs continuously across the whole session, not
-    // restarted per screen, so a fixation's index is its position in the array.
+    // restarted per screen, so an index is its entry's position in the array. Every index
+    // that points at another list has to land inside it, or a replay reads past the end.
+    session.screens.forEach((screen, position) => {
+      if (screen.index !== position) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['screens', position, 'index'],
+          message: `screen index runs 0, 1, 2 … in array order: expected ${position}, found ${screen.index}`,
+        });
+      }
+    });
     session.fixations.forEach((fixation, position) => {
       if (fixation.index !== position) {
         ctx.addIssue({
@@ -239,6 +251,24 @@ export const sessionSchema = z
           path: ['fixations', position, 'index'],
           message: `fixation index runs 0, 1, 2 … continuously across the session, in array order: expected ${position}, found ${fixation.index}`,
         });
+      }
+      if (fixation.screenIndex >= session.screens.length) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fixations', position, 'screenIndex'],
+          message: `screenIndex ${fixation.screenIndex} is past the session's ${session.screens.length} screens`,
+        });
+      }
+    });
+    session.saccades.forEach((saccade, position) => {
+      for (const end of ['fromFixation', 'toFixation'] as const) {
+        if (saccade[end] >= session.fixations.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['saccades', position, end],
+            message: `${end} ${saccade[end]} is past the session's ${session.fixations.length} fixations`,
+          });
+        }
       }
     });
   });
