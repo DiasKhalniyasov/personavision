@@ -33,10 +33,26 @@ divergence of the humans from it depends on the humans' own spread rather than b
 pixel, `x` runs right, `y` runs down, and cell `(x, y)` of a map is `values[y * width + x]`. This is not the run
 artifact's page space, and the two are never mixed.
 
-| Metric | Compared at |
-| --- | --- |
-| CC, KLD | the **ground truth's grid**. A prediction at a different resolution is resampled onto it; the humans' map is never moved. |
-| NSS, AUC-Judd | the **prediction's own grid**. These read the human *fixations*, not the human map, so there is no second grid to reconcile. |
+**All four compare at the ground truth's grid.** A prediction at a different resolution is resampled onto it; the
+humans' map is never moved.
+
+For CC and KLD that is the only thing it could mean. For NSS and AUC-Judd it is a choice, and it is the published
+one: `NSS.m` and `AUC_Judd.m` both open with `imresize(saliencyMap, size(fixationMap))`, so the fixations are binned
+at the resolution the humans' map states and the prediction is brought onto that grid first.
+
+Binning on the prediction's own grid instead would make both figures a function of whatever resolution a predictor
+happened to choose, so the engine and the baselines (#87) could not be compared — which is the comparison #88 exists
+to make. Worse, a prediction coarser than the ground truth would bin *every* cell as fixated, leaving AUC-Judd no
+negative to rank against and refusing the record outright. The test asserts both halves: a 4 × 3 prediction against
+40 × 30 ground truth scores, and one field sampled at 20 × 15, 40 × 30 and 80 × 60 gives the same figures.
+
+So all four metrics take the same pair — the prediction, and the ground truth as `{ saliencyMap, scanpaths }`:
+
+```ts
+cc(prediction, truth.saliencyMap)   kld(prediction, truth.saliencyMap)
+nss(prediction, truth)              aucJudd(prediction, truth)
+scoreSaliency(prediction, truth)    // all four; resamples once rather than four times
+```
 
 ### The one rule for a resolution or aspect mismatch
 
@@ -114,6 +130,14 @@ zero. A mean accumulated over many cells need not land exactly on the value they
 to `4.800000000000001`, whose twelfth is `0.4000000000000001` — and dividing by a variance of a few times 10⁻³² would
 turn a map that expresses nothing into a confident one.
 
+**Why a figure cannot overflow.** CC and NSS square every deviation, which runs to `Infinity` above about 1e154 and
+then yields a `NaN` or — worse — a plausible `0`; KLD sums the cells to read them as a distribution, which overflows
+near 1e308 and would silently make every cell zero, reporting a perfect `0` for a prediction that is nothing of the
+sort. All three are invariant to a positive rescaling and AUC-Judd to any monotone one, so each map is divided
+through by its own peak before any arithmetic, which costs nothing and removes the whole class for any finite input.
+Past that, every metric's return passes one last guard that turns a non-finite result into a named error, so the "no
+`NaN`, no `Infinity`" promise is structural rather than argued.
+
 **Why KLD refuses an all-zero map instead of returning infinity.** A map whose cells sum to zero cannot be made into
 a distribution. The divergence is conceptually unbounded there, and the ticket forbids an `Infinity` escaping, so the
 honest answer is a named error rather than a fabricated large number. A prediction that merely *misses* mass the
@@ -122,7 +146,11 @@ nats a cell instead of letting it diverge.
 
 ## The direction and the epsilon of KLD
 
-`KLD = Σᵢ Pᵢ · log((Pᵢ + ε) / (Qᵢ + ε))`, with **`P` the humans and `Q` the prediction**, both read as distributions.
+`KLD = Σᵢ Pᵢ · log(ε + Pᵢ / (Qᵢ + ε))`, with **`P` the humans and `Q` the prediction**, both read as distributions.
+
+That is `KLdiv.m`'s expression exactly, epsilon placement included. It is deliberately *not* the tidier
+`Σᵢ Pᵢ · log((Pᵢ + ε) / (Qᵢ + ε))`, which differs from it at the epsilon's own scale — indistinguishable in a
+figure, but not the same arithmetic, and this is the file whose job is to say exactly what produced a number.
 
 The direction is the published one: the humans are the reference, so mass the prediction **missed** costs it, and
 mass it added where the humans put none costs it nothing. It is not symmetric — `kld(a, b)` and `kld(b, a)` are
@@ -203,6 +231,7 @@ its reason in the code beside it:
 | `resolutionRule` | `resample-prediction-onto-ground-truth` |
 | `resampleKernel` | `area-weighted-mean` |
 | `aspectRule`, `imageSizeRule` | `reject` |
+| `fixationGrid` | `ground-truth` — as `imresize(saliencyMap, size(fixationMap))` does |
 | `fixationCellRule` | `distinct-cells` |
 | `fixationEdgeRule` | `inclusive-upper-edge` |
 | `aucNegatives` | `every-cell-without-a-human-fixation` |
@@ -219,9 +248,9 @@ never the ruler.
 Pure and deterministic: no clock, no randomness, no filesystem, no network, no API key. The same inputs give the
 identical number twice, down to the last bit, and the inputs are never mutated — the test asserts all three.
 
-**The measured budget**, on 2026-10-26: the 63 tests of `test/metrics-saliency.test.ts` run in **96–132 ms** of
-vitest-reported duration (of which about 55 ms is the tests themselves), or **0.35–0.42 s** of wall clock including
+**The measured budget**, on 2026-10-27: the 67 tests of `test/metrics-saliency.test.ts` run in **118–134 ms** of
+vitest-reported duration (of which about 70 ms is the tests themselves), or **0.40–0.41 s** of wall clock including
 process start, over three consecutive runs. Measured on an **Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin
 27.0.0)**. The heaviest single case is the 1,200-cell convergence check against `AUC_Judd.m`'s sweep, which is
-quadratic in the cell count by construction; the metrics themselves are `O(n)` apart from AUC-Judd's `O(n log n)`
-sort of the negatives.
+quadratic in the cell count by construction; the metrics themselves are `O(n)` in the ground truth's cells, apart
+from AUC-Judd's `O(n log n)` sort of the negatives.

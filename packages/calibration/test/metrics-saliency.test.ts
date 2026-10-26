@@ -18,6 +18,7 @@ import {
 import type {
   Fixation,
   GroundTruthRecord,
+  SaliencyGroundTruth,
   SaliencyMap,
   SaliencyMetricId,
   SaliencyNormalisation,
@@ -86,6 +87,30 @@ const peaked = map(
 
 /** Fixations on the two heaviest cells of `peaked`: `(3, 0)` at 0.30 and `(3, 1)` at 0.15. */
 const peakedFixations: readonly Fixation[] = [fixCell(0, 3, 0), fixCell(1, 3, 1)];
+
+/**
+ * Ground truth: the map whose grid the fixations are binned on, and the humans who made
+ * them. One participant is enough wherever the test is not about pooling.
+ */
+const truthOf = (
+  saliencyMap: SaliencyMap,
+  fixations: readonly Fixation[],
+): SaliencyGroundTruth => ({
+  saliencyMap,
+  scanpaths: [{ participantId: 'P-01', fixations }],
+});
+
+/**
+ * NSS and AUC-Judd bin the fixations on the **ground truth's** grid. Most cases below are
+ * about one map, where the ground truth's grid and the prediction's are the same one, so
+ * these two wrappers say that once instead of at every call.
+ * `describe('the ground truth\u2019s grid is the reference')` is where the two grids differ.
+ */
+const nssAt = (prediction: SaliencyMap, fixations: readonly Fixation[]): number =>
+  nss(prediction, truthOf(prediction, fixations));
+
+const aucJuddAt = (prediction: SaliencyMap, fixations: readonly Fixation[]): number =>
+  aucJudd(prediction, truthOf(prediction, fixations));
 
 /** A descriptor field that has to be a number here, so a `null` fails loudly rather than quietly. */
 const required = (value: number | null, what: string): number => {
@@ -168,8 +193,8 @@ describe('NSS — the prediction standardised, read at the human fixations', () 
     const prediction = map(2, 2, [1, 2, 3, 4]);
     const fixations = [fix(0, 30, 10), fix(1, 30, 30)];
 
-    expect(nss(prediction, fixations)).toBeCloseTo(0.5 * Math.sqrt(0.6), 12);
-    expect(nss(prediction, fixations)).toBeCloseTo(0.3872983346207417, 12);
+    expect(nssAt(prediction, fixations)).toBeCloseTo(0.5 * Math.sqrt(0.6), 12);
+    expect(nssAt(prediction, fixations)).toBeCloseTo(0.3872983346207417, 12);
   });
 
   it('counts a cell once however many fixations landed in it', () => {
@@ -177,13 +202,13 @@ describe('NSS — the prediction standardised, read at the human fixations', () 
     const once = [fix(0, 30, 10), fix(1, 30, 30)];
     const twice = [...once, fix(2, 35, 35), fix(3, 25, 25)];
 
-    expect(nss(prediction, twice)).toBe(nss(prediction, once));
+    expect(nssAt(prediction, twice)).toBe(nssAt(prediction, once));
   });
 
   it('scores 0 — chance — for a prediction with no variation, including an all-zero one', () => {
-    expect(nss(flatLike(peaked, 0.5), peakedFixations)).toBe(0);
-    expect(nss(flatLike(peaked, 0), peakedFixations)).toBe(0);
-    expect(nss(flatLike(peaked, 0.5), peakedFixations)).toBe(SALIENCY_METRICS.nss.chance);
+    expect(nssAt(flatLike(peaked, 0.5), peakedFixations)).toBe(0);
+    expect(nssAt(flatLike(peaked, 0), peakedFixations)).toBe(0);
+    expect(nssAt(flatLike(peaked, 0.5), peakedFixations)).toBe(SALIENCY_METRICS.nss.chance);
   });
 
   it('is positive when the prediction is heaviest where the humans looked and negative when it is lightest there', () => {
@@ -193,8 +218,8 @@ describe('NSS — the prediction standardised, read at the human fixations', () 
       peaked.values.map((value) => 0.3 - value),
     );
 
-    expect(nss(peaked, peakedFixations)).toBeGreaterThan(0);
-    expect(nss(inverted, peakedFixations)).toBeLessThan(0);
+    expect(nssAt(peaked, peakedFixations)).toBeGreaterThan(0);
+    expect(nssAt(inverted, peakedFixations)).toBeLessThan(0);
   });
 
   it('has no upper bound, so there is no maximum an identical prediction could reach', () => {
@@ -203,7 +228,7 @@ describe('NSS — the prediction standardised, read at the human fixations', () 
     // grid reaches further: the figure grows with the resolution, so it is not a maximum.
     const spike = (cells: number): number => {
       const values = Array.from({ length: cells }, (_, index) => (index === 0 ? 1 : 0));
-      return nss(map(cells, 1, values), [fix(0, 10, 10)]);
+      return nssAt(map(cells, 1, values), [fix(0, 10, 10)]);
     };
 
     // One cell of n at 1 and the rest at 0: the mean is 1/n and the sample standard
@@ -296,7 +321,7 @@ describe('AUC-Judd — how the prediction ranks the fixated cells against the re
     const prediction = map(2, 2, [0.5, 0.5, 0.2, 0.9]);
     const fixations = [fixCell(0, 0, 0), fixCell(1, 1, 1)];
 
-    expect(aucJudd(prediction, fixations)).toBe(0.875);
+    expect(aucJuddAt(prediction, fixations)).toBe(0.875);
   });
 
   it('scores exactly 0.5 — chance — when the fixated cell sits in the middle of a tie-free ranking', () => {
@@ -304,21 +329,21 @@ describe('AUC-Judd — how the prediction ranks the fixated cells against the re
     // rank below it and four above, so 4 / 8 = 0.5 with no tie anywhere.
     const prediction = map(3, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
-    expect(aucJudd(prediction, [fixCell(0, 1, 1)])).toBe(0.5);
-    expect(aucJudd(prediction, [fixCell(0, 1, 1)])).toBe(SALIENCY_METRICS.aucJudd.chance);
+    expect(aucJuddAt(prediction, [fixCell(0, 1, 1)])).toBe(0.5);
+    expect(aucJuddAt(prediction, [fixCell(0, 1, 1)])).toBe(SALIENCY_METRICS.aucJudd.chance);
   });
 
   it('scores exactly 0.5 for a uniform prediction, where every pair ties — the tolerance here is zero', () => {
-    expect(aucJudd(flatLike(peaked, 0.5), peakedFixations)).toBe(0.5);
-    expect(aucJudd(flatLike(peaked, 0), peakedFixations)).toBe(0.5);
+    expect(aucJuddAt(flatLike(peaked, 0.5), peakedFixations)).toBe(0.5);
+    expect(aucJuddAt(flatLike(peaked, 0), peakedFixations)).toBe(0.5);
   });
 
   it('scores the documented maximum of 1 when every fixated cell outranks every other', () => {
     // The identity case for this metric: a human map whose heaviest cells are the ones the
     // humans fixated, scored against those fixations. `peaked`'s two heaviest cells, 0.30
     // and 0.15, are exactly where `peakedFixations` land.
-    expect(aucJudd(peaked, peakedFixations)).toBe(1);
-    expect(aucJudd(peaked, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.best);
+    expect(aucJuddAt(peaked, peakedFixations)).toBe(1);
+    expect(aucJuddAt(peaked, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.best);
   });
 
   it('scores its documented minimum of 0 when every fixated cell ranks below every other', () => {
@@ -328,8 +353,8 @@ describe('AUC-Judd — how the prediction ranks the fixated cells against the re
       peaked.values.map((value) => 0.3 - value),
     );
 
-    expect(aucJudd(inverted, peakedFixations)).toBe(0);
-    expect(aucJudd(inverted, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.worst);
+    expect(aucJuddAt(inverted, peakedFixations)).toBe(0);
+    expect(aucJuddAt(inverted, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.worst);
   });
 
   it('is invariant to any monotone transform of the prediction', () => {
@@ -340,13 +365,13 @@ describe('AUC-Judd — how the prediction ranks the fixated cells against the re
       'peak-to-one',
     );
 
-    expect(aucJudd(squared, peakedFixations)).toBe(aucJudd(peaked, peakedFixations));
+    expect(aucJuddAt(squared, peakedFixations)).toBe(aucJuddAt(peaked, peakedFixations));
   });
 
   it('counts a cell once however many fixations landed in it', () => {
     const extra = [...peakedFixations, fixCell(2, 3, 0), fixCell(3, 3, 1)];
 
-    expect(aucJudd(peaked, extra)).toBe(aucJudd(peaked, peakedFixations));
+    expect(aucJuddAt(peaked, extra)).toBe(aucJuddAt(peaked, peakedFixations));
   });
 });
 
@@ -406,7 +431,7 @@ describe('the published formulations', () => {
     );
     const standardised = values.map((value) => (value - m) / sd);
 
-    expect(nss(reference, fixations)).toBeCloseTo(
+    expect(nssAt(reference, fixations)).toBeCloseTo(
       mean(fixatedCells.map((c) => standardised[c])),
       12,
     );
@@ -494,11 +519,14 @@ describe('the published formulations', () => {
   };
 
   it('computes exactly the area under the ROC curve', () => {
-    expect(aucJudd(reference, fixations)).toBeCloseTo(rocArea(reference.values, fixatedCells), 12);
+    expect(aucJuddAt(reference, fixations)).toBeCloseTo(
+      rocArea(reference.values, fixatedCells),
+      12,
+    );
     // 22 of the 3 × 9 = 27 (fixated, unfixated) pairs are ranked the right way: the three
     // fixated cells hold 0.21, 0.16 and 0.06, and of the nine others all nine are below the
     // first two and four are below the third. 22 / 27 = 0.8148148…
-    expect(aucJudd(reference, fixations)).toBeCloseTo(22 / 27, 12);
+    expect(aucJuddAt(reference, fixations)).toBeCloseTo(22 / 27, 12);
   });
 
   it('agrees with the exact area on a tie-free input, on a tied one, and on a flat one', () => {
@@ -516,7 +544,7 @@ describe('the published formulations', () => {
       const fixationsHere = cells.map((cell) =>
         fixCell(cell, cell % prediction.width, Math.floor(cell / prediction.width)),
       );
-      expect(aucJudd(prediction, fixationsHere), name).toBeCloseTo(
+      expect(aucJuddAt(prediction, fixationsHere), name).toBeCloseTo(
         rocArea(prediction.values, cells),
         12,
       );
@@ -532,7 +560,7 @@ describe('the published formulations', () => {
     // disagreement about the quantity — which is why `src/metrics/saliency.ts` computes the
     // area exactly instead.
     const coarse = aucJuddPublishedSweep(reference.values, fixatedCells);
-    const exact = aucJudd(reference, fixations);
+    const exact = aucJuddAt(reference, fixations);
 
     expect(coarse).toBeGreaterThan(exact);
     expect(coarse - exact).toBeLessThanOrEqual(1 / (2 * fixatedCells.length) + 1e-12);
@@ -561,7 +589,7 @@ describe('the published formulations', () => {
     );
 
     const coarse = aucJuddPublishedSweep(values, cells);
-    const exact = aucJudd(dense, fixationsHere);
+    const exact = aucJuddAt(dense, fixationsHere);
 
     expect(new Set(cells).size).toBe(60);
     expect(Math.abs(coarse - exact)).toBeLessThanOrEqual(1 / (2 * cells.length) + 1e-12);
@@ -572,14 +600,14 @@ describe('the published formulations', () => {
     // Bylinskii et al. (2019) state the levels this asserts: AUC is 0.5 at chance and 1 at
     // best; CC is 1 at identity and 0 for an uninformative prediction; KLD is 0 at identity
     // and unbounded above; NSS is 0 at chance and has no upper bound.
-    expect(aucJudd(flatLike(reference, 0.4), fixations)).toBe(0.5);
+    expect(aucJuddAt(flatLike(reference, 0.4), fixations)).toBe(0.5);
     expect(
-      aucJudd(humans, poolFixations([{ participantId: 'P-01', fixations }])),
+      aucJuddAt(humans, poolFixations([{ participantId: 'P-01', fixations }])),
     ).toBeLessThanOrEqual(1);
     expect(cc(humans, humans)).toBe(1);
     expect(cc(flatLike(humans, 0.4), humans)).toBe(0);
     expect(kld(humans, humans)).toBe(0);
-    expect(nss(flatLike(reference, 0.4), fixations)).toBe(0);
+    expect(nssAt(flatLike(reference, 0.4), fixations)).toBe(0);
   });
 
   it('departs from AUC_Judd.m only where that code needs random jitter, and says which way', () => {
@@ -594,7 +622,7 @@ describe('the published formulations', () => {
 
     expect(new Set(thresholds).size).toBe(1);
     expect(firstFalsePositiveRate).toBeGreaterThan(1);
-    expect(aucJudd(flat, fixations)).toBe(0.5);
+    expect(aucJuddAt(flat, fixations)).toBe(0.5);
   });
 });
 
@@ -695,13 +723,113 @@ describe('the resolution and aspect rule', () => {
   });
 });
 
+describe('the ground truth’s grid is the reference', () => {
+  /**
+   * The published `NSS.m` and `AUC_Judd.m` open with
+   * `imresize(saliencyMap, size(fixationMap))`, so the fixations are binned at the ground
+   * truth's resolution and the prediction is brought onto that grid. These cases are the
+   * ones where the two grids differ, which is where that choice is visible.
+   */
+  const image = { width: 320, height: 240 };
+
+  /** One smooth peak at 70% across and 30% down, in normalised image coordinates. */
+  const field = (x: number, y: number): number =>
+    Math.exp(-(((x - 0.7) ** 2 + (y - 0.3) ** 2) / 0.03));
+
+  /** That same field sampled at a cell-centre on a `width` × `height` grid. */
+  const sampled = (width: number, height: number): SaliencyMap => ({
+    width,
+    height,
+    values: Array.from({ length: width * height }, (_, cell) =>
+      field(((cell % width) + 0.5) / width, (Math.floor(cell / width) + 0.5) / height),
+    ),
+    imageSize: image,
+    normalisation: 'none',
+  });
+
+  const truthMap = sampled(40, 30);
+
+  /** A fixation on the centre of a cell of a `width` × `height` grid, in image pixels. */
+  const atCell = (index: number, cell: number, width: number, height: number): Fixation =>
+    fix(
+      index,
+      (((cell % width) + 0.5) * image.width) / width,
+      ((Math.floor(cell / width) + 0.5) * image.height) / height,
+    );
+
+  /** One fixation in each cell of a 4 × 3 grid: spread over the whole image. */
+  const spread = Array.from({ length: 12 }, (_, i) => atCell(i, i, 4, 3));
+  /** Six fixations on the ground truth's six heaviest cells: the field's own peak. */
+  const onPeak = truthMap.values
+    .map((value, cell) => ({ value, cell }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6)
+    .map(({ cell }, i) => atCell(i, cell, 40, 30));
+
+  const truthSpread: SaliencyGroundTruth = {
+    saliencyMap: truthMap,
+    scanpaths: [{ participantId: 'P-01', fixations: spread }],
+  };
+  const truthOnPeak: SaliencyGroundTruth = {
+    saliencyMap: truthMap,
+    scanpaths: [{ participantId: 'P-01', fixations: onPeak }],
+  };
+
+  it('scores a prediction coarser than the ground truth, where binning on the prediction would refuse the record', () => {
+    const coarse = sampled(4, 3);
+    const scores = scoreSaliency(coarse, truthSpread);
+
+    expect(Number.isFinite(scores.cc)).toBe(true);
+    expect(Number.isFinite(scores.nss)).toBe(true);
+    expect(Number.isFinite(scores.kld)).toBe(true);
+    expect(Number.isFinite(scores.aucJudd)).toBe(true);
+
+    // Binned on the prediction's own 4 × 3 grid instead, these twelve fixations fill all
+    // twelve cells and there is no negative left to rank against — so the record would be
+    // refused outright, and with `scoreSaliency` evaluating all four, CC and KLD would be
+    // lost with it.
+    expect(() => aucJuddAt(coarse, spread)).toThrow(/all 12 cells of the map hold one/);
+  });
+
+  it('gives the same figure for one field expressed at two resolutions', () => {
+    const atTruthGrid = scoreSaliency(sampled(40, 30), truthOnPeak);
+    const finer = scoreSaliency(sampled(80, 60), truthOnPeak);
+    const coarser = scoreSaliency(sampled(20, 15), truthOnPeak);
+
+    // The same picture at three resolutions is the same prediction, so the figures agree to
+    // within the sampling difference rather than being three different numbers. NSS is
+    // unbounded, so its agreement is stated relatively; AUC-Judd lives in [0, 1], so its
+    // agreement is stated absolutely.
+    const relative = (a: number, b: number): number => Math.abs(a - b) / Math.abs(b);
+
+    expect(relative(finer.nss, atTruthGrid.nss)).toBeLessThan(0.01);
+    expect(relative(coarser.nss, atTruthGrid.nss)).toBeLessThan(0.05);
+    expect(Math.abs(finer.aucJudd - atTruthGrid.aucJudd)).toBeLessThan(0.01);
+    expect(Math.abs(coarser.aucJudd - atTruthGrid.aucJudd)).toBeLessThan(0.05);
+    // And it is a real figure, not chance: the fixations are on the field's own peak.
+    expect(atTruthGrid.nss).toBeGreaterThan(2);
+    expect(atTruthGrid.aucJudd).toBeGreaterThan(0.95);
+  });
+
+  it('refuses a prediction whose image or grid shape disagrees, from all four metrics', () => {
+    const wrongImage: SaliencyMap = { ...sampled(40, 30), imageSize: { width: 640, height: 480 } };
+    const wrongShape: SaliencyMap = { ...sampled(30, 40), imageSize: image };
+
+    for (const bad of [wrongImage, wrongShape]) {
+      expect(() => scoreSaliency(bad, truthOnPeak)).toThrow(SaliencyMetricError);
+      expect(() => nss(bad, truthOnPeak)).toThrow(SaliencyMetricError);
+      expect(() => aucJudd(bad, truthOnPeak)).toThrow(SaliencyMetricError);
+    }
+  });
+});
+
 describe('degenerate inputs: a documented value or a named error, and never a NaN', () => {
   it('scores an all-zero prediction 0, 0 and 0.5, and refuses it for KLD by name', () => {
     const zero = flatLike(peaked, 0);
 
     expect(cc(zero, peaked)).toBe(0);
-    expect(nss(zero, peakedFixations)).toBe(0);
-    expect(aucJudd(zero, peakedFixations)).toBe(0.5);
+    expect(nssAt(zero, peakedFixations)).toBe(0);
+    expect(aucJuddAt(zero, peakedFixations)).toBe(0.5);
     expect(() => kld(zero, peaked)).toThrow(SaliencyMetricError);
     expect(() => kld(zero, peaked)).toThrow(/the prediction holds no mass at all/);
   });
@@ -722,9 +850,9 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
 
     expect(() => cc(empty, peaked)).toThrow(/the prediction map is empty/);
     expect(() => cc(peaked, empty)).toThrow(/the ground truth map is empty/);
-    expect(() => nss(empty, peakedFixations)).toThrow(/the prediction map is empty/);
+    expect(() => nssAt(empty, peakedFixations)).toThrow(/the prediction map is empty/);
     expect(() => kld(empty, peaked)).toThrow(/the prediction map is empty/);
-    expect(() => aucJudd(empty, peakedFixations)).toThrow(/the prediction map is empty/);
+    expect(() => aucJuddAt(empty, peakedFixations)).toThrow(/the prediction map is empty/);
   });
 
   it('refuses a malformed map at the offending field', () => {
@@ -755,15 +883,15 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
   it('treats a single human fixation as ordinary, not degenerate', () => {
     const single = [fixCell(0, 3, 0)];
 
-    expect(nss(peaked, single)).toBeGreaterThan(0);
-    expect(aucJudd(peaked, single)).toBe(1);
-    expect(Number.isFinite(nss(peaked, single))).toBe(true);
+    expect(nssAt(peaked, single)).toBeGreaterThan(0);
+    expect(aucJuddAt(peaked, single)).toBe(1);
+    expect(Number.isFinite(nssAt(peaked, single))).toBe(true);
   });
 
   it('refuses ground truth with no fixation at all, by name, for the two metrics that read them', () => {
-    expect(() => nss(peaked, [])).toThrow(SaliencyMetricError);
-    expect(() => nss(peaked, [])).toThrow(/at least one human fixation/);
-    expect(() => aucJudd(peaked, [])).toThrow(/at least one human fixation as a positive/);
+    expect(() => nssAt(peaked, [])).toThrow(SaliencyMetricError);
+    expect(() => nssAt(peaked, [])).toThrow(/at least one human fixation/);
+    expect(() => aucJuddAt(peaked, [])).toThrow(/at least one human fixation as a positive/);
     expect(() => scoreSaliency(peaked, { saliencyMap: peaked, scanpaths: [] })).toThrow(
       SaliencyMetricError,
     );
@@ -777,24 +905,60 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
       fixCell(cell, cell % peaked.width, Math.floor(cell / peaked.width)),
     );
 
-    expect(() => aucJudd(peaked, everyCell)).toThrow(/all 12 cells of the map hold one/);
+    expect(() => aucJuddAt(peaked, everyCell)).toThrow(/all 12 cells of the map hold one/);
     // NSS still has a mean to take, so it is unaffected and lands at about 0.
-    expect(nss(peaked, everyCell)).toBeCloseTo(0, 12);
+    expect(nssAt(peaked, everyCell)).toBeCloseTo(0, 12);
   });
 
   it('refuses a fixation outside the image, naming its index and coordinates', () => {
-    expect(() => nss(peaked, [fix(0, 81, 10)])).toThrow(
+    expect(() => nssAt(peaked, [fix(0, 81, 10)])).toThrow(
       /fixation 0 is at \(81, 10\), outside the 80 × 60 image/,
     );
-    expect(() => aucJudd(peaked, [fix(4, 10, -1)])).toThrow(/fixation 4 is at \(10, -1\)/);
-    expect(() => nss(peaked, [fix(0, Number.NaN, 10)])).toThrow(/fixation 0 is at \(NaN, 10\)/);
+    expect(() => aucJuddAt(peaked, [fix(4, 10, -1)])).toThrow(/fixation 4 is at \(10, -1\)/);
+    expect(() => nssAt(peaked, [fix(0, Number.NaN, 10)])).toThrow(/fixation 0 is at \(NaN, 10\)/);
   });
 
   it('puts a fixation exactly on the right or bottom edge in the last cell rather than failing', () => {
-    const corner = nss(peaked, [fix(0, 80, 60)]);
+    const corner = nssAt(peaked, [fix(0, 80, 60)]);
 
-    expect(corner).toBe(nss(peaked, [fixCell(0, 3, 2)]));
+    expect(corner).toBe(nssAt(peaked, [fixCell(0, 3, 2)]));
     expect(Number.isFinite(corner)).toBe(true);
+  });
+
+  it('stays invariant to a rescaling large enough to overflow a squared sum', () => {
+    // Squaring a cell of 1e200 overflows to Infinity, which used to make CC return `NaN` on
+    // one map and a plausible `0` on a mismatched pair — a flat answer about a sharply
+    // peaked map. Scaling each map by its own peak first removes the whole class, so these
+    // are the same figures as at ordinary magnitudes.
+    const huge = map(
+      peaked.width,
+      peaked.height,
+      peaked.values.map((value) => value * 1e200),
+    );
+    const alsoHuge = map(
+      peaked.width,
+      peaked.height,
+      peaked.values.map((value) => value * 3e180),
+    );
+
+    expect((1e200 * 0.3) ** 2).toBe(Number.POSITIVE_INFINITY);
+    expect(cc(huge, huge)).toBe(1);
+    expect(cc(huge, peaked)).toBe(1);
+    expect(cc(alsoHuge, huge)).toBe(1);
+    expect(nssAt(huge, peakedFixations)).toBeCloseTo(nssAt(peaked, peakedFixations), 12);
+    expect(aucJuddAt(huge, peakedFixations)).toBe(aucJuddAt(peaked, peakedFixations));
+    expect(kld(huge, peaked)).toBe(0);
+    // And near the top of the range, where summing the cells overflows rather than squaring
+    // them: KLD reads both maps as distributions, so an infinite mass would make every cell
+    // zero and report a perfect 0 for a prediction that is nothing of the sort.
+    const enormous = map(2, 2, [1e308, 1e307, 1e308, 1e307]);
+    const ordinary = map(2, 2, [1, 0.1, 1, 0.1]);
+    const humansHere = map(2, 2, [0.4, 0.1, 0.3, 0.2], 'sum-to-one');
+
+    expect(enormous.values.reduce((sum, value) => sum + value, 0)).toBe(Number.POSITIVE_INFINITY);
+    expect(kld(enormous, humansHere)).toBeGreaterThan(0);
+    expect(kld(enormous, humansHere)).toBeCloseTo(kld(ordinary, humansHere), 12);
+    expect(cc(enormous, humansHere)).toBeCloseTo(cc(ordinary, humansHere), 12);
   });
 
   it('lets no NaN and no Infinity out of any metric, over every degenerate input above', () => {
@@ -803,6 +967,19 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
       flatLike(peaked, 0),
       flatLike(peaked, 1),
       flatLike(peaked, Number.MAX_VALUE / 16),
+      // Not constant, so `isConstant` does not short-circuit: squaring these overflows
+      // unless the metric scales by the peak first, which is what makes the sweep below a
+      // real check rather than a vacuous one.
+      map(
+        peaked.width,
+        peaked.height,
+        peaked.values.map((v) => v * 1e200),
+      ),
+      map(
+        peaked.width,
+        peaked.height,
+        peaked.values.map((v) => v * 1e306),
+      ),
       map(1, 1, [0.5]),
       map(1, 1, [0]),
       map(
@@ -834,8 +1011,8 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
         finiteOrNamed(() => kld(prediction, truth));
       }
       for (const fixations of fixationSets) {
-        finiteOrNamed(() => nss(prediction, fixations));
-        finiteOrNamed(() => aucJudd(prediction, fixations));
+        finiteOrNamed(() => nssAt(prediction, fixations));
+        finiteOrNamed(() => aucJuddAt(prediction, fixations));
       }
     }
   });
@@ -875,9 +1052,9 @@ describe('each metric reports its direction as data', () => {
     const fixations = peakedFixations;
     const compute: { readonly [K in SaliencyMetricId]: (prediction: SaliencyMap) => number } = {
       cc: (prediction) => cc(prediction, peaked),
-      nss: (prediction) => nss(prediction, fixations),
+      nss: (prediction) => nssAt(prediction, fixations),
       kld: (prediction) => kld(prediction, peaked),
-      aucJudd: (prediction) => aucJudd(prediction, fixations),
+      aucJudd: (prediction) => aucJuddAt(prediction, fixations),
     };
 
     for (const id of SALIENCY_METRIC_IDS) {
@@ -893,10 +1070,10 @@ describe('each metric reports its direction as data', () => {
   it('reaches the best and chance values its descriptors publish', () => {
     expect(cc(peaked, peaked)).toBe(SALIENCY_METRICS.cc.best);
     expect(kld(peaked, peaked)).toBe(SALIENCY_METRICS.kld.best);
-    expect(aucJudd(peaked, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.best);
+    expect(aucJuddAt(peaked, peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.best);
     expect(cc(flatLike(peaked, 1), peaked)).toBe(SALIENCY_METRICS.cc.chance);
-    expect(nss(flatLike(peaked, 1), peakedFixations)).toBe(SALIENCY_METRICS.nss.chance);
-    expect(aucJudd(flatLike(peaked, 1), peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.chance);
+    expect(nssAt(flatLike(peaked, 1), peakedFixations)).toBe(SALIENCY_METRICS.nss.chance);
+    expect(aucJuddAt(flatLike(peaked, 1), peakedFixations)).toBe(SALIENCY_METRICS.aucJudd.chance);
     // NSS is unbounded above and KLD's value against a flat prediction is not one number.
     expect(SALIENCY_METRICS.nss.best).toBeNull();
     expect(SALIENCY_METRICS.kld.chance).toBeNull();

@@ -164,9 +164,10 @@ export const SALIENCY_METRIC_PARAMETERS = Object.freeze({
   kldEpsilon: Number.EPSILON,
   /**
    * How far two grids' aspect ratios may differ and still be called the same picture.
-   * One per cent absorbs the rounding of an integer grid chosen for a given image — a
-   * 16 × 12 and a 21 × 16 grid over a 4:3 image differ by 0.4% — and refuses a grid that is
-   * genuinely a different shape.
+   * One per cent absorbs the rounding of an integer grid chosen for a given image — over a
+   * 4:3 image a 16 × 12 grid is exact and a 37 × 28 one is 0.89% off, so both are the same
+   * picture — and refuses a grid that is genuinely a different shape, such as 21 × 16, which
+   * is 1.56% off.
    */
   gridAspectTolerance: 0.01,
   /** A prediction at a different resolution is resampled onto the ground truth's grid. */
@@ -177,6 +178,11 @@ export const SALIENCY_METRIC_PARAMETERS = Object.freeze({
   aspectRule: 'reject',
   /** Two maps describing images of different sizes are refused. */
   imageSizeRule: 'reject',
+  /**
+   * Fixations are binned on the **ground truth's** grid, which is what `imresize(saliencyMap,
+   * size(fixationMap))` at the head of the published `NSS.m` and `AUC_Judd.m` does.
+   */
+  fixationGrid: 'ground-truth',
   /** A cell counts once however many fixations landed in it: the published binary fixation map. */
   fixationCellRule: 'distinct-cells',
   /** A fixation exactly on the right or bottom edge falls in the last cell rather than failing. */
@@ -437,6 +443,9 @@ const fixatedCells = (map: SaliencyMap, fixations: readonly Fixation[]): readonl
   return [...cells].sort((a, b) => a - b);
 };
 
+/** What a saliency comparison needs from a ground-truth record: the map and the humans. */
+export type SaliencyGroundTruth = Pick<GroundTruthRecord, 'saliencyMap' | 'scanpaths'>;
+
 /**
  * The human fixations of a record, pooled across its participants in the order the dataset
  * lists them.
@@ -459,6 +468,40 @@ const moments = (values: readonly number[]): { readonly mean: number; readonly s
 
 const clamp = (value: number, low: number, high: number): number =>
   value < low ? low : value > high ? high : value;
+
+/**
+ * A map's values divided by its peak, so that squaring and summing them cannot overflow.
+ *
+ * CC and NSS square every deviation, which overflows to `Infinity` above about 1e154 and
+ * then produces a `NaN` or — worse — a plausible `0`; KLD sums the cells to read them as a
+ * distribution, which overflows near 1e307 and silently makes every cell zero. Both metrics
+ * are invariant to a positive rescaling, and AUC-Judd to any monotone one, so dividing
+ * through by the peak first costs nothing and removes the whole class of overflow for any
+ * finite input `assertMap` admits.
+ *
+ * A peak of 0 means every cell is 0, which the constant check has already handled.
+ */
+const scaledToPeak = (values: readonly number[]): readonly number[] => {
+  const peak = peakOf(values);
+  return peak > 0 && peak !== 1 ? values.map((value) => value / peak) : values;
+};
+
+/**
+ * The last guard before a figure leaves this module: a metric returns a finite number or it
+ * refuses by name, with no third outcome.
+ *
+ * Every path above either returns a documented value or raises, so reaching this is a
+ * defect here rather than in the data — which is exactly why it says so instead of letting a
+ * `NaN` travel into a report.
+ */
+const finite = (value: number, metric: string): number => {
+  if (!Number.isFinite(value)) {
+    throw new SaliencyMetricError(
+      `${metric} came out as ${String(value)} on an input its own guards admitted, which is a defect in this module rather than in the data`,
+    );
+  }
+  return value;
+};
 
 /**
  * **CC** — the Pearson correlation coefficient of the two maps' cells.
@@ -484,21 +527,23 @@ export const cc = (prediction: SaliencyMap, truth: SaliencyMap): number => {
 
   if (isConstant(predicted) || isConstant(human)) return 0;
 
-  const predictedMean = sumOf(predicted) / predicted.length;
-  const humanMean = sumOf(human) / human.length;
+  const predictedScaled = scaledToPeak(predicted);
+  const humanScaled = scaledToPeak(human);
+  const predictedMean = sumOf(predictedScaled) / predictedScaled.length;
+  const humanMean = sumOf(humanScaled) / humanScaled.length;
 
   let covariance = 0;
   let predictedSquares = 0;
   let humanSquares = 0;
-  for (let i = 0; i < human.length; i += 1) {
-    const a = predicted[i] - predictedMean;
-    const b = human[i] - humanMean;
+  for (let i = 0; i < humanScaled.length; i += 1) {
+    const a = predictedScaled[i] - predictedMean;
+    const b = humanScaled[i] - humanMean;
     covariance += a * b;
     predictedSquares += a * a;
     humanSquares += b * b;
   }
   if (predictedSquares === 0 || humanSquares === 0) return 0;
-  return clamp(covariance / Math.sqrt(predictedSquares * humanSquares), -1, 1);
+  return finite(clamp(covariance / Math.sqrt(predictedSquares * humanSquares), -1, 1), 'CC');
 };
 
 /**
@@ -513,38 +558,48 @@ export const cc = (prediction: SaliencyMap, truth: SaliencyMap): number => {
  *
  * The prediction is standardised with the **sample** standard deviation (dividing by
  * `n - 1`), which is what the published `NSS.m` does, since MATLAB's `std` is the sample
- * one. The fixations are read in the prediction's own image space, at the cell each one
- * falls in; a cell counts once however many fixations landed in it (see `fixatedCells`).
- * Invariant to a positive affine rescaling, so no normalisation is converted.
+ * one. A cell counts once however many fixations landed in it (see `fixatedCells`).
+ * Invariant to a positive rescaling, so no normalisation is converted.
  *
- * **Compared at** the prediction's own grid: this metric reads the human *fixations*, not
- * the human map, so there is no second grid to reconcile.
+ * **Compared at** the ground truth's grid. This metric reads the human *fixations* rather
+ * than the human map, but it reads them at the resolution the humans' map states, which is
+ * what `imresize(saliencyMap, size(fixationMap))` at the head of the published `NSS.m`
+ * does: the prediction is brought onto that grid first and standardised there. Binning at
+ * the prediction's own grid instead would make the figure a function of whatever resolution
+ * a predictor happened to choose, so the engine and the baselines (#87) could not be
+ * compared — which is the comparison #88 exists to make.
  *
  * **Degenerate inputs.** A prediction with no variation — every cell equal, an all-zero map
  * among them — gives **0**, which is also what chance gives, because a flat map is exactly
  * as informative as chance. Ground truth with **no fixation** is refused by name: an
  * average over nothing is not a number. A single fixation is ordinary, not degenerate.
  */
-export const nss = (prediction: SaliencyMap, fixations: readonly Fixation[]): number => {
+export const nss = (prediction: SaliencyMap, truth: SaliencyGroundTruth): number => {
   assertMap(prediction, 'prediction');
-  const cells = fixatedCells(prediction, fixations);
+  assertMap(truth.saliencyMap, 'ground truth');
+  const aligned = alignedToTruth(prediction, truth.saliencyMap);
+  const cells = fixatedCells(aligned, poolFixations(truth.scanpaths));
   if (cells.length === 0) {
     throw new SaliencyMetricError(
       'NSS needs at least one human fixation to average the prediction at, and the ground truth has none',
     );
   }
-  if (isConstant(prediction.values)) return 0;
-  const { mean, sd } = moments(prediction.values);
+  if (isConstant(aligned.values)) return 0;
+  const values = scaledToPeak(aligned.values);
+  const { mean, sd } = moments(values);
   if (sd === 0) return 0;
   let total = 0;
-  for (const cell of cells) total += (prediction.values[cell] - mean) / sd;
-  return total / cells.length;
+  for (const cell of cells) total += (values[cell] - mean) / sd;
+  return finite(total / cells.length, 'NSS');
 };
 
 /**
  * **KLD** — the Kullback–Leibler divergence of the human distribution from the predicted
- * one, `sum_i P_i · log((P_i + eps) / (Q_i + eps))` with `P` the humans' map and `Q` the
- * prediction, both read as distributions.
+ * one, `sum_i P_i · log(eps + P_i / (Q_i + eps))` with `P` the humans' map and `Q` the
+ * prediction, both read as distributions. That is the published `KLdiv.m`'s expression
+ * exactly, epsilon placement included — not the tidier
+ * `sum_i P_i · log((P_i + eps) / (Q_i + eps))`, which differs from it at the epsilon's own
+ * scale: indistinguishable in a figure, but not the same arithmetic.
  *
  * **Lower is better**, and this is the only one of the four that reads that way. Its
  * minimum is **0**, reached by an identical prediction, and it is unbounded above: a
@@ -580,8 +635,10 @@ export const kld = (prediction: SaliencyMap, truth: SaliencyMap): number => {
   const predicted = alignedToTruth(prediction, truth).values;
   const human = truth.values;
 
-  const predictedMass = sumOf(predicted);
-  const humanMass = sumOf(human);
+  const predictedScaled = scaledToPeak(predicted);
+  const humanScaled = scaledToPeak(human);
+  const predictedMass = sumOf(predictedScaled);
+  const humanMass = sumOf(humanScaled);
   if (predictedMass === 0) {
     throw new SaliencyMetricError(
       'KLD reads both maps as distributions, and the prediction holds no mass at all: every cell is zero',
@@ -595,13 +652,13 @@ export const kld = (prediction: SaliencyMap, truth: SaliencyMap): number => {
 
   const epsilon = SALIENCY_METRIC_PARAMETERS.kldEpsilon;
   let total = 0;
-  for (let i = 0; i < human.length; i += 1) {
-    const p = human[i] / humanMass;
+  for (let i = 0; i < humanScaled.length; i += 1) {
+    const p = humanScaled[i] / humanMass;
     if (p === 0) continue;
-    const q = predicted[i] / predictedMass;
+    const q = predictedScaled[i] / predictedMass;
     total += p * Math.log(epsilon + p / (q + epsilon));
   }
-  return Math.max(0, total);
+  return finite(Math.max(0, total), 'KLD');
 };
 
 /** The first index of `sorted` holding a value that is not below `value`. */
@@ -650,33 +707,39 @@ const upperBound = (sorted: readonly number[], value: number): number => {
  * map. Half credit gets the right answer deterministically, and on an input with no ties
  * the two agree exactly; `docs/metrics-saliency.md` works the example through.
  *
- * **Compared at** the prediction's own grid, as NSS is: this metric reads the human
- * fixations, not the human map.
+ * **Compared at** the ground truth's grid, as NSS is and for the same reason: the published
+ * `AUC_Judd.m` opens with `imresize(saliencyMap, size(fixationMap))`, so the ranking happens
+ * at the resolution the humans' map states, and the prediction is brought onto that grid
+ * first. Ranking on the prediction's own grid instead would make the figure a function of
+ * the resolution a predictor chose — and with a prediction coarser than the ground truth it
+ * would bin every cell as fixated and refuse the record outright.
  *
  * **Degenerate inputs.** A prediction with no variation scores exactly **0.5**, because
  * every pair ties. Ground truth with **no fixation** is refused for want of a positive, and
  * a map in which **every** cell holds a fixation is refused for want of a negative — a
  * one-cell map that was fixated is that second case.
  */
-export const aucJudd = (prediction: SaliencyMap, fixations: readonly Fixation[]): number => {
+export const aucJudd = (prediction: SaliencyMap, truth: SaliencyGroundTruth): number => {
   assertMap(prediction, 'prediction');
-  const positiveCells = fixatedCells(prediction, fixations);
+  assertMap(truth.saliencyMap, 'ground truth');
+  const aligned = alignedToTruth(prediction, truth.saliencyMap);
+  const positiveCells = fixatedCells(aligned, poolFixations(truth.scanpaths));
   if (positiveCells.length === 0) {
     throw new SaliencyMetricError(
       'AUC-Judd needs at least one human fixation as a positive, and the ground truth has none',
     );
   }
-  if (positiveCells.length === prediction.values.length) {
+  if (positiveCells.length === aligned.values.length) {
     throw new SaliencyMetricError(
-      `AUC-Judd needs a cell without a human fixation to rank against, and all ${prediction.values.length} cells of the map hold one`,
+      `AUC-Judd needs a cell without a human fixation to rank against, and all ${aligned.values.length} cells of the map hold one`,
     );
   }
 
   const fixated = new Set(positiveCells);
   const positives: number[] = [];
   const negatives: number[] = [];
-  for (let cell = 0; cell < prediction.values.length; cell += 1) {
-    (fixated.has(cell) ? positives : negatives).push(prediction.values[cell]);
+  for (let cell = 0; cell < aligned.values.length; cell += 1) {
+    (fixated.has(cell) ? positives : negatives).push(aligned.values[cell]);
   }
   negatives.sort((a, b) => a - b);
 
@@ -686,7 +749,7 @@ export const aucJudd = (prediction: SaliencyMap, fixations: readonly Fixation[])
     const equal = upperBound(negatives, positive) - below;
     wins += below + equal / 2;
   }
-  return clamp(wins / (positives.length * negatives.length), 0, 1);
+  return finite(clamp(wins / (positives.length * negatives.length), 0, 1), 'AUC-Judd');
 };
 
 /** The four figures for one prediction against one record's ground truth. */
@@ -697,27 +760,27 @@ export interface SaliencyScores {
   readonly aucJudd: number;
 }
 
-/** What a saliency comparison needs from a ground-truth record: the map and the humans. */
-export type SaliencyGroundTruth = Pick<GroundTruthRecord, 'saliencyMap' | 'scanpaths'>;
-
 /**
  * All four metrics for one prediction against one record, which is the call #88 makes per
  * record.
  *
- * The fixations are pooled across the record's participants (`poolFixations`), and every
- * rule the individual metrics document applies unchanged — including that a mismatched
- * grid is resampled and a mismatched image size refused, so this either returns four
- * numbers or raises one `SaliencyMetricError` naming what was wrong.
+ * The prediction is brought onto the ground truth's grid once here rather than four times,
+ * which changes no figure — each metric then finds the grid it would have resampled to — and
+ * every rule the individual metrics document applies unchanged. So this either returns four
+ * numbers or raises one `SaliencyMetricError` naming what was wrong; there is no partial
+ * result.
  */
 export const scoreSaliency = (
   prediction: SaliencyMap,
   truth: SaliencyGroundTruth,
 ): SaliencyScores => {
-  const fixations = poolFixations(truth.scanpaths);
+  assertMap(prediction, 'prediction');
+  assertMap(truth.saliencyMap, 'ground truth');
+  const aligned = alignedToTruth(prediction, truth.saliencyMap);
   return {
-    cc: cc(prediction, truth.saliencyMap),
-    nss: nss(prediction, fixations),
-    kld: kld(prediction, truth.saliencyMap),
-    aucJudd: aucJudd(prediction, fixations),
+    cc: cc(aligned, truth.saliencyMap),
+    nss: nss(aligned, truth),
+    kld: kld(aligned, truth.saliencyMap),
+    aucJudd: aucJudd(aligned, truth),
   };
 };
