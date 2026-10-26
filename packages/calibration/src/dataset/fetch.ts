@@ -925,9 +925,10 @@ export const fetchDataset = async (
   }
 
   const downloaded = obtained.filter(({ outcome }) => outcome.state === 'downloaded');
+  const count = manifest.files.length;
   log(
     downloaded.length === 0 && extractions.every((entry) => entry.state === 'already-unpacked')
-      ? `Nothing to do: all ${manifest.files.length} file${manifest.files.length === 1 ? ' is' : 's are'} already present, verified and unpacked in ${paths.root}.`
+      ? `Nothing to do: ${count === 1 ? 'the file is' : `all ${count} files are`} already present, verified and unpacked in ${paths.root}.`
       : `${manifest.dataset.name} is in ${paths.extracted}.`,
   );
 
