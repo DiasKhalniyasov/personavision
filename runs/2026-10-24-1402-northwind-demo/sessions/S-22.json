@@ -1,0 +1,690 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "S-22",
+  "runId": "2026-10-24-1402-northwind-demo",
+  "variant": "B",
+  "taskId": "buy-boots",
+  "kind": "simulated",
+  "persona": {
+    "id": "price",
+    "traits": {
+      "persistence": 0.6,
+      "scanningVsReading": 0.8,
+      "detailOrientation": 0.7,
+      "interfaceFamiliarity": 0.5,
+      "patience": 0.4,
+      "riskTolerance": 0.3
+    },
+    "device": {
+      "name": "iPhone 15",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 3,
+      "touch": true
+    }
+  },
+  "participant": null,
+  "seed": 1,
+  "startedAt": "2026-10-24T14:17:45.000Z",
+  "durationMs": 29400,
+  "screens": [
+    {
+      "index": 0,
+      "step": "cart",
+      "screenshot": "screenshots/B/cart.png",
+      "scrollY": 0,
+      "intent": "See the real total with shipping before anything else.",
+      "decidedAction": "left without ordering"
+    }
+  ],
+  "fixations": [
+    {
+      "index": 0,
+      "screenIndex": 0,
+      "tMs": 887,
+      "durationMs": 434,
+      "x": 190.9,
+      "y": 93.8,
+      "pageX": 190.9,
+      "pageY": 93.8,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 1,
+      "screenIndex": 0,
+      "tMs": 1480,
+      "durationMs": 278,
+      "x": 189.9,
+      "y": 115.9,
+      "pageX": 189.9,
+      "pageY": 115.9,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 2,
+      "screenIndex": 0,
+      "tMs": 2454,
+      "durationMs": 275,
+      "x": 120,
+      "y": 231.6,
+      "pageX": 120,
+      "pageY": 231.6,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 3,
+      "screenIndex": 0,
+      "tMs": 3044,
+      "durationMs": 307,
+      "x": 303.1,
+      "y": 339.9,
+      "pageX": 303.1,
+      "pageY": 339.9,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 4,
+      "screenIndex": 0,
+      "tMs": 3747,
+      "durationMs": 323,
+      "x": 308.4,
+      "y": 376.5,
+      "pageX": 308.4,
+      "pageY": 376.5,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 5,
+      "screenIndex": 0,
+      "tMs": 4545,
+      "durationMs": 225,
+      "x": 187.2,
+      "y": 102.6,
+      "pageX": 187.2,
+      "pageY": 102.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 6,
+      "screenIndex": 0,
+      "tMs": 5518,
+      "durationMs": 412,
+      "x": 196.2,
+      "y": 435.7,
+      "pageX": 196.2,
+      "pageY": 435.7,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 7,
+      "screenIndex": 0,
+      "tMs": 6340,
+      "durationMs": 197,
+      "x": 187.7,
+      "y": 482.8,
+      "pageX": 187.7,
+      "pageY": 482.8,
+      "aoiId": "B-cart-keep-shopping"
+    },
+    {
+      "index": 8,
+      "screenIndex": 0,
+      "tMs": 6897,
+      "durationMs": 503,
+      "x": 199.5,
+      "y": 91.6,
+      "pageX": 199.5,
+      "pageY": 91.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 9,
+      "screenIndex": 0,
+      "tMs": 7813,
+      "durationMs": 281,
+      "x": 191.4,
+      "y": 123.4,
+      "pageX": 191.4,
+      "pageY": 123.4,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 10,
+      "screenIndex": 0,
+      "tMs": 8395,
+      "durationMs": 247,
+      "x": 126.6,
+      "y": 229,
+      "pageX": 126.6,
+      "pageY": 229,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 11,
+      "screenIndex": 0,
+      "tMs": 9259,
+      "durationMs": 274,
+      "x": 299.1,
+      "y": 339.9,
+      "pageX": 299.1,
+      "pageY": 339.9,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 12,
+      "screenIndex": 0,
+      "tMs": 9986,
+      "durationMs": 310,
+      "x": 296.9,
+      "y": 379.7,
+      "pageX": 296.9,
+      "pageY": 379.7,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 13,
+      "screenIndex": 0,
+      "tMs": 10884,
+      "durationMs": 221,
+      "x": 189.2,
+      "y": 100.9,
+      "pageX": 189.2,
+      "pageY": 100.9,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 14,
+      "screenIndex": 0,
+      "tMs": 11663,
+      "durationMs": 397,
+      "x": 188,
+      "y": 441.4,
+      "pageX": 188,
+      "pageY": 441.4,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 15,
+      "screenIndex": 0,
+      "tMs": 12446,
+      "durationMs": 187,
+      "x": 189.3,
+      "y": 490.6,
+      "pageX": 189.3,
+      "pageY": 490.6,
+      "aoiId": "B-cart-keep-shopping"
+    },
+    {
+      "index": 16,
+      "screenIndex": 0,
+      "tMs": 13252,
+      "durationMs": 437,
+      "x": 199.5,
+      "y": 93.1,
+      "pageX": 199.5,
+      "pageY": 93.1,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 17,
+      "screenIndex": 0,
+      "tMs": 13808,
+      "durationMs": 251,
+      "x": 190.4,
+      "y": 122.9,
+      "pageX": 190.4,
+      "pageY": 122.9,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 18,
+      "screenIndex": 0,
+      "tMs": 14596,
+      "durationMs": 285,
+      "x": 115.9,
+      "y": 230.6,
+      "pageX": 115.9,
+      "pageY": 230.6,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 19,
+      "screenIndex": 0,
+      "tMs": 15410,
+      "durationMs": 336,
+      "x": 296.2,
+      "y": 341.4,
+      "pageX": 296.2,
+      "pageY": 341.4,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 20,
+      "screenIndex": 0,
+      "tMs": 16184,
+      "durationMs": 361,
+      "x": 295,
+      "y": 382.9,
+      "pageX": 295,
+      "pageY": 382.9,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 21,
+      "screenIndex": 0,
+      "tMs": 16960,
+      "durationMs": 203,
+      "x": 200.3,
+      "y": 100.5,
+      "pageX": 200.3,
+      "pageY": 100.5,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 22,
+      "screenIndex": 0,
+      "tMs": 17845,
+      "durationMs": 481,
+      "x": 189.4,
+      "y": 431.1,
+      "pageX": 189.4,
+      "pageY": 431.1,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 23,
+      "screenIndex": 0,
+      "tMs": 18469,
+      "durationMs": 178,
+      "x": 190,
+      "y": 491.3,
+      "pageX": 190,
+      "pageY": 491.3,
+      "aoiId": "B-cart-keep-shopping"
+    },
+    {
+      "index": 24,
+      "screenIndex": 0,
+      "tMs": 19264,
+      "durationMs": 506,
+      "x": 191.2,
+      "y": 100,
+      "pageX": 191.2,
+      "pageY": 100,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 25,
+      "screenIndex": 0,
+      "tMs": 20041,
+      "durationMs": 268,
+      "x": 194.8,
+      "y": 125.1,
+      "pageX": 194.8,
+      "pageY": 125.1,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 26,
+      "screenIndex": 0,
+      "tMs": 20857,
+      "durationMs": 292,
+      "x": 120.2,
+      "y": 233.1,
+      "pageX": 120.2,
+      "pageY": 233.1,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 27,
+      "screenIndex": 0,
+      "tMs": 21685,
+      "durationMs": 269,
+      "x": 294.8,
+      "y": 344.7,
+      "pageX": 294.8,
+      "pageY": 344.7,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 28,
+      "screenIndex": 0,
+      "tMs": 22459,
+      "durationMs": 300,
+      "x": 304.1,
+      "y": 372.5,
+      "pageX": 304.1,
+      "pageY": 372.5,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 29,
+      "screenIndex": 0,
+      "tMs": 23063,
+      "durationMs": 221,
+      "x": 191.1,
+      "y": 100.2,
+      "pageX": 191.1,
+      "pageY": 100.2,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 30,
+      "screenIndex": 0,
+      "tMs": 23959,
+      "durationMs": 464,
+      "x": 199.4,
+      "y": 430.2,
+      "pageX": 199.4,
+      "pageY": 430.2,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 31,
+      "screenIndex": 0,
+      "tMs": 24905,
+      "durationMs": 168,
+      "x": 188.2,
+      "y": 484.4,
+      "pageX": 188.2,
+      "pageY": 484.4,
+      "aoiId": "B-cart-keep-shopping"
+    },
+    {
+      "index": 32,
+      "screenIndex": 0,
+      "tMs": 25565,
+      "durationMs": 448,
+      "x": 191.5,
+      "y": 99.5,
+      "pageX": 191.5,
+      "pageY": 99.5,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 33,
+      "screenIndex": 0,
+      "tMs": 26259,
+      "durationMs": 237,
+      "x": 195.8,
+      "y": 122.4,
+      "pageX": 195.8,
+      "pageY": 122.4,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 34,
+      "screenIndex": 0,
+      "tMs": 27190,
+      "durationMs": 270,
+      "x": 124.4,
+      "y": 231.4,
+      "pageX": 124.4,
+      "pageY": 231.4,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 35,
+      "screenIndex": 0,
+      "tMs": 27747,
+      "durationMs": 269,
+      "x": 299.2,
+      "y": 347.3,
+      "pageX": 299.2,
+      "pageY": 347.3,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 36,
+      "screenIndex": 0,
+      "tMs": 28743,
+      "durationMs": 311,
+      "x": 309.7,
+      "y": 382.1,
+      "pageX": 309.7,
+      "pageY": 382.1,
+      "aoiId": "B-cart-cart-total"
+    }
+  ],
+  "saccades": [
+    {
+      "fromFixation": 0,
+      "toFixation": 1,
+      "amplitudePx": 22.1,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 1,
+      "toFixation": 2,
+      "amplitudePx": 135.2,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 2,
+      "toFixation": 3,
+      "amplitudePx": 212.7,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 3,
+      "toFixation": 4,
+      "amplitudePx": 37,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 4,
+      "toFixation": 5,
+      "amplitudePx": 299.5,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 5,
+      "toFixation": 6,
+      "amplitudePx": 333.2,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 6,
+      "toFixation": 7,
+      "amplitudePx": 47.9,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 7,
+      "toFixation": 8,
+      "amplitudePx": 391.4,
+      "durationMs": 34
+    },
+    {
+      "fromFixation": 8,
+      "toFixation": 9,
+      "amplitudePx": 32.8,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 9,
+      "toFixation": 10,
+      "amplitudePx": 123.9,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 10,
+      "toFixation": 11,
+      "amplitudePx": 205.1,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 11,
+      "toFixation": 12,
+      "amplitudePx": 39.9,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 12,
+      "toFixation": 13,
+      "amplitudePx": 298.9,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 13,
+      "toFixation": 14,
+      "amplitudePx": 340.5,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 14,
+      "toFixation": 15,
+      "amplitudePx": 49.2,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 15,
+      "toFixation": 16,
+      "amplitudePx": 397.6,
+      "durationMs": 34
+    },
+    {
+      "fromFixation": 16,
+      "toFixation": 17,
+      "amplitudePx": 31.2,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 17,
+      "toFixation": 18,
+      "amplitudePx": 131,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 18,
+      "toFixation": 19,
+      "amplitudePx": 211.6,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 19,
+      "toFixation": 20,
+      "amplitudePx": 41.5,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 20,
+      "toFixation": 21,
+      "amplitudePx": 297.9,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 21,
+      "toFixation": 22,
+      "amplitudePx": 330.8,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 22,
+      "toFixation": 23,
+      "amplitudePx": 60.2,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 23,
+      "toFixation": 24,
+      "amplitudePx": 391.3,
+      "durationMs": 34
+    },
+    {
+      "fromFixation": 24,
+      "toFixation": 25,
+      "amplitudePx": 25.4,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 25,
+      "toFixation": 26,
+      "amplitudePx": 131.3,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 26,
+      "toFixation": 27,
+      "amplitudePx": 207.2,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 27,
+      "toFixation": 28,
+      "amplitudePx": 29.3,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 28,
+      "toFixation": 29,
+      "amplitudePx": 294.8,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 29,
+      "toFixation": 30,
+      "amplitudePx": 330.1,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 30,
+      "toFixation": 31,
+      "amplitudePx": 55.3,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 31,
+      "toFixation": 32,
+      "amplitudePx": 384.9,
+      "durationMs": 33
+    },
+    {
+      "fromFixation": 32,
+      "toFixation": 33,
+      "amplitudePx": 23.3,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 33,
+      "toFixation": 34,
+      "amplitudePx": 130.3,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 34,
+      "toFixation": 35,
+      "amplitudePx": 209.7,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 35,
+      "toFixation": 36,
+      "amplitudePx": 36.3,
+      "durationMs": 19
+    }
+  ],
+  "actions": [
+    {
+      "tMs": 29400,
+      "type": "abandon",
+      "target": null,
+      "aoiId": null,
+      "value": "Cart — “calculated later” distrusted, left",
+      "ok": true
+    }
+  ],
+  "outcome": {
+    "status": "abandoned",
+    "step": "cart",
+    "reason": "Cart — “calculated later” distrusted, left",
+    "attribution": "product",
+    "excludedFromScores": false
+  },
+  "integrity": {
+    "selectorFailures": 0,
+    "retries": 0
+  }
+}

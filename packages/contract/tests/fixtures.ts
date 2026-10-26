@@ -95,6 +95,9 @@ export const validRun = (): Run => ({
     { id: CART, label: 'Cart' },
     { id: CONFIRM, label: 'Confirmation' },
   ],
+  stepCaptions: [
+    { variant: 'A', step: CART, caption: 'Variant A, cart. Two people read the total.' },
+  ],
   audience: audience(),
   personas: [
     {

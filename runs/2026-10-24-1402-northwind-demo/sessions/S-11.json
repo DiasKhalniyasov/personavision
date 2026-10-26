@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "S-11",
+  "runId": "2026-10-24-1402-northwind-demo",
+  "variant": "A",
+  "taskId": "buy-boots",
+  "kind": "simulated",
+  "persona": {
+    "id": "price",
+    "traits": {
+      "persistence": 0.6,
+      "scanningVsReading": 0.8,
+      "detailOrientation": 0.7,
+      "interfaceFamiliarity": 0.5,
+      "patience": 0.4,
+      "riskTolerance": 0.3
+    },
+    "device": {
+      "name": "iPhone 15",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 3,
+      "touch": true
+    }
+  },
+  "participant": null,
+  "seed": 2,
+  "startedAt": "2026-10-24T14:09:30.000Z",
+  "durationMs": 19500,
+  "screens": [
+    {
+      "index": 0,
+      "step": "cart",
+      "screenshot": "screenshots/A/cart.png",
+      "scrollY": 0,
+      "intent": "See the real total with shipping before anything else.",
+      "decidedAction": "left without ordering"
+    }
+  ],
+  "fixations": [
+    {
+      "index": 0,
+      "screenIndex": 0,
+      "tMs": 669,
+      "durationMs": 343,
+      "x": 121.2,
+      "y": 144,
+      "pageX": 121.2,
+      "pageY": 144,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 1,
+      "screenIndex": 0,
+      "tMs": 1485,
+      "durationMs": 238,
+      "x": 324.8,
+      "y": 144.9,
+      "pageX": 324.8,
+      "pageY": 144.9,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 2,
+      "screenIndex": 0,
+      "tMs": 2220,
+      "durationMs": 381,
+      "x": 306,
+      "y": 275.8,
+      "pageX": 306,
+      "pageY": 275.8,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 3,
+      "screenIndex": 0,
+      "tMs": 2670,
+      "durationMs": 354,
+      "x": 295.9,
+      "y": 298.9,
+      "pageX": 295.9,
+      "pageY": 298.9,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 4,
+      "screenIndex": 0,
+      "tMs": 3390,
+      "durationMs": 504,
+      "x": 191.1,
+      "y": 345.1,
+      "pageX": 191.1,
+      "pageY": 345.1,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 5,
+      "screenIndex": 0,
+      "tMs": 4299,
+      "durationMs": 287,
+      "x": 129.9,
+      "y": 138.1,
+      "pageX": 129.9,
+      "pageY": 138.1,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 6,
+      "screenIndex": 0,
+      "tMs": 4941,
+      "durationMs": 232,
+      "x": 320.8,
+      "y": 135.9,
+      "pageX": 320.8,
+      "pageY": 135.9,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 7,
+      "screenIndex": 0,
+      "tMs": 5493,
+      "durationMs": 435,
+      "x": 299.6,
+      "y": 279.4,
+      "pageX": 299.6,
+      "pageY": 279.4,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 8,
+      "screenIndex": 0,
+      "tMs": 6207,
+      "durationMs": 328,
+      "x": 303.9,
+      "y": 295.4,
+      "pageX": 303.9,
+      "pageY": 295.4,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 9,
+      "screenIndex": 0,
+      "tMs": 6826,
+      "durationMs": 573,
+      "x": 190.3,
+      "y": 343,
+      "pageX": 190.3,
+      "pageY": 343,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 10,
+      "screenIndex": 0,
+      "tMs": 7531,
+      "durationMs": 334,
+      "x": 128.3,
+      "y": 144.6,
+      "pageX": 128.3,
+      "pageY": 144.6,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 11,
+      "screenIndex": 0,
+      "tMs": 8443,
+      "durationMs": 221,
+      "x": 312.4,
+      "y": 139.1,
+      "pageX": 312.4,
+      "pageY": 139.1,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 12,
+      "screenIndex": 0,
+      "tMs": 8954,
+      "durationMs": 391,
+      "x": 301.3,
+      "y": 273.9,
+      "pageX": 301.3,
+      "pageY": 273.9,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 13,
+      "screenIndex": 0,
+      "tMs": 9832,
+      "durationMs": 335,
+      "x": 309.9,
+      "y": 295.4,
+      "pageX": 309.9,
+      "pageY": 295.4,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 14,
+      "screenIndex": 0,
+      "tMs": 10523,
+      "durationMs": 565,
+      "x": 197.5,
+      "y": 353.9,
+      "pageX": 197.5,
+      "pageY": 353.9,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 15,
+      "screenIndex": 0,
+      "tMs": 11254,
+      "durationMs": 290,
+      "x": 123.4,
+      "y": 135.6,
+      "pageX": 123.4,
+      "pageY": 135.6,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 16,
+      "screenIndex": 0,
+      "tMs": 11782,
+      "durationMs": 258,
+      "x": 324.4,
+      "y": 138,
+      "pageX": 324.4,
+      "pageY": 138,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 17,
+      "screenIndex": 0,
+      "tMs": 12416,
+      "durationMs": 417,
+      "x": 299.2,
+      "y": 277.3,
+      "pageX": 299.2,
+      "pageY": 277.3,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 18,
+      "screenIndex": 0,
+      "tMs": 13149,
+      "durationMs": 378,
+      "x": 297.4,
+      "y": 293.5,
+      "pageX": 297.4,
+      "pageY": 293.5,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 19,
+      "screenIndex": 0,
+      "tMs": 13939,
+      "durationMs": 507,
+      "x": 196.1,
+      "y": 347.8,
+      "pageX": 196.1,
+      "pageY": 347.8,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 20,
+      "screenIndex": 0,
+      "tMs": 14536,
+      "durationMs": 311,
+      "x": 119.1,
+      "y": 140.8,
+      "pageX": 119.1,
+      "pageY": 140.8,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 21,
+      "screenIndex": 0,
+      "tMs": 15243,
+      "durationMs": 260,
+      "x": 326.4,
+      "y": 145.1,
+      "pageX": 326.4,
+      "pageY": 145.1,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 22,
+      "screenIndex": 0,
+      "tMs": 16146,
+      "durationMs": 406,
+      "x": 307.2,
+      "y": 283.2,
+      "pageX": 307.2,
+      "pageY": 283.2,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 23,
+      "screenIndex": 0,
+      "tMs": 16663,
+      "durationMs": 347,
+      "x": 306.9,
+      "y": 301.6,
+      "pageX": 306.9,
+      "pageY": 301.6,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 24,
+      "screenIndex": 0,
+      "tMs": 17348,
+      "durationMs": 499,
+      "x": 199.6,
+      "y": 351,
+      "pageX": 199.6,
+      "pageY": 351,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 25,
+      "screenIndex": 0,
+      "tMs": 18234,
+      "durationMs": 297,
+      "x": 126.5,
+      "y": 143.7,
+      "pageX": 126.5,
+      "pageY": 143.7,
+      "aoiId": "A-cart-cart-line"
+    },
+    {
+      "index": 26,
+      "screenIndex": 0,
+      "tMs": 18736,
+      "durationMs": 230,
+      "x": 328.2,
+      "y": 136.8,
+      "pageX": 328.2,
+      "pageY": 136.8,
+      "aoiId": "A-cart-cart-line"
+    }
+  ],
+  "saccades": [
+    {
+      "fromFixation": 0,
+      "toFixation": 1,
+      "amplitudePx": 203.6,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 1,
+      "toFixation": 2,
+      "amplitudePx": 132.2,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 2,
+      "toFixation": 3,
+      "amplitudePx": 25.2,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 3,
+      "toFixation": 4,
+      "amplitudePx": 114.5,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 4,
+      "toFixation": 5,
+      "amplitudePx": 215.9,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 5,
+      "toFixation": 6,
+      "amplitudePx": 190.9,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 6,
+      "toFixation": 7,
+      "amplitudePx": 145.1,
+      "durationMs": 24
+    },
+    {
+      "fromFixation": 7,
+      "toFixation": 8,
+      "amplitudePx": 16.6,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 8,
+      "toFixation": 9,
+      "amplitudePx": 123.2,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 9,
+      "toFixation": 10,
+      "amplitudePx": 207.9,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 10,
+      "toFixation": 11,
+      "amplitudePx": 184.2,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 11,
+      "toFixation": 12,
+      "amplitudePx": 135.3,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 12,
+      "toFixation": 13,
+      "amplitudePx": 23.2,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 13,
+      "toFixation": 14,
+      "amplitudePx": 126.7,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 14,
+      "toFixation": 15,
+      "amplitudePx": 230.5,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 15,
+      "toFixation": 16,
+      "amplitudePx": 201,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 16,
+      "toFixation": 17,
+      "amplitudePx": 141.6,
+      "durationMs": 24
+    },
+    {
+      "fromFixation": 17,
+      "toFixation": 18,
+      "amplitudePx": 16.3,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 18,
+      "toFixation": 19,
+      "amplitudePx": 114.9,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 19,
+      "toFixation": 20,
+      "amplitudePx": 220.9,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 20,
+      "toFixation": 21,
+      "amplitudePx": 207.3,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 21,
+      "toFixation": 22,
+      "amplitudePx": 139.4,
+      "durationMs": 24
+    },
+    {
+      "fromFixation": 22,
+      "toFixation": 23,
+      "amplitudePx": 18.4,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 23,
+      "toFixation": 24,
+      "amplitudePx": 118.1,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 24,
+      "toFixation": 25,
+      "amplitudePx": 219.8,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 25,
+      "toFixation": 26,
+      "amplitudePx": 201.8,
+      "durationMs": 26
+    }
+  ],
+  "actions": [
+    {
+      "tMs": 19500,
+      "type": "abandon",
+      "target": null,
+      "aoiId": null,
+      "value": "Cart — re-read $8.95 shipping, then left",
+      "ok": true
+    }
+  ],
+  "outcome": {
+    "status": "abandoned",
+    "step": "cart",
+    "reason": "Cart — re-read $8.95 shipping, then left",
+    "attribution": "product",
+    "excludedFromScores": false
+  },
+  "integrity": {
+    "selectorFailures": 0,
+    "retries": 0
+  }
+}

@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@personavision/contract':
+        specifier: workspace:*
+        version: link:packages/contract
+      '@personavision/engine':
+        specifier: workspace:*
+        version: link:packages/engine
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
