@@ -175,6 +175,27 @@ export type DecisionUsage = Omit<RunUsage, 'calls'>;
  */
 export type RelevanceHints = Readonly<Record<string, number>>;
 
+/**
+ * Which model produced a decision, and in which mode.
+ *
+ * Absent offline, where there is no model to name. Present on every decision a model
+ * provider returns, because a run's cost can only be checked against an invoice if each
+ * call says what it was priced at: the same usage costs twelve times as much in one of the
+ * owner's two modes as in the other (#43), and the run artifact records the mode it ran in
+ * (#142). It is a sibling of `usage` rather than a field of it, because `usage` is the
+ * contract's own five figures and gains no sixth.
+ *
+ * The mode's vocabulary belongs to the provider that implements it — `contributor` and
+ * `standard` for the Meta Model API — so this interface takes the words rather than
+ * declaring them.
+ */
+export interface DecisionModel {
+  /** The provider's own name for the tier, as its records and the run artifact spell it. */
+  readonly mode: string;
+  /** The model actually called, never one that was substituted for it. */
+  readonly modelId: string;
+}
+
 /** What a provider decided: the agent's words, one action, and the call's cost. */
 export interface Decision {
   /** The agent's intent, in its own words — what the replay shows it was thinking. */
@@ -182,6 +203,8 @@ export interface Decision {
   readonly action: DecisionAction;
   readonly relevanceHints?: RelevanceHints;
   readonly usage: DecisionUsage;
+  /** Which model and mode produced it. Absent when no model did. */
+  readonly model?: DecisionModel;
 }
 
 /**
