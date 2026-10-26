@@ -299,6 +299,97 @@ describe('aggregate', () => {
     });
   });
 
+  describe('dwell, fixation count and revisits', () => {
+    const DEAD_END = 'a-cart-dead-end';
+    // `docs/FLOW.md` section 5: dead-end revisits are the median returns *per session*, so
+    // the seven sessions that never went near the area are the zeros they really are.
+    const sessions = [
+      ...Array.from({ length: 7 }, (_unused, index) =>
+        session({ id: `S-0${index + 1}`, looks: [[CHECKOUT, 900, 300]] }),
+      ),
+      session({
+        id: 'S-08',
+        looks: [
+          [DEAD_END, 300, 200],
+          [CHECKOUT, 600, 200],
+          [DEAD_END, 900, 200],
+          [CHECKOUT, 1200, 200],
+          [DEAD_END, 1500, 200],
+          [CHECKOUT, 1800, 200],
+          [DEAD_END, 2100, 200],
+        ],
+      }),
+      session({
+        id: 'S-09',
+        looks: [
+          [DEAD_END, 300, 300],
+          [CHECKOUT, 600, 200],
+          [DEAD_END, 900, 300],
+          [CHECKOUT, 1200, 200],
+          [DEAD_END, 1500, 300],
+          [CHECKOUT, 1800, 200],
+          [DEAD_END, 2100, 300],
+        ],
+      }),
+    ];
+    const deadEnd = row(aggregate(sessions, [aoi(DEAD_END)]), DEAD_END);
+
+    it('are medians over every session behind the row, not only the ones that looked', () => {
+      expect(deadEnd.sessionCount).toBe(9);
+      expect(deadEnd.lookedAtShare).toBe(2 / 9);
+      // Two sessions returned three times each; the other seven returned not at all.
+      expect(deadEnd.revisits).toBe(0);
+      expect(deadEnd.fixationCount).toBe(0);
+      expect(deadEnd.totalDwellMs).toBe(0);
+    });
+
+    it('still report the first fixation over only the sessions that looked', () => {
+      expect(deadEnd.timeToFirstFixationMs).toBe(300);
+      expect(deadEnd.firstFixationDurationMs).toBe(250);
+    });
+
+    it('take dwell over every session behind the row', () => {
+      const dwelt = [
+        session({ id: 'S-01', looks: [[CHECKOUT, 900, 400]] }),
+        session({ id: 'S-02', looks: [[CHECKOUT, 900, 600]] }),
+        session({ id: 'S-03', looks: [[PROMO, 300, 200]] }),
+      ];
+
+      expect(row(aggregate(dwelt, [aoi(CHECKOUT)]), CHECKOUT).totalDwellMs).toBe(400);
+    });
+
+    it('round a fractional median down rather than claim a return nobody made', () => {
+      const split = [
+        session({
+          id: 'S-01',
+          looks: [
+            [CHECKOUT, 300, 200],
+            [PROMO, 600, 200],
+            [CHECKOUT, 900, 200],
+          ],
+        }),
+        session({ id: 'S-02', looks: [[CHECKOUT, 300, 200]] }),
+      ];
+
+      // One session returned once, the other never did: half a revisit is not a revisit.
+      expect(row(aggregate(split, [aoi(CHECKOUT)]), CHECKOUT).revisits).toBe(0);
+    });
+  });
+
+  describe('an area no session reached', () => {
+    const unreached = row(
+      aggregate([session({ id: 'S-01', steps: [CART] })], [aoi(COMPLETE, { step: CONFIRM })]),
+      COMPLETE,
+    );
+
+    it('says so with a session count of zero rather than a share nobody is behind', () => {
+      expect(unreached.sessionCount).toBe(0);
+      expect(unreached.lookedAtShare).toBe(0);
+      expect(unreached.timeToFirstFixationMs).toBeNull();
+      expect(unreached.firstFixationDurationMs).toBeNull();
+    });
+  });
+
   it('reads sessions that the contract accepts', () => {
     const fixtures = [
       session({ id: 'S-01', looks: [[CHECKOUT, 900, 420]] }),

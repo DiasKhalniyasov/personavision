@@ -23,7 +23,7 @@ export type Aoi = Run['aois'][number];
 /** One row of `run.json`'s `aoiMetrics`: an area's numbers across the run's sessions. */
 export type AoiMetric = Run['aoiMetrics'][number];
 
-/** Non-empty by construction: only areas with at least one fixating session reach it. */
+/** Non-empty by construction: every caller below guards on the session count first. */
 const median = (values: readonly number[]): number => {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
@@ -43,6 +43,12 @@ interface SessionAoiStats {
  * Fixation order is the session's continuous `index`, never a timestamp sort, and a
  * revisit is a return after the gaze left the area: a run of consecutive fixations inside
  * one area is one visit.
+ *
+ * `timeToFirstFixationMs` is the fixation's `tMs`, which the contract puts on the
+ * session's clock — it counts from the start of the session, not from the moment the
+ * area's step appeared. Re-basing it per step needs a screen onset the session shape does
+ * not carry yet, and guessing one from the first fixation on the screen would manufacture
+ * the zero this module exists to refuse. See the note on #57.
  */
 const statsByAoi = (session: Session): Map<string, SessionAoiStats> => {
   const stats = new Map<string, SessionAoiStats>();
@@ -80,11 +86,23 @@ const statsByAoi = (session: Session): Map<string, SessionAoiStats> => {
  * session reached.
  *
  * A session is behind an area's row when it was not excluded from scores, ran the area's
- * variant, and reached the area's step — the denominator beat 5 states in words ("0 of 9
- * agents who reached this step looked at it"). Every reported value is a median over the
- * sessions that fixated the area, so that the ones that never looked lower no number
- * except `lookedAtShare`, which is exactly what they are counted in. The counts are
- * rounded to whole fixations and whole revisits, as the contract types them.
+ * variant, and reached the area's step — the denominator `docs/FLOW.md` section 7, beat 5
+ * states in words ("0 of 9 agents who reached this step looked at it"). Two populations
+ * then share that row, because the honest answer differs by metric:
+ *
+ * - *First-fixation* values are medians over the sessions that **fixated** the area. A
+ *   session that never looked has no time to first fixation, and a zero would be a lie;
+ *   when nobody looked the value is `null`.
+ * - *Accumulated* values — dwell, fixation count, revisits — are medians over **every**
+ *   session behind the row, a session that never looked counting as the zero it really is.
+ *   `docs/FLOW.md` section 5 defines dead-end revisits as the median returns *per session*,
+ *   and the friction score reads this row rather than recomputing it.
+ *
+ * The counts round down, so a median of half a revisit never reports a return nobody made.
+ *
+ * An area no session reached at all reports `sessionCount: 0` with `lookedAtShare: 0`: the
+ * contract types the share as a number, so "no data" is told by the count, and a screen
+ * saying "0 of N looked" has to read `sessionCount` before it says anything.
  */
 export const aggregate = (sessions: readonly Session[], aois: readonly Aoi[]): AoiMetric[] => {
   const contributing = sessions
@@ -97,32 +115,28 @@ export const aggregate = (sessions: readonly Session[], aois: readonly Aoi[]): A
         session.variant === aoi.variant &&
         session.screens.some((screen) => screen.step === aoi.step),
     );
-    const looked = behindTheRow
-      .map(({ stats }) => stats.get(aoi.id))
-      .filter((stats): stats is SessionAoiStats => stats !== undefined);
+    const perSession = behindTheRow.map(({ stats }) => stats.get(aoi.id));
+    const looked = perSession.filter((stats): stats is SessionAoiStats => stats !== undefined);
     const sessionCount = behindTheRow.length;
 
-    if (looked.length === 0) {
-      return {
-        aoiId: aoi.id,
-        timeToFirstFixationMs: null,
-        firstFixationDurationMs: null,
-        totalDwellMs: 0,
-        fixationCount: 0,
-        revisits: 0,
-        lookedAtShare: 0,
-        sessionCount,
-      };
-    }
+    /** Over every session behind the row; a session that never looked contributes a zero. */
+    const perSessionMedian = (of: (stats: SessionAoiStats) => number): number =>
+      sessionCount === 0
+        ? 0
+        : median(perSession.map((stats) => (stats === undefined ? 0 : of(stats))));
+
+    /** Over the sessions that fixated the area; `null` rather than an invented number. */
+    const amongLookers = (of: (stats: SessionAoiStats) => number): number | null =>
+      looked.length === 0 ? null : median(looked.map(of));
 
     return {
       aoiId: aoi.id,
-      timeToFirstFixationMs: median(looked.map((stats) => stats.timeToFirstFixationMs)),
-      firstFixationDurationMs: median(looked.map((stats) => stats.firstFixationDurationMs)),
-      totalDwellMs: median(looked.map((stats) => stats.totalDwellMs)),
-      fixationCount: Math.round(median(looked.map((stats) => stats.fixationCount))),
-      revisits: Math.round(median(looked.map((stats) => stats.revisits))),
-      lookedAtShare: looked.length / sessionCount,
+      timeToFirstFixationMs: amongLookers((stats) => stats.timeToFirstFixationMs),
+      firstFixationDurationMs: amongLookers((stats) => stats.firstFixationDurationMs),
+      totalDwellMs: perSessionMedian((stats) => stats.totalDwellMs),
+      fixationCount: Math.floor(perSessionMedian((stats) => stats.fixationCount)),
+      revisits: Math.floor(perSessionMedian((stats) => stats.revisits)),
+      lookedAtShare: sessionCount === 0 ? 0 : looked.length / sessionCount,
       sessionCount,
     };
   });
