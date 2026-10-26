@@ -1,0 +1,313 @@
+/*
+ * northwind — the demo shop's own stylesheet.
+ *
+ * This file deliberately does NOT import `docs/design/tokens.css` and copies nothing from
+ * it. The product's visual language belongs to the product; this shop stands in for a
+ * customer's checkout, and every screenshot of it has to look like somebody else's site.
+ * The values below are ordinary CSS, owned here.
+ *
+ * Shared by variant A (`../a/`) and, when it lands, variant B (`../b/`), so that B can be
+ * an honest copy of the chrome with only its planted defects differing.
+ *
+ * Layout rule, matching the prototype: `.body` is two columns from 768px up and one column
+ * below it, so at 390x844 the step's primary action precedes the order summary in both
+ * document and visual order and stays above the fold.
+ */
+
+:root {
+  --shop-ink: #1b1f24;
+  --shop-ink-muted: #5c6670;
+  /* 5.3:1 on the page and 4.5:1 on the sunken surface: faint, but still WCAG AA. */
+  --shop-ink-faint: #646d76;
+  --shop-page: #ffffff;
+  --shop-raised: #f7f8f9;
+  --shop-sunken: #ebeef0;
+  --shop-line: #d9dee2;
+  --shop-accent: #0b6b5f;
+  --shop-accent-ink: #ffffff;
+  --shop-good: #1c6b3a;
+  --shop-good-bg: #e8f4ec;
+  --shop-radius: 6px;
+  --shop-gap: 16px;
+  --shop-font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--shop-page);
+  color: var(--shop-ink);
+  font: 16px/1.45 var(--shop-font);
+}
+
+/* ---------------------------------------------------------------- shared chrome */
+
+.shop-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--shop-line);
+}
+
+.shop-bar .brand {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--shop-ink);
+  text-decoration: none;
+}
+
+.shop-bar .cart {
+  margin-left: auto;
+  color: var(--shop-ink-muted);
+  font-size: 14px;
+}
+
+.trust {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--shop-line);
+  color: var(--shop-ink-faint);
+  font-size: 13px;
+}
+
+.trust .support {
+  margin-left: auto;
+  color: var(--shop-accent);
+}
+
+/* ------------------------------------------------------------------ step layout */
+
+.body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--shop-gap);
+  padding: 16px 20px 24px;
+  max-width: 980px;
+}
+
+@media (min-width: 768px) {
+  .body {
+    grid-template-columns: 1.4fr 1fr;
+    gap: 32px;
+  }
+
+  .body-single {
+    grid-template-columns: 1fr;
+  }
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 16px;
+  line-height: 1.25;
+  margin: 0 0 10px;
+}
+
+.faint {
+  color: var(--shop-ink-faint);
+}
+
+/* ------------------------------------------------------------------- cart line */
+
+.item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.item .thumb {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: var(--shop-radius);
+  background: var(--shop-sunken);
+}
+
+.item .price {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- summary */
+
+.summary {
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius);
+  padding: 12px 14px;
+  background: var(--shop-raised);
+}
+
+.summary dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  font-size: 15px;
+}
+
+.summary dt {
+  color: var(--shop-ink-muted);
+}
+
+.summary dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary .total {
+  font-weight: 700;
+  color: var(--shop-ink);
+  border-top: 1px solid var(--shop-line);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------- fields */
+
+.field {
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius);
+  padding: 8px 12px 10px;
+  margin-bottom: 12px;
+  background: var(--shop-raised);
+}
+
+.field > label,
+.field > .field-label {
+  display: block;
+  color: var(--shop-ink-muted);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.field > input {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--shop-ink);
+  font: inherit;
+}
+
+.field > p {
+  margin: 0;
+}
+
+.field > .card-frame {
+  display: block;
+  width: 100%;
+  height: 26px;
+  border: 0;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ------------------------------------------------------------- primary actions */
+
+.cta {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--shop-radius);
+  background: var(--shop-accent);
+  color: var(--shop-accent-ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cta.weak {
+  background: var(--shop-sunken);
+  border-color: var(--shop-line);
+  color: var(--shop-ink-muted);
+  font-weight: 500;
+}
+
+/* ----------------------------------------------------------------- confirmation */
+
+.confirmbox {
+  margin: 24px 20px;
+  padding: 24px 20px;
+  border-radius: var(--shop-radius);
+  background: var(--shop-good-bg);
+  color: var(--shop-good);
+  text-align: center;
+}
+
+.confirmbox h1 {
+  margin: 0;
+  color: inherit;
+}
+
+.confirmbox p {
+  margin: 8px 0 0;
+  color: var(--shop-ink-muted);
+}
+
+/* --------------------------------------------------------------- the card frame */
+
+/*
+ * `card-frame.html` is its own document, so it carries its own body rule. It is
+ * transparent so the hosted field sits in the surrounding `.field` box rather than
+ * cutting a white strip through it.
+ */
+body.card-frame-body {
+  background: transparent;
+  font-size: 16px;
+}
+
+/*
+ * The visible "Card number" wording lives in the parent document, on the `data-aoi="card"`
+ * field, exactly as the prototype draws it. The label in here is the input's own
+ * accessible name, so the control is labelled in its own document too; it is hidden
+ * visually rather than dropped.
+ */
+body.card-frame-body label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+body.card-frame-body input {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--shop-ink);
+  font: inherit;
+}

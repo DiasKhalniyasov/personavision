@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Payment details &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="../shared/shop.css" />
+  </head>
+  <body>
+    <header class="shop-bar">
+      <a class="brand" href="cart.html">NORTHWIND</a>
+      <span class="cart" data-aoi="cart-badge">Cart (1)</span>
+    </header>
+    <main class="body">
+      <section>
+        <h1>Payment details</h1>
+        <!--
+          A plain GET submit, so the step advances with JavaScript disabled. The card
+          number is not in this form: it is entered in the same-origin frame below, the
+          way a hosted payment field works.
+        -->
+        <form method="get" action="review.html">
+          <div class="field" data-aoi="email">
+            <label for="email">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value="you@example.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="field" data-aoi="card">
+            <span class="field-label">Card number</span>
+            <iframe class="card-frame" src="../shared/card-frame.html" title="Card number"></iframe>
+          </div>
+          <div class="row2">
+            <div class="field" data-aoi="expiry">
+              <label for="expiry">Expiry</label>
+              <input
+                id="expiry"
+                name="expiry"
+                type="text"
+                value="09 / 29"
+                inputmode="numeric"
+                autocomplete="cc-exp"
+                required
+              />
+            </div>
+            <div class="field" data-aoi="cvc">
+              <label for="cvc">CVC</label>
+              <input
+                id="cvc"
+                name="cvc"
+                type="text"
+                value="123"
+                inputmode="numeric"
+                autocomplete="cc-csc"
+                required
+              />
+            </div>
+          </div>
+          <button class="cta" data-aoi="primary" type="submit">Continue to review</button>
+        </form>
+      </section>
+      <aside>
+        <h2>Order summary</h2>
+        <div class="summary" data-aoi="summary">
+          <dl>
+            <dt>Ridgeline boots</dt>
+            <dd>$129.00</dd>
+            <dt>Shipping</dt>
+            <dd>$8.95</dd>
+            <dt class="total">Total</dt>
+            <dd class="total">$137.95</dd>
+          </dl>
+        </div>
+      </aside>
+    </main>
+    <footer class="trust" data-aoi="trust">
+      Secure payment &middot; 30-day returns<a
+        class="support"
+        data-aoi="support"
+        href="../shared/help.html"
+        >Need help?</a
+      >
+    </footer>
+  </body>
+</html>
