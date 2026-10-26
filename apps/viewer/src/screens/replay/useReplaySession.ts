@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@personavision/contract';
 import { openRun } from '@/session/index.js';
 import type { RunSessions } from '@/session/index.js';
+import { runDataBase } from '@/shell/useRun';
 
 /**
  * One person's session, read once.
@@ -20,15 +21,12 @@ import type { RunSessions } from '@/session/index.js';
  * open` serves and `src/shell/useRun.ts` reads `run.json` from.
  */
 
-/** One run's directory, as the mount serves it. */
-const runBase = (runId: string): string => `/runs/${encodeURIComponent(runId)}/`;
-
 const opened = new Map<string, Promise<RunSessions>>();
 
 const openOnce = (runId: string): Promise<RunSessions> => {
   const pending =
     opened.get(runId) ??
-    openRun({ baseUrl: runBase(runId) }).catch((error: unknown) => {
+    openRun({ baseUrl: runDataBase(runId) }).catch((error: unknown) => {
       opened.delete(runId);
       throw error;
     });
