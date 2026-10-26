@@ -129,9 +129,12 @@
   fill: var(--gaze-fixation-current);
 }
 
+/* The label's size is a `viewBox` length and is set on the element itself; what the
+   stylesheet gives it is the family, the weight and the gaze tokens' own label colour. */
 .replay .layer text {
-  font: var(--weight-bold) var(--text-2xs) / 1 var(--font-sans);
   fill: var(--gaze-fixation-label);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
 }
 
 /* ---- The scrubber ------------------------------------------------------ */

@@ -22,7 +22,12 @@ import type { GazeTrail } from './position';
  */
 const radius = (durationMs: number): number => 1.6 + (durationMs / 1000) * 1.9;
 
-/** The number sits inside its dot, so it is sized in `viewBox` units too. */
+/**
+ * The number sits inside its dot, so it is sized in `viewBox` units too — and as an inline
+ * style, which is the only way a length in those units survives: the stylesheet gives the
+ * label its family, weight and colour, and a stylesheet's `font-size` would otherwise win
+ * over a presentation attribute and draw the number the size of the whole dot.
+ */
 const NUMBER_SIZE = 3;
 
 export function GazeOverlay({ trail }: { trail: GazeTrail }) {
@@ -51,7 +56,12 @@ export function GazeOverlay({ trail }: { trail: GazeTrail }) {
               rx={radius(mark.durationMs)}
               ry={radius(mark.durationMs) * 1.6}
             />
-            <text x={mark.xPct} y={mark.yPct + 1.1} textAnchor="middle" fontSize={NUMBER_SIZE}>
+            <text
+              x={mark.xPct}
+              y={mark.yPct + 1.1}
+              textAnchor="middle"
+              style={{ fontSize: NUMBER_SIZE }}
+            >
               {mark.number}
             </text>
           </g>
