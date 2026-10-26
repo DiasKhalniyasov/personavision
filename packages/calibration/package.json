@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "corpus": "tsx --conditions development scripts/make-corpus.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "sharp": "^0.35.5"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "vitest": "^5.0.5"
   }
 }

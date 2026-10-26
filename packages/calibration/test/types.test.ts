@@ -108,12 +108,14 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the manifest loader and the cache-path helpers, and nothing else', () => {
+  it('exports the types, the corpus loader, the manifest loader and the cache-path helpers, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
       'CACHE_ENV_VAR',
+      'CORPUS_RECORD_NAMES',
       'CachePathError',
+      'CorpusError',
       'MANIFEST_SCHEMA_VERSION',
       'ManifestError',
       'RECORD_CATEGORIES',
@@ -123,6 +125,9 @@ describe('the public entry point', () => {
       'describeChecksum',
       'isContainedRelativePath',
       'isDatasetId',
+      'loadCorpus',
+      'loadCorpusCategory',
+      'loadCorpusRecord',
       'loadManifest',
       'parseManifest',
       'recordedChecksum',

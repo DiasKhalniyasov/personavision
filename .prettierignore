@@ -8,3 +8,8 @@ docs
 
 # Run directories are generated artifacts.
 runs
+
+# The calibration corpus is generated data: `pnpm -F @personavision/calibration corpus` writes
+# it and `packages/calibration/test/corpus.test.ts` asserts the committed bytes are that
+# generator's output, so formatting it here would make the two disagree.
+packages/calibration/test/corpus

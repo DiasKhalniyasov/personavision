@@ -7,9 +7,10 @@
  * the engine's configuration to them. The badge the product shows on every screen reads the
  * result, so an honest low number is better than a flattering one.
  *
- * This ticket (#81) is the ground the rest of step #11 stands on: the vocabulary, the dataset
- * manifest and the cache policy. The metrics, the corpus, the download, the conversion, the
- * baselines, the scoring and the fit arrive as later tickets and export from here.
+ * #81 laid the ground the rest of step #11 stands on: the vocabulary, the dataset manifest and
+ * the cache policy, and #82 the committed synthetic corpus every later ticket tests against.
+ * The metrics, the download, the conversion, the baselines, the scoring and the fit arrive as
+ * later tickets and export from here.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and may later
  * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -33,6 +34,15 @@ export type {
   ViewingDurationSeconds,
   Viewport,
 } from './types.js';
+
+export {
+  CORPUS_RECORD_NAMES,
+  CorpusError,
+  loadCorpus,
+  loadCorpusCategory,
+  loadCorpusRecord,
+} from './corpus.js';
+export type { CorpusRecordData, CorpusRecordName } from './corpus.js';
 
 export {
   MANIFEST_SCHEMA_VERSION,
