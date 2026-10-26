@@ -13,8 +13,9 @@ because every step advances by an ordinary link or an ordinary `GET` form submit
 > to the product; a demo target that inherited it would make every screenshot look like
 > PersonaVision instead of like a customer's checkout.
 
-The markup is a transcription of `docs/design/prototype.html`'s `PAGES` constant, taking the
-`only-a` branches. **Every `data-aoi` value is reproduced exactly.** Those ids are the areas
+The markup is a transcription of `docs/design/prototype.html`'s `PAGES` constant: variant A
+takes the `only-a` branches, variant B takes both. **Every `data-aoi` value is reproduced
+exactly.** Those ids are the areas
 of interest the Attention screen names, the findings quote and the ground truth points at, so
 renaming one here silently breaks three other tickets. A test asserts that the ids on the
 pages are exactly the variant-A ids the prototype declares, and that they are the ids this
@@ -22,10 +23,10 @@ file claims.
 
 ## Variants
 
-| Variant | Where               | What it is                                                                                                                         |
-| ------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **A**   | `demo/northwind/a/` | The current checkout: clean, conventional, the baseline that has to score ≤ 25.                                                    |
-| **B**   | `demo/northwind/b/` | The redesign candidate with the three planted defects. **Not built yet** — a later ticket adds it as an honest copy of A's chrome. |
+| Variant | Where               | What it is                                                                                                                                                |
+| ------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A**   | `demo/northwind/a/` | The current checkout: clean, conventional, the baseline that has to score ≤ 25.                                                                           |
+| **B**   | `demo/northwind/b/` | The redesign candidate: A's pages copied, with the three planted defects and nothing else changed. See [Variant B](#variant-b-the-three-planted-defects). |
 
 Shared chrome — the `NORTHWIND` bar with its cart badge, the summary block, the trust strip
 with its "Need help?" link — is styled by one stylesheet under `demo/northwind/shared/`, so
@@ -42,15 +43,25 @@ Served by `serveDemoShop()` from `demo/northwind/`, so a URL path is a file path
 | `/a/payment.html`         | `a/payment.html`         | 2. Payment                                                     |
 | `/a/review.html`          | `a/review.html`          | 3. Review                                                      |
 | `/a/confirmation.html`    | `a/confirmation.html`    | 4. Confirmation                                                |
+| `/b/cart.html`            | `b/cart.html`            | 1. Cart, variant B                                             |
+| `/b/payment.html`         | `b/payment.html`         | 2. Payment, variant B                                          |
+| `/b/review.html`          | `b/review.html`          | 3. Review, variant B                                           |
+| `/b/confirmation.html`    | `b/confirmation.html`    | 4. Confirmation, variant B                                     |
 | `/shared/shop.css`        | `shared/shop.css`        | the shop's stylesheet                                          |
 | `/shared/card-frame.html` | `shared/card-frame.html` | the card-number field, embedded by the payment step            |
 | `/shared/help.html`       | `shared/help.html`       | where "Need help?" goes: a real page and a deliberate dead end |
 
-The step pages reach each other in order, and nothing else does:
+The step pages reach each other in order, and nothing else does. The links and forms are the
+same plumbing on both variants — only the wording of the controls differs:
 
 - **Cart → Payment** — the `Checkout` link, `href="payment.html"`.
-- **Payment → Review** — `<form method="get" action="review.html">`, submitted by `Continue to review`.
-- **Review → Confirmation** — `<form method="get" action="confirmation.html">`, submitted by `Place order · $137.95`.
+- **Payment → Review** — `<form method="get" action="review.html">`, submitted by `Continue to review` on A and by `Place order · $129.00` on B.
+- **Review → Confirmation** — `<form method="get" action="confirmation.html">`, submitted by `Place order · $137.95` on A and by `Confirm purchase · $147.95` on B.
+
+Relative `href`s, so each variant stays inside its own directory. The one exception is
+inherited: `shared/help.html`'s "Back to your cart" link points at `/a/cart.html`, so an
+agent that follows it out of variant B lands on variant A. The page tells a reader to use
+the back button instead, and the run ticket should treat it as the dead end it is.
 
 `Keep shopping` on the cart returns to the cart, and `Need help?` on the payment and review
 steps opens `shared/help.html`. The shop has no catalogue and no support flow, so both are
@@ -60,7 +71,8 @@ friction score's dead-end-revisit term measures.
 ## The order
 
 One product, one quantity, all the way through. Variant A states shipping up front, so the
-total never changes between steps.
+total never changes between steps; variant B defers it and then adds a fee, which is
+[defect 2](#variant-b-the-three-planted-defects).
 
 | Line                                   | Value      |
 | -------------------------------------- | ---------- |
@@ -69,8 +81,9 @@ total never changes between steps.
 | Total                                  | `$137.95`  |
 | Order number, on the confirmation page | `NW-20418` |
 
-`$129.00`, `$8.95` and `$137.95` all appear on all four steps. The cart labels the first row
-`Subtotal` and the confirmation labels the total row `Paid`; the amounts are the same.
+`$129.00`, `$8.95` and `$137.95` all appear on all four steps of **variant A**. The cart
+labels the first row `Subtotal` and the confirmation labels the total row `Paid`; the amounts
+are the same.
 
 ## Areas of interest, per page
 
@@ -85,12 +98,14 @@ it. `cart-badge` is chrome and so appears on every step.
 | `/a/confirmation.html` | `cart-badge`, `confirm`, `order-number`, `summary`                                       |
 
 The ids a variant-B branch of the prototype declares — `promo`, `shipping-row`, `fee-row` —
-are absent from variant A by design, and are the next ticket's.
+are absent from variant A by design. Variant B carries them **in addition** to everything in
+this table; its own list is in [Variant B](#variant-b-the-three-planted-defects).
 
 ## The primary action, per page
 
 The one control that advances the task. On variant A it is **above the fold at both
-viewports** on every step.
+viewports** on every step. Variant B's are in
+[Variant B](#variant-b-the-three-planted-defects), where one of them is not.
 
 | Page                   | Primary action          | Selector                     | Element                                               |
 | ---------------------- | ----------------------- | ---------------------------- | ----------------------------------------------------- |
@@ -114,17 +129,139 @@ mobile rule. The fields-and-action column comes first in document order, so when
 stacks, the primary action still precedes the order summary.
 
 Measured in Chrome with device emulation at both viewports, no page scrolls horizontally
-(`scrollWidth === clientWidth`) and every primary action's bottom edge sits well inside the
-fold:
+(`scrollWidth === clientWidth`) and every primary action on variant A sits well inside the
+fold. Variant B's are measured the same way: the promo banner pushes each one down by its own
+height, and on the review step the spacer pushes the completing action out of sight entirely.
 
-| Step    | Primary action          | Bottom edge | Fold         |
-| ------- | ----------------------- | ----------- | ------------ |
-| Cart    | "Checkout"              | 356 px      | 844 / 900 px |
-| Payment | "Continue to review"    | 403 px      | 844 / 900 px |
-| Review  | "Place order · $137.95" | 308 px      | 844 / 900 px |
+| Variant | Step    | Primary action               | Bottom edge | Fold         |
+| ------- | ------- | ---------------------------- | ----------- | ------------ |
+| A       | Cart    | "Checkout"                   | 356 px      | 844 / 900 px |
+| A       | Payment | "Continue to review"         | 403 px      | 844 / 900 px |
+| A       | Review  | "Place order · $137.95"      | 308 px      | 844 / 900 px |
+| B       | Cart    | "Checkout"                   | 442 px      | 844 / 900 px |
+| B       | Payment | "Place order · $129.00"      | 488 px      | 844 / 900 px |
+| B       | Review  | "Confirm purchase · $147.95" | **1077 px** | 844 / 900 px |
 
 The numbers are the same at both viewports, because the column that carries the action is
-first either way. Nothing is absolutely positioned, so no scroll offset can move it.
+first either way. Nothing is absolutely positioned, so no scroll offset can move it. The one
+row above the fold on neither viewport is the planted defect; its arithmetic is written out
+in [Variant B](#variant-b-the-three-planted-defects).
+
+## Variant B: the three planted defects
+
+The redesign candidate. It is `a/*.html` **copied**, with only the regions named below
+changed: a test applies the list of edits to variant A's served markup and requires the
+result to be variant B's, byte for byte. So B cannot drift from A by accident, and a fourth
+defect cannot arrive unannounced. The shared chrome, the page titles and every relative link
+are variant A's, untouched. What variant B adds to `shared/shop.css` is the five rules in
+that file's last section and the four custom properties they use; no rule between the top of
+that file and that section applies to one variant and not the other.
+
+**The task is still completable.** All three defects cost attention and trust; none breaks the
+flow, and an agent who scrolls can buy the boots. A broken flow would be a bug rather than a
+usability defect, and would make the A/B comparison meaningless.
+
+| #     | Defect                               | Step and page                                                                 | Region                                          | What it does                                                                                                                                                                                                                                             |
+| ----- | ------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The completing action nobody sees    | Review, `/b/review.html`                                                      | `complete`                                      | Reads "Confirm purchase · $147.95", sits below a 676 px spacer that puts it under the fold at both viewports, and wears the shop's weaker button treatment — the same control as variant A's "Place order", demoted. Nothing above it advances the task. |
+| **2** | The fee that arrives after the card  | Review, `/b/review.html`; begins on `/b/cart.html`                            | `fee-row`, with `cart-total` and `shipping-row` | A $9.95 service fee appears for the first time **after** payment details are entered. The cart and payment totals read $129.00 with shipping "calculated later" and "calculated at next step"; the review total reads $147.95.                           |
+| **3** | The banner that takes the first look | Cart, payment and review: `/b/cart.html`, `/b/payment.html`, `/b/review.html` | `promo`                                         | A "SPRING SALE −20% · code SPRING20 · today only" banner sits above the content, so it is first in the reading order and competes with the primary action for the first fixation. It is absent from the confirmation step.                               |
+
+### Also carried over, and deliberately not a declared defect
+
+On `/b/payment.html` the primary action reads **"Place order · $129.00"** although it only
+advances to the review step. `docs/design/prototype.html` draws it that way and reports it as
+a finding of its own, so it stays — the prototype wins. It is **not one of the three** planted
+defects, and the cost of that is in the measured precision rather than in the markup: a
+scoring run that reports this as a fourth product defect is right about variant B and wrong
+about the ground truth, so ground-truth precision against the three declared defects is at
+best 3/4 whenever an agent stops at the review step believing it has bought the boots. The
+test suite pins it as an edit with defect number `0` so that nobody later mistakes it for a
+fourth planted defect or for drift.
+
+### The order, on variant B
+
+| Line                                   | Cart and payment                               | Review and confirmation |
+| -------------------------------------- | ---------------------------------------------- | ----------------------- |
+| Ridgeline hiking boots, size 43, brown | `$129.00`                                      | `$129.00`               |
+| Shipping                               | "calculated later" / "calculated at next step" | `$8.95`                 |
+| Service fee                            | —                                              | `$9.95`                 |
+| Total, and `Paid` on the confirmation  | `$129.00`                                      | `$147.95`               |
+
+`$137.95` — variant A's total — appears nowhere on variant B. The confirmation's copy of the
+service-fee row is a plain row, not an alarmed one: the alarm colour belongs to the step where
+the fee first appears, and the confirmation is only a receipt.
+
+### Two things this markup cannot promise
+
+Both are inherited from `docs/design/prototype.html` and are written down here so that a
+ticket which scores a run is not surprised by them.
+
+1. **A `fee-row` rect covers the label, not the amount.** The prototype puts
+   `data-aoi="fee-row"` on the `<dt>`, and the summary is a two-column grid whose `<dt>` and
+   `<dd>` are siblings, so a DOM-sourced rect for the region is the words "Service fee"
+   (x 597–872 at `1440 × 900`) and not `$9.95` (x 884–945). A consumer that wants the row
+   should union the `<dt>` with the `<dd>` that follows it; one that does not will read
+   fixations on the amount as landing in `summary`. The same holds for `shipping-row` on
+   `/b/payment.html`.
+2. **The review total is five cents more than its own rows.** $129.00 + $8.95 + $9.95 is
+   $147.90, and every one of those four figures is fixed by the prototype, by
+   `AOI_METRICS` and by this ticket's acceptance criteria, so they are reproduced as given.
+   An agent that checks the arithmetic has found something true that the ground truth has no
+   entry for. Fixing it means changing the prototype — the fee to $10.00, or the total to
+   $147.90 — which is a design-contract change and not this shop's to make.
+
+### Areas of interest, per page
+
+Variant B carries every id variant A carries, plus `promo` on three steps and `shipping-row`
+and `fee-row` on one each. Each appears exactly once on the page that declares it.
+
+| Page                   | `data-aoi` ids                                                                                                    | Primary action               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `/b/cart.html`         | `cart-badge`, `promo`, `cart-line`, `cart-total`, `cart-checkout`, `keep-shopping`                                | "Checkout"                   |
+| `/b/payment.html`      | `cart-badge`, `promo`, `email`, `card`, `expiry`, `cvc`, `primary`, `summary`, `shipping-row`, `trust`, `support` | "Place order · $129.00"      |
+| `/b/review.html`       | `cart-badge`, `promo`, `ship-to`, `pay-with`, `complete`, `summary`, `fee-row`, `trust`, `support`                | "Confirm purchase · $147.95" |
+| `/b/confirmation.html` | `cart-badge`, `confirm`, `order-number`, `summary`                                                                | — a terminal step            |
+
+`/b/review.html` has **exactly one** `<button>`, and it is the one marked `complete`, so "the
+completing action" is as unambiguous for a driver and for a finding as it is on variant A.
+
+### The spacer, and the fold arithmetic
+
+`.pushdown` in `shared/shop.css` is **676 px**. The value is measured, not guessed: the
+prototype's own `.pushdown` is `height: 150px`, but it is sized for a 9 px thumbnail of a page
+and does not transfer to a real browser.
+
+Measured in headless Chromium at both device-emulated viewports, on the top edge of
+`[data-aoi="complete"]`:
+
+| Measurement                                        | px   |
+| -------------------------------------------------- | ---- |
+| Top edge of the completing action, less the spacer | 348  |
+| The .pushdown spacer                               | 676  |
+| Top edge of the completing action, as served       | 1024 |
+| The fold at 390 x 844                              | 844  |
+| Below the mobile fold                              | 180  |
+| The fold at 1440 x 900                             | 900  |
+| Below the desktop fold                             | 124  |
+
+348 + 676 = 1024, so the control's top edge is 180 px below the fold at `390 × 844` and 124 px
+below it at `1440 × 900`. The first row is arithmetic, not a separate measurement: _deleting_
+the spacer puts the top edge at 340 px rather than 348 px, because the button's 8 px top
+margin then collapses with the field's 12 px bottom margin instead of stacking after the
+spacer. 1024 px and 676 px are the measured numbers; 348 is the difference between them. 180 px is what the prototype's first finding claims — _"'Confirm
+purchase' sits about 180 px below the fold on the review step"_ — and the desktop viewport is
+the binding check on the other side: a spacer small enough to leave the control visible at
+`1440 × 900` would not plant the defect at all. The page's `scrollHeight` is 1333 px at
+`390 × 844`, so the control is one scroll away rather than unreachable.
+
+The figures are the same at both viewports, because the column that carries the action is
+first either way. One consequence of that is worth knowing before a run is scored: at
+`390 × 844` the one-column stack puts the order summary **after** the completing action, so
+the newly revealed fee row is at 1188 px — also below the fold, and below the button. At
+`1440 × 900` the summary is in the right column with the fee row at 246 px, above the fold,
+and only the completing action is below it. Defect 2 is therefore the one a desktop agent
+meets first and a mobile agent meets second.
 
 ## The card-number field is in an iframe
 

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Order placed &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="../shared/shop.css" />
+  </head>
+  <body>
+    <header class="shop-bar">
+      <a class="brand" href="cart.html">NORTHWIND</a>
+      <span class="cart" data-aoi="cart-badge">Cart (0)</span>
+    </header>
+    <div class="confirmbox" data-aoi="confirm">
+      <h1>Order placed</h1>
+      <p data-aoi="order-number">Order NW-20418 &middot; arrives Tue 28 Oct</p>
+    </div>
+    <main class="body body-single">
+      <div class="summary" data-aoi="summary">
+        <dl>
+          <dt>Ridgeline boots</dt>
+          <dd>$129.00</dd>
+          <dt>Shipping</dt>
+          <dd>$8.95</dd>
+          <!--
+            Defect 2, where it ends: the fee is in the amount paid. It is a plain row here,
+            not an alarmed one — the alarm colour belongs to the step where the fee first
+            appears, and this page is only a receipt.
+          -->
+          <dt>Service fee</dt>
+          <dd>$9.95</dd>
+          <dt class="total">Paid</dt>
+          <dd class="total">$147.95</dd>
+        </dl>
+      </div>
+    </main>
+  </body>
+</html>

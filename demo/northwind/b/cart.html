@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your cart &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="../shared/shop.css" />
+  </head>
+  <body>
+    <header class="shop-bar">
+      <a class="brand" href="cart.html">NORTHWIND</a>
+      <span class="cart" data-aoi="cart-badge">Cart (1)</span>
+    </header>
+    <!-- Defect 3, the banner that takes the first look: above the content, on every step but the last. -->
+    <div class="promo" data-aoi="promo">
+      SPRING SALE &minus;20%<small>code SPRING20 &middot; today only</small>
+    </div>
+    <main class="body body-single">
+      <section>
+        <h1>Your cart</h1>
+        <div class="item" data-aoi="cart-line">
+          <span class="thumb" aria-hidden="true"></span>
+          <span>Ridgeline hiking boots<br /><span class="faint">size 43 &middot; brown</span></span>
+          <span class="price">$129.00</span>
+        </div>
+        <div class="summary" data-aoi="cart-total">
+          <dl>
+            <dt>Subtotal</dt>
+            <dd>$129.00</dd>
+            <!-- Defect 2, where it begins: shipping is deferred, so this total is not the one paid. -->
+            <dt class="faint">Shipping</dt>
+            <dd class="faint">calculated later</dd>
+            <dt class="total">Total</dt>
+            <dd class="total">$129.00</dd>
+          </dl>
+        </div>
+        <a class="cta" data-aoi="cart-checkout" href="payment.html">Checkout</a>
+        <a class="cta weak" data-aoi="keep-shopping" href="cart.html">Keep shopping</a>
+      </section>
+    </main>
+  </body>
+</html>
