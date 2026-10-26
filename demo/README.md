@@ -153,8 +153,9 @@ The redesign candidate. It is `a/*.html` **copied**, with only the regions named
 changed: a test applies the list of edits to variant A's served markup and requires the
 result to be variant B's, byte for byte. So B cannot drift from A by accident, and a fourth
 defect cannot arrive unannounced. The shared chrome, the page titles and every relative link
-are variant A's, untouched; the one thing variant B adds to `shared/shop.css` is the four
-rules in that file's last section, which is the only variant-specific part of it.
+are variant A's, untouched. What variant B adds to `shared/shop.css` is the five rules in
+that file's last section and the four custom properties they use; no rule between the top of
+that file and that section applies to one variant and not the other.
 
 **The task is still completable.** All three defects cost attention and trust; none breaks the
 flow, and an agent who scrolls can buy the boots. A broken flow would be a bug rather than a
@@ -191,6 +192,25 @@ fourth planted defect or for drift.
 service-fee row is a plain row, not an alarmed one: the alarm colour belongs to the step where
 the fee first appears, and the confirmation is only a receipt.
 
+### Two things this markup cannot promise
+
+Both are inherited from `docs/design/prototype.html` and are written down here so that a
+ticket which scores a run is not surprised by them.
+
+1. **A `fee-row` rect covers the label, not the amount.** The prototype puts
+   `data-aoi="fee-row"` on the `<dt>`, and the summary is a two-column grid whose `<dt>` and
+   `<dd>` are siblings, so a DOM-sourced rect for the region is the words "Service fee"
+   (x 597–872 at `1440 × 900`) and not `$9.95` (x 884–945). A consumer that wants the row
+   should union the `<dt>` with the `<dd>` that follows it; one that does not will read
+   fixations on the amount as landing in `summary`. The same holds for `shipping-row` on
+   `/b/payment.html`.
+2. **The review total is five cents more than its own rows.** $129.00 + $8.95 + $9.95 is
+   $147.90, and every one of those four figures is fixed by the prototype, by
+   `AOI_METRICS` and by this ticket's acceptance criteria, so they are reproduced as given.
+   An agent that checks the arithmetic has found something true that the ground truth has no
+   entry for. Fixing it means changing the prototype — the fee to $10.00, or the total to
+   $147.90 — which is a design-contract change and not this shop's to make.
+
 ### Areas of interest, per page
 
 Variant B carries every id variant A carries, plus `promo` on three steps and `shipping-row`
@@ -215,18 +235,21 @@ and does not transfer to a real browser.
 Measured in headless Chromium at both device-emulated viewports, on the top edge of
 `[data-aoi="complete"]`:
 
-| Measurement                                       | px   |
-| ------------------------------------------------- | ---- |
-| Top edge of the completing action, spacer removed | 348  |
-| The .pushdown spacer                              | 676  |
-| Top edge of the completing action, as served      | 1024 |
-| The fold at 390 x 844                             | 844  |
-| Below the mobile fold                             | 180  |
-| The fold at 1440 x 900                            | 900  |
-| Below the desktop fold                            | 124  |
+| Measurement                                        | px   |
+| -------------------------------------------------- | ---- |
+| Top edge of the completing action, less the spacer | 348  |
+| The .pushdown spacer                               | 676  |
+| Top edge of the completing action, as served       | 1024 |
+| The fold at 390 x 844                              | 844  |
+| Below the mobile fold                              | 180  |
+| The fold at 1440 x 900                             | 900  |
+| Below the desktop fold                             | 124  |
 
 348 + 676 = 1024, so the control's top edge is 180 px below the fold at `390 × 844` and 124 px
-below it at `1440 × 900`. 180 px is what the prototype's first finding claims — _"'Confirm
+below it at `1440 × 900`. The first row is arithmetic, not a separate measurement: _deleting_
+the spacer puts the top edge at 340 px rather than 348 px, because the button's 8 px top
+margin then collapses with the field's 12 px bottom margin instead of stacking after the
+spacer. 1024 px and 676 px are the measured numbers; 348 is the difference between them. 180 px is what the prototype's first finding claims — _"'Confirm
 purchase' sits about 180 px below the fold on the review step"_ — and the desktop viewport is
 the binding check on the other side: a spacer small enough to leave the control visible at
 `1440 × 900` would not plant the defect at all. The page's `scrollHeight` is 1333 px at

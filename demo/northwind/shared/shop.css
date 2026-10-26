@@ -8,7 +8,8 @@
  *
  * Shared by variant A (`../a/`) and variant B (`../b/`), so that B can be an honest copy of
  * the chrome with only its planted defects differing. Everything B needs that A does not is
- * in the last section of this file, and nothing above that section is variant-specific.
+ * in the last section of this file, plus the four custom properties it declares in `:root`
+ * below; no rule between here and that section applies to one variant and not the other.
  *
  * Layout rule, matching the prototype: `.body` is two columns from 768px up and one column
  * below it, so at 390x844 the step's primary action precedes the order summary in both
@@ -333,8 +334,15 @@ body.card-frame-body input {
 
 /* Defect 3: the banner that takes the first look. Above the content, so it is the first
    thing in the reading order on cart, payment and review; absent from the confirmation. */
+/*
+ * `.body` is capped at 980px with 20px of padding, so its content box runs to 940px. The
+ * banner is content rather than chrome — the bar and the trust strip are full-bleed because
+ * their borders span the page, this does not — so it is capped to the same 940px and lines up
+ * with the column beneath it instead of overhanging it by 420px at 1440px wide.
+ */
 .promo {
   margin: 12px 20px 0;
+  max-width: 940px;
   padding: 14px 16px;
   border: 1px solid var(--shop-promo-line);
   border-radius: var(--shop-radius);
@@ -356,6 +364,17 @@ body.card-frame-body input {
 .summary .fee-new {
   color: var(--shop-alarm);
   font-weight: 500;
+}
+
+/*
+ * ...but the grand total keeps variant A's weight. `.summary .total` above and
+ * `.summary .fee-new` have equal specificity, so on `class="total fee-new"` the later one
+ * would win and quietly render variant B's total lighter than variant A's — a fourth visual
+ * difference nobody declared, in the one region the run photographs. The fee changes the
+ * total's colour, not the page's hierarchy.
+ */
+.summary .total.fee-new {
+  font-weight: 700;
 }
 
 /*

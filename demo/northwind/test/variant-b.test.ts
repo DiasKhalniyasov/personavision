@@ -535,6 +535,15 @@ describe('defect 1: the completing action nobody sees', () => {
     }
   });
 
+  it('keeps variant A\u2019s weight on the grand total the fee changes', () => {
+    // `.summary .total` and `.summary .fee-new` have equal specificity, so without this rule
+    // the later one wins on `class="total fee-new"` and renders B's total lighter than A's —
+    // a fourth visual difference, in the region the run photographs. Measured in Chrome
+    // before the rule existed: 500 against variant A's 700.
+    expect(SHOP_CSS).toMatch(/\.summary \.total\.fee-new\s*\{[^}]*font-weight:\s*700/);
+    expect(page('/b/review.html')).toContain('<dd class="total fee-new">$147.95</dd>');
+  });
+
   it('is still reachable: the spacer is empty, hidden from assistive tech, and scrollable past', () => {
     expect(SPACER_PX).toBeGreaterThan(0);
     expect(page(url)).toContain('<div class="pushdown" aria-hidden="true"></div>');
@@ -587,6 +596,12 @@ describe('defect 2: the fee that arrives after the card', () => {
 });
 
 describe('defect 3: the banner that takes the first look', () => {
+  it('is capped to the width of the column beneath it', () => {
+    // `.body` is 980px wide with 20px of padding; uncapped, the banner ran to the full
+    // viewport and overhung that column by 420px at 1440px wide.
+    expect(SHOP_CSS).toMatch(/\.promo\s*\{[^}]*max-width:\s*940px/);
+  });
+
   it('sits above the content on the cart, payment and review steps', () => {
     for (const file of ['cart.html', 'payment.html', 'review.html']) {
       const html = page(`/b/${file}`);
@@ -667,6 +682,17 @@ describe('the task can still be completed on variant B with JavaScript disabled'
     expect(page('/b/cart.html')).toMatch(/data-aoi="keep-shopping"[^>]*href="cart\.html"/);
   });
 
+  it('leaves no way from the shared help page into either variant', async () => {
+    // Both variants share this page. A link to `../a/cart.html` on it would walk a variant-B
+    // session into variant A and go on attributing it to variant B, so the comparison would
+    // be measuring the wrong pages. The way back is the browser's back button.
+    const help = await get('/shared/help.html');
+    expect(help.status).toBe(200);
+    for (const href of [...help.body.matchAll(/href="([^"]+)"/g)].map((match) => match[1])) {
+      expect(href, `${href} leads back into a variant`).not.toMatch(/\.\.\/[ab]\//);
+    }
+  });
+
   it('embeds the same shared card frame as variant A', async () => {
     expect(page('/b/payment.html')).toContain('src="../shared/card-frame.html"');
     expect(page('/b/payment.html')).not.toContain('name="card-number"');
@@ -711,13 +737,13 @@ describe('demo/README.md documents variant B', () => {
 
   it('writes out fold arithmetic that adds up, at both viewports', () => {
     const px = foldArithmetic();
-    const natural = px.get('Top edge of the completing action, spacer removed');
+    const natural = px.get('Top edge of the completing action, less the spacer');
     const served = px.get('Top edge of the completing action, as served');
     const mobileFold = px.get('The fold at 390 x 844');
     const desktopFold = px.get('The fold at 1440 x 900');
 
     for (const [label, value] of [
-      ['the top edge with the spacer removed', natural],
+      ['the top edge less the spacer', natural],
       ['the top edge as served', served],
       ['the mobile fold', mobileFold],
       ['the desktop fold', desktopFold],
