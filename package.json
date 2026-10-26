@@ -11,8 +11,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "prepare": "pnpm -r build",
-    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
+    "typecheck": "pnpm -r build && tsc -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -6,6 +6,7 @@
   "description": "Browser driving, screenshots and area-of-interest extraction",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

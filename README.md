@@ -9,29 +9,27 @@ Node 22 and pnpm. `.nvmrc` pins the Node version, `package.json` pins the pnpm v
 ```sh
 nvm use            # or any Node 22; the version is pinned in .nvmrc
 corepack enable    # pnpm, at the version package.json pins
-pnpm install       # no API key, no account, nothing to provision;
-                   # its prepare step builds the packages, so every
-                   # package's public entry point resolves from here on
+pnpm install       # no API key, no account, nothing to provision
 pnpm typecheck
 pnpm lint
 pnpm test          # makes no network call and reads no credential
 pnpm build
 ```
 
-A fresh clone passes all four checks. CI runs the same four on Node 22 with a frozen lockfile.
+A fresh clone passes all four checks. A package's public entry point is its built output, so `pnpm typecheck` builds first; `pnpm test` does not need to, because Vitest reads each package's source through a `development` export condition and so never tests a stale build. CI runs the same four on Node 22 with a frozen lockfile.
 
 ## Every root script
 
-| Script                  | What it does                                                                |
-| ----------------------- | --------------------------------------------------------------------------- |
-| `pnpm typecheck`        | Type-checks the root `tests/` and `scripts/`, then every workspace package. |
-| `pnpm lint`             | ESLint with typescript-eslint over the whole workspace.                     |
-| `pnpm format`           | Prettier, writing in place. `pnpm format:check` only reports.               |
-| `pnpm test`             | Vitest once, over `tests/` and every package's own tests.                   |
-| `pnpm build`            | `tsc` per package, into each package's `dist/`.                             |
-| `pnpm dev`              | Starts the dev server of every app that has one.                            |
-| `pnpm seed:example-run` | Generates the committed seed example run under `runs/`.                     |
-| `pnpm open`             | `personavision open` — the local web app on the most recent run.            |
+| Script                  | What it does                                                             |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `pnpm typecheck`        | Builds every package, then type-checks the root `tests/` and `scripts/`. |
+| `pnpm lint`             | ESLint with typescript-eslint over the whole workspace.                  |
+| `pnpm format`           | Prettier, writing in place. `pnpm format:check` only reports.            |
+| `pnpm test`             | Vitest once, over `tests/` and every package's own tests.                |
+| `pnpm build`            | `tsc` per package, into each package's `dist/`.                          |
+| `pnpm dev`              | Starts the dev server of every app that has one.                         |
+| `pnpm seed:example-run` | Generates the committed seed example run under `runs/`.                  |
+| `pnpm open`             | `personavision open` — the local web app on the most recent run.         |
 
 ## Two commands that do not work yet
 

@@ -6,6 +6,7 @@
   "description": "Zod schemas, inferred types and the run-directory layout for the run artifact",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

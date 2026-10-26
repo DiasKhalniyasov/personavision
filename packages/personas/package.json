@@ -6,6 +6,7 @@
   "description": "Persona definitions, trait sampling and the device mix",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

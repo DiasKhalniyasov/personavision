@@ -6,6 +6,7 @@
   "description": "The session engine that drives personas through a variant",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

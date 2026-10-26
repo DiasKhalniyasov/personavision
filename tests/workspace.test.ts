@@ -94,6 +94,9 @@ describe('the workspace', () => {
         const exports = manifest['exports'] as Record<string, unknown>;
         expect(Object.keys(exports)).toEqual(['.']);
         expect(exports['.']).toEqual({
+          // Vite and Vitest read the source through this condition, so a sibling package
+          // is never type-checked or tested against a stale build. tsc does not match it.
+          development: './src/index.ts',
           types: './dist/index.d.ts',
           default: './dist/index.js',
         });
