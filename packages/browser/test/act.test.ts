@@ -358,6 +358,26 @@ describeWithChromium('acting on a page', () => {
   );
 
   it(
+    'looks an element id up on the page when it is handed no capture',
+    async () =>
+      withSession(DESKTOP, '/cart.html', async (handle) => {
+        // The swarm passes the screen it decided against; a caller that passes none has
+        // the page read again to resolve the id. No element of the cart carries this one,
+        // which is the answer both before and after #45 fills the extractor.
+        const result = await act(
+          handle,
+          { type: 'click', elementId: 'e-000000000000' },
+          contextFor(DESKTOP),
+        );
+
+        expect(result.ok).toBe(false);
+        expect(result.failure).toBe('selector_not_found');
+        expect(result.url).toBe(`${site.url}/cart.html`);
+      }),
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'reports a click with nothing to aim at',
     async () =>
       withSession(DESKTOP, '/cart.html', async (handle) => {
