@@ -41,18 +41,33 @@ function assertShare(rate: number): void {
 export function completionBand(rate: number): CompletionBand {
   assertShare(rate);
 
-  if (rate >= readCompletionThreshold('good')) return 'good';
-  if (rate <= readCompletionThreshold('bad')) return 'bad';
+  // Both bounds are read before either is compared, as `scoreBand` reads the score's two:
+  // a band is one reading of the cascade, not one reading per boundary.
+  const good = readCompletionThreshold('good');
+  const bad = readCompletionThreshold('bad');
+
+  if (rate >= good) return 'good';
+  if (rate <= bad) return 'bad';
   return 'warn';
 }
 
 /**
  * The figure itself: the share out of ten, which is how the product says it
  * (`docs/FLOW.md` section 1 — *8 in 10 of your audience*, never *0.818182*).
+ *
+ * **10 and 0 are reserved for everybody and nobody**, and rounding never reaches them.
+ * 69 of 72 is 96%, and a figure reading *10 in 10* over a population that says three
+ * people did not get through is a claim the run did not make; *0 in 10* beside *2 of 72
+ * completed* is the same claim upside down. Ten tenths is a coarse frame — the percentage
+ * and the population beside it are the exact ones — but it must not say *all* or *none*
+ * when the counts say otherwise.
  */
 export function inTen(rate: number): number {
   assertShare(rate);
-  return Math.round(rate * 10);
+
+  if (rate === 1) return 10;
+  if (rate === 0) return 0;
+  return Math.min(9, Math.max(1, Math.round(rate * 10)));
 }
 
 /** The same share as a percentage, which is the number the reader repeats. */

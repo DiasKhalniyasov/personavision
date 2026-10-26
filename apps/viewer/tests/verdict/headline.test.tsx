@@ -171,8 +171,12 @@ describe('what this screen does not show', () => {
     ]) {
       expect(text, component).not.toContain(component);
     }
-    for (const score of run.scores) {
-      expect(text, score.variant).not.toContain(String(score.frictionScore.median));
+    // Not by looking for the score's number: a median of 45 would be found inside the
+    // audience's own 25–45 and a median of 8 inside *8 in 10*, so the assertion would both
+    // cry wolf and miss. What is asserted is the breakdown's own furniture.
+    for (const className of ['.score-value', '.score-grid', '.comp', '.segbar', '.spread']) {
+      expect(container.querySelector(className), className).toBeNull();
     }
+    expect(container.querySelectorAll('table')).toHaveLength(0);
   });
 });

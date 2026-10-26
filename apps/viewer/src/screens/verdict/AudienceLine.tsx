@@ -32,6 +32,13 @@ const PRICE_WORDS = {
 const PRICE_HIGH = 0.6;
 const PRICE_LOW = 0.4;
 
+/**
+ * How close two device shares have to be to count as level. A third each is stored as
+ * three values that do not compare equal, and the contract itself holds the mix to summing
+ * to 1 only within a tolerance — so a lean is a lean by more than arithmetic noise.
+ */
+const SHARE_TOLERANCE = 1e-6;
+
 /** `25–45`, the span the personas' ages were drawn from. */
 const ages = ({ min, max }: Audience['ageRange']): string => `${min}–${max}`;
 
@@ -45,7 +52,9 @@ function deviceLean(devices: Audience['devices']): string {
   if (names.length === 1) return names[0] as string;
 
   const top = Math.max(...devices.map((device) => device.share));
-  const leading = devices.filter((device) => device.share === top).map((device) => device.name);
+  const leading = devices
+    .filter((device) => top - device.share <= SHARE_TOLERANCE)
+    .map((device) => device.name);
   return leading.length === 1 ? `mostly ${leading[0] as string}` : leading.join(' and ');
 }
 
@@ -81,7 +90,7 @@ export function audienceSummary(audience: Audience): string {
 }
 
 /** `24 simulated people, generated from this audience with seed 20261024`. */
-export function generatedFrom(audience: Audience): string {
+function generatedFrom(audience: Audience): string {
   const people = audience.size === 1 ? '1 simulated person' : `${audience.size} simulated people`;
   return `${people}, generated from this audience with seed ${audience.generatedFrom.seed}`;
 }

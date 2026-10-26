@@ -141,6 +141,14 @@
   max-width: var(--layout-max-narrow);
 }
 
+/* A test with one version says so under its one figure, on a row of its own. */
+.figures-alone {
+  flex-basis: 100%;
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .completion-good {
   color: var(--completion-good);
 }

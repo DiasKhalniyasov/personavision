@@ -17,7 +17,8 @@ import './verdict.css';
  *
  * A figure is never shown without its population, and never over nothing: a version with
  * no score, or with no scored session, is named as unavailable with the reason, because one
- * figure presented alone would read as a comparison.
+ * figure presented alone would read as a comparison. A test that ran a single version says
+ * so for the same reason — there the missing figure has no name to be named by.
  */
 
 /** One version's figure, or the reason there is none. */
@@ -74,6 +75,9 @@ function Unavailable({ name, why }: { name: string; why: string }) {
   );
 }
 
+/** The two versions a test compares. One is a reading; it is not a comparison. */
+const COMPARISON = 2;
+
 export function CompletionFigures({ run }: { run: Run }) {
   const { scores, task, variants, verdict } = run;
 
@@ -101,6 +105,13 @@ export function CompletionFigures({ run }: { run: Run }) {
           />
         );
       })}
+
+      {variants.length < COMPARISON ? (
+        <p className="figures-alone">
+          This test ran one version, so the figure above is a reading of that version and not a
+          comparison.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -22,8 +22,10 @@ export function Reasons({ run }: { run: Run }) {
     <div className="reasons" data-section="reasons">
       <span className="microlabel">Why</span>
       <div className="reason-list">
-        {reasons.map((reason) => (
-          <p className="reason" key={reason}>
+        {reasons.map((reason, position) => (
+          // Keyed by position: the contract does not hold two reasons to being different
+          // from each other, and this list is capped at two and never reordered.
+          <p className="reason" key={position}>
             <i aria-hidden="true" />
             <span>{reason}</span>
           </p>

@@ -125,6 +125,57 @@ describe('the band comes from the design tokens', () => {
   });
 });
 
+describe('the figure out of ten', () => {
+  it('rounds the share to tenths, as the product says it', () => {
+    expect(inTen(0.818182)).toBe(8);
+    expect(inTen(0.181818)).toBe(2);
+    expect(percent(0.818182)).toBe(82);
+    expect(percent(0.181818)).toBe(18);
+  });
+
+  it('keeps 10 for everybody and 0 for nobody, and rounds to neither', () => {
+    expect(inTen(1)).toBe(10);
+    expect(inTen(0)).toBe(0);
+    // 96% is not everybody, and 3% is not nobody: the population beside the figure would
+    // say so, and the figure must not disagree with it.
+    expect(inTen(0.958)).toBe(9);
+    expect(inTen(0.028)).toBe(1);
+  });
+
+  it('does not claim the whole audience got through when three of them did not', () => {
+    const run = withScore(seedRun(), 'A', {
+      completionRate: 0.958333,
+      outcomeCounts: { success: 69, abandoned: 2, failed: 1, automationFailure: 0 },
+      scoredSessionCount: 72,
+    });
+    show(<CompletionFigures run={run} />);
+
+    const text = (figures()[0] as HTMLElement).textContent ?? '';
+    expect(text).toContain('9 in 10');
+    expect(text).not.toContain('10 in 10');
+    expect(text).toContain('96% · 69 of 72 people completed the task');
+  });
+});
+
+describe('a test with one version', () => {
+  it('says the figure it has is a reading and not a comparison', () => {
+    const run = seedRun();
+    const alone = { ...run, variants: run.variants.slice(0, 1) };
+    const { container } = show(<CompletionFigures run={alone} />);
+
+    expect(figures()).toHaveLength(1);
+    expect((figures()[0] as HTMLElement).textContent).toContain('8 in 10');
+    expect(container.textContent).toContain('This test ran one version');
+    expect(container.textContent).toContain('not a comparison');
+  });
+
+  it('says nothing of the kind when the test has its two versions', () => {
+    const { container } = show(<CompletionFigures run={seedRun()} />);
+
+    expect(container.textContent).not.toContain('This test ran one version');
+  });
+});
+
 describe('a figure nobody measured', () => {
   it('says why there is no figure when no session on a version was scored', () => {
     const run = withScore(seedRun(), 'B', { scoredSessionCount: 0 });
