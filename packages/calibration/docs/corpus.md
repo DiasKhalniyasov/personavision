@@ -95,7 +95,9 @@ Every later session in this step reads these files, so they are small and stay s
 | `desktop-two-panels`     | 870 B   | 5,596 B      |
 | `mobile-single-fixation` | 778 B   | 3,957 B      |
 | `poster-uniform-field`   | 600 B   | 5,459 B      |
-| **Total**                |         | **23,349 B** |
+| **Total**                | 3,003 B | 20,346 B     |
+
+**23,349 B in all.**
 
 **The budget is 32 KiB (32,768 B)** for the corpus as a whole, asserted by `test/corpus.test.ts`. A record added
 beyond that budget is a decision to make deliberately, by raising the number in the test and in this table, not by

@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RECORD_CATEGORIES } from './types.js';
+import { RECORD_CATEGORIES, VIEWING_DURATIONS_SECONDS } from './types.js';
 import type { GroundTruthRecord, RecordCategory } from './types.js';
 
 /**
@@ -140,6 +140,23 @@ export const parseCorpusRecordData = (
   const cells = mapSize.width * mapSize.height;
   if (!Array.isArray(map.values) || map.values.length !== cells) {
     return fail(`saliencyMap.values is not ${cells} cells`);
+  }
+  // The corpus states its own normalisation and viewing duration, and both change what a
+  // figure means: KLD reads a map as a distribution and is not invariant to a rescaling,
+  // and a score cut at one second is not a score cut at three. A file that disagrees with
+  // the corpus about either is wrong in a way no metric can see.
+  if (map.normalisation !== 'sum-to-one') {
+    return fail(
+      `saliencyMap.normalisation is ${JSON.stringify(map.normalisation)}, not sum-to-one`,
+    );
+  }
+  if (
+    typeof parsed.viewingDurationSeconds !== 'number' ||
+    !(VIEWING_DURATIONS_SECONDS as readonly number[]).includes(parsed.viewingDurationSeconds)
+  ) {
+    return fail(
+      `viewingDurationSeconds is ${JSON.stringify(parsed.viewingDurationSeconds)}, not one of ${VIEWING_DURATIONS_SECONDS.join(', ')}`,
+    );
   }
   if (!Array.isArray(parsed.scanpaths) || parsed.scanpaths.length === 0) {
     return fail('it carries no scanpath');

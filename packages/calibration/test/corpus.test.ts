@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { buildRecord, corpusSpec, encodeData, encodeImage } from '../scripts/make-corpus.js';
+import { buildRecord, corpusSpec, encodeData } from '../scripts/make-corpus.js';
 import { corpusRecordPaths, parseCorpusRecordData } from '../src/corpus.js';
 import {
   CORPUS_RECORD_NAMES,
@@ -89,6 +89,7 @@ const luminanceOf = async (
     .greyscale()
     .raw()
     .toBuffer({ resolveWithObject: true });
+  expect(info.channels).toBe(1);
   return { width: info.width, height: info.height, data: new Uint8Array(data) };
 };
 
@@ -100,7 +101,13 @@ const meanLuminance = (
   let count = 0;
   for (let y = area.y; y < area.y + area.height; y += 1) {
     for (let x = area.x; x < area.x + area.width; x += 1) {
-      total += image.data[y * image.width + x] ?? 0;
+      const level = image.data[y * image.width + x];
+      // An area reaching outside the image is a misstated region, not a dark one: averaging
+      // in zeros would let a wrong box still satisfy a contrast assertion.
+      if (level === undefined || x < 0 || y < 0 || x >= image.width || y >= image.height) {
+        throw new Error(`the area leaves the image at ${x},${y}`);
+      }
+      total += level;
       count += 1;
     }
   }
@@ -116,7 +123,13 @@ describe.each(CORPUS_RECORD_NAMES)('%s', (name) => {
     // Both files, because a record is its JSON and its image together: a map regenerated
     // against a differently painted image would still be a corpus that does not hold.
     expect(readFileSync(paths.data, 'utf8')).toBe(encodeData(built));
-    expect(readFileSync(paths.image).equals(await encodeImage(built))).toBe(true);
+    // The image is compared as pixels rather than as PNG bytes, as the engine's fixtures
+    // are: the deflate stream depends on the architecture `sharp` was built for, so
+    // comparing it would fail on a machine that is not the one the corpus was generated
+    // on. An encoder upgrade is not a failure here; a differently painted image is.
+    const { data, info } = await sharp(paths.image).raw().toBuffer({ resolveWithObject: true });
+    expect(info.channels).toBe(3);
+    expect(Buffer.from(data).equals(Buffer.from(built.sheet.data))).toBe(true);
   });
 
   it('loads as the ground truth #81 declares', () => {
@@ -351,6 +364,15 @@ describe('the loader', () => {
     expect(() => parseCorpusRecordData('webpage-bright-hero', { ...sound, scanpaths: [] })).toThrow(
       /carries no scanpath/,
     );
+    expect(() =>
+      parseCorpusRecordData('webpage-bright-hero', {
+        ...sound,
+        saliencyMap: { ...(sound.saliencyMap as object), normalisation: 'peak-to-one' },
+      }),
+    ).toThrow(/not sum-to-one/);
+    expect(() =>
+      parseCorpusRecordData('webpage-bright-hero', { ...sound, viewingDurationSeconds: 2 }),
+    ).toThrow(/not one of 1, 3, 7/);
   });
 });
 

@@ -153,6 +153,13 @@ const saliencyMap = (spec: RecordSpec): SaliencyMap => {
     }
   }
   const total = raw.reduce((sum, value) => sum + value, 0);
+  // A record whose blobs cancel or are missing has no distribution to scale to one, and
+  // dividing anyway would commit 192 cells of `null`. Fail at the write, not three tickets
+  // later when a metric reads the file.
+  if (!(total > 0))
+    throw new Error(
+      `the map of a record with blobs ${JSON.stringify(spec.blobs)} sums to ${total}`,
+    );
   const scale = 10 ** CELL_DECIMALS;
   return {
     width,
