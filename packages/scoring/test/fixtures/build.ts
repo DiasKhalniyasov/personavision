@@ -51,7 +51,7 @@ export interface SessionSpec {
 }
 
 /** The four generated people of the fixture audience: two on a phone, two on a desktop. */
-const PERSONAS: Record<string, NonNullable<Session['persona']>> = {
+export const FIXTURE_PERSONAS: Record<string, NonNullable<Session['persona']>> = {
   'P-1': {
     id: 'P-1',
     traits: {
@@ -275,7 +275,7 @@ export const buildSession = (spec: SessionSpec, aois: readonly Aoi[]): Session =
     variant: spec.variant,
     taskId: 'buy-a-tent',
     kind: 'simulated',
-    persona: PERSONAS[spec.personaId] ?? null,
+    persona: FIXTURE_PERSONAS[spec.personaId] ?? null,
     participant: null,
     seed: spec.seed,
     startedAt: '2026-10-24T14:02:00.000Z',

@@ -1,4 +1,4 @@
-import { sessionSchema, type Session } from '@personavision/contract';
+import { runSchema, sessionSchema, type Session } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import {
   evaluateAgainstPlantedDefects,
@@ -12,6 +12,7 @@ import {
 } from '../src/index.js';
 import { buildAoiMetrics, buildSession, type SessionSpec } from './fixtures/build.js';
 import {
+  buildFixtureRun,
   cleanVariantSessions,
   defectiveVariantSessions,
   fixtureAoiMetrics,
@@ -234,6 +235,54 @@ describe('the time to first fixation on the primary action', () => {
     expect(timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(4.5, 10);
   });
 
+  it('names the same worst step whatever order the sessions arrive in', () => {
+    // Two sessions that each reached one step, both reading the same seconds: the step
+    // that comes first in the journey wins the tie, and which session was listed first
+    // must not decide it.
+    const oneStep = (sessionId: string, step: string): Session =>
+      buildSession(
+        {
+          sessionId,
+          variant: 'A',
+          seed: null,
+          personaId: 'P-1',
+          status: 'success',
+          steps: [{ step, primaryAfterSeconds: 2, deadEndReturns: 0 }],
+        },
+        fixtureAois,
+      );
+    const cart = oneStep('S-01', 'cart');
+    const payment = oneStep('S-02', 'payment');
+    expect(scoreOf([cart, payment]).components.timeToFirstFixationPrimary).toEqual(
+      scoreOf([payment, cart]).components.timeToFirstFixationPrimary,
+    );
+    expect(scoreOf([payment, cart]).components.timeToFirstFixationPrimary.worstStep).toBe('cart');
+  });
+
+  it('measures from the arrival of the visit the control was found on, not across a detour', () => {
+    // Basket, payment, then back to the basket, where Checkout is found 0.9s after the
+    // step reappears. Pooling the two visits would measure from the first arrival and
+    // report the whole payment detour as time before the control was seen.
+    const wentBack = buildSession(
+      {
+        sessionId: 'S-01',
+        variant: 'A',
+        seed: null,
+        personaId: 'P-1',
+        status: 'success',
+        steps: [
+          { step: 'cart', primaryAfterSeconds: null, deadEndReturns: 0 },
+          { step: 'payment', primaryAfterSeconds: 0.7, deadEndReturns: 0 },
+          { step: 'cart', primaryAfterSeconds: 0.9, deadEndReturns: 0 },
+        ],
+      },
+      fixtureAois,
+    );
+    const { components } = scoreOf([wentBack]);
+    expect(components.timeToFirstFixationPrimary.worstStep).toBe('cart');
+    expect(components.timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(0.9, 10);
+  });
+
   it('reports the never-fixated 1.0 even where a session did look, when the run says nobody did', () => {
     // The engine's row is what the heatmaps and the findings are built on, so the score
     // reads "was it ever looked at" from there rather than deciding it again.
@@ -350,6 +399,30 @@ describe('the whole formula', () => {
     expect(scores.map((entry) => entry.scoredSessionCount)).toEqual([11, 11]);
   });
 
+  it('never leaves the 0-100 scale the contract types it on', () => {
+    for (const rows of [
+      [{ status: 'success' as const, seconds: 0, returns: 0 }],
+      [{ status: 'failed' as const, seconds: null, returns: 40 }],
+      [
+        { status: 'abandoned' as const, seconds: 5.9, returns: 4 },
+        { status: 'failed' as const, seconds: null, returns: 5 },
+      ],
+    ]) {
+      const scored = scoreMini(rows);
+      expect(scored.frictionScore.median).toBeGreaterThanOrEqual(0);
+      expect(scored.frictionScore.median).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('writes rows the artifact contract accepts, counts and completion rate included', () => {
+    // The contract holds `completionRate` to the outcome counts and the counts to
+    // `scoredSessionCount`, so parsing a run built on these scores is what proves the
+    // three agree — not a type, which cannot see a number.
+    const parsed = runSchema.safeParse(buildFixtureRun(fixtureScores()));
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.success).toBe(true);
+  });
+
   it('changes none of its inputs', () => {
     const before = structuredClone({ fixtureSessions, fixtureAois, fixtureAoiMetrics });
     fixtureScores();
@@ -395,6 +468,29 @@ describe('automation failures', () => {
         { status: 'automation_failure', seconds: null, returns: 0, excludedFromScores: false },
       ]),
     ).toThrow(/excludedFromScores: false/);
+  });
+
+  it('are refused the other way round too: an excluded session with a product outcome', () => {
+    // `outcomeCounts` has one field for an excluded session, and it is named after the
+    // automation. A session excluded while reporting that somebody gave up would be
+    // published as our failure and dropped from the share that gave up.
+    expect(() =>
+      scoreMini([
+        { status: 'success', seconds: 0, returns: 0 },
+        { status: 'abandoned', seconds: 0, returns: 0, excludedFromScores: true },
+      ]),
+    ).toThrow(/only an automation failure is excluded/);
+  });
+});
+
+describe('a variant that mixes simulated and real sessions', () => {
+  it('is refused, because a session in no seed group cannot be in the median', () => {
+    expect(() =>
+      scoreMini([
+        { status: 'success', seconds: 0, returns: 0, seed: 1 },
+        { status: 'success', seconds: 6, returns: 0 },
+      ]),
+    ).toThrow(/carries no seed while others of the same variant do/);
   });
 });
 

@@ -5,9 +5,14 @@ import type { Findings } from '@personavision/contract';
  *
  * Every number the friction score is made of lives here: the four weights, the two
  * normalisation constants, the 0–100 scale and the severity each findings rule carries.
- * `docs/FLOW.md` section 5 states them in prose and this file is their only expression in
- * code — the viewer imports `scoringConfig` to label a component "weight 30%" rather than
- * writing 30 beside the label, so changing a weight stays one edit (#9, user story 18).
+ * `docs/FLOW.md` section 5 states them in prose and this is where the scorer reads them —
+ * the viewer imports `scoringConfig` to label a component "weight 30%" rather than writing
+ * 30 beside the label, so changing a weight is one edit here (#9, user story 18).
+ *
+ * Two files written before this package existed still keep their own copy of the four
+ * numbers — `scripts/seed-example-run.ts` and `tests/seed-example-run.test.ts`, which
+ * author and check the committed example run. Both should import this object instead; they
+ * are outside this ticket's files and the follow-up is recorded on #26.
  *
  * They are **versioned with the code, not with a run**: `runSchema` has no field for them,
  * which means a run directory on disk is re-scored by whatever version reads it. That was

@@ -60,15 +60,28 @@ const sampleStandardDeviation = (values: readonly number[]): number => {
 
 const scored = (session: Session): boolean => !session.outcome.excludedFromScores;
 
-/** The steps the sessions reached, in the order they were reached. */
+/**
+ * The steps the sessions reached, in journey order.
+ *
+ * A step's place in the journey is the earliest screen it appeared as, which is a fact
+ * about the run; collecting the steps in the order the sessions happen to be listed in
+ * would make it a fact about the array, and two steps that read equally badly would then
+ * name a different worst step depending on which session came first. A step id breaks a
+ * remaining tie, so the order is total.
+ */
 const stepsReached = (sessions: readonly Session[]): string[] => {
-  const steps = new Set<string>();
+  const firstSeenAt = new Map<string, number>();
   for (const session of sessions) {
-    for (const screen of [...session.screens].sort((a, b) => a.index - b.index)) {
-      steps.add(screen.step);
+    for (const screen of session.screens) {
+      const earliest = firstSeenAt.get(screen.step);
+      if (earliest === undefined || screen.index < earliest) {
+        firstSeenAt.set(screen.step, screen.index);
+      }
     }
   }
-  return [...steps];
+  return [...firstSeenAt.entries()]
+    .sort(([stepA, atA], [stepB, atB]) => atA - atB || stepA.localeCompare(stepB))
+    .map(([step]) => step);
 };
 
 /** What one area of interest reads, as the time-to-first-fixation component needs it. */
@@ -93,23 +106,33 @@ const NEVER_FIXATED: FirstFixationReading = { medianSeconds: null, value: 1 };
  * looked at it", and the reason `packages/engine`'s run-level row, which refuses to
  * manufacture that zero for a per-area metric, is not what this component reads.
  *
+ * A session may reach the same step twice — it went back — and each screen is one visit,
+ * so each visit has its own arrival. The reading is the **first visit in which the area was
+ * looked at**, measured from that visit's own arrival; pooling the visits would count a
+ * whole detour as time spent not seeing the control, and a session that came back to the
+ * basket and found Checkout straight away would read as the slowest in the run.
+ *
  * `undefined` when the session never reached the step or never looked at the area: it has
  * no time to first fixation, and a zero would be a different claim.
  */
 const secondsToFirstFixation = (session: Session, aoi: Aoi): number | undefined => {
   if (session.variant !== aoi.variant) return undefined;
-  const onStep = new Set(
-    session.screens.filter((screen) => screen.step === aoi.step).map((screen) => screen.index),
-  );
-  if (onStep.size === 0) return undefined;
-  const fixations = session.fixations
-    .filter((fixation) => onStep.has(fixation.screenIndex))
-    .sort((a, b) => a.index - b.index);
-  const arrival = fixations[0];
-  if (arrival === undefined) return undefined;
-  const first = fixations.find((fixation) => fixation.aoiId === aoi.id);
-  if (first === undefined) return undefined;
-  return Math.max(0, first.tMs - arrival.tMs) / 1000;
+  const visits = session.screens
+    .filter((screen) => screen.step === aoi.step)
+    .map((screen) => screen.index)
+    .sort((a, b) => a - b);
+
+  for (const visit of visits) {
+    const fixations = session.fixations
+      .filter((fixation) => fixation.screenIndex === visit)
+      .sort((a, b) => a.index - b.index);
+    const arrival = fixations[0];
+    if (arrival === undefined) continue;
+    const first = fixations.find((fixation) => fixation.aoiId === aoi.id);
+    if (first === undefined) continue;
+    return Math.max(0, first.tMs - arrival.tMs) / 1000;
+  }
+  return undefined;
 };
 
 /**
@@ -149,8 +172,8 @@ const firstFixationReading = (
  *
  * A step may declare more than one primary action, and an agent only has to find one of
  * them, so a step reads as its **best** control; the component then takes the **worst**
- * step, as section 5 says. Ties go to the earlier step, so the answer does not depend on
- * the order areas happen to be listed in.
+ * step, as section 5 says. Ties go to the step that comes first in the journey, so the
+ * answer does not depend on the order the areas or the sessions happen to be listed in.
  *
  * A variant that declares no primary action anywhere is a full 1.0: nobody could have
  * looked at a control that is not there. The step named is then the furthest the sessions
@@ -242,7 +265,15 @@ const componentsOf = (
   };
 };
 
-/** Weighted, summed and put on the contract's 0–100 scale. */
+/**
+ * Weighted, summed and put on the contract's 0–100 scale.
+ *
+ * Each component is a fraction in 0..1 and the weights sum to exactly one, so the blend
+ * cannot leave 0..1 by more than a float's last digit — but `frictionScore` is typed as
+ * points out of 100 and would be refused at 100.000000000000014, so the answer is held
+ * inside the range the contract declares. A set of weights that genuinely summed to more
+ * than one is a different mistake, and the configuration test is where it fails.
+ */
 const frictionScoreOf = (components: Score['components']): number => {
   const { weights, pointsPerUnit } = scoringConfig;
   const blend =
@@ -250,13 +281,24 @@ const frictionScoreOf = (components: Score['components']): number => {
     weights.abandonment * components.abandonment +
     weights.timeToFirstFixationPrimary * components.timeToFirstFixationPrimary.value +
     weights.deadEndRevisits * components.deadEndRevisits;
-  return blend * pointsPerUnit;
+  return Math.min(Math.max(blend * pointsPerUnit, 0), pointsPerUnit);
 };
 
 const outcomeCountsOf = (
   scoredSessions: readonly Session[],
   excluded: readonly Session[],
 ): Score['outcomeCounts'] => {
+  for (const session of excluded) {
+    if (session.outcome.status === 'automation_failure') continue;
+    // The mirror of the contradiction refused below. The only outcome kept out of a score
+    // is an automation failure, and `outcomeCounts` has one field for it: counting a
+    // session that says it was abandoned there would report the product's own result as a
+    // weakness of our simulation, and drop it from the share that gave up.
+    throw new Error(
+      `session ${session.sessionId} is excluded from the scores but reports outcome "${session.outcome.status}": only an automation failure is excluded, and outcomeCounts has nowhere else to put it`,
+    );
+  }
+
   const counts = { success: 0, abandoned: 0, failed: 0, automationFailure: excluded.length };
   for (const session of scoredSessions) {
     const { status } = session.outcome;
@@ -302,6 +344,17 @@ export const score = (
       scoredSessions,
       ofVariant.filter((session) => !scored(session)),
     );
+
+    // A simulated session carries a seed and a real one does not, and the spread is
+    // reported per seed group: a session belonging to no group would sit inside the median
+    // and outside `perSeedGroup`, so the number could not be audited against the groups
+    // printed beside it. One or the other, never a mixture.
+    const seedless = scoredSessions.find((session) => session.seed === null);
+    if (seedless !== undefined && scoredSessions.some((session) => session.seed !== null)) {
+      throw new Error(
+        `session ${seedless.sessionId} on variant ${variant} carries no seed while others of the same variant do: a friction score is the median across seed groups, and a session in no group cannot be in it`,
+      );
+    }
 
     const seeds = [
       ...new Set(
