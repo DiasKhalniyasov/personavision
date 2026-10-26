@@ -9,6 +9,16 @@
  * no socket and calls no model — see `packages/engine/README.md`.
  */
 
+export { aoiId, buildAois, defaultSegmenter, noSegmenter } from './aois/index.js';
+export type {
+  AoiIdentity,
+  Awaitable,
+  BuildAoisInput,
+  SegmentedArea,
+  Segmenter,
+  SegmenterInput,
+} from './aois/index.js';
+
 export { aggregate } from './aggregate.js';
 export type { Aoi, AoiMetric } from './aggregate.js';
 
