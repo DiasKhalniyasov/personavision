@@ -1,7 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -9,7 +6,7 @@ import axe from 'axe-core';
 import type { Run } from '@personavision/contract';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from '../setup';
-import { forgetRuns, mountApp, readRunFile, serveRunData } from '../app';
+import { forgetRuns, mountApp, readFindingsFile, readRunFile, serveRunData } from '../app';
 import { Finding } from '../../src/screens/verdict/Finding';
 import { HeadlineFindings } from '../../src/screens/verdict/HeadlineFindings';
 import { evidenceUrl } from '../../src/screens/verdict/evidenceLink';
@@ -27,14 +24,10 @@ import { paths } from '../../src/shell/paths';
  */
 
 const SEED = '2026-10-24-1402-northwind-demo';
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../runs');
 
-const seedFindings = (): FindingItem[] =>
-  (
-    JSON.parse(readFileSync(join(runsRoot, SEED, 'findings.json'), 'utf8')) as {
-      findings: FindingItem[];
-    }
-  ).findings;
+/** The committed run's own findings. The file does not change while the suite runs. */
+const SEED_FINDINGS = (readFindingsFile(SEED) as { findings: FindingItem[] }).findings;
+const seedFindings = (): FindingItem[] => SEED_FINDINGS;
 
 const seedRun = (): Run => readRunFile(SEED) as unknown as Run;
 
@@ -107,6 +100,34 @@ describe('the three headline findings', () => {
     expect(screen.queryByText(seedFindings()[3]!.claim)).toBeNull();
   });
 
+  it('spends no headline place on an id its findings file does not hold', async () => {
+    await serveRunData();
+    const run = seedRun();
+    const named = {
+      ...run,
+      verdict: { ...run.verdict, headlineFindingIds: ['F-99', 'F-1', 'F-2', 'F-3'] },
+    };
+    const { container } = render(
+      <MemoryRouter>
+        <HeadlineFindings run={named} />
+      </MemoryRouter>,
+    );
+
+    // The dangling id is dropped before the cap, so three real findings still reach the
+    // reader rather than two.
+    await waitFor(() => expect(findings(container)).toHaveLength(3));
+    expect(container.textContent).toContain(seedFindings()[2]!.claim);
+  });
+
+  it('says the two files disagree when every named finding is missing', async () => {
+    await serveRunData({ files: runNaming(['F-99']) });
+    mountApp(paths.run(SEED));
+
+    expect(
+      await screen.findByText(/names a finding to lead with that its findings file does not hold/),
+    ).toBeTruthy();
+  });
+
   it('does not rank or filter: reversing findings[].rank changes nothing it shows', async () => {
     const reversed = seedFindings().map((finding, index) => ({ ...finding, rank: 6 - index }));
     await serveRunData({ files: findingsOf(reversed) });
@@ -169,11 +190,10 @@ describe('the three headline findings', () => {
     await serveRunData({ files: runNaming([]) });
     const { container } = mountApp(paths.run(SEED));
 
-    await waitFor(() => {
-      expect(container.querySelector('[data-section="detail-doors"]')).not.toBeNull();
-    });
+    // The findings are fetched after the run resolves, so the sentence is awaited rather
+    // than asserted off the back of the doors appearing.
+    expect(await screen.findByText(/No finding was serious enough/)).toBeTruthy();
     expect(findings(container)).toHaveLength(0);
-    expect(screen.getByText(/No finding was serious enough/)).toBeTruthy();
     // The detail is still worth reaching, so the doors are there whatever the findings did.
     const doors = container.querySelector('[data-section="detail-doors"]')!;
     expect(doors.querySelector(`a[href="${paths.breakdown(SEED)}"]`)).not.toBeNull();
@@ -201,9 +221,13 @@ describe('the three headline findings', () => {
 
     // The first paint, before the findings have arrived: three places held open, so the
     // doors below do not move up and then back down.
-    const busy = container.querySelector('[aria-busy="true"]');
+    const busy = container.querySelector<HTMLElement>('[aria-busy="true"]');
     expect(busy).not.toBeNull();
     expect(busy!.children).toHaveLength(3);
+    // The state a reader meets first is audited too: the finished list is not the only
+    // thing axe sees.
+    const loading = await axe.run(container, { resultTypes: ['violations'] });
+    expect(loading.violations.map((violation) => violation.id)).toEqual([]);
 
     await waitFor(() => expect(findings(container)).toHaveLength(3));
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
@@ -287,6 +311,23 @@ describe('the Finding component, as #107 reuses it', () => {
     expect(evidenceUrl('r-1', base().evidence_link)).toBe(
       `${paths.sessions('r-1')}?variant=B&outcome=failed`,
     );
+  });
+
+  it('forwards every parameter the destination screen takes', () => {
+    // `step` is one of the four the contract allows on a sessions link, and the Sessions
+    // screen filters on it: dropping it would land the reader on the wrong rows.
+    expect(
+      evidenceUrl('r-1', {
+        screen: 'sessions',
+        params: { variant: 'B', step: 'payment', aoi: 'B-payment-promo', outcome: 'failed' },
+      }),
+    ).toBe(`${paths.sessions('r-1')}?variant=B&step=payment&aoi=B-payment-promo&outcome=failed`);
+    expect(
+      evidenceUrl('r-1', {
+        screen: 'attention',
+        params: { variant: 'B', step: 'review', aoi: 'B-review-fee-row', outcome: 'abandoned' },
+      }),
+    ).toBe(`${paths.attention('r-1', 'B', 'review')}?aoi=B-review-fee-row&outcome=abandoned`);
   });
 
   it('accepts no Attention link that names no version or step', () => {

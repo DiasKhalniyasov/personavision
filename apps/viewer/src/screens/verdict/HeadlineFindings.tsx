@@ -53,10 +53,17 @@ export function HeadlineFindings({ run }: { run: Run }) {
 function LoadingFindings() {
   return (
     <>
-      <p className="lede">
+      {/* A `div` rather than a `p`: `Skeleton` is itself a `div`, which a paragraph cannot
+          hold, and `.section > .lede` styles whichever element carries the class. */}
+      <div className="lede">
         <Skeleton className={styles.loadingLede} />
-      </p>
-      <div className={styles.findings} aria-busy="true" aria-label="Loading the findings">
+      </div>
+      <div
+        className={styles.findings}
+        aria-busy="true"
+        role="status"
+        aria-label="Loading the findings"
+      >
         {[0, 1, 2].map((slot) => (
           <Skeleton className={styles.loading} key={slot} />
         ))}
@@ -67,11 +74,14 @@ function LoadingFindings() {
 
 function ReadyFindings({ run, findings }: { run: Run; findings: readonly FindingItem[] }) {
   const byId = new Map(findings.map((finding) => [finding.id, finding]));
-  // The verdict's own order, its own choice, and never more than three of them.
-  const headline = run.verdict.headlineFindingIds
-    .slice(0, HEADLINE_CAP)
+  const named = run.verdict.headlineFindingIds;
+  // The verdict's own order, its own choice, and never more than three of them. The cap is
+  // applied to the findings that were *found*, so an id naming nothing does not spend one
+  // of the three places and quietly cost the reader a finding that is on disk.
+  const headline = named
     .map((id) => byId.get(id))
-    .filter((finding): finding is FindingItem => finding !== undefined);
+    .filter((finding): finding is FindingItem => finding !== undefined)
+    .slice(0, HEADLINE_CAP);
   const variantNames = new Map(run.variants.map((variant) => [variant.id, variant.name]));
   const total = findings.length;
 
@@ -79,9 +89,14 @@ function ReadyFindings({ run, findings }: { run: Run; findings: readonly Finding
     return (
       <>
         <p className="lede">
-          {total === 0
-            ? 'This test turned up nothing to fix on either version of your checkout.'
-            : 'No finding was serious enough for this test to lead with.'}
+          {/* Named findings that are not in the findings file are a hole in the run, not an
+              editorial choice: saying the verdict led with nothing would be a claim about a
+              test whose two files disagree. */}
+          {named.length > 0
+            ? `This test names ${named.length === 1 ? 'a finding' : `${named.length} findings`} to lead with that its findings file does not hold.`
+            : total === 0
+              ? 'This test turned up nothing to fix on either version of your checkout.'
+              : 'No finding was serious enough for this test to lead with.'}
         </p>
         {total > 0 && <AllFindingsLink runId={run.runId} total={total} />}
       </>

@@ -104,6 +104,14 @@ export function readRunFile(runId: string): Record<string, unknown> {
   >;
 }
 
+/** One run directory's findings, parsed. The reader reads this file through `useFindings`. */
+export function readFindingsFile(runId: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(runsRoot, runId, layout.findings), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+}
+
 export interface MountOptions {
   /** Who is signed in. The default is the stub's signed-in demo workspace. */
   session?: SessionState;

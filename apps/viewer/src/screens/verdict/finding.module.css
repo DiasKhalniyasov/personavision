@@ -58,7 +58,9 @@
 
 /* A finding with no evidence to open is not a control: it does not offer the hover
    of one either. */
-div.finding {
+div.finding,
+div.finding:hover {
+  box-shadow: none;
   cursor: default;
 }
 
@@ -117,8 +119,10 @@ div.finding {
 }
 
 .loadingLede {
+  /* `.section > .lede` is `--text-sm`, so the place held open is that line's height and
+     the paragraph does not shrink when the real lede replaces it. */
   width: 50%;
-  height: var(--text-base);
+  height: var(--text-sm);
 }
 
 /* The link out to every finding there is, below the list. */

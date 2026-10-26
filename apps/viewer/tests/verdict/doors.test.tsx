@@ -94,6 +94,22 @@ describe('the doors to the detail', () => {
     expect(router.state.location.pathname).toBe(paths.breakdown(SEED));
   });
 
+  it('opens the Attention door on the area the verdict turned on, when it names one', () => {
+    const run = seedRun();
+    const { container } = renderDoors({
+      ...run,
+      verdict: {
+        ...run.verdict,
+        heroEvidence: { variant: 'B', step: 'review', aoiId: 'B-review-complete' },
+      },
+    });
+
+    // The same place a finding pointing at that step opens: the door is not the coarser link.
+    expect([...doorsOf(container).querySelectorAll('a')][1]!.getAttribute('href')).toBe(
+      `${paths.attention(SEED, 'B', 'review')}?aoi=B-review-complete`,
+    );
+  });
+
   it('counts the people it promises from the run itself', () => {
     const run = seedRun();
     const { container } = renderDoors({ ...run, sessionIds: ['S-01'] });
@@ -124,12 +140,13 @@ describe('the doors to the detail', () => {
   it('keeps the doors beside the findings, under the same strip', async () => {
     await serveRunData();
     const { container } = mountApp(paths.run(SEED));
-    await waitFor(() => expect(doorsOf(container).querySelectorAll('a')).toHaveLength(4));
+    // The findings are fetched after the run resolves, so their link is awaited rather
+    // than asserted off the back of the doors appearing.
+    expect(await screen.findByRole('link', { name: /See all 6 findings/ })).toBeTruthy();
 
     const sections = [...container.querySelectorAll('[data-section]')].map((section) =>
       section.getAttribute('data-section'),
     );
     expect(sections.indexOf('detail-doors')).toBe(sections.indexOf('headline-findings') + 1);
-    expect(screen.getByRole('link', { name: /See all 6 findings/ })).toBeTruthy();
   });
 });

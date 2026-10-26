@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import type { Run } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import styles from './doors.module.css';
+import { evidenceUrl } from './evidenceLink';
 
 /**
  * The four doors to the detail — Score breakdown, Attention, People, Watch one person.
@@ -24,7 +25,18 @@ const people = (count: number): string =>
 
 export function DetailDoors({ run }: { run: Run }) {
   const { runId } = run;
-  const { variant, step } = run.verdict.heroEvidence;
+  const hero = run.verdict.heroEvidence;
+  // The same place a finding pointing at this step would open, area included: the door is
+  // not a coarser link to the evidence than the finding above it.
+  const attention =
+    evidenceUrl(runId, {
+      screen: 'attention',
+      params: {
+        variant: hero.variant,
+        step: hero.step,
+        ...(hero.aoiId === null ? {} : { aoi: hero.aoiId }),
+      },
+    }) ?? paths.attention(runId, hero.variant, hero.step);
   const firstPerson = run.sessionIds[0];
 
   return (
@@ -37,7 +49,7 @@ export function DetailDoors({ run }: { run: Run }) {
       <Door
         blurb="Every heatmap, the order attention moved in, and the numbers per area of the page."
         name="Attention"
-        to={paths.attention(runId, variant, step)}
+        to={attention}
       />
       <Door
         blurb={`All ${people(run.sessionIds.length)}: what each one did, how long it took and where it ended.`}

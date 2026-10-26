@@ -35,8 +35,10 @@ const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 /** The two version ids the tokens carry a colour for; a third reads as information. */
 const VARIANT_TAGS = ['a', 'b'] as const;
 
-const tagFor = (value: string, known: readonly string[]): string =>
-  known.includes(value.toLowerCase()) ? `tag-${value.toLowerCase()}` : 'tag-info';
+const tagFor = (value: string, known: readonly string[]): string => {
+  const word = value.toLowerCase();
+  return known.includes(word) ? `tag-${word}` : 'tag-info';
+};
 
 const people = (count: number): string => (count === 1 ? '1 person' : `${count} people`);
 

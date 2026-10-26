@@ -19,8 +19,14 @@ export type FindingItem = Findings['findings'][number];
 
 type EvidenceLink = FindingItem['evidence_link'];
 
-/** The query parameters the Sessions screen takes, in the order it lists them. */
-const SESSION_FILTERS = ['variant', 'outcome', 'aoi'] as const;
+/**
+ * The query parameters each screen takes, in the order `docs/FLOW.md` section 3 writes
+ * them. The contract lets an evidence link carry any of `variant`, `step`, `aoi` and
+ * `outcome`; Attention takes its version and step as path segments and the rest as query,
+ * so between the two every parameter a link can carry reaches its screen.
+ */
+const SESSION_FILTERS = ['variant', 'step', 'aoi', 'outcome'] as const;
+const ATTENTION_FILTERS = ['aoi', 'outcome'] as const;
 
 const query = (params: Record<string, string>, keys: readonly string[]): string => {
   const search = new URLSearchParams();
@@ -45,7 +51,7 @@ export function evidenceUrl(runId: string, link: EvidenceLink): string | null {
       // neither opens no heatmap, so it opens nothing.
       const { variant, step } = params;
       if (variant === undefined || variant === '' || step === undefined || step === '') return null;
-      return `${paths.attention(runId, variant, step)}${query(params, ['aoi'])}`;
+      return `${paths.attention(runId, variant, step)}${query(params, ATTENTION_FILTERS)}`;
     }
     case 'sessions':
       return `${paths.sessions(runId)}${query(params, SESSION_FILTERS)}`;

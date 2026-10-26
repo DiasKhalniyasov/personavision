@@ -62,8 +62,11 @@
   font-size: var(--text-sm);
 }
 
-/* A door with nothing behind it is not a control. */
-div.door {
+/* A door with nothing behind it is not a control, and does not light up like one. */
+div.door,
+div.door:hover {
+  border-color: var(--color-border);
+  box-shadow: none;
   cursor: default;
 }
 
