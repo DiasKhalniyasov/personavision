@@ -8,9 +8,13 @@
  *
  * No assertion here reaches into Playwright: a session is opened with `openSession` and
  * measured with `readGeometry`, which is all the rest of the step is allowed to assume.
- * Playwright is imported for one thing only — asking where the browser would be, so
- * that a machine without one is skipped rather than failed.
+ * Playwright is imported for two things only — asking where the browser would be, so that a
+ * machine without one is skipped rather than failed, and waiting for the page's stylesheet
+ * on the one page that cannot be opened with `load` (see the stalled-frame case below).
  */
+
+/// <reference lib="dom" />
+// The callback below runs inside the page, not in Node, so this file needs the DOM types.
 
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
@@ -104,6 +108,14 @@ describeWithChromium('page geometry', () => {
         { waitUntil: 'domcontentloaded' },
       );
       try {
+        // This page's height is in the stylesheet (`body.page-broken-frame`), and
+        // `domcontentloaded` does not wait for a stylesheet: on a slow machine the document
+        // would be measured before it has a layout at all and would report the viewport's
+        // 900. Waiting for that one file is not waiting for the frames, which is the thing
+        // this page exists to never do.
+        // This page links one stylesheet, so one parsed sheet is that one.
+        await handle.page.waitForFunction(() => document.styleSheets.length > 0);
+
         const geometry = await readGeometry(handle);
         expect(geometry.pageHeight).toBe(1000);
         expect(geometry.foldY).toBe(900);
