@@ -199,7 +199,18 @@ describe('only the one sanctioned place reads a credential', () => {
    * in no result, no reason and no thrown message. Anywhere else, a credential read fails
    * this test; a new provider that needs one adds its read here, deliberately.
    */
-  const SANCTIONED = ['packages/provider/src/select.ts'];
+  const SANCTIONED = [
+    'packages/provider/src/select.ts',
+    // `#43`'s Meta Model API provider reads the same variable at call time, because the key
+    // a run was selected with and the key a call is made with have to be the same one at
+    // the moment of the call. It puts it in one `Authorization` header and redacts it out of
+    // everything it emits; its own tests assert that no trajectory record, no error message
+    // and no log line carries it, with a key set in the environment.
+    'packages/provider/src/meta-model.ts',
+    // The live test reads it only to decide whether to run at all: with no key it skips,
+    // visibly and with the reason in its name, which is how CI makes no call.
+    'packages/provider/tests/meta-model-live.test.ts',
+  ];
 
   it('reads no API key from the environment and holds no CI secret', () => {
     const offenders = sourceFiles()

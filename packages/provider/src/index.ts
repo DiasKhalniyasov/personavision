@@ -16,6 +16,7 @@ export type {
   DecisionAction,
   DecisionActionKind,
   DecisionContext,
+  DecisionModel,
   DecisionProvider,
   DecisionScreenshot,
   DecisionSession,
@@ -40,3 +41,30 @@ export type { OfflineProviderOptions } from './offline.js';
 
 export { MODEL_API_KEY_ENV, ModelModeUnavailableError, selectDecisionProvider } from './select.js';
 export type { SelectDecisionProviderOptions, SelectedDecisionProvider } from './select.js';
+
+export {
+  createMetaModelApiProvider,
+  DEFAULT_TIMEOUT_MS,
+  META_MODEL_PROVIDER_NAME,
+  META_RESPONSES_ENDPOINT,
+  MODEL_FAILURE_KINDS,
+  ModelDecisionError,
+} from './meta-model.js';
+export type {
+  MetaModelApiProviderOptions,
+  ModelFailureKind,
+  ModelHttpRequest,
+  ModelHttpResponse,
+  ModelTransport,
+  TrajectoryCall,
+  TrajectoryRecord,
+  TrajectorySink,
+} from './meta-model.js';
+
+export {
+  estimateCostUsd,
+  MODEL_ID_BY_MODE,
+  MODEL_SPEC_BY_ID,
+  PRICES_READ_ON,
+} from './meta-pricing.js';
+export type { BilledTokens, ModelId, ModelMode, ModelSpec } from './meta-pricing.js';
