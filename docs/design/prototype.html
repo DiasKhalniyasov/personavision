@@ -22,6 +22,7 @@ a { color: var(--color-accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 :focus-visible { outline: var(--border-width-strong) solid var(--color-focus); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
+.grow { flex: 1; }
 
 /* ===== Prototype-only strip (not part of the product) ==================== */
 .proto {
@@ -42,20 +43,29 @@ a:hover { text-decoration: underline; }
 .proto button:hover { color: var(--color-text); border-color: var(--color-text-faint); }
 .proto .spacer { flex: 1; }
 
-/* ===== App chrome ======================================================== */
+/* ===== App chrome ========================================================
+   Signed-in platform chrome: workspace, test picker, tabs, account menu. */
 .wrap { max-width: var(--layout-max); margin: 0 auto; padding: 0 var(--layout-gutter); }
+.wrap-narrow { max-width: var(--layout-max-narrow); margin: 0 auto; padding: 0 var(--layout-gutter); }
 .appbar {
-  display: flex; align-items: center; gap: var(--space-4);
+  display: flex; align-items: center;
   min-height: var(--header-height);
   background: var(--color-surface);
   border-bottom: var(--border-width) solid var(--color-border);
 }
 .appbar .wrap { display: flex; align-items: center; gap: var(--space-4); width: 100%; min-height: var(--header-height); }
-.logo { font-weight: var(--weight-bold); font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
-.logo span { color: var(--color-text-faint); font-weight: var(--weight-regular); }
+.logo { font-weight: var(--weight-extrabold); font-size: var(--text-md); letter-spacing: var(--tracking-tighter); }
+.logo span { color: var(--color-text-faint); font-weight: var(--weight-regular); letter-spacing: 0; }
+.wsname {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding-left: var(--space-4);
+  border-left: var(--border-width) solid var(--color-border);
+  font-size: var(--text-sm); color: var(--color-text-muted);
+}
+.wsname strong { color: var(--color-text); font-weight: var(--weight-semibold); }
 .runpick {
   display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
@@ -64,20 +74,24 @@ a:hover { text-decoration: underline; }
 .runpick strong { color: var(--color-text); font-weight: var(--weight-medium); }
 .sim-badge {
   display: inline-flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: var(--border-width) solid var(--sev-info-border);
   background: var(--sev-info-bg); color: var(--sev-info);
   border-radius: var(--radius-full);
   font-size: var(--text-xs); font-weight: var(--weight-medium);
 }
 .sim-badge .dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
-.grow { flex: 1; }
+.avatar {
+  width: 32px; height: 32px; border-radius: var(--radius-full); cursor: pointer;
+  border: var(--border-width) solid var(--color-border-strong); background: var(--color-accent-soft);
+  color: var(--color-accent-strong); font: var(--weight-bold) var(--text-xs)/1 var(--font-sans);
+}
 
 .tabs { background: var(--color-surface); border-bottom: var(--border-width) solid var(--color-border); }
-.tabs .wrap { display: flex; gap: var(--space-5); }
+.tabs .wrap { display: flex; gap: var(--space-6); }
 .tab {
   appearance: none; background: none; border: 0; cursor: pointer;
-  padding: var(--space-3) var(--space-1);
+  padding: var(--space-4) var(--space-1);
   font: var(--weight-medium) var(--text-sm)/1.4 var(--font-sans);
   color: var(--color-text-muted); border-bottom: var(--border-width-strong) solid transparent;
 }
@@ -88,23 +102,24 @@ a:hover { text-decoration: underline; }
 .btn {
   appearance: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface); color: var(--color-text);
-  font: var(--weight-medium) var(--text-sm)/1 var(--font-sans);
-  transition: background var(--duration-fast) var(--ease);
+  font: var(--weight-semibold) var(--text-sm)/1 var(--font-sans);
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
 }
 .btn:hover { background: var(--color-surface-sunken); }
 .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
-.btn-primary:hover { background: var(--color-accent-strong); }
+.btn-primary:hover { background: var(--color-accent-strong); border-color: var(--color-accent-strong); }
 .btn-quiet { border-color: transparent; background: none; color: var(--color-text-muted); }
-.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+.btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+.btn-lg { padding: var(--space-4) var(--space-6); font-size: var(--text-base); }
 
 .seg { display: inline-flex; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
 .seg button {
   appearance: none; border: 0; cursor: pointer; background: var(--color-surface);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
   font: var(--weight-medium) var(--text-xs)/1 var(--font-sans); color: var(--color-text-muted);
   border-right: var(--border-width) solid var(--color-border);
 }
@@ -130,51 +145,135 @@ a:hover { text-decoration: underline; }
 .tag-a { color: var(--variant-a); background: var(--variant-a-bg); }
 .tag-b { color: var(--variant-b); background: var(--variant-b-bg); }
 
-/* ===== Page scaffolding ================================================== */
-main { padding: var(--space-8) 0 var(--space-16); }
+/* ===== Page scaffolding ==================================================
+   A screen is a stack of strips. Whitespace, not rules, separates them. */
 .screen[hidden] { display: none; }
-.pagehead { display: flex; align-items: flex-end; gap: var(--space-4); margin-bottom: var(--space-2); }
-.pagehead h1 { font-size: var(--text-lg); }
-.lede { color: var(--color-text-muted); font-size: var(--text-sm); }
+.screen > .wrap { padding-top: var(--space-12); padding-bottom: var(--section-pad-y); }
+.strip { padding: var(--section-pad-y) 0; }
+.strip-sm { padding: var(--space-12) 0; }
+.strip-lg { padding: var(--section-pad-y-lg) 0; }
+.strip-tint { background: var(--color-canvas-alt); }
+.strip-dark { background: var(--color-canvas-dark); color: var(--color-on-canvas-dark); }
+.strip-dark .lede, .strip-dark .footnote, .strip-dark .faint { color: rgb(255 255 255 / 0.66); }
+.strip-dark .microlabel { color: rgb(255 255 255 / 0.5); }
+
+.pagehead { display: flex; align-items: flex-end; gap: var(--space-4); margin-bottom: var(--space-3); }
+.pagehead h1 { font-size: var(--text-xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-tighter); }
+.lede { color: var(--color-text-muted); font-size: var(--text-base); max-width: 72ch; }
+.breadcrumb { font-size: var(--text-sm); color: var(--color-text-faint); margin-bottom: var(--space-4); }
+.breadcrumb a { color: var(--color-text-muted); }
 .runmeta {
-  display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5);
-  margin: var(--space-4) 0 var(--space-6);
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6);
+  margin: var(--space-5) 0 var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg);
   background: var(--color-surface); font-size: var(--text-xs); color: var(--color-text-muted);
 }
-.runmeta b { color: var(--color-text); font-weight: var(--weight-medium); }
+.runmeta b { color: var(--color-text); font-weight: var(--weight-semibold); }
 .runmeta code { font-family: var(--font-mono); font-size: var(--text-2xs); }
 .card {
   background: var(--color-surface); border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-lg); padding: var(--space-5);
+  border-radius: var(--radius-lg); padding: var(--space-6);
 }
-.section { margin-top: var(--space-8); }
-.section > h2 { font-size: var(--text-md); margin-bottom: var(--space-1); }
-.section > .lede { margin-bottom: var(--space-4); }
+.card-lg { padding: var(--space-8); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
+.section { margin-top: var(--space-12); }
+.section > h2 { font-size: var(--text-lg); font-weight: var(--weight-bold); margin-bottom: var(--space-2); }
+.section > .lede { margin-bottom: var(--space-5); font-size: var(--text-sm); }
 .microlabel {
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
   color: var(--color-text-faint); font-weight: var(--weight-semibold);
 }
 .notice {
   display: flex; gap: var(--space-3); align-items: flex-start;
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5); border-radius: var(--radius-md);
   border: var(--border-width) solid var(--sev-high-border); background: var(--sev-high-bg);
-  color: var(--sev-high); font-size: var(--text-sm); margin-bottom: var(--space-5);
+  color: var(--sev-high); font-size: var(--text-sm); margin-bottom: var(--space-6);
 }
 .notice.info { border-color: var(--sev-info-border); background: var(--sev-info-bg); color: var(--sev-info); }
 .notice a { color: inherit; text-decoration: underline; }
-.footnote { margin-top: var(--space-8); color: var(--color-text-faint); font-size: var(--text-xs); }
+.footnote { margin-top: var(--space-8); color: var(--color-text-faint); font-size: var(--text-xs); max-width: 86ch; }
 
-/* ===== Score cards ======================================================= */
-.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+/* ===== The Verdict screen ================================================
+   One headline sentence, two completion figures, one or two reasons, one
+   heatmap, at most three findings. Nothing else lives here. */
+.audbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-6);
+}
+.audbar .who {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-full);
+  background: var(--color-accent-soft); color: var(--color-accent-strong);
+  font-weight: var(--weight-semibold); font-size: var(--text-xs);
+}
+.hero h1 {
+  font-size: var(--text-display);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+  max-width: 26ch;
+}
+.hero .sub { margin-top: var(--space-6); font-size: var(--text-md); color: var(--color-text-muted); max-width: 60ch; }
+
+.figures { display: flex; flex-wrap: wrap; gap: var(--space-12); margin-top: var(--space-10); }
+.figure { display: grid; gap: var(--space-1); }
+.figure .figure-value {
+  font-size: var(--text-figure); font-weight: var(--weight-extrabold);
+  line-height: var(--leading-tight); letter-spacing: var(--tracking-tighter);
+  font-variant-numeric: tabular-nums;
+}
+.figure .figure-value small { font-size: 0.42em; font-weight: var(--weight-semibold); letter-spacing: 0; }
+.figure .figure-label { font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.figure .figure-pop { font-size: var(--text-sm); color: var(--color-text-muted); }
+.completion-good { color: var(--completion-good); }
+.completion-warn { color: var(--completion-warn); }
+.completion-bad  { color: var(--completion-bad); }
+
+.reasons { display: grid; gap: var(--space-3); margin-top: var(--space-10); max-width: 72ch; }
+.reason {
+  display: flex; gap: var(--space-3); align-items: baseline;
+  font-size: var(--text-md); line-height: var(--leading-snug);
+}
+.reason i {
+  flex: none; width: 8px; height: 8px; border-radius: var(--radius-full);
+  background: var(--sev-critical); transform: translateY(-2px);
+}
+
+/* A screenshot is never flush against the layout: it sits on a neutral mat. */
+.mat {
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-xl);
+  padding: var(--frame-mat-pad);
+}
+.mat-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3);
+  margin-bottom: var(--frame-mat-pad);
+}
+.mat-head h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.evidence-cap { margin-top: var(--frame-mat-pad); font-size: var(--text-sm); color: var(--color-text-muted); }
+
+.doors { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-top: var(--space-10); }
+.door {
+  display: grid; gap: var(--space-2); align-content: start; text-align: left; cursor: pointer;
+  padding: var(--space-5); border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--color-border); background: var(--color-surface);
+  font: inherit; color: inherit;
+  transition: box-shadow var(--duration-base) var(--ease), border-color var(--duration-base) var(--ease);
+}
+.door:hover { box-shadow: var(--shadow-md); border-color: var(--color-border-strong); }
+.door h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.door p { font-size: var(--text-sm); color: var(--color-text-muted); }
+.door .more { font-size: var(--text-xs); color: var(--color-accent); font-weight: var(--weight-semibold); }
+
+/* ===== Score cards (breakdown screen) ==================================== */
+.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); }
 .score-card { position: relative; }
 .score-card[data-variant="a"] { border-top: 3px solid var(--variant-a); }
 .score-card[data-variant="b"] { border-top: 3px solid var(--variant-b); }
-.score-card h3 { font-size: var(--text-2xl); }
+.score-card h3 { font-size: var(--text-2xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-tighter); }
 .score-card .url { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-faint); }
-.score-row { display: flex; align-items: flex-end; gap: var(--space-4); margin: var(--space-4) 0 var(--space-2); }
-.score-value { font-size: var(--text-score); font-weight: var(--weight-bold); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.score-row { display: flex; align-items: flex-end; gap: var(--space-4); margin: var(--space-5) 0 var(--space-2); }
+.score-value { font-size: var(--text-score); font-weight: var(--weight-extrabold); line-height: var(--leading-tight); letter-spacing: var(--tracking-tighter); }
 .score-spread { font-size: var(--text-md); color: var(--color-text-muted); padding-bottom: var(--space-2); }
 .score-band { font-size: var(--text-xs); font-weight: var(--weight-semibold); padding-bottom: var(--space-3); }
 .band-good { color: var(--score-good); }
@@ -191,20 +290,20 @@ main { padding: var(--space-8) 0 var(--space-16); }
 .scale .marker { position: absolute; top: -3px; width: 3px; height: 14px; border-radius: var(--radius-sm); background: currentColor; }
 .scale .spreadband { position: absolute; top: 0; height: 8px; border-radius: var(--radius-full); background: currentColor; opacity: 0.25; }
 .scale-legend { display: flex; justify-content: space-between; font-size: var(--text-2xs); color: var(--color-text-faint); }
-.components { list-style: none; margin: var(--space-5) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.components { list-style: none; margin: var(--space-6) 0 0; padding: 0; display: grid; gap: var(--space-4); }
 .components li { display: grid; grid-template-columns: 1fr 90px auto; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
 .components .what { color: var(--color-text-muted); }
 .components .what i { font-style: normal; color: var(--color-text-faint); font-size: var(--text-2xs); }
 .bar { height: 6px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: currentColor; border-radius: var(--radius-full); }
-.components .val { font-variant-numeric: tabular-nums; font-weight: var(--weight-medium); min-width: 56px; text-align: right; }
+.components .val { font-variant-numeric: tabular-nums; font-weight: var(--weight-semibold); min-width: 56px; text-align: right; }
 .verdict {
-  display: flex; align-items: center; gap: var(--space-3);
-  margin-top: var(--space-5); padding: var(--space-4);
-  border-radius: var(--radius-md); border: var(--border-width) solid var(--color-border);
-  background: var(--color-surface-sunken); font-size: var(--text-md); font-weight: var(--weight-medium);
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  margin-top: var(--space-6); padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg); border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface); font-size: var(--text-md); font-weight: var(--weight-medium);
 }
-.verdict .delta { font-size: var(--text-xl); font-weight: var(--weight-bold); color: var(--score-bad); }
+.verdict .delta { font-size: var(--text-xl); font-weight: var(--weight-extrabold); color: var(--score-bad); }
 
 /* ===== Tables ============================================================ */
 .tablewrap { overflow-x: auto; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
@@ -214,7 +313,7 @@ th {
   letter-spacing: var(--tracking-wide); color: var(--color-text-faint); font-weight: var(--weight-semibold);
   padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); white-space: nowrap;
 }
-td { padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); vertical-align: middle; }
+td { padding: var(--space-4); border-bottom: var(--border-width) solid var(--color-border); vertical-align: middle; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr[data-click] { cursor: pointer; }
 tbody tr[data-click]:hover { background: var(--color-accent-soft); }
@@ -222,18 +321,19 @@ tbody tr[aria-selected="true"] { background: var(--color-accent-soft); }
 td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 .muted { color: var(--color-text-muted); }
 .faint { color: var(--color-text-faint); }
-.never { color: var(--sev-critical); font-weight: var(--weight-medium); }
+.never { color: var(--sev-critical); font-weight: var(--weight-semibold); }
 .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
 
 /* ===== Findings ========================================================== */
-.findings { display: grid; gap: var(--space-3); }
+.findings { display: grid; gap: var(--space-4); }
 .finding {
-  display: grid; grid-template-columns: var(--space-8) 1fr auto; gap: var(--space-4);
-  padding: var(--space-4); background: var(--color-surface);
+  display: grid; grid-template-columns: var(--space-8) 1fr auto; gap: var(--space-5);
+  padding: var(--space-5); background: var(--color-surface);
   border: var(--border-width) solid var(--color-border);
   border-left: 3px solid var(--color-border-strong);
-  border-radius: var(--radius-md); cursor: pointer; text-align: left;
+  border-radius: var(--radius-lg); cursor: pointer; text-align: left;
   font: inherit; color: inherit;
+  transition: box-shadow var(--duration-base) var(--ease);
 }
 .finding:hover { box-shadow: var(--shadow-md); }
 .finding[data-sev="critical"] { border-left-color: var(--sev-critical); }
@@ -241,15 +341,15 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 .finding[data-sev="medium"]   { border-left-color: var(--sev-medium); }
 .finding[data-sev="low"]      { border-left-color: var(--sev-low); }
 .finding[data-sev="info"]     { border-left-color: var(--sev-info); }
-.finding .rank { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
-.finding .claim { font-size: var(--text-md); line-height: var(--leading-snug); margin-bottom: var(--space-2); }
-.finding .evidence { font-size: var(--text-sm); color: var(--color-text-muted); }
+.finding .rank { font-size: var(--text-lg); font-weight: var(--weight-extrabold); color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
+.finding .claim { display: block; font-size: var(--text-md); font-weight: var(--weight-semibold); line-height: var(--leading-snug); margin-bottom: var(--space-2); }
+.finding .evidence { display: block; font-size: var(--text-sm); color: var(--color-text-muted); }
 .finding .meta { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
 .finding .meta .aoi { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-faint); }
 .finding .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
 
 /* ===== Device frame + fake page =========================================== */
-.stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-5); align-items: start; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-6); align-items: start; }
 .frame {
   position: relative; overflow: hidden;
   aspect-ratio: var(--frame-ratio-desktop);
@@ -331,87 +431,124 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 .aoibox { fill: none; stroke: var(--gaze-aoi); stroke-width: 1; stroke-dasharray: var(--gaze-aoi-dash); }
 .aoibox.active { stroke: var(--gaze-aoi-active); stroke-width: var(--border-width-strong); stroke-dasharray: none; }
 .aoibox.empty { stroke: var(--sev-critical); stroke-width: var(--border-width-strong); stroke-dasharray: none; }
-.nofix { color: var(--sev-critical); font-weight: var(--weight-medium); }
+.nofix { color: var(--sev-critical); font-weight: var(--weight-semibold); }
 .page .pushdown { height: 150px; }
 .aoilabel { font: var(--weight-medium) var(--text-2xs)/1 var(--font-sans); fill: var(--color-text-muted); }
 
 .sidepanel { display: grid; gap: var(--space-4); }
-.panel { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-4); }
-.panel h3 { font-size: var(--text-sm); margin-bottom: var(--space-3); }
+.panel { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); padding: var(--space-5); }
+.panel h3 { font-size: var(--text-sm); font-weight: var(--weight-semibold); margin-bottom: var(--space-3); }
 .toggles { display: grid; gap: var(--space-2); }
 .toggles label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); cursor: pointer; }
 .heatkey { height: 8px; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5)); margin: var(--space-2) 0 var(--space-1); }
-.filmstrip { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.filmstrip { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); }
 .step {
   flex: 1; cursor: pointer; text-align: left; background: var(--color-surface);
-  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3); font: inherit; color: inherit;
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4); font: inherit; color: inherit;
 }
 .step[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .step .microlabel { display: block; }
 .step .reach { font-size: var(--text-xs); color: var(--color-text-muted); }
 .step .reach.zero { color: var(--sev-critical); }
 
-/* Empty state */
+/* Empty states */
 .empty {
-  display: grid; place-items: center; gap: var(--space-3); text-align: center;
-  padding: var(--space-12) var(--space-6);
-  border: var(--border-width) dashed var(--color-border-strong); border-radius: var(--radius-lg);
+  display: grid; place-items: center; gap: var(--space-4); text-align: center;
+  padding: var(--space-16) var(--space-6);
+  border: var(--border-width) dashed var(--color-border-strong); border-radius: var(--radius-xl);
   background: var(--color-surface);
 }
-.empty h2 { font-size: var(--text-md); }
-.empty p { color: var(--color-text-muted); font-size: var(--text-sm); max-width: 46ch; }
-.empty .cmd { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-surface-sunken); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); color: var(--color-text-muted); }
-.empty .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
+.empty h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-tighter); }
+.empty p { color: var(--color-text-muted); font-size: var(--text-base); max-width: 52ch; }
+.empty .cmd { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-surface-sunken); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); color: var(--color-text-muted); }
+.empty .actions { display: flex; gap: var(--space-3); flex-wrap: wrap; justify-content: center; }
+
+/* ===== Sign in ===========================================================
+   The one screen on the deep navy band. */
+.signin { display: grid; place-items: center; min-height: 80vh; padding: var(--space-16) var(--layout-gutter); }
+.signin-card {
+  width: 100%; max-width: 420px; background: var(--color-surface); color: var(--color-text);
+  border-radius: var(--radius-xl); padding: var(--space-8); box-shadow: var(--shadow-lg);
+  display: grid; gap: var(--space-5);
+}
+.signin-card h1 { font-size: var(--text-lg); font-weight: var(--weight-bold); }
+.signin-card .lede { font-size: var(--text-sm); }
+.signin-mark { font-weight: var(--weight-extrabold); font-size: var(--text-xl); letter-spacing: var(--tracking-tighter); color: var(--color-on-canvas-dark); margin-bottom: var(--space-8); text-align: center; }
+.demo-creds {
+  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted);
+  background: var(--color-surface-sunken); border-radius: var(--radius-sm); padding: var(--space-3);
+}
+
+/* ===== Audiences ========================================================= */
+.aud-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-5); }
+.aud-card { display: grid; gap: var(--space-3); align-content: start; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.aud-card:hover { box-shadow: var(--shadow-md); }
+.aud-card h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.aud-card[aria-current="true"] { border-color: var(--color-accent); }
+.aud-facts { display: grid; gap: var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); }
+.aud-facts b { color: var(--color-text); font-weight: var(--weight-medium); }
+.meters { display: grid; gap: var(--space-3); }
+.meter { display: grid; grid-template-columns: 1fr 120px auto; gap: var(--space-3); align-items: center; font-size: var(--text-sm); }
+.meter .track { height: 6px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
+.meter .track > span { display: block; height: 100%; background: var(--color-accent); border-radius: var(--radius-full); }
+.meter .val { font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
+.personagrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--space-3); }
+.personachip {
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); font-size: var(--text-sm); display: grid; gap: var(--space-1);
+}
+.personachip b { font-weight: var(--weight-semibold); }
 
 /* Replay */
-.replay { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
-.scrub { margin-top: var(--space-4); display: grid; gap: var(--space-2); }
+.replay { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+.scrub { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
 .scrub .row { display: flex; align-items: center; gap: var(--space-3); }
 .scrub input[type="range"] { flex: 1; accent-color: var(--color-accent); }
 .scrub .clock { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted); min-width: 92px; }
-.timeline { display: grid; gap: var(--space-3); }
-.tl-screen { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-4); }
+.timeline { display: grid; gap: var(--space-4); }
+.tl-screen { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); padding: var(--space-5); }
 .tl-screen[data-active="true"] { border-color: var(--color-accent); box-shadow: var(--shadow-sm); }
-.tl-screen header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.tl-screen header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .tl-screen h3 { font-size: var(--text-sm); }
-.intent { font-size: var(--text-md); line-height: var(--leading-snug); margin-bottom: var(--space-3); }
+.intent { font-size: var(--text-md); line-height: var(--leading-snug); margin-bottom: var(--space-4); }
 .intent::before { content: "\201C"; }
 .intent::after { content: "\201D"; }
 .events { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--text-sm); }
 .events li { display: grid; grid-template-columns: 54px 1fr; gap: var(--space-3); color: var(--color-text-muted); }
 .events .t { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); }
 .events .kind { color: var(--color-text); font-weight: var(--weight-medium); }
-.outcome-card { border: var(--border-width) solid var(--outcome-abandoned-bg); background: var(--outcome-abandoned-bg); border-radius: var(--radius-md); padding: var(--space-4); }
-.outcome-card h3 { font-size: var(--text-md); color: var(--outcome-abandoned); margin-bottom: var(--space-2); }
+.outcome-card { border: var(--border-width) solid var(--outcome-abandoned-bg); background: var(--outcome-abandoned-bg); border-radius: var(--radius-lg); padding: var(--space-5); }
+.outcome-card h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); color: var(--outcome-abandoned); margin-bottom: var(--space-2); }
 .outcome-card p { font-size: var(--text-sm); color: var(--color-text); }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-4); font-size: var(--text-sm); margin-top: var(--space-3); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); margin-top: var(--space-4); }
 .kv dt { color: var(--color-text-muted); }
 .kv dd { margin: 0; }
 
 /* Forms */
-.form { display: grid; gap: var(--space-5); max-width: 760px; }
+.form { display: grid; gap: var(--space-6); max-width: var(--layout-max-narrow); }
 .field-group { display: grid; gap: var(--space-2); }
-.field-group > label { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.field-group > label { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .field-group .hint { font-size: var(--text-xs); color: var(--color-text-muted); }
 .field-group .err { font-size: var(--text-xs); color: var(--sev-critical); font-weight: var(--weight-medium); }
-input[type="text"], input[type="url"], textarea, select {
+input[type="text"], input[type="url"], input[type="email"], input[type="password"], input[type="number"], textarea, select {
   font: var(--weight-regular) var(--text-sm)/1.4 var(--font-sans);
-  padding: var(--space-3); border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface); color: var(--color-text); width: 100%;
 }
 input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(--sev-critical-bg); }
-.inline2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.inline2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+.inline3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-5); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip {
   display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
-  padding: var(--space-2) var(--space-3); border-radius: var(--radius-full);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-full);
   border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface);
   font-size: var(--text-xs); font-weight: var(--weight-medium);
 }
 .chip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
-.formfoot { display: flex; align-items: center; gap: var(--space-4); border-top: var(--border-width) solid var(--color-border); padding-top: var(--space-5); }
+.formfoot { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; border-top: var(--border-width) solid var(--color-border); padding-top: var(--space-6); }
 
 /* Progress */
 .progress { height: 8px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
@@ -421,31 +558,40 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
 
 /* Error */
 .errorcard { border-color: var(--sev-critical-border); background: var(--sev-critical-bg); }
-.errorcard h2 { font-size: var(--text-md); color: var(--sev-critical); margin-bottom: var(--space-2); }
-.errorcard .detail { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); background: var(--color-surface); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-3); margin: var(--space-3) 0; white-space: pre-wrap; }
-.errorcard ul { margin: 0 0 var(--space-4); padding-left: var(--space-5); font-size: var(--text-sm); }
+.errorcard h2 { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--sev-critical); margin-bottom: var(--space-2); }
+.errorcard .detail { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); background: var(--color-surface); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-4); margin: var(--space-4) 0; white-space: pre-wrap; }
+.errorcard ul { margin: 0 0 var(--space-5); padding-left: var(--space-5); font-size: var(--text-sm); }
 
 /* Segment breakdown */
-.segments { display: grid; gap: var(--space-2); }
-.segbar { display: grid; grid-template-columns: 160px 1fr auto; gap: var(--space-3); align-items: center; font-size: var(--text-sm); }
+.segments { display: grid; gap: var(--space-3); }
+.segbar { display: grid; grid-template-columns: 220px 1fr auto; gap: var(--space-4); align-items: center; font-size: var(--text-sm); }
 .stack { display: flex; height: 14px; border-radius: var(--radius-sm); overflow: hidden; background: var(--color-surface-sunken); }
 .stack i { display: block; }
 .stack .s { background: var(--outcome-success); }
 .stack .ab { background: var(--outcome-abandoned); }
 .stack .f { background: var(--outcome-failed); }
 .stack .au { background: var(--attr-automation); }
-.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-3); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-4); }
 .legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
 .legend i { width: 10px; height: 10px; border-radius: 2px; }
 
+@media (max-width: 1100px) {
+  .doors { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 1000px) {
-  .score-grid, .stage, .replay, .inline2 { grid-template-columns: 1fr; }
+  .score-grid, .stage, .replay, .inline2, .inline3 { grid-template-columns: 1fr; }
+  .hero h1 { font-size: var(--text-display-sm); }
+  .figures { gap: var(--space-8); }
 }
 @media (max-width: 640px) {
-  .wrap { padding: 0 var(--layout-gutter-narrow); }
-  .appbar .wrap { flex-wrap: wrap; padding-top: var(--space-2); padding-bottom: var(--space-2); }
+  .wrap, .wrap-narrow { padding: 0 var(--layout-gutter-narrow); }
+  .appbar .wrap { flex-wrap: wrap; padding-top: var(--space-3); padding-bottom: var(--space-3); }
+  .hero h1 { font-size: var(--text-xl); }
+  .figure .figure-value { font-size: var(--text-2xl); }
   .score-value { font-size: var(--text-2xl); }
+  .doors { grid-template-columns: 1fr; }
   .segbar { grid-template-columns: 1fr; }
+  .strip { padding: var(--space-10) 0; }
 }
 </style>
 </head>
@@ -454,68 +600,299 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
 <!-- ===================== prototype-only navigation ====================== -->
 <div class="proto">
   <b>Prototype</b>
-  <button data-go="empty">No runs</button>
-  <button data-go="newrun">New run</button>
-  <button data-go="newrun-invalid">New run · invalid</button>
-  <button data-go="running">Running</button>
-  <button data-go="error">Run failed</button>
-  <button data-go="comparison">Comparison</button>
+  <button data-go="signin">Sign in</button>
+  <button data-go="verdict">Verdict</button>
+  <button data-go="breakdown">Score breakdown</button>
   <button data-go="attention">Attention</button>
   <button data-go="sessions">Sessions</button>
-  <button data-go="sessions-empty">Sessions · no match</button>
+  <button data-go="sessions-empty">Sessions &middot; no match</button>
   <button data-go="replay">Replay</button>
+  <button data-go="audiences">Audiences</button>
+  <button data-go="audience">Audience &middot; edit</button>
+  <button data-go="no-audience">No audience</button>
+  <button data-go="empty">No tests</button>
+  <button data-go="newrun">New test</button>
+  <button data-go="newrun-invalid">New test &middot; invalid</button>
+  <button data-go="running">Running</button>
+  <button data-go="error">Test failed</button>
   <span class="spacer"></span>
   <button id="themebtn">Dark mode</button>
 </div>
 
-<!-- ===================== product chrome ================================= -->
+<!-- ===================== product chrome =================================
+     The signed-in chrome of a hosted platform: the workspace, the test being
+     read, the simulated-audience badge, and the account menu. -->
 <div class="appbar" id="chrome">
   <div class="wrap">
-    <span class="logo">PersonaVision <span>local</span></span>
+    <span class="logo">PersonaVision</span>
+    <span class="wsname"><strong>Northwind Outdoors</strong> <span class="faint">workspace</span></span>
     <button class="runpick" data-go="empty">
-      <strong>northwind-demo · checkout A vs B</strong>
-      <span>24 Oct 14:02 · 24 sessions</span>
+      <strong>Checkout A vs B</strong>
+      <span>24 Oct 14:02 &middot; 24 people</span>
       <span aria-hidden="true">&#9662;</span>
     </button>
     <span class="grow"></span>
-    <span class="sim-badge" title="Attention is simulated. UEyes similarity: CC 0.68 / NSS 1.9 / ScanMatch 0.54 on the UEyes benchmark.">
-      <i class="dot"></i> Simulated &middot; UEyes similarity 0.68
+    <span class="sim-badge" title="Your audience is simulated. Similarity to real human gaze on the UEyes benchmark: CC 0.68 / NSS 1.9 / ScanMatch 0.54.">
+      <i class="dot"></i> Simulated audience &middot; gaze similarity 0.68
     </span>
-    <button class="btn btn-primary" data-go="newrun">New run</button>
+    <button class="btn btn-primary" data-go="newrun">New test</button>
+    <button class="avatar" title="Signed in as the workspace owner &mdash; account and sign out" data-go="signin">NO</button>
   </div>
 </div>
 <div class="tabs" id="tabbar">
   <div class="wrap">
-    <button class="tab" data-go="comparison">Comparison</button>
+    <button class="tab" data-go="verdict">Verdict</button>
+    <button class="tab" data-go="breakdown">Score breakdown</button>
     <button class="tab" data-go="attention">Attention</button>
     <button class="tab" data-go="sessions">Sessions</button>
+    <span class="grow"></span>
+    <button class="tab" data-go="audiences">Audiences</button>
   </div>
 </div>
 
 <main>
 
-<!-- ===================== 1. empty: no runs yet ========================== -->
-<section class="screen" id="screen-empty" hidden>
-  <div class="wrap">
-    <div class="empty">
-      <h2>No runs yet</h2>
-      <p>PersonaVision reads and writes runs in <code class="mono">./runs/</code>. Nothing is there yet. Open the bundled example run of the demo shop, or start your own.</p>
-      <div class="actions">
-        <button class="btn btn-primary" data-go="comparison">Open example run &middot; northwind-demo</button>
-        <button class="btn" data-go="newrun">New run</button>
+<!-- ===================== 0. sign in =====================================
+     The product is a hosted platform, so it starts signed out. The one
+     screen on the deep navy band (docs/FLOW.md section 10). -->
+<section class="screen" id="screen-signin" hidden>
+  <div class="strip-dark">
+    <div class="signin">
+      <div>
+        <p class="signin-mark">PersonaVision</p>
+        <form class="signin-card" onsubmit="return false">
+          <div>
+            <h1>Sign in</h1>
+            <p class="lede">Test a change on your own audience before you ship it.</p>
+          </div>
+          <div class="field-group">
+            <label for="si-email">Work email</label>
+            <input id="si-email" type="email" value="owner@northwind.example" autocomplete="username">
+          </div>
+          <div class="field-group">
+            <label for="si-pass">Password</label>
+            <input id="si-pass" type="password" value="demo-password" autocomplete="current-password">
+          </div>
+          <button class="btn btn-primary btn-lg" data-go="verdict">Sign in</button>
+          <p class="demo-creds">A fresh install seeds one demo workspace, so this screen works with no cloud account:
+            owner@northwind.example / the password printed by <b>personavision serve</b>.</p>
+          <p class="footnote" style="margin-top: 0">No card, no API key. Your tests and audiences stay in your workspace.</p>
+        </form>
       </div>
-      <p class="cmd">personavision run --url http://localhost:4173/checkout-a --task "Buy the boots" --personas default --repeats 3</p>
-      <p class="faint">The example run needs no API key: it was produced by the deterministic offline engine.</p>
     </div>
   </div>
 </section>
 
-<!-- ===================== 2. new run ===================================== -->
+<!-- ===================== 0b. audiences ================================== -->
+<section class="screen" id="screen-audiences" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <div class="pagehead"><h1>Who does your business serve?</h1></div>
+      <p class="lede">PersonaVision generates the simulated people it tests with from the audience you describe here.
+        Describe your customers once; every test is then framed as how <b>they</b> behaved.</p>
+
+      <div class="section" style="margin-top: var(--space-10)">
+        <div class="aud-grid">
+          <button class="card aud-card" aria-current="true" data-go="audience">
+            <span class="microlabel">Used by the latest test</span>
+            <h3>Outdoor-gear shoppers</h3>
+            <div class="aud-facts">
+              <span><b>25&ndash;45</b> &middot; United Kingdom &amp; Ireland</span>
+              <span><b>60%</b> mobile &middot; <b>40%</b> desktop</span>
+              <span>First-time buyers and returning customers</span>
+              <span>Price-aware &middot; moderately tech-confident</span>
+              <span class="faint">24 people generated &middot; 4 personas &times; 3 seeds</span>
+            </div>
+          </button>
+          <button class="card aud-card" data-go="audience">
+            <span class="microlabel">Not used yet</span>
+            <h3>Trade &amp; wholesale buyers</h3>
+            <div class="aud-facts">
+              <span><b>30&ndash;60</b> &middot; United Kingdom</span>
+              <span><b>85%</b> desktop &middot; <b>15%</b> mobile</span>
+              <span>Procurement, repeat bulk orders</span>
+              <span>Price-insensitive &middot; highly tech-confident</span>
+              <span class="faint">12 people generated &middot; 4 personas &times; 3 seeds</span>
+            </div>
+          </button>
+          <button class="card aud-card" data-go="audience">
+            <h3>+ Describe a new audience</h3>
+            <p class="lede" style="font-size: var(--text-sm)">Age, role, device, region, goals, how tech-confident they
+              are and how much price matters. Six fields and you are done.</p>
+          </button>
+        </div>
+      </div>
+
+      <p class="footnote">An audience is not a persona. You describe the audience; PersonaVision generates the personas
+        from it, from a seed, so the same audience always produces the same people and two tests are comparable.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 0c. audience setup ============================= -->
+<section class="screen" id="screen-audience" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <p class="breadcrumb"><a href="#" data-go="audiences">Audiences</a> / Outdoor-gear shoppers</p>
+      <div class="pagehead"><h1>Outdoor-gear shoppers</h1></div>
+      <p class="lede">The audience your business actually serves. Every figure in a test using it is framed as how these
+        people behaved.</p>
+
+      <form class="form card card-lg" style="margin-top: var(--space-8)" onsubmit="return false">
+        <div class="field-group">
+          <label for="aud-name">Audience name</label>
+          <input id="aud-name" type="text" value="Outdoor-gear shoppers">
+          <span class="hint">What you call this group of customers. It appears above every verdict.</span>
+        </div>
+
+        <div class="inline3">
+          <div class="field-group">
+            <label for="aud-agemin">Age from</label>
+            <input id="aud-agemin" type="number" value="25">
+          </div>
+          <div class="field-group">
+            <label for="aud-agemax">Age to</label>
+            <input id="aud-agemax" type="number" value="45">
+          </div>
+          <div class="field-group">
+            <label for="aud-size">People per test</label>
+            <select id="aud-size"><option>24 &mdash; 4 personas &times; 3 seeds &times; 2 versions</option><option>12 &mdash; faster, less spread</option><option>48</option></select>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Who they are</label>
+          <div class="chips">
+            <button type="button" class="chip" aria-pressed="true">First-time buyer</button>
+            <button type="button" class="chip" aria-pressed="true">Returning customer</button>
+            <button type="button" class="chip">Gift buyer</button>
+            <button type="button" class="chip">Trade buyer</button>
+            <button type="button" class="chip">+ Add a role</button>
+          </div>
+          <span class="hint">Roles name the generated people and group the results into segments.</span>
+        </div>
+
+        <div class="field-group">
+          <label>What they came to do</label>
+          <div class="chips">
+            <button type="button" class="chip" aria-pressed="true">Buy one item quickly</button>
+            <button type="button" class="chip" aria-pressed="true">Compare prices first</button>
+            <button type="button" class="chip">Check delivery before buying</button>
+            <button type="button" class="chip">Browse without buying</button>
+          </div>
+          <span class="hint">Goals decide what the simulated people treat as relevant on a page &mdash; the engine's
+            top-down relevance input, unchanged.</span>
+        </div>
+
+        <div class="inline2">
+          <div class="field-group">
+            <label>Devices</label>
+            <div class="chips">
+              <button type="button" class="chip" aria-pressed="true">Mobile 60% &middot; 390 &times; 844</button>
+              <button type="button" class="chip" aria-pressed="true">Desktop 40% &middot; 1280 &times; 800</button>
+              <button type="button" class="chip">Tablet</button>
+            </div>
+            <span class="hint">The device mix a test reports is drawn from these shares, so it is real rather than nominal.</span>
+          </div>
+          <div class="field-group">
+            <label>Regions</label>
+            <div class="chips">
+              <button type="button" class="chip" aria-pressed="true">United Kingdom</button>
+              <button type="button" class="chip" aria-pressed="true">Ireland</button>
+              <button type="button" class="chip">+ Add a region</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>How they behave</label>
+          <div class="meters">
+            <div class="meter">
+              <span>How tech-confident they are</span>
+              <span class="track"><span style="width: 55%"></span></span>
+              <span class="val">0.55</span>
+            </div>
+            <div class="meter">
+              <span>How much price matters to them</span>
+              <span class="track"><span style="width: 75%"></span></span>
+              <span class="val">0.75</span>
+            </div>
+          </div>
+          <span class="hint">These two move the generated people's traits: how familiar an interface feels, how closely a
+            total is read, and how quickly somebody gives up when a price changes.</span>
+        </div>
+
+        <div class="field-group">
+          <label>The people this generates <span class="faint">seed 20261024 &middot; same audience and seed, same people</span></label>
+          <div class="personagrid">
+            <div class="personachip"><b>First-time visitor</b><span class="faint">desktop &middot; low familiarity &middot; patient</span></div>
+            <div class="personachip"><b>Rushed buyer</b><span class="faint">mobile &middot; scanning &middot; impatient</span></div>
+            <div class="personachip"><b>Careful comparer</b><span class="faint">desktop &middot; reading &middot; detail-oriented</span></div>
+            <div class="personachip"><b>Price-sensitive scanner</b><span class="faint">mobile &middot; scanning &middot; price-led</span></div>
+          </div>
+          <span class="hint">Generated, not chosen. Change the audience above and these change with it.</span>
+        </div>
+
+        <div class="formfoot">
+          <button class="btn btn-primary" data-go="audiences">Save audience</button>
+          <button class="btn" data-go="newrun">Save and start a test</button>
+          <span class="faint">Changing an audience does not change a finished test: a test records the audience it ran with.</span>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 0d. no audience yet ============================ -->
+<section class="screen" id="screen-no-audience" hidden>
+  <div class="strip">
+    <div class="wrap">
+      <div class="empty">
+        <h2>First, who are your customers?</h2>
+        <p>A test needs an audience: PersonaVision generates the people it tests with from the audience you describe.
+          It takes about a minute &mdash; age, role, device, region, goals, and how much price matters.</p>
+        <div class="actions">
+          <button class="btn btn-primary btn-lg" data-go="audience">Describe my audience</button>
+          <button class="btn" data-go="verdict">Look at the example test first</button>
+        </div>
+        <p class="faint">The example test uses a ready-made audience, so you can see what a result looks like before
+          describing your own.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 1. empty: no tests yet ========================= -->
+<section class="screen" id="screen-empty" hidden>
+  <div class="strip">
+    <div class="wrap">
+      <div class="empty">
+        <h2>No tests yet</h2>
+        <p>This workspace has an audience but no test. Open the example test of our demo shop to see what a result looks
+          like, or point PersonaVision at two versions of one of your own pages.</p>
+        <div class="actions">
+          <button class="btn btn-primary btn-lg" data-go="verdict">Open the example test</button>
+          <button class="btn" data-go="newrun">New test</button>
+        </div>
+        <p class="faint">The example test needs no API key and no network: it was produced by the deterministic offline engine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. new test ==================================== -->
 <section class="screen" id="screen-newrun" hidden>
-  <div class="wrap">
-    <div class="pagehead"><h1>New run</h1></div>
-    <p class="lede">Two variants of the same task, the same personas on both, repeated with different seeds.</p>
-    <form class="form card" style="margin-top: var(--space-6)" onsubmit="return false">
+  <div class="strip strip-sm">
+    <div class="wrap">
+    <div class="pagehead"><h1>New test</h1></div>
+    <p class="lede">Two versions of the same page, the same audience on both, repeated with different seeds so the result
+      has a spread you can trust.</p>
+    <form class="form card card-lg" style="margin-top: var(--space-8)" onsubmit="return false">
+      <div class="field-group">
+        <label for="aud-pick">Audience</label>
+        <select id="aud-pick"><option>Outdoor-gear shoppers &mdash; 25&ndash;45, mostly mobile, price-aware (24 people)</option><option>Trade &amp; wholesale buyers &mdash; 30&ndash;60, desktop (12 people)</option></select>
+        <span class="hint">The people this test runs with are generated from this audience. <a href="#" data-go="audience">Edit the audience</a>.</span>
+      </div>
       <div class="inline2">
         <div class="field-group">
           <label for="url-a">Variant A URL</label>
@@ -531,20 +908,17 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
       <div class="field-group">
         <label for="task">Task</label>
         <input id="task" type="text" value="Buy the hiking boots and pay with the saved card.">
-        <span class="hint" id="task-hint">One sentence, in the user's words. It must say what counts as finishing &mdash; agents stop when they believe the task is done.</span>
+        <span class="hint" id="task-hint">One sentence, in the user's words. It must say what counts as finishing &mdash; the simulated people stop when they believe the task is done.</span>
       </div>
       <div class="field-group">
-        <label>Personas <span class="faint">4 selected &middot; 3 repeats each &middot; 12 sessions per variant</span></label>
-        <div class="chips">
-          <button type="button" class="chip" aria-pressed="true">Rushed buyer &middot; mobile</button>
-          <button type="button" class="chip" aria-pressed="true">Careful comparer &middot; desktop</button>
-          <button type="button" class="chip" aria-pressed="true">First-time visitor &middot; desktop</button>
-          <button type="button" class="chip" aria-pressed="true">Price-sensitive scanner &middot; mobile</button>
-          <button type="button" class="chip">Screen-reader user &middot; desktop</button>
-          <button type="button" class="chip">Returning power user &middot; desktop</button>
-          <button type="button" class="chip">+ Edit persona policies</button>
+        <label>The people this generates <span class="faint">4 personas &middot; 3 seeds each &middot; 12 per version</span></label>
+        <div class="personagrid">
+          <div class="personachip"><b>First-time visitor</b><span class="faint">desktop &middot; low familiarity</span></div>
+          <div class="personachip"><b>Rushed buyer</b><span class="faint">mobile &middot; impatient</span></div>
+          <div class="personachip"><b>Careful comparer</b><span class="faint">desktop &middot; reads closely</span></div>
+          <div class="personachip"><b>Price-sensitive scanner</b><span class="faint">mobile &middot; price-led</span></div>
         </div>
-        <span class="hint">A persona is an attention policy with a seed: persistence, scanning vs reading, detail orientation, interface familiarity, device, patience, risk tolerance.</span>
+        <span class="hint">Generated from the audience, not chosen here. To change who is tested, change the audience.</span>
       </div>
       <div class="inline2">
         <div class="field-group">
@@ -567,20 +941,22 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
         <span class="hint">The attention engine (saliency, relevance, gaze sampler) always runs locally. Only per-screen intent and actions use the model.</span>
       </div>
       <div class="formfoot">
-        <button class="btn btn-primary" data-go="running">Start run &middot; 24 sessions</button>
-        <span class="faint">Estimated 6 min offline. Writes <code class="mono">./runs/2026-10-24-1402-northwind-demo/</code></span>
+        <button class="btn btn-primary btn-lg" data-go="running">Start test &middot; 24 people</button>
+        <span class="faint">About 6 minutes. You can leave this page; we will have the verdict when you come back.</span>
       </div>
     </form>
+    </div>
   </div>
 </section>
 
-<!-- ===================== 2b. new run, invalid ============================ -->
+<!-- ===================== 2b. new test, invalid =========================== -->
 <section class="screen" id="screen-newrun-invalid" hidden>
-  <div class="wrap">
-    <div class="pagehead"><h1>New run</h1></div>
-    <p class="lede">Two variants of the same task, the same personas on both, repeated with different seeds.</p>
-    <form class="form card" style="margin-top: var(--space-6)" onsubmit="return false">
-      <div class="notice">The run was not started. Two fields need attention.</div>
+  <div class="strip strip-sm">
+    <div class="wrap">
+    <div class="pagehead"><h1>New test</h1></div>
+    <p class="lede">Two versions of the same page, the same audience on both.</p>
+    <form class="form card card-lg" style="margin-top: var(--space-8)" onsubmit="return false">
+      <div class="notice">The test was not started. Two fields need attention.</div>
       <div class="inline2">
         <div class="field-group">
           <label for="url-a2">Variant A URL</label>
@@ -595,23 +971,25 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
       <div class="field-group">
         <label for="task2">Task</label>
         <input id="task2" type="text" value="Have a look around" aria-invalid="true">
-        <span class="err">The task must say what finishing means, or no session can be scored a success.</span>
+        <span class="err">The task has to say what finishing means, or nobody can be counted as having completed it.</span>
         <span class="hint">Example: &ldquo;Buy the hiking boots and pay with the saved card.&rdquo;</span>
       </div>
       <div class="formfoot">
-        <button class="btn btn-primary" data-go="newrun-invalid">Start run &middot; 24 sessions</button>
+        <button class="btn btn-primary btn-lg" data-go="newrun-invalid">Start test &middot; 24 people</button>
         <button class="btn btn-quiet" data-go="newrun">Reset</button>
       </div>
     </form>
+    </div>
   </div>
 </section>
 
 <!-- ===================== 3. running ===================================== -->
 <section class="screen" id="screen-running" hidden>
-  <div class="wrap">
-    <div class="pagehead"><h1>Running &middot; northwind-demo</h1></div>
-    <p class="lede">17 of 24 sessions finished &middot; 3 min elapsed &middot; about 2 min left &middot; offline deterministic engine</p>
-    <div class="card" style="margin-top: var(--space-6)">
+  <div class="strip strip-sm">
+    <div class="wrap">
+    <div class="pagehead"><h1>Running &middot; Checkout A vs B</h1></div>
+    <p class="lede">17 of 24 people finished &middot; 3 min elapsed &middot; about 2 min left &middot; offline deterministic engine</p>
+    <div class="card card-lg" style="margin-top: var(--space-8)">
       <div class="progress" style="margin-bottom: var(--space-5)"><span style="width: 71%"></span></div>
       <div class="segments">
         <div class="segbar"><span><span class="tag tag-a">A</span> Current checkout</span><div class="progress"><span style="width: 83%"></span></div><span class="num">10 / 12</span></div>
@@ -624,146 +1002,260 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
         <div><b>00:02:44</b> S-09 First-time visitor &middot; A &middot; seed 3 &mdash; automation failure: selector timeout on card iframe, will retry once</div>
         <div><b>00:02:30</b> S-08 First-time visitor &middot; A &middot; seed 2 &mdash; success in 31.0 s</div>
       </div>
-      <div class="formfoot" style="margin-top: var(--space-5)">
-        <button class="btn" data-go="comparison">Show partial results</button>
-        <button class="btn btn-quiet">Stop run</button>
-        <span class="faint">Each finished session is written to disk as it completes; stopping keeps what is done.</span>
+      <div class="formfoot" style="margin-top: var(--space-6)">
+        <button class="btn" data-go="verdict">Show what we have so far</button>
+        <button class="btn btn-quiet">Stop test</button>
+        <span class="faint">Each person is saved as they finish; stopping keeps everyone who is already done.</span>
       </div>
+    </div>
     </div>
   </div>
 </section>
 
 <!-- ===================== 4. run failed ================================== -->
 <section class="screen" id="screen-error" hidden>
-  <div class="wrap">
-    <div class="pagehead"><h1>Run failed to start</h1></div>
-    <div class="card errorcard" style="margin-top: var(--space-6)">
-      <h2>Variant B URL could not be opened</h2>
-      <p>No session ran. Nothing was written to <code class="mono">./runs/</code>.</p>
+  <div class="strip strip-sm">
+    <div class="wrap">
+    <div class="pagehead"><h1>Test failed to start</h1></div>
+    <div class="card card-lg errorcard" style="margin-top: var(--space-8)">
+      <h2>The second URL could not be opened</h2>
+      <p>Nobody was simulated and no result was saved.</p>
       <div class="detail">playwright: net::ERR_CONNECTION_REFUSED at http://localhost:4173/checkout-b
 variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
       <ul>
-        <li>Is the dev server for variant B running on port 4173?</li>
-        <li>If it needs a login, add a session cookie or a sign-in step to the run.</li>
-        <li>Both variants must be reachable: scores are only comparable from one run.</li>
+        <li>Is the page for the second version actually reachable at that address?</li>
+        <li>If it needs a login, add a sign-in step to the test.</li>
+        <li>Both versions have to be reachable: a comparison is only valid from one test.</li>
       </ul>
-      <div style="display: flex; gap: var(--space-2); flex-wrap: wrap">
-        <button class="btn btn-primary" data-go="running">Retry run</button>
-        <button class="btn" data-go="newrun">Edit run</button>
-        <button class="btn btn-quiet" data-go="comparison">Open last good run</button>
+      <div style="display: flex; gap: var(--space-3); flex-wrap: wrap">
+        <button class="btn btn-primary" data-go="running">Try again</button>
+        <button class="btn" data-go="newrun">Edit the test</button>
+        <button class="btn btn-quiet" data-go="verdict">Open the last good test</button>
       </div>
     </div>
-    <div class="notice info" style="margin-top: var(--space-5)">
-      <span>No <code class="mono">META_API_KEY</code> in the environment, so the offline deterministic engine was selected. Simulated attention is unaffected; per-screen intent text is terser than with Muse Spark.</span>
+    <div class="notice info" style="margin-top: var(--space-6)">
+      <span>No model key is configured for this workspace, so the offline deterministic engine was used. Simulated
+      attention is unaffected; what each person says about their intent is terser than with a model.</span>
+    </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== 5. comparison (the demo screen) ================ -->
-<section class="screen" id="screen-comparison" hidden>
-  <div class="wrap">
-    <div class="pagehead">
-      <h1>Which variant is easier, and why</h1>
-    </div>
-    <div class="runmeta">
-      <span><b>Task</b> Buy the hiking boots and pay with the saved card.</span>
-      <span><b>Personas</b> 4 &times; 3 seeds = 12 sessions per variant</span>
-      <span><b>Devices</b> 2 mobile &middot; 2 desktop</span>
-      <span><b>Engine</b> offline deterministic</span>
-      <span><b>Run</b> <code>runs/2026-10-24-1402-northwind-demo</code></span>
-    </div>
+<!-- ===================== 5. verdict (the screen the demo ends on) =======
+     docs/FLOW.md sections 3, 5 and 7. One headline sentence, two completion
+     figures, one or two reasons, ONE heatmap, at most three findings.
+     Everything numeric is read from the run as the pipeline wrote it. -->
+<section class="screen" id="screen-verdict" hidden>
 
-    <div class="notice">
-      <span>2 of 24 sessions ended in an <b>automation failure</b> (selector timeout on the card iframe). They are excluded from both scores and are not held against either variant. <a href="#" data-go="sessions">See the 2 sessions</a>.</span>
-    </div>
-
-    <div class="score-grid">
-      <div class="card score-card" data-variant="a">
-        <span class="microlabel">Variant A</span>
-        <h3>Current checkout</h3>
-        <p class="url">http://localhost:4173/checkout-a</p>
-        <div class="score-row">
-          <span class="score-value band-good num">22</span>
-          <span class="score-spread num">&plusmn; 3</span>
-          <span class="score-band band-good">Friction score &middot; clean</span>
-        </div>
-        <div class="scale band-good">
-          <i class="spreadband" style="left: 19%; width: 6%"></i>
-          <i class="marker" style="left: 22%"></i>
-        </div>
-        <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
-        <ul class="components">
-          <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-good"><span style="width: 1%"></span></span><span class="val">0 / 11</span></li>
-          <li><span class="what">Abandonment <i>weight 20%</i></span><span class="bar band-good"><span style="width: 18%"></span></span><span class="val">2 / 11</span></li>
-          <li><span class="what">Time to first fixation on the primary action <i>weight 35% &middot; worst step: review</i></span><span class="bar band-good"><span style="width: 38%"></span></span><span class="val">2.3 s</span></li>
-          <li><span class="what">Dead-end revisits per session <i>weight 15%</i></span><span class="bar band-good"><span style="width: 30%"></span></span><span class="val">1.5</span></li>
-        </ul>
-        <p class="footnote" style="margin-top: var(--space-4)">9 success &middot; 2 abandoned &middot; 0 failed &middot; 1 automation failure excluded</p>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <div class="audbar">
+        <span class="who" data-go="audience">&#9679; Outdoor-gear shoppers</span>
+        <span>25&ndash;45 &middot; mostly mobile &middot; price-aware &middot; United Kingdom &amp; Ireland</span>
+        <span class="faint">24 simulated people, generated from this audience with seed 20261024</span>
+        <span class="grow"></span>
+        <button class="btn btn-sm btn-quiet" data-go="audience">Change audience</button>
       </div>
 
-      <div class="card score-card" data-variant="b">
-        <span class="microlabel">Variant B</span>
-        <h3>Redesign candidate</h3>
-        <p class="url">http://localhost:4173/checkout-b</p>
-        <div class="score-row">
-          <span class="score-value band-bad num">67</span>
-          <span class="score-spread num">&plusmn; 4</span>
-          <span class="score-band band-bad">Friction score &middot; defective</span>
-        </div>
-        <div class="scale band-bad">
-          <i class="spreadband" style="left: 63%; width: 8%"></i>
-          <i class="marker" style="left: 67%"></i>
-        </div>
-        <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
-        <ul class="components">
-          <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-bad"><span style="width: 27%"></span></span><span class="val">3 / 11</span></li>
-          <li><span class="what">Abandonment <i>weight 20%</i></span><span class="bar band-bad"><span style="width: 55%"></span></span><span class="val">6 / 11</span></li>
-          <li><span class="what">Time to first fixation on the primary action <i>weight 35% &middot; worst step: review</i></span><span class="bar band-bad"><span style="width: 100%"></span></span><span class="val">never</span></li>
-          <li><span class="what">Dead-end revisits per session <i>weight 15%</i></span><span class="bar band-bad"><span style="width: 86%"></span></span><span class="val">4.3</span></li>
-        </ul>
-        <p class="footnote" style="margin-top: var(--space-4)">2 success &middot; 6 abandoned &middot; 3 failed &middot; 1 automation failure excluded</p>
+      <div class="notice">
+        <span>2 of the 24 people could not be simulated to the end: our own browser automation timed out on the card field.
+        They are <b>excluded from both figures</b> and are not counted against either version of your checkout.
+        <a href="#" data-go="sessions">See those 2</a>.</span>
+      </div>
+
+      <div class="hero">
+        <h1 id="vd-headline"></h1>
+        <p class="sub">Task tested: &ldquo;Buy the hiking boots and pay with the saved card.&rdquo; Same audience, same people, both versions.</p>
+      </div>
+
+      <div class="figures" id="vd-figures"></div>
+
+      <div class="reasons">
+        <span class="microlabel">Why</span>
+        <div id="vd-reasons"></div>
       </div>
     </div>
+  </div>
 
-    <div class="verdict">
-      <span class="delta num">+45</span>
-      <span>Variant B is harder. The gap held in all 3 seed groups (A 19&ndash;25, B 63&ndash;71 &mdash; the bands do not overlap).</span>
-      <span class="grow"></span>
-      <button class="btn btn-sm" data-go="attention">See where attention went</button>
-    </div>
-
-    <div class="section">
-      <h2>Findings</h2>
-      <p class="lede">What the run concluded, ranked by severity. Each sentence carries the evidence behind it.</p>
-      <div class="findings" id="findings"></div>
-    </div>
-
-    <div class="section">
-      <h2>Task outcomes by persona segment</h2>
-      <p class="lede">Same personas, same seeds, both variants.</p>
-      <div class="card">
-        <div class="segments" id="segments"></div>
-        <div class="legend">
-          <span><i style="background: var(--outcome-success)"></i> Success</span>
-          <span><i style="background: var(--outcome-abandoned)"></i> Abandoned</span>
-          <span><i style="background: var(--outcome-failed)"></i> Failed</span>
-          <span><i style="background: var(--attr-automation)"></i> Automation failure (excluded)</span>
+  <!-- The single piece of evidence on this screen: one heatmap, framed in
+       neutral space, of the moment the verdict turns on. -->
+  <div class="strip strip-tint">
+    <div class="wrap">
+      <div class="mat">
+        <div class="mat-head">
+          <h3>Where your audience looked on the redesign, at the final step</h3>
+          <span class="grow"></span>
+          <span class="microlabel">Redesign candidate &middot; review step &middot; desktop 1280 &times; 800 &middot; 9 people</span>
         </div>
+        <div class="frame dim" id="vd-frame">
+          <div class="page" id="vd-page" data-variant="b"></div>
+          <div class="layer heat" id="vd-heat"></div>
+          <div class="layer" id="vd-vec"></div>
+          <div class="fold"><span>fold &middot; 1280 &times; 800</span></div>
+        </div>
+        <p class="evidence-cap">
+          Attention burns on the total and the newly added service fee. Nothing at all lands on
+          <b>&ldquo;Confirm purchase&rdquo;</b>, which sits below the fold.
+          <a href="#" data-go="attention">Open this in Attention &rarr;</a>
+        </p>
       </div>
     </div>
+  </div>
 
-    <p class="footnote">
-      Every number on this screen is <b>simulated</b>. It ranks variants and locates friction; it is not a conversion-lift estimate
-      and does not replace a test on real users. Attention similarity to human gaze on the UEyes benchmark: CC 0.68 / NSS 1.9 / ScanMatch 0.54.
-    </p>
+  <div class="strip">
+    <div class="wrap">
+      <div class="section" style="margin-top: 0">
+        <h2>What to fix first</h2>
+        <p class="lede">The three things that cost you the most, in order. Open one to see the people behind it.</p>
+        <div class="findings" id="vd-findings"></div>
+        <p class="lede" style="margin-top: var(--space-5)">
+          <a href="#" data-go="breakdown">See all 6 findings and the full score breakdown &rarr;</a>
+        </p>
+      </div>
+
+      <div class="doors">
+        <button class="door" data-go="breakdown">
+          <h3>Score breakdown</h3>
+          <p>How sure is this, and what drove it? The friction score, its four parts and the run-to-run spread.</p>
+          <span class="more">Open &rarr;</span>
+        </button>
+        <button class="door" data-go="attention">
+          <h3>Attention</h3>
+          <p>Every heatmap, the order attention moved in, and the numbers per area of the page.</p>
+          <span class="more">Open &rarr;</span>
+        </button>
+        <button class="door" data-go="sessions">
+          <h3>People</h3>
+          <p>All 24 simulated people: what each one did, how long it took and where it ended.</p>
+          <span class="more">Open &rarr;</span>
+        </button>
+        <button class="door" data-go="replay">
+          <h3>Watch one person</h3>
+          <p>Replay a single person's gaze, scrolling, clicks and the moment they gave up.</p>
+          <span class="more">Open &rarr;</span>
+        </button>
+      </div>
+
+      <p class="footnote">
+        Every figure on this screen is <b>simulated</b>, for the audience named at the top. It ranks your two versions and
+        locates friction; it is not a conversion-lift estimate and does not replace a test on real customers.
+        Similarity to real human gaze on the UEyes benchmark: CC 0.68 / NSS 1.9 / ScanMatch 0.54.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5b. score breakdown ===========================
+     One click deeper. Everything the old Comparison screen led with lives
+     here: the friction score, its four weighted parts, the spread, the
+     verdict line, the full findings list and outcomes by audience segment. -->
+<section class="screen" id="screen-breakdown" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <p class="breadcrumb"><a href="#" data-go="verdict">Verdict</a> / Score breakdown</p>
+      <div class="pagehead"><h1>How sure is this, and what drove it</h1></div>
+      <p class="lede">The friction score ranks the two versions from 0 to 100, higher being worse. It is not the headline &mdash;
+        your audience's completion rate is &mdash; but it is the number the result is ranked and regression-tested on.</p>
+
+      <div class="runmeta">
+        <span><b>Audience</b> Outdoor-gear shoppers &middot; 25&ndash;45 &middot; price-aware</span>
+        <span><b>People</b> 4 generated personas &times; 3 seeds = 12 per version</span>
+        <span><b>Devices</b> 2 mobile &middot; 2 desktop</span>
+        <span><b>Engine</b> offline deterministic</span>
+        <span><b>Test</b> <code>runs/2026-10-24-1402-northwind-demo</code></span>
+      </div>
+
+      <div class="score-grid">
+        <div class="card score-card" data-variant="a">
+          <span class="microlabel">Version A</span>
+          <h3>Current checkout</h3>
+          <p class="url">http://localhost:4173/checkout-a</p>
+          <div class="score-row">
+            <span class="score-value band-good num">22</span>
+            <span class="score-spread num">&plusmn; 3</span>
+            <span class="score-band band-good">Friction score &middot; clean</span>
+          </div>
+          <div class="scale band-good">
+            <i class="spreadband" style="left: 19%; width: 6%"></i>
+            <i class="marker" style="left: 22%"></i>
+          </div>
+          <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
+          <ul class="components">
+            <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-good"><span style="width: 1%"></span></span><span class="val">0 / 11</span></li>
+            <li><span class="what">Gave up <i>weight 20%</i></span><span class="bar band-good"><span style="width: 18%"></span></span><span class="val">2 / 11</span></li>
+            <li><span class="what">Time before anyone looked at the main button <i>weight 35% &middot; worst step: review</i></span><span class="bar band-good"><span style="width: 38%"></span></span><span class="val">2.3 s</span></li>
+            <li><span class="what">Dead-end revisits per person <i>weight 15%</i></span><span class="bar band-good"><span style="width: 30%"></span></span><span class="val">1.5</span></li>
+          </ul>
+          <p class="footnote" style="margin-top: var(--space-5)">9 completed &middot; 2 gave up &middot; 0 failed &middot; 1 excluded (our automation)</p>
+        </div>
+
+        <div class="card score-card" data-variant="b">
+          <span class="microlabel">Version B</span>
+          <h3>Redesign candidate</h3>
+          <p class="url">http://localhost:4173/checkout-b</p>
+          <div class="score-row">
+            <span class="score-value band-bad num">67</span>
+            <span class="score-spread num">&plusmn; 4</span>
+            <span class="score-band band-bad">Friction score &middot; defective</span>
+          </div>
+          <div class="scale band-bad">
+            <i class="spreadband" style="left: 63%; width: 8%"></i>
+            <i class="marker" style="left: 67%"></i>
+          </div>
+          <div class="scale-legend"><span>0 &middot; no friction</span><span>25</span><span>60</span><span>100 &middot; unusable</span></div>
+          <ul class="components">
+            <li><span class="what">Task failure rate <i>weight 30%</i></span><span class="bar band-bad"><span style="width: 27%"></span></span><span class="val">3 / 11</span></li>
+            <li><span class="what">Gave up <i>weight 20%</i></span><span class="bar band-bad"><span style="width: 55%"></span></span><span class="val">6 / 11</span></li>
+            <li><span class="what">Time before anyone looked at the main button <i>weight 35% &middot; worst step: review</i></span><span class="bar band-bad"><span style="width: 100%"></span></span><span class="val">never</span></li>
+            <li><span class="what">Dead-end revisits per person <i>weight 15%</i></span><span class="bar band-bad"><span style="width: 86%"></span></span><span class="val">4.3</span></li>
+          </ul>
+          <p class="footnote" style="margin-top: var(--space-5)">2 completed &middot; 6 gave up &middot; 3 failed &middot; 1 excluded (our automation)</p>
+        </div>
+      </div>
+
+      <div class="verdict">
+        <span class="delta num">+45</span>
+        <span>The redesign is harder for this audience. The gap held in all 3 seed groups (A 19&ndash;25, B 63&ndash;71 &mdash; the bands do not overlap).</span>
+        <span class="grow"></span>
+        <button class="btn btn-sm" data-go="attention">See where attention went</button>
+      </div>
+
+      <div class="section">
+        <h2>All findings</h2>
+        <p class="lede">Ranked by severity, then by how many people are behind each. The top three are the ones on the Verdict screen.</p>
+        <div class="findings" id="findings"></div>
+      </div>
+
+      <div class="section">
+        <h2>Which part of your audience this came from</h2>
+        <p class="lede">Same generated people, same seeds, both versions. One segment carrying the whole result is worth knowing about.</p>
+        <div class="card">
+          <div class="segments" id="segments"></div>
+          <div class="legend">
+            <span><i style="background: var(--outcome-success)"></i> Completed</span>
+            <span><i style="background: var(--outcome-abandoned)"></i> Gave up</span>
+            <span><i style="background: var(--outcome-failed)"></i> Failed</span>
+            <span><i style="background: var(--attr-automation)"></i> Our automation broke (excluded)</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="footnote">
+        Every number on this screen is <b>simulated</b> for the audience named above. It ranks versions and locates friction;
+        it is not a conversion-lift estimate. People whose session ended because our own automation broke are excluded from
+        every figure here &mdash; that is our weakness, never evidence against your checkout.
+      </p>
+    </div>
   </div>
 </section>
 
 <!-- ===================== 6. attention (variant) ========================= -->
 <section class="screen" id="screen-attention" hidden>
   <div class="wrap">
-    <div class="pagehead"><h1>Where did attention go</h1></div>
-    <p class="lede">Fixations of all sessions on this variant, over the page as the agents saw it.</p>
+    <p class="breadcrumb"><a href="#" data-go="verdict">Verdict</a> / Attention</p>
+    <div class="pagehead"><h1>Where your audience looked</h1></div>
+    <p class="lede">Every look your audience took on this version, over the page as they saw it. Fixation, dwell and
+      scanpath are the technical words for it; the table under the page is the same thing in numbers.</p>
 
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-5) 0">
       <div class="seg" id="variant-seg">
@@ -771,7 +1263,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
         <button data-variant="b" aria-pressed="true">B &middot; Redesign candidate</button>
       </div>
       <span class="grow"></span>
-      <span class="microlabel">Aggregate of <span id="att-n">11</span> scored sessions</span>
+      <span class="microlabel">Aggregate of <span id="att-n">11</span> people &middot; the 1 our automation broke is excluded</span>
     </div>
 
     <div class="filmstrip" id="filmstrip"></div>
@@ -810,7 +1302,8 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 
     <div class="section">
       <h2>Areas of interest</h2>
-      <p class="lede">DOM and accessibility tree for controls and text, SAM 3.1 segments for everything else. Click a row to isolate it, or open the sessions that fixated it.</p>
+      <p class="lede">One row per area of the page. Click a row to isolate it, or open the people who looked at it.
+        Boundaries come from the page's own markup where it has any, and from image segmentation where it does not.</p>
       <div class="tablewrap">
         <table>
           <thead>
@@ -829,7 +1322,8 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
           <tbody id="aoi-rows"></tbody>
         </table>
       </div>
-      <p class="footnote">Medians across scored sessions. &ldquo;Looked at it&rdquo; is the share of sessions with at least one fixation inside the area.</p>
+      <p class="footnote">Medians across the people whose session was scored. &ldquo;Looked at it&rdquo; is the share of
+        those people who looked inside the area at least once. Every number here is simulated for this audience.</p>
     </div>
   </div>
 </section>
@@ -837,8 +1331,9 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 <!-- ===================== 7. sessions ==================================== -->
 <section class="screen" id="screen-sessions" hidden>
   <div class="wrap">
-    <div class="pagehead"><h1>What happened to each agent</h1></div>
-    <p class="lede">One row per persona &times; variant &times; seed. A session is the main object in PersonaVision: open one to replay it.</p>
+    <p class="breadcrumb"><a href="#" data-go="verdict">Verdict</a> / People</p>
+    <div class="pagehead"><h1>What happened to each person</h1></div>
+    <p class="lede">One row per generated person &times; version &times; seed. Open one to watch it back.</p>
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-5) 0">
       <div class="seg">
         <button aria-pressed="true">All variants</button><button aria-pressed="false">A</button><button aria-pressed="false">B</button>
@@ -848,7 +1343,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
       </div>
       <span class="chip" aria-pressed="true">Fixated: Confirm purchase &times;</span>
       <span class="grow"></span>
-      <span class="microlabel">24 sessions &middot; 22 scored &middot; 2 automation failures</span>
+      <span class="microlabel">24 people &middot; 22 scored &middot; 2 excluded because our automation broke</span>
     </div>
     <div class="tablewrap">
       <table>
@@ -861,15 +1356,17 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
         <tbody id="session-rows"></tbody>
       </table>
     </div>
-    <p class="footnote">Automation failures are the simulation's own fault, never the product's: they are excluded from the friction score and from every area-of-interest metric.</p>
+    <p class="footnote">When our own browser automation breaks, that is our fault and never your checkout's: those people
+      are excluded from every figure, including the friction score and each area's numbers. Somebody giving up, somebody
+      ending without the task done, and our automation breaking are three different things and are never merged.</p>
   </div>
 </section>
 
 <!-- ===================== 7b. sessions, nothing matches ================== -->
 <section class="screen" id="screen-sessions-empty" hidden>
   <div class="wrap">
-    <div class="pagehead"><h1>What happened to each agent</h1></div>
-    <p class="lede">One row per persona &times; variant &times; seed.</p>
+    <div class="pagehead"><h1>What happened to each person</h1></div>
+    <p class="lede">One row per generated person &times; version &times; seed.</p>
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-5) 0">
       <div class="seg"><button aria-pressed="false">All variants</button><button aria-pressed="true">B</button><button aria-pressed="false">A</button></div>
       <div class="seg"><button aria-pressed="false">All outcomes</button><button aria-pressed="true">Success</button></div>
@@ -879,10 +1376,11 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
     </div>
     <div class="empty">
       <h2>No session matches</h2>
-      <p>On variant B, no session both fixated <b>Confirm purchase</b> and finished the task. That is the finding, not an empty table: of the 9 agents who reached the review step, none ever looked at the button that completes the order.</p>
+      <p>On the redesign, nobody both looked at <b>Confirm purchase</b> and finished the task. That is the finding, not an
+        empty table: of the 9 people who reached the review step, not one ever looked at the button that completes the order.</p>
       <div class="actions">
         <button class="btn" data-go="sessions">Clear filters</button>
-        <button class="btn btn-quiet" data-go="attention">See the heatmap for B</button>
+        <button class="btn btn-quiet" data-go="attention">See the heatmap for the redesign</button>
       </div>
     </div>
   </div>
@@ -891,13 +1389,14 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 <!-- ===================== 8. session replay ============================== -->
 <section class="screen" id="screen-replay" hidden>
   <div class="wrap">
-    <p class="lede" style="margin-bottom: var(--space-2)"><a href="#" data-go="sessions">Sessions</a> / S-15</p>
-    <div class="pagehead"><h1>S-15 &middot; Rushed buyer &middot; Variant B &middot; seed 3</h1></div>
+    <p class="breadcrumb"><a href="#" data-go="verdict">Verdict</a> / <a href="#" data-go="sessions">People</a> / S-15</p>
+    <div class="pagehead"><h1>S-15 &middot; Rushed buyer &middot; the redesign &middot; seed 3</h1></div>
     <p class="lede">
       <span class="tag tag-b">B Redesign candidate</span>
       <span class="tag tag-abandoned">Abandoned at 0:38</span>
       <span class="tag tag-product">Product at fault</span>
-      <span class="faint">mobile 390 &times; 844 &middot; 23 fixations &middot; 3 screens &middot; reproducible with seed 3</span>
+      <span class="faint">mobile 390 &times; 844 &middot; 23 fixations &middot; 3 screens &middot; generated from the
+        Outdoor-gear shoppers audience, reproducible from that audience and seed 3</span>
     </p>
 
     <div class="replay" style="margin-top: var(--space-6)">
@@ -917,7 +1416,8 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
             <input type="range" id="rp-range" min="1" max="23" value="12">
             <span class="microlabel" id="rp-fixlabel">fixation 12 of 23</span>
           </div>
-          <p class="footnote">Scrubbing moves gaze, scrolling, clicks and typing together. The screen shown is the one the agent was on at that moment.</p>
+          <p class="footnote">Scrubbing moves gaze, scrolling, clicks and typing together. The screen shown is the one
+            this person was on at that moment.</p>
         </div>
       </div>
 
@@ -930,14 +1430,54 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 
 <script>
 /* ===========================================================================
-   Hard-coded run: runs/2026-10-24-1402-northwind-demo
-   Four personas x two variants x three seeds = 24 sessions, 22 scored.
+   Hard-coded test: runs/2026-10-24-1402-northwind-demo
+   One audience (Outdoor-gear shoppers) -> four generated personas, x two
+   variants x three seeds = 24 sessions, 22 scored.
    Variant A = current checkout (clean). Variant B = redesign candidate with
    three planted defects: a competing promo banner, a fee revealed late, and a
    mislabelled button. Every number below is representative, not random.
    ======================================================================== */
 
 const SCORED = 11;                /* scored sessions per variant (12 - 1 automation failure) */
+
+/* The audience the user described. The personas below are GENERATED from it
+   with a seed, not chosen: same audience + same seed, same people. */
+const AUDIENCE = {
+  id: 'outdoor-gear-shoppers',
+  name: 'Outdoor-gear shoppers',
+  ageRange: { min: 25, max: 45 },
+  roles: ['First-time buyer', 'Returning customer'],
+  regions: ['United Kingdom', 'Ireland'],
+  goals: ['Buy one item quickly', 'Compare prices first'],
+  devices: [
+    { name: 'mobile', viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, touch: true, share: 0.6 },
+    { name: 'desktop', viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, touch: false, share: 0.4 }
+  ],
+  techSavviness: 0.55,
+  priceSensitivity: 0.75,
+  size: 24,
+  generatedFrom: { seed: 20261024, generatorVersion: 'persona-gen-1' },
+  summary: '25\u201345 \u00b7 mostly mobile \u00b7 price-aware \u00b7 United Kingdom & Ireland'
+};
+
+/* What the Verdict screen leads with. All of it is STORED in the run
+   artifact (scores[].completionRate, verdict.*) and only formatted here:
+   the screen never computes a verdict of its own. */
+const COMPLETION = {
+  a: { name: 'Current checkout', completed: 9, scored: 11 },
+  b: { name: 'Redesign candidate', completed: 2, scored: 11 }
+};
+
+const VERDICT = {
+  preferredVariant: 'a',
+  audienceSentence: 'Your audience completes the purchase on the current checkout, not on the redesign.',
+  reasons: [
+    'The button that completes the order was never seen on the redesign.',
+    'A $9.95 service fee appears only after the card is entered, and people leave when they see it.'
+  ],
+  heroEvidence: { variant: 'b', step: 'review', aoiId: null },
+  headlineFindingCount: 3
+};
 
 const STEPS = [
   { id: 'cart',    name: 'Cart',         reach: { a: 11, b: 11 } },
@@ -1074,7 +1614,7 @@ const FIX = {
 
 /* Area-of-interest metrics per step, per variant.
    null            = the area does not exist in that variant.
-   ttff === null   = the area exists and no agent ever fixated it. */
+   ttff === null   = the area exists and nobody ever fixated it. */
 const AOI_METRICS = {
   cart: [
     { id: 'promo', label: 'Promo banner', src: 'SAM 3.1 segment', a: null, b: { ttff: 0.3, ffd: 480, dwell: 2.4, fix: 3.1, rev: 1.4, seen: 91 } },
@@ -1107,23 +1647,26 @@ const AOI_METRICS = {
 };
 
 const STEP_CAPTION = {
-  'a-cart': 'Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-sensitive agents left here over it.',
+  'a-cart': 'Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-led people left here over it.',
   'b-cart': 'Variant B, cart. The promo banner takes the first fixation, and "calculated later" draws a second fixation in 8 of 11 sessions before Checkout is clicked.',
-  'a-payment': 'Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 agents who reached this step fixated "Continue to review", median 1.8 s in.',
+  'a-payment': 'Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 people who reached this step fixated "Continue to review", median 1.8 s in.',
   'b-payment': 'Variant B, payment step. The promo banner takes the first fixation in 9 of 10 sessions and holds 3.1 s of dwell. The primary action here says "Place order", but it only advances to the review step.',
-  'a-review': 'Variant A, review step. The total is read once, then the primary action; 9 of 9 agents placed the order.',
-  'b-review': 'Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 agents who reached this step ever fixated it.',
-  'a-confirm': 'Variant A, confirmation. 9 of 11 agents reached it.',
-  'b-confirm': 'Variant B, confirmation. Only 2 of 11 agents reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.'
+  'a-review': 'Variant A, review step. The total is read once, then the primary action; 9 of 9 people placed the order.',
+  'b-review': 'Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and "Confirm purchase" sits below the fold: 0 of 9 people who reached this step ever fixated it.',
+  'a-confirm': 'Variant A, confirmation. 9 of 11 people reached it.',
+  'b-confirm': 'Variant B, confirmation. Only 2 of 11 people reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to.'
 };
 
+/* A claim is one sentence the owner of the shop could repeat out loud, about
+   their audience. The evidence sentence under it carries the numbers. No
+   jargon in a claim (docs/FLOW.md section 6). */
 const FINDINGS = [
-  { sev: 'critical', variant: 'b', claim: 'Nobody ever looked at the button that completes the order on variant B.', evidence: '&ldquo;Confirm purchase&rdquo; sits about 180 px below the fold on the review step. Of the 9 agents who reached that step, 0 fixated it; on variant A the equivalent button was fixated by 9 of 9, median 2.3 s in.', aoi: 'review / complete', n: 9, attr: 'product', goto: 'attention' },
-  { sev: 'critical', variant: 'b', claim: 'A $9.95 service fee appears only after payment details are entered, and 4 of 9 agents left within 5 s of fixating it.', evidence: 'The fee row holds 610 ms on first fixation and 2.4 revisits &mdash; the highest revisit count in the run. The total changes from $129.00 to $147.95 between the payment and review steps.', aoi: 'review / fee-row', n: 4, attr: 'product', goto: 'attention' },
-  { sev: 'high', variant: 'b', claim: 'The promo banner takes the first fixation in 9 of 10 sessions, a median 1.3 s before any form field.', evidence: 'Dwell 3.1 s with 1.8 revisits, against 1.2 s on the primary action beneath it. No agent applied the code: the banner costs attention without being used.', aoi: 'payment / promo', n: 9, attr: 'product', goto: 'attention' },
-  { sev: 'medium', variant: 'b', claim: 'The payment step&rsquo;s button says &ldquo;Place order&rdquo; but only advances to review, and 3 of 11 agents stopped there believing they had bought the boots.', evidence: 'All three show a confirmation-seeking fixation pattern on the next screen (summary, then support link) and no further action. Their outcome is a failure with no order placed, not an abandonment.', aoi: 'payment / primary', n: 3, attr: 'product', goto: 'sessions' },
-  { sev: 'low', variant: 'a', claim: 'On variant A, 2 of 11 agents abandoned at the cart after re-reading the shipping line.', evidence: 'Both were the price-sensitive scanner persona; $8.95 shipping on a $129.00 order drew 2 revisits before they left. Reported for symmetry: variant A is the cleaner variant, not a perfect one.', aoi: 'cart / cart-total', n: 2, attr: 'product', goto: 'sessions' },
-  { sev: 'info', variant: 'both', claim: '2 of 24 sessions ended in an automation failure and are excluded from both scores.', evidence: 'Playwright selector timeout on the card-number iframe (S-09 on variant A, S-23 on variant B) after one retry each. This is a weakness of the simulation, never evidence against a variant.', aoi: 'payment / card', n: 2, attr: 'automation', goto: 'sessions' }
+  { sev: 'critical', variant: 'b', claim: 'Nobody in your audience ever looked at the button that completes the order on the redesign.', evidence: 'On the review step, &ldquo;Confirm purchase&rdquo; sits about 180 px below the fold. Of the 9 people who got that far, 0 looked at it. On your current checkout the same button was seen by 9 of 9, after 2.3 s on average.', aoi: 'review / complete', n: 9, attr: 'product', goto: 'attention' },
+  { sev: 'critical', variant: 'b', claim: 'A $9.95 service fee only appears after the card is entered, and 4 of 9 people left within 5 seconds of seeing it.', evidence: 'The fee holds the eye for 610 ms the first time and is returned to 2.4 times &mdash; the most re-read thing in the test. The total changes from $129.00 to $147.95 between the two steps.', aoi: 'review / fee-row', n: 4, attr: 'product', goto: 'attention' },
+  { sev: 'high', variant: 'b', claim: 'The sale banner takes the first look in 9 of 10 people, about 1.3 s before they look at any form field.', evidence: 'It holds 3.1 s of attention against 1.2 s on the button beneath it, and nobody used the code: it costs attention without earning anything.', aoi: 'payment / promo', n: 9, attr: 'product', goto: 'attention' },
+  { sev: 'medium', variant: 'b', claim: 'The payment button says &ldquo;Place order&rdquo; but only moves to a review step, and 3 of 11 people stopped there believing they had bought the boots.', evidence: 'All three look for a confirmation on the next screen, then stop. They end with no order placed &mdash; a failure, not someone choosing to leave.', aoi: 'payment / primary', n: 3, attr: 'product', goto: 'sessions' },
+  { sev: 'low', variant: 'a', claim: 'On your current checkout, 2 of 11 people gave up at the cart after re-reading the shipping line.', evidence: 'Both were price-led shoppers; $8.95 shipping on a $129.00 order was read twice before they left. Reported for balance: the current checkout is the better version, not a perfect one.', aoi: 'cart / cart-total', n: 2, attr: 'product', goto: 'sessions' },
+  { sev: 'info', variant: 'both', claim: '2 of 24 people could not be simulated to the end, and are excluded from both figures.', evidence: 'Our own browser automation timed out on the card field (one person on each version) after one retry. This is a weakness of the simulation, never evidence against your checkout.', aoi: 'payment / card', n: 2, attr: 'automation', goto: 'sessions' }
 ];
 
 const PERSONAS = [
@@ -1183,7 +1726,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
-/* Score bands come from tokens.css, so the thresholds are stated once. */
+/* Bands come from tokens.css, so every threshold is stated exactly once. */
 function band(score) {
   const css = getComputedStyle(document.documentElement);
   const good = parseFloat(css.getPropertyValue('--score-threshold-good'));
@@ -1191,17 +1734,34 @@ function band(score) {
   return score <= good ? 'good' : score >= bad ? 'bad' : 'warn';
 }
 
+/* The completion rate's band, read from the tokens for the same reason. */
+function completionBand(rate) {
+  const css = getComputedStyle(document.documentElement);
+  const good = parseFloat(css.getPropertyValue('--completion-threshold-good'));
+  const bad = parseFloat(css.getPropertyValue('--completion-threshold-bad'));
+  return rate >= good ? 'good' : rate <= bad ? 'bad' : 'warn';
+}
+
 /* ---- navigation ---- */
-const CHROME_OFF = new Set(['empty', 'newrun', 'newrun-invalid', 'running', 'error']);
-const TAB_OF = { comparison: 'comparison', attention: 'attention', sessions: 'sessions', 'sessions-empty': 'sessions', replay: 'sessions' };
+/* Screens that show no test, so the test picker and the tab bar are hidden. */
+const CHROME_OFF = new Set(['empty', 'newrun', 'newrun-invalid', 'running', 'error', 'audiences', 'audience', 'no-audience']);
+const TAB_OF = {
+  verdict: 'verdict', breakdown: 'breakdown', attention: 'attention',
+  sessions: 'sessions', 'sessions-empty': 'sessions', replay: 'sessions',
+  audiences: 'audiences', audience: 'audiences'
+};
 
 function go(name) {
-  if (!$('#screen-' + name)) name = 'comparison';
+  if (!$('#screen-' + name)) name = 'verdict';
   $$('.screen').forEach(s => { s.hidden = s.id !== 'screen-' + name; });
-  const bare = CHROME_OFF.has(name);
-  $('#tabbar').hidden = bare;
+  /* Signed out: no product chrome at all. */
+  const signedOut = name === 'signin';
+  $('#chrome').hidden = signedOut;
+  const bare = signedOut || CHROME_OFF.has(name);
+  $('#tabbar').hidden = signedOut;
   $$('#chrome .runpick, #chrome .sim-badge').forEach(el => { el.style.visibility = bare ? 'hidden' : 'visible'; });
   $$('.tab').forEach(t => t.setAttribute('aria-current', t.dataset.go === TAB_OF[name] ? 'page' : 'false'));
+  if (name === 'verdict') renderVerdict();
   if (name === 'attention') renderAttention();
   if (name === 'replay') renderReplay();
   window.scrollTo(0, 0);
@@ -1220,9 +1780,54 @@ $('#themebtn').addEventListener('click', () => {
   $('#themebtn').textContent = dark ? 'Dark mode' : 'Light mode';
 });
 
-/* ---- comparison ---- */
-function renderFindings() {
-  $('#findings').innerHTML = FINDINGS.slice().sort((x, y) => SEV_RANK[x.sev] - SEV_RANK[y.sev]).map((f, i) => `
+/* ---- verdict: one sentence, two figures, two reasons, one heatmap ----
+   Everything here is read from the run as the pipeline wrote it. The screen
+   formats; it does not decide which variant won, how it is worded, or which
+   findings are the headline ones. */
+function renderVerdict() {
+  $('#vd-headline').textContent = VERDICT.audienceSentence;
+
+  $('#vd-figures').innerHTML = ['a', 'b'].map(v => {
+    const c = COMPLETION[v];
+    const rate = c.completed / c.scored;
+    const inTen = Math.round(rate * 10);
+    return `<div class="figure">
+      <span class="figure-value completion-${completionBand(rate)}">${inTen}<small> in 10</small></span>
+      <span class="figure-label">${c.name}</span>
+      <span class="figure-pop">${Math.round(rate * 100)}% &middot; ${c.completed} of ${c.scored} people completed the task
+        ${v === VERDICT.preferredVariant ? '&middot; <b>the one to ship</b>' : ''}</span>
+    </div>`;
+  }).join('');
+
+  /* One or two reasons. Never three: docs/FLOW.md section 5. */
+  $('#vd-reasons').innerHTML = VERDICT.reasons.slice(0, 2)
+    .map(r => `<p class="reason"><i aria-hidden="true"></i><span>${r}</span></p>`).join('');
+
+  /* The single heatmap: the step and version the verdict turns on. */
+  const key = VERDICT.heroEvidence.variant + '-' + VERDICT.heroEvidence.step;
+  const page = $('#vd-page'), frame = $('#vd-frame');
+  page.dataset.variant = VERDICT.heroEvidence.variant;
+  page.innerHTML = PAGES[VERDICT.heroEvidence.step];
+  const boxes = aoiBoxes(frame, page);
+  const pts = resolve(FIX[key] || [], boxes);
+  $('#vd-heat').innerHTML = heatHTML(pts);
+  /* No scanpath and no numbers on this screen: the heatmap alone, plus the
+     outline of the thing nobody looked at. */
+  $('#vd-vec').innerHTML = vectorHTML(pts, { scan: false, aoi: true, boxes: { complete: boxes.complete }, active: 'complete', activeEmpty: true });
+
+  renderHeadlineFindings();
+}
+
+/* At most three findings reach this screen, in the order the pipeline ranked
+   them. The rest live on the breakdown screen. */
+function renderHeadlineFindings() {
+  const top = FINDINGS.slice().sort((x, y) => SEV_RANK[x.sev] - SEV_RANK[y.sev]).slice(0, VERDICT.headlineFindingCount);
+  $('#vd-findings').innerHTML = top.map((f, i) => findingHTML(f, i)).join('');
+}
+
+/* ---- findings (verdict screen: top three; breakdown screen: all) ---- */
+function findingHTML(f, i) {
+  return `
     <button class="finding" data-sev="${f.sev}" data-go="${f.goto}">
       <span class="rank">${i + 1}</span>
       <span>
@@ -1230,16 +1835,22 @@ function renderFindings() {
         <span class="evidence">${f.evidence}</span>
         <span class="meta">
           <span class="tag tag-${f.sev}">${f.sev}</span>
-          ${f.variant === 'both' ? '<span class="tag tag-info">both variants</span>' : `<span class="tag tag-${f.variant}">variant ${f.variant.toUpperCase()}</span>`}
-          <span class="tag tag-${f.attr}">${f.attr === 'product' ? 'product at fault' : 'automation at fault &middot; excluded'}</span>
+          ${f.variant === 'both' ? '<span class="tag tag-info">both versions</span>' : `<span class="tag tag-${f.variant}">${f.variant === 'a' ? 'current checkout' : 'redesign'}</span>`}
+          <span class="tag tag-${f.attr}">${f.attr === 'product' ? 'your checkout' : 'our simulation &middot; excluded'}</span>
           <span class="aoi">${f.aoi}</span>
         </span>
       </span>
       <span class="side">
-        <span class="microlabel">${f.n} sessions</span>
-        <span class="faint" style="font-size: var(--text-xs)">open evidence &rarr;</span>
+        <span class="microlabel">${f.n} people</span>
+        <span class="faint" style="font-size: var(--text-xs)">see the evidence &rarr;</span>
       </span>
-    </button>`).join('');
+    </button>`;
+}
+
+function renderFindings() {
+  $('#findings').innerHTML = FINDINGS.slice()
+    .sort((x, y) => SEV_RANK[x.sev] - SEV_RANK[y.sev])
+    .map((f, i) => findingHTML(f, i)).join('');
 }
 
 function renderSegments() {
@@ -1251,14 +1862,14 @@ function renderSegments() {
       mine.forEach(s => c[s[3]]++);
       const n = mine.length;
       rows.push(`<div class="segbar">
-        <span><span class="tag tag-${v}">${v.toUpperCase()}</span> ${p.name} <span class="faint">${p.device}</span></span>
+        <span><span class="tag tag-${v}">${v === 'a' ? 'current' : 'redesign'}</span> ${p.name} <span class="faint">${p.device}</span></span>
         <div class="stack">
           <i class="s" style="width:${c.success / n * 100}%"></i>
           <i class="ab" style="width:${c.abandoned / n * 100}%"></i>
           <i class="f" style="width:${c.failed / n * 100}%"></i>
           <i class="au" style="width:${c.automation / n * 100}%"></i>
         </div>
-        <span class="num faint">${c.success}/${n} success</span>
+        <span class="num faint">${c.success}/${n} completed</span>
       </div>`);
     });
   });
@@ -1350,7 +1961,7 @@ function renderAttention() {
   const pts = resolve(FIX[key] || [], boxes);
   const showHeat = $('#t-heat').checked, showScan = $('#t-scan').checked, showAoi = $('#t-aoi').checked;
 
-  /* Is the isolated area one that no agent ever fixated? That is a result. */
+  /* Is the isolated area one that nobody ever fixated? That is a result. */
   let activeEmpty = false;
   if (att.active && boxes[att.active]) {
     const b = boxes[att.active];
@@ -1363,8 +1974,8 @@ function renderAttention() {
     $('#att-heat').innerHTML = '';
     $('#att-vec').innerHTML = '';
     page.innerHTML = `<div class="empty" style="position:absolute; inset:var(--space-4); border-radius:var(--radius-md)">
-        <h2>No session reached this step on variant ${att.variant.toUpperCase()}</h2>
-        <p>There is no attention to show here, and that is the result: every scored session ended earlier.</p>
+        <h2>Nobody in your audience reached this step on variant ${att.variant.toUpperCase()}</h2>
+        <p>There is no attention to show here, and that is the result: everyone ended earlier.</p>
         <div class="actions"><button class="btn btn-sm" data-go="sessions">See where they ended</button></div>
       </div>`;
     $('#att-caption').innerHTML = '';
@@ -1378,7 +1989,7 @@ function renderAttention() {
     if (att.active) {
       caption = activeEmpty
         ? `<span class="nofix">No fixation ever landed in &ldquo;${att.active}&rdquo; on variant ${att.variant.toUpperCase()}.</span> ` +
-          `0 of ${STEPS.find(s => s.id === att.step).reach[att.variant]} agents who reached this step looked at it. Nothing is missing from the data: the area was simply never seen.`
+          `0 of ${STEPS.find(s => s.id === att.step).reach[att.variant]} people in your audience who reached this step looked at it. Nothing is missing from the data: the area was simply never seen.`
         : `Isolated to &ldquo;${att.active}&rdquo;: ${shown.length} fixations of the ${pts.length} on this step. ${caption}`;
     }
     $('#att-caption').innerHTML = caption;
@@ -1482,10 +2093,10 @@ function renderReplay() {
       <ul class="events">${s.events.map(([t, kind, what]) => `<li><span class="t">${t}</span><span><span class="kind">${kind}</span> &middot; ${what}</span></li>`).join('')}</ul>
     </div>`).join('') + `
     <div class="outcome-card">
-      <h3>Abandoned at 0:38 &middot; the product was at fault</h3>
-      <p>The agent entered payment details believing the total was $129.00, clicked a button that said &ldquo;Place order&rdquo;, and landed on a review step where the total had become $147.95. It re-read the total three times, looked for help, and left. &ldquo;Confirm purchase&rdquo; was never fixated: it sits below the fold on this viewport.</p>
+      <h3>Gave up at 0:38 &middot; your checkout was at fault, not our simulation</h3>
+      <p>This person entered their payment details believing the total was $129.00, clicked a button that said &ldquo;Place order&rdquo;, and landed on a review step where the total had become $147.95. They re-read the total three times, looked for help, and left. &ldquo;Confirm purchase&rdquo; was never looked at once: it sits below the fold on this phone.</p>
       <dl class="kv">
-        <dt>Supports findings</dt><dd><a href="#" data-go="comparison">#2 service fee revealed after payment details</a> &middot; <a href="#" data-go="comparison">#4 &ldquo;Place order&rdquo; only advances to review</a></dd>
+        <dt>Supports findings</dt><dd><a href="#" data-go="breakdown">#2 service fee revealed after the card is entered</a> &middot; <a href="#" data-go="breakdown">#4 &ldquo;Place order&rdquo; only moves to review</a></dd>
         <dt>Automation integrity</dt><dd><span class="tag tag-automation">no selector failures</span> every action resolved, so the outcome is the product&rsquo;s and not the harness&rsquo;s</dd>
         <dt>Reproduce</dt><dd class="mono">personavision replay runs/2026-10-24-1402-northwind-demo/sessions/S-15.json</dd>
       </dl>
@@ -1500,8 +2111,9 @@ $('#rp-next').addEventListener('click', () => { rpFix = Math.min(REPLAY.fixation
 renderFindings();
 renderSegments();
 renderSessions();
-go(location.hash ? location.hash.slice(1) : 'comparison');
+go(location.hash ? location.hash.slice(1) : 'verdict');
 window.addEventListener('resize', () => {
+  if (!$('#screen-verdict').hidden) renderVerdict();
   if (!$('#screen-attention').hidden) renderAttention();
   if (!$('#screen-replay').hidden) renderReplay();
 });
