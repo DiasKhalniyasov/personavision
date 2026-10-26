@@ -103,6 +103,15 @@ describe('toScreenshotEntries', () => {
   it('records no row for a screen whose image was never written', () => {
     expect(toScreenshotEntries([capture({ screenshot: null })])).toEqual([]);
   });
+
+  it('records one row for a screen a dozen sessions all captured', () => {
+    const sessions = Array.from({ length: 12 }, () => capture());
+
+    expect(toScreenshotEntries([...sessions, capture({ variant: 'B' })])).toEqual([
+      expect.objectContaining({ variant: 'A', step: 'cart' }),
+      expect.objectContaining({ variant: 'B', step: 'cart' }),
+    ]);
+  });
 });
 
 describe('toAoiEntries', () => {
@@ -174,6 +183,22 @@ describe('toAoiEntries', () => {
 
   it('records an area for a screen that was measured but never pictured', () => {
     expect(toAoiEntries([capture({ screenshot: null })])).toHaveLength(1);
+  });
+
+  it('records one area however many sessions saw it, and keeps the two screens apart', () => {
+    const onCart = capture();
+    const onPayment = capture({
+      step: 'payment',
+      screenshot: 'screenshots/A/payment.png',
+      // An element id is minted from the element and not from the screen, so the same
+      // control at the same box on the next step arrives with the same id.
+      elements: [element()],
+    });
+
+    expect(toAoiEntries([onCart, capture(), onPayment]).map((aoi) => [aoi.step, aoi.id])).toEqual([
+      ['cart', 'e-0123456789ab'],
+      ['payment', 'e-0123456789ab'],
+    ]);
   });
 });
 

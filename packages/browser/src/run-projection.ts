@@ -12,6 +12,13 @@
  * order and adds the regions a segmenter explains, and it needs the elements as the browser
  * found them to do it.
  *
+ * **One screen is one row, and one area is one row.** A swarm sends a dozen sessions over
+ * the same variant, and each of them captures the same screens: the captures arriving here
+ * are therefore repetitive, while `run.json` records each screen and each area once — that
+ * is what makes an area's metrics aggregable across sessions. A repeat is dropped rather
+ * than merged, because a screen is one image file and an area is one box: the first capture
+ * of a screen is the one its row describes.
+ *
  * **A capture with no step is projected nowhere.** A screenshot row and an area of interest
  * are both addressed by variant *and* step: that is how the Attention screen finds the
  * image it draws on and how metrics are aggregated across sessions. A screen the task does
@@ -48,45 +55,71 @@ const firstNonBlank = (...values: readonly (string | null)[]): string | null =>
 const labelFor = (element: CaptureElement): string =>
   firstNonBlank(element.name, element.text, element.role) ?? element.id;
 
+/** What addresses one screen, and what addresses one area on it, as `run.json` does. */
+const screenKey = (variant: string, step: string): string => `${variant}\u0000${step}`;
+const areaKey = (variant: string, step: string, id: string): string =>
+  `${screenKey(variant, step)}\u0000${id}`;
+
+/** The entries of `rows` whose key has not been seen before, in the order they arrived. */
+const firstOfEach = <T>(rows: readonly T[], keyOf: (row: T) => string): T[] => {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = keyOf(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /** `run.json`'s `screenshots`: one row per captured screen, with its geometry. */
 export const toScreenshotEntries: ToScreenshotEntries = (captures) =>
-  captures.filter(onAStep).flatMap((capture) =>
-    // A row is a pointer at an image. A capture that wrote none — an unknown step, or a
-    // source that measured a page without picturing it — is a row the screens could not
-    // draw, so it is left out rather than recorded against a file that is not there.
-    capture.screenshot === null
-      ? []
-      : [
-          {
-            variant: capture.variant,
-            step: capture.step,
-            path: capture.screenshot,
-            viewport: { width: capture.viewport.width, height: capture.viewport.height },
-            pageHeight: capture.pageHeight,
-            foldY: capture.foldY,
-          },
-        ],
+  firstOfEach(
+    captures.filter(onAStep).flatMap((capture) =>
+      // A row is a pointer at an image. A capture that wrote none — a source that measured
+      // a page without picturing it — is a row the screens could not draw, so it is left
+      // out rather than recorded against a file that is not there.
+      capture.screenshot === null
+        ? []
+        : [
+            {
+              variant: capture.variant,
+              step: capture.step,
+              path: capture.screenshot,
+              viewport: { width: capture.viewport.width, height: capture.viewport.height },
+              pageHeight: capture.pageHeight,
+              foldY: capture.foldY,
+            },
+          ],
+    ),
+    (row) => screenKey(row.variant, row.step),
   );
 
 /** `run.json`'s `aois`: the DOM- and accessibility-sourced areas of interest. */
 export const toAoiEntries: ToAoiEntries = (captures) =>
-  captures.filter(onAStep).flatMap((capture) =>
-    capture.elements.map((element) => ({
-      id: element.id,
-      variant: capture.variant,
-      step: capture.step,
-      label: labelFor(element),
-      source: element.source,
-      role: element.role,
-      // Copied field by field: the box in the artifact is the four numbers the contract
-      // declares, and nothing an extractor hung on its own box travels with it.
-      bbox: {
-        x: element.bbox.x,
-        y: element.bbox.y,
-        width: element.bbox.width,
-        height: element.bbox.height,
-      },
-      isPrimaryAction: element.isPrimaryAction,
-      belowFold: element.belowFold,
-    })),
+  firstOfEach(
+    captures.filter(onAStep).flatMap((capture) =>
+      capture.elements.map((element) => ({
+        id: element.id,
+        variant: capture.variant,
+        step: capture.step,
+        label: labelFor(element),
+        source: element.source,
+        role: element.role,
+        // Copied field by field: the box in the artifact is the four numbers the contract
+        // declares, and nothing an extractor hung on its own box travels with it.
+        bbox: {
+          x: element.bbox.x,
+          y: element.bbox.y,
+          width: element.bbox.width,
+          height: element.bbox.height,
+        },
+        isPrimaryAction: element.isPrimaryAction,
+        belowFold: element.belowFold,
+      })),
+    ),
+    // An element id is minted from what the element is and not from which screen it is on
+    // (`extract/stable-id.ts`), so the screen is part of the key here: the same control at
+    // the same box on two steps is two areas, and the same control seen by two sessions on
+    // one step is one.
+    (row) => areaKey(row.variant, row.step, row.id),
   );

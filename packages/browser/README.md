@@ -117,7 +117,8 @@ of its own):
 - `test/screenshot.test.ts` — the written PNG, read back from the run directory: its path,
   that it covers the whole document at the device's pixels, and that one screen is one file.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
-  example run and parsed by `@personavision/contract`. No browser.
+  example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
+  captured is one row. No browser.
 
 No test asserts a Playwright internal. `test/fixture-site.test.ts` holds the fixture site to
 its own record and needs no browser at all.
