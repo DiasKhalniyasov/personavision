@@ -133,6 +133,19 @@ describe('fixation duration', () => {
     expect(scanning / reading).toBeLessThan(predicted * 1.02);
   });
 
+  it('loses only a tail to the lower clamp, even for the shortest-fixating persona', () => {
+    const { medianMs, minMs } = defaultEngineConfig.fixationDuration;
+    const scanning = overSeeds((rng) => drawFixationDurationMs(SCANNING, rng));
+    const clamped = scanning.filter((duration) => duration === minMs);
+    const predicted = medianMs * SCANNING.fixationDurationScale;
+
+    // The module documents this share: a scanning median 1.9 sigma above `minMs`.
+    expect(clamped.length / scanning.length).toBeGreaterThan(0.02);
+    expect(clamped.length / scanning.length).toBeLessThan(0.04);
+    // Enough to move the median by well under a millisecond, so the table's ratio holds.
+    expect(Math.abs(median(scanning) - predicted)).toBeLessThan(1);
+  });
+
   it('rises when the configured median rises, with no code change', () => {
     const { config } = resolveEngineConfig({ fixationDuration: { medianMs: 500 } });
     const longer = median(overSeeds((rng) => drawFixationDurationMs(MIDDLING_PARAMS, rng, config)));
@@ -151,10 +164,23 @@ describe('fixation duration', () => {
 describe('saccades', () => {
   const amplitudes = overSeeds((rng) => drawSaccadeAmplitudePx(rng));
 
-  it('draws positive amplitudes inside the documented five-sigma band', () => {
+  it('draws positive amplitudes inside the bound the generator imposes', () => {
     const { medianPx, logSigma } = defaultEngineConfig.saccade.amplitude;
-    expect(Math.min(...amplitudes)).toBeGreaterThan(medianPx * Math.exp(-5 * logSigma));
-    expect(Math.max(...amplitudes)).toBeLessThan(medianPx * Math.exp(5 * logSigma));
+    /**
+     * Box-Muller over a generator whose smallest non-zero value is 2⁻³² cannot return a
+     * normal beyond this, so the band is structural: it holds for any sample size, unlike
+     * a sigma band, which a larger sample eventually leaves.
+     */
+    const maxZ = Math.sqrt(-2 * Math.log(2 ** -32));
+    expect(Math.min(...amplitudes)).toBeGreaterThan(medianPx * Math.exp(-maxZ * logSigma));
+    expect(Math.max(...amplitudes)).toBeLessThan(medianPx * Math.exp(maxZ * logSigma));
+
+    const threeSigma = amplitudes.filter(
+      (amplitudePx) =>
+        amplitudePx > medianPx * Math.exp(-3 * logSigma) &&
+        amplitudePx < medianPx * Math.exp(3 * logSigma),
+    );
+    expect(threeSigma.length / amplitudes.length).toBeGreaterThan(0.99);
     expect(median(amplitudes)).toBeGreaterThan(medianPx * 0.97);
     expect(median(amplitudes)).toBeLessThan(medianPx * 1.03);
   });
@@ -216,12 +242,36 @@ describe('inter-fixation timing', () => {
     }
   });
 
-  it('has a median gap near the configured gap when the saccade is shorter than it', () => {
-    const gaps = overSeeds((rng) => nextFixationStart({ tMs: 0, durationMs: 200 }, 10, rng).gapMs);
+  it('has a median gap near the configured gap when the saccade is the shortest one', () => {
+    // The shortest duration the relationship can return, rather than a number it cannot.
+    const shortest = saccadeDurationMsFor(0);
+    const gaps = overSeeds(
+      (rng) => nextFixationStart({ tMs: 0, durationMs: 200 }, shortest, rng).gapMs,
+    );
     const { gapMs } = defaultEngineConfig.interFixation;
 
     expect(median(gaps)).toBeGreaterThan(gapMs * 0.97);
     expect(median(gaps)).toBeLessThan(gapMs * 1.03);
+  });
+
+  it('is truncated by the floor on realistic saccades, which calibration has to know', () => {
+    const { gapMs, minGapMs } = defaultEngineConfig.interFixation;
+    const drawn = overSeeds((rng) => {
+      const saccadeMs = saccadeDurationMsFor(drawSaccadeAmplitudePx(rng));
+      return {
+        saccadeMs,
+        gapMs: nextFixationStart({ tMs: 0, durationMs: 200 }, saccadeMs, rng).gapMs,
+      };
+    });
+    const floored = drawn.filter((gap) => gap.gapMs <= gap.saccadeMs + minGapMs + 1e-9);
+
+    // Documented in the module: the floor binds for roughly two gaps in five…
+    expect(floored.length / drawn.length).toBeGreaterThan(0.3);
+    expect(floored.length / drawn.length).toBeLessThan(0.45);
+    // …and lifts the realized mean above the configured gap rather than onto it.
+    const realized = mean(drawn.map((gap) => gap.gapMs));
+    expect(realized).toBeGreaterThan(gapMs);
+    expect(realized).toBeLessThan(gapMs * 1.2);
   });
 
   it('widens every gap when the configured gap rises, with no code change', () => {
@@ -282,6 +332,24 @@ describe('landing point', () => {
     const base = overSeeds((rng) => drawLandingPoint(PAGE, rng).x);
 
     expect(standardDeviation(wider)).toBeGreaterThan(standardDeviation(base) * 1.5);
+  });
+
+  it('stays on the page for a box that hangs off the left edge', () => {
+    const offLeft: BoundingBox = { x: -40, y: 300, width: 120, height: 40 };
+    const points = overSeeds((rng) => drawLandingPoint(offLeft, rng));
+
+    // Strictly inside the box, and never a negative coordinate the artifact would reject.
+    expect(points.every(insideOf(offLeft))).toBe(true);
+    expect(Math.min(...points.map((point) => point.x))).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...points.map((point) => point.x))).toBeLessThan(offLeft.x + offLeft.width);
+  });
+
+  it('collapses to the page edge for a box with nothing on the page', () => {
+    const offPage: BoundingBox = { x: -200, y: -80, width: 100, height: 40 };
+    const point = drawLandingPoint(offPage, createSeededRandom(5));
+
+    // No interior a session can record: a fixation's coordinates are never negative.
+    expect(point).toEqual({ x: 0, y: 0 });
   });
 
   it('returns the box origin on an axis with no extent to land in', () => {

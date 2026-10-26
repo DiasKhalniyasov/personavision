@@ -89,8 +89,14 @@ const logNormal = (medianValue: number, logSigma: number, rng: () => number): nu
  * `detailOrientation` and `patience` twice (see `packages/engine/src/persona.ts`).
  *
  * Clamped to `[minMs, maxMs]`, so no seed and no trait combination yields a fixation of
- * zero length or one that lasts a second and a half. The clamp bites in the tails only,
- * well beyond two sigma on the defaults, and therefore does not move the median.
+ * zero length or one that lasts a second and a half. On the defaults the clamp is a tail
+ * effect, but not a negligible one for every persona: a reading persona loses a draw in a
+ * thousand to it, while a scanning persona's 187.5 ms median sits only 1.9 sigma above
+ * `minMs` and about 3% of its draws clamp. That moves the scanning median by well under a
+ * millisecond — 186.7 ms measured against the 187.5 ms the median predicts — so the ratio
+ * between the two personas is still the one the persona-trait table states. Raising
+ * `logSigma` or `minMs` moves that figure, which is why it is measured in the suite rather
+ * than asserted as exact.
  */
 export const drawFixationDurationMs = (
   persona: PersonaSamplingParams,
@@ -106,9 +112,10 @@ export const drawFixationDurationMs = (
  * How far one saccade jumps, in pixels. Two rng values.
  *
  * Log-normal again, and for the same reason: most jumps are short, a few cross the page.
- * The value is always positive, and over many seeds stays inside
- * `medianPx · exp(±5·logSigma)` — the five-sigma band, which on the defaults is 9 px to
- * 3615 px.
+ * The value is always positive, and it is **bounded** rather than merely improbable: the
+ * generator's smallest non-zero value caps the normal at `|z| ≤ 6.66`, so a draw always
+ * lands inside `medianPx · exp(±6.66·logSigma)` — 3 px to 9800 px on the defaults — and
+ * over many seeds 99% of draws sit in the three-sigma band, 30 px to 1090 px.
  *
  * The sampler does not need this to time a saccade between two fixations it has already
  * placed: there the amplitude is the distance between the two landing points, geometry
@@ -153,6 +160,13 @@ export const saccadeDurationMsFor = (
  * `saccadeDurationMs / gapMs` is always a share strictly between zero and one, and
  * because the gap and the fixation's duration are both positive, `tMs` is strictly
  * increasing along a session.
+ *
+ * The floor is not a rare correction on the defaults: with amplitudes drawn from the
+ * configured distribution it binds for roughly two gaps in five and lifts the mean gap to
+ * about 44 ms against a configured 40 ms. That truncation is the point of the floor — a
+ * 120 ms saccade cannot happen inside a 40 ms gap — but it means the realized gaps are not
+ * the normal, so calibration (#11) fitting `gapMs` fits it against the realized
+ * distribution, which the suite measures, rather than against the normal alone.
  */
 export const nextFixationStart = (
   previous: FixationClock,
@@ -182,6 +196,14 @@ export const nextFixationStart = (
  * on an axis has no interior to land in, and the box's own coordinate is returned on that
  * axis.
  *
+ * Page space starts at the top-left of the page, but a box's origin does not: an element
+ * off the left or top edge has a negative `x` or `y` (see `../types.ts`), while a
+ * fixation's coordinates in the run artifact are `pixels`, never negative. So the drawable
+ * interval on each axis is the inset interval **intersected with the page**, which is also
+ * the physically honest answer: no one looks at a pixel that is not on the page. A box with
+ * nothing on the page at all has no interior a session can record, and the page edge — 0 —
+ * is returned on that axis; the sampler should not be handing one over.
+ *
  * No persona scaling: nothing in the persona-trait table says where within an element a
  * given agent looks, and inventing a row here would be a number calibration has no data
  * to fit.
@@ -194,10 +216,13 @@ export const drawLandingPoint = (
   const { spreadShare, minInsetPx } = config.landing;
 
   const onAxis = (origin: number, extent: number, z: number): number => {
-    if (extent <= 0) return origin;
+    if (extent <= 0) return Math.max(origin, 0);
     const inset = Math.min(minInsetPx, extent / 4);
     const centre = origin + extent / 2;
-    return clamp(centre + z * (extent / 2) * spreadShare, origin + inset, origin + extent - inset);
+    const low = Math.max(origin + inset, 0);
+    const high = Math.max(origin + extent - inset, 0);
+    /** `clamp` returns `high` when the box is wholly off the page and `low` exceeds it. */
+    return clamp(centre + z * (extent / 2) * spreadShare, low, high);
   };
 
   /**
