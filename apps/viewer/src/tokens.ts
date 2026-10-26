@@ -1,10 +1,12 @@
 /**
- * The score-band thresholds, read from the design tokens at runtime.
+ * The band thresholds, read from the design tokens at runtime.
  *
- * `docs/design/tokens.css` declares `--score-threshold-good` and `--score-threshold-bad`.
+ * `docs/design/tokens.css` declares `--score-threshold-good` and `--score-threshold-bad`
+ * for the friction score, and `--completion-threshold-good` and
+ * `--completion-threshold-bad` for the share of the audience that finished the task.
  * Nothing in this app may restate those numbers: a screen that wants to know which band a
- * friction score falls in asks here, so that moving a threshold in the tokens moves the
- * product and a screen cannot quietly disagree with the stylesheet.
+ * figure falls in asks here, so that moving a threshold in the tokens moves the product and
+ * a screen cannot quietly disagree with the stylesheet.
  */
 
 /** The bands `docs/design/tokens.css` names with its `--score-*` colours. */
@@ -45,16 +47,36 @@ export function readScoreThreshold(threshold: ScoreThreshold): number {
 }
 
 /**
+ * The completion thresholds: the share of the audience, 0..1, at or above which the
+ * audience gets through, and at or below which it does not. The Verdict screen leads with
+ * that figure (`docs/FLOW.md` section 5), and 0.6 and 0.3 are never written in a screen.
+ */
+const COMPLETION_TOKEN = {
+  good: '--completion-threshold-good',
+  bad: '--completion-threshold-bad',
+} as const;
+
+/** Which end of the completion scale a threshold bounds. */
+export type CompletionThreshold = keyof typeof COMPLETION_TOKEN;
+
+/** The value of a completion threshold as the cascade currently resolves it. */
+export function readCompletionThreshold(threshold: CompletionThreshold): number {
+  return numericToken(getComputedStyle(document.documentElement), COMPLETION_TOKEN[threshold]);
+}
+
+/**
  * Throws unless `docs/design/tokens.css` has reached the page.
  *
- * Both thresholds are checked, not one sentinel: a stylesheet that loaded but no longer
- * declares a threshold has to fail at boot, where the message can name the file, rather
- * than at the first score somebody tries to band.
+ * All four thresholds are checked, not one sentinel: a stylesheet that loaded but no longer
+ * declares one of them has to fail at boot, where the message can name the file, rather
+ * than at the first figure somebody tries to band.
  */
 export function assertTokensLoaded(): void {
   const style = getComputedStyle(document.documentElement);
   numericToken(style, THRESHOLD_TOKEN.good);
   numericToken(style, THRESHOLD_TOKEN.bad);
+  numericToken(style, COMPLETION_TOKEN.good);
+  numericToken(style, COMPLETION_TOKEN.bad);
 }
 
 /**

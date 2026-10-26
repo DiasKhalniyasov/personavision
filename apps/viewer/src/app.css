@@ -30,20 +30,32 @@ h2,
 h3,
 h4 {
   margin: var(--space-0);
+  color: var(--color-heading);
+  font-family: var(--font-display);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-snug);
+}
+
+/* An occasional editorial headline, where a section wants a quieter voice. */
+.editorial {
+  font-family: var(--font-editorial);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
 }
 
 p {
   margin: var(--space-0);
 }
 
+/* Lime is the action colour and cannot be read as text on white, which is why a
+   link is teal. */
 a {
-  color: var(--color-accent);
+  color: var(--color-link);
   text-decoration: none;
 }
 
 a:hover {
+  color: var(--color-link-hover);
   text-decoration: underline;
 }
 

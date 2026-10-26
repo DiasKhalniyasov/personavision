@@ -1,0 +1,153 @@
+/* =============================================================================
+   The Tailwind theme, mapped onto `docs/design/tokens.css`.
+
+   Tailwind ships a palette, a type scale, radii, shadows, leading and tracking
+   under the same names the tokens use, with different values. Those namespaces
+   are cleared below, so the tokens file stays the single source of visual truth
+   and a shadcn primitive inherits the direction with no restyling: a token edit
+   still moves the whole product.
+
+   Nothing here declares a custom property of its own. Every value is a
+   `var(--…)` reference, in one of two kinds of block:
+
+   - `@theme reference` holds the names the tokens already declare — the radius
+     scale, the type scale, the four families, the shadows, leading, tracking.
+     Tailwind emits no variable for a reference theme, so `rounded-xl` compiles
+     to `border-radius: var(--radius-xl)` and reads the token where it is used,
+     dark mode included.
+   - `@theme inline` holds the names shadcn's primitives ask for that the tokens
+     do not use — `primary`, `muted`, `ring`. Their values are inlined into the
+     utilities, so `bg-primary` compiles to `background-color: var(--color-accent)`
+     and again no variable of this app's own reaches the document.
+
+   `tests/theme.test.ts` asserts both of those against a production build: the
+   app adds no declaration of a token's name, and every mapped value is a
+   `var(--…)`.
+   ========================================================================== */
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@source '../**/*.{ts,tsx}';
+
+@theme {
+  /* Tailwind's own values for the namespaces the tokens own. Cleared rather
+     than overridden: an uncleared namespace re-declares `--font-sans`,
+     `--text-lg`, `--radius-xl` and `--shadow-sm` in `:root` after the tokens
+     file has, and the product would quietly render in Tailwind's defaults. */
+  --color-*: initial;
+  --text-*: initial;
+  --font-*: initial;
+  --font-weight-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --ease-*: initial;
+}
+
+@theme reference {
+  /* The four type roles of `docs/FLOW.md` section 10. */
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-editorial: var(--font-editorial);
+
+  --text-2xs: var(--text-2xs);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-display-sm: var(--text-display-sm);
+  --text-display: var(--text-display);
+  --text-score: var(--text-score);
+  --text-figure: var(--text-figure);
+
+  --leading-tight: var(--leading-tight);
+  --leading-snug: var(--leading-snug);
+  --leading-normal: var(--leading-normal);
+  --leading-relaxed: var(--leading-relaxed);
+
+  --tracking-tighter: var(--tracking-tighter);
+  --tracking-tight: var(--tracking-tight);
+  --tracking-wide: var(--tracking-wide);
+
+  /* 20 / 16 / 12 / 8 / 4, and fully rounded for every button, chip and tag. */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --color-border: var(--color-border);
+}
+
+@theme inline {
+  /* The 4px scale the tokens are built on, so `p-4` is `--space-4`. */
+  --spacing: var(--space-1);
+
+  /* Display weights are 400 / 600 / 800; body, buttons and forms 400 / 500 / 700. */
+  --font-weight-regular: var(--weight-regular);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-bold);
+  --font-weight-extrabold: var(--weight-extrabold);
+
+  /* shadcn's colour roles. `primary` is the lime action colour with dark fir
+     text, and `secondary` is the tint a primitive hovers and selects on — the
+     lime-tinted panel, never the action colour itself.
+
+     There is deliberately no `accent` role here: that is the tokens' own name
+     for the lime, and a Tailwind theme entry of that name is declared in the
+     document, where it would shadow the token the whole product reads. The
+     registry's `accent` classes are therefore this product's `secondary`, and
+     `tests/theme.test.ts` asserts that no token's name is declared twice. */
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface-raised);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-on-accent);
+  --color-secondary: var(--color-accent-soft);
+  --color-secondary-foreground: var(--color-heading);
+  --color-muted: var(--color-surface-sunken);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-destructive: var(--sev-critical);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-focus);
+
+  /* The direction uses no black and no bare white: a primitive asking for one
+     gets the dark fir band and the colour that reads on it. */
+  --color-black: var(--color-canvas-dark);
+  --color-white: var(--color-on-canvas-dark);
+
+  --shadow-xs: var(--shadow-sm);
+
+  /* The one pulse of section 10, so a skeleton and a live badge share it and the tokens'
+     reduced-motion block flattens both. `pv-pulse` is declared in the tokens file. */
+  --animate-pulse: pv-pulse var(--pulse-duration) var(--ease) infinite;
+
+  /* One transition for hover and state changes, and it is the only one most of
+     the product has — so every ease utility resolves to the same token. */
+  --ease-in: var(--ease);
+  --ease-out: var(--ease);
+  --ease-in-out: var(--ease);
+
+  --default-transition-duration: var(--duration-base);
+  --default-transition-timing-function: var(--ease);
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+}

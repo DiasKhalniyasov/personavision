@@ -26,8 +26,15 @@ export interface RunArtifact {
   findings: Findings;
 }
 
-/** The layout again, addressed relatively, for the `file` of a violation. */
-const relative = runPaths('');
+/**
+ * The layout again, addressed relatively, for the `file` of a violation.
+ *
+ * Annotated pure so that a bundler can drop this module, and the `node:fs` reader with it,
+ * from a build that only wants the schemas: `apps/viewer` imports this package in the
+ * browser for the field names, and a call left at the top level would keep the reader in
+ * its bundle (`apps/viewer/tests/contract-in-the-browser.test.ts`).
+ */
+const relative = /* @__PURE__ */ runPaths('');
 
 const pointer = (path: ReadonlyArray<PropertyKey>): string =>
   path.map((segment) => `/${String(segment).replace(/~/g, '~0').replace(/\//g, '~1')}`).join('');
