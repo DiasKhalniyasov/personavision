@@ -99,6 +99,17 @@ const EXPECTED_LEAF_KEYS = [
   'salience.weights.relativeArea',
   'salience.weights.rolePrior',
   'salience.weights.topBias',
+  'segmentation.background.bucketLevels',
+  'segmentation.background.colourDistance',
+  'segmentation.background.luminanceDistance',
+  'segmentation.cellPx',
+  'segmentation.maxRegions',
+  'segmentation.minAreaShare',
+  'segmentation.minAspectRatio',
+  'segmentation.minRectangularity',
+  'segmentation.minSidePx',
+  'segmentation.similarity.colourDistance',
+  'segmentation.similarity.luminanceDistance',
 ].sort();
 
 describe('the configuration object', () => {

@@ -1,5 +1,6 @@
 import type { Aoi } from '../aggregate.js';
 import type { BoundingBox, Capture } from '../types.js';
+import { heuristicSegmenter } from './heuristic-segmenter.js';
 
 /**
  * The `Segmenter` seam: the areas of interest the capture's elements do **not** explain.
@@ -37,6 +38,15 @@ export interface SegmenterInput {
    * segmenter that opens the image resolves it against the run directory itself.
    */
   readonly capture: Capture;
+  /**
+   * The variant id, exactly as `run.json`'s `variants[].id` spells it.
+   *
+   * A region's id has to carry it: `aoiMetrics` joins on the id alone, so the same card
+   * grid on variant A and variant B must not mint the same id. A capture is per step and
+   * says nothing about the variant, which is why `buildAois` passes it on here rather than
+   * leaving a segmenter to guess it from a screenshot path.
+   */
+  readonly variant: string;
   /**
    * The areas the capture's elements explain, in the order `buildAois` emits them. A
    * segmenter returns regions for what is *left*: #66 keeps its regions from overlapping
@@ -84,11 +94,15 @@ export interface Segmenter {
 export const noSegmenter: Segmenter = { segment: () => [] };
 
 /**
- * The segmenter `buildAois` uses when the caller names none.
+ * The segmenter `buildAois` uses when the caller names none: the offline heuristic one
+ * (#66), with the engine's default thresholds.
  *
- * This is the seam #66 fills: that ticket replaces the value below with its offline
- * heuristic segmenter, in one line, and `buildAois` needs no change. Until then the
- * default segments nothing — an engine with no segmenter attributes attention to the
- * elements it can actually name, which is a smaller answer and never a fabricated one.
+ * It is the default because it needs no credential and no network, so a cold clone builds
+ * the same areas CI and the demo do. It is constructed with no run directory, which means
+ * it finds the screenshot only when `capture.screenshot` is already absolute; a caller
+ * that holds the run directory builds its own with `heuristicSegmenter({ runDir })`, and
+ * one that wants no segmentation at all passes `noSegmenter`. Either way the seam's first
+ * rule holds: a screenshot this cannot open is a screen with fewer areas on it, never a
+ * failed run.
  */
-export const defaultSegmenter: Segmenter = noSegmenter;
+export const defaultSegmenter: Segmenter = heuristicSegmenter();

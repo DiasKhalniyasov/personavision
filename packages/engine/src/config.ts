@@ -54,6 +54,43 @@ export interface GoalVerbRoleWeights {
   readonly prose: number;
 }
 
+/**
+ * What the offline heuristic segmenter (#66) partitions the unexplained area by.
+ *
+ * Every number that changes *which* regions a screen yields is here, because #11 fits
+ * them: the analysis grid, how far a cell's colour must sit from the page background to
+ * count as ink at all, how close two neighbouring cells must be to belong to one region,
+ * and the four filters that throw a candidate away. What a region is *called* is not here
+ * — a label is words, not a quantity, and `heuristic-segmenter.ts` keeps its naming grid
+ * as documented constants rather than offering calibration a knob that fits nothing.
+ */
+export interface SegmentationConfig {
+  /** The analysis grid: one cell is this many page pixels on a side. */
+  readonly cellPx: number;
+  /** How far from the page background a cell must sit to be ink rather than paper. */
+  readonly background: {
+    /** Levels per channel when the background colour is estimated by its modal bucket. */
+    readonly bucketLevels: number;
+    readonly luminanceDistance: number;
+    readonly colourDistance: number;
+  };
+  /** How close a cell must be to its region's seed cell to join it. Either bound fails it. */
+  readonly similarity: {
+    readonly luminanceDistance: number;
+    readonly colourDistance: number;
+  };
+  /** The smallest region worth reporting, as a share of the viewport's area. */
+  readonly minAreaShare: number;
+  /** …and in page pixels on its shorter side, so a hairline never passes on area alone. */
+  readonly minSidePx: number;
+  /** `min(width, height) / max(width, height)`: below this a region is a sliver. */
+  readonly minAspectRatio: number;
+  /** Cells in the region over cells in its rectangle: below this it is not a rectangle. */
+  readonly minRectangularity: number;
+  /** At most this many regions from one screen, largest first, so a busy page cannot explode. */
+  readonly maxRegions: number;
+}
+
 export interface EngineConfig {
   /** `P(area) ∝ exp(alpha·salience + beta·relevance + gamma·history)` — #7, user story 7. */
   readonly alpha: number;
@@ -169,6 +206,9 @@ export interface EngineConfig {
     readonly screenPersistenceScale: TraitResponse;
     readonly verificationScale: TraitResponse;
   };
+
+  /** The offline heuristic segmenter's thresholds. */
+  readonly segmentation: SegmentationConfig;
 }
 
 /** A partial configuration, to any depth: what a run's `engine.weights` is one of. */
@@ -266,6 +306,24 @@ export const defaultEngineConfig: EngineConfig = {
     rolePriorScale: { atZero: 0.8, atOne: 1.4 },
     screenPersistenceScale: { atZero: 0.7, atOne: 1.5 },
     verificationScale: { atZero: 1.4, atOne: 0.7 },
+  },
+
+  segmentation: {
+    // Four page pixels: fine enough that a card's edge lands on a cell boundary rather
+    // than inside one, coarse enough that a full-page screenshot is a few hundred
+    // thousand cells.
+    cellPx: 4,
+    // A 16-level bucket is wide enough that a near-white page is one colour and narrow
+    // enough that a card is not the same colour as the paper it sits on.
+    background: { bucketLevels: 16, luminanceDistance: 16, colourDistance: 20 },
+    // Tighter than the background bounds on purpose: a cell that is half card and half
+    // paper is ink, but it is not the card, so a region's edge stops at whole cells.
+    similarity: { luminanceDistance: 12, colourDistance: 16 },
+    minAreaShare: 0.01,
+    minSidePx: 24,
+    minAspectRatio: 0.12,
+    minRectangularity: 0.75,
+    maxRegions: 12,
   },
 };
 

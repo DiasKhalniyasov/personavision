@@ -12,10 +12,19 @@
 export { aggregate } from './aggregate.js';
 export type { Aoi, AoiMetric } from './aggregate.js';
 
-export { aoiId, buildAois, defaultSegmenter } from './aois/index.js';
+export {
+  aoiId,
+  buildAois,
+  defaultSegmenter,
+  heuristicSegmenter,
+  noSegmenter,
+} from './aois/index.js';
 export type {
   AoiIdentity,
   BuildAoisInput,
+  HeuristicSegmenterOptions,
+  ImageReader,
+  RasterImage,
   SegmentedArea,
   Segmenter,
   SegmenterInput,
@@ -28,6 +37,7 @@ export type {
   GoalVerbRoleWeights,
   ResolvedEngineConfig,
   RolePriors,
+  SegmentationConfig,
   TraitResponse,
 } from './config.js';
 
