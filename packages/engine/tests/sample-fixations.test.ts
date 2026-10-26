@@ -128,6 +128,35 @@ describe('sampleFixations is deterministic', () => {
     expect(JSON.stringify(other)).not.toBe(JSON.stringify(first));
   });
 
+  it('answers the same bytes whatever order the areas arrive in', () => {
+    const reversed = [...PRICE_SCREEN].reverse();
+    const given = sampleFixations({ ...input, seed: 4242 });
+    const shuffled = sampleFixations({ ...input, aois: reversed, seed: 4242 });
+
+    expect(JSON.stringify(shuffled)).toBe(JSON.stringify(given));
+  });
+
+  it('reads a salience value that is not a number as no salience at all', () => {
+    const areas = uniformAreas(4);
+    /**
+     * A `NaN` through `exp` would make every weight on the screen `NaN`, and the draw
+     * would stop choosing between the areas at all. It scores zero instead, which is what
+     * an unscored area scores.
+     */
+    const broken = new Map(flatSalience(areas));
+    broken.set(areas[2].id, Number.NaN);
+    const zeroed = new Map(flatSalience(areas));
+    zeroed.set(areas[2].id, 0);
+
+    const screen = (salience: ReadonlyMap<string, number>) =>
+      sampleFixations({ aois: areas, goal: INDIFFERENT, persona: MIDDLING, salience, seed: 7 });
+
+    expect(JSON.stringify(screen(broken))).toBe(JSON.stringify(screen(zeroed)));
+    expect(
+      new Set(screen(broken).fixations.map((fixation) => fixation.aoiId)).size,
+    ).toBeGreaterThan(1);
+  });
+
   it('answers the same bytes in a second process', () => {
     /** No `salience` map: the input has to cross a process boundary as JSON. */
     const crossProcess: SampleFixationsInput = {

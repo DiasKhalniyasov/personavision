@@ -228,7 +228,10 @@ The run loop does not spend the persistence row again on its own decision to lea
 duration is `drawFixationDurationMs`, and `dwellScale` scales a look at an area that already
 has a fixation behind it this session, which is where an area's dwell accumulates; the first
 look at an area is the duration draw unscaled, so the duration row and the dwell row are
-never counted on the same number.
+never counted on the same number. The count is the persona's and not a draw, so
+`fixationsPerScreen.logSigma` is the one leaf of that group nothing reads yet: spending it
+needs a normal draw `src/sampling/distributions.ts` does not publish, so it is named on
+#67 rather than fitted blind by calibration.
 
 **Inhibition of return** is `src/sampling/history.ts`, beside the sampler because it is a
 property of the sequence rather than a static term. Two mechanisms, both parameterised under
@@ -253,8 +256,8 @@ revisit further out; it does not change which areas the cap holds.
 **Determinism.** One `createSeededRandom`, threaded through every draw and consumed in a
 fixed order: per fixation the area (1 value), its duration (2), its landing point (4), then
 the gap to the next fixation (2). Nothing reaches for the platform's unseeded generator,
-nothing decides anything by iterating a map's keys, and nothing depends on the order the
-areas arrive in beyond the ids themselves. `tests/sample-fixations.test.ts` holds the same
+nothing decides anything by iterating a map's keys, and the areas are sorted by id before
+any of it, so the order a caller hands them over in cannot change a scanpath. `tests/sample-fixations.test.ts` holds the same
 input to the same bytes in this process and in a second one, each weight to its documented
 direction, the sequence properties above, and the empty screen and the one-area screen.
 

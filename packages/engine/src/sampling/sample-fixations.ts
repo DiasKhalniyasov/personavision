@@ -31,8 +31,8 @@
  * threaded through every draw, consumed in a fixed order: for each fixation the area
  * (one value), its duration (two), its landing point (four), and then the gap to the next
  * fixation (two). Nothing here reaches for the platform's unseeded generator, nothing
- * decides anything by iterating a map's keys, and nothing depends on the order the areas
- * arrive in beyond the ids themselves — the purity suite in
+ * decides anything by iterating a map's keys, and the areas are sorted by id before any of
+ * it, so the order they arrive in cannot change a scanpath — the purity suite in
  * `packages/engine/tests/config.test.ts` fails the build if the first of those appears. The same
  * `{ aois, goal, persona, history, seed, weights }` therefore produces byte-identical
  * fixations and saccades, in this process and in any other.
@@ -127,6 +127,12 @@ const clamp = (value: number, min: number, max: number): number =>
  * bounds so no trait combination asks for a screen with no fixations on it. The run loop
  * (#44) therefore does not spend `screenPersistenceScale` again on its own decision to
  * leave — the budget is here, where the looks are drawn.
+ *
+ * The count is the persona's and not a draw, so a persona's screens are all the same
+ * length and `fixationsPerScreen.logSigma` — the spread the configuration advertises — is
+ * consumed by nobody yet. Spending it needs a normal draw that `./distributions.js` does
+ * not publish, which is #63's module and not this ticket's to widen; it is noted on #67
+ * so calibration (#11) is not left fitting a number nothing reads.
  */
 export const screenFixationCount = (
   traits: PersonaTraits,
@@ -188,14 +194,35 @@ const drawDuration = (
  */
 export const sampleFixations = (input: SampleFixationsInput): SampledScanpath => {
   const { config } = resolveEngineConfig(input.weights);
-  const { aois, goal, persona: traits } = input;
-  if (aois.length === 0) return { fixations: [], saccades: [] };
+  const { goal, persona: traits } = input;
+  if (input.aois.length === 0) return { fixations: [], saccades: [] };
+
+  /**
+   * By id, so that the order the areas arrive in cannot reach the sampling: the draw
+   * below walks the areas in order, and a caller handing over DOM order where another
+   * handed over reading order would otherwise get a different scanpath from the same
+   * seed. Sorting on the ids is what makes "the same seed, persona, page and goal" a
+   * statement about the page rather than about the array.
+   */
+  const aois = [...input.aois].sort((left, right) =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+  );
 
   const persona = personaSamplingParams(traits, config);
   const relevance = relevanceByArea({ areas: aois, goal, hints: input.relevanceHints, config });
   const relevanceOf = (area: SamplerArea): number =>
     relevance.get(area.id) ?? config.relevance.floor;
-  const salienceOf = (area: SamplerArea): number => input.salience?.get(area.id) ?? 0;
+  /**
+   * A salience value is another module's output, and an area with no interior or no
+   * variance is an easy source of a `NaN`: one of those reaching `exp` would make every
+   * weight on the screen `NaN` and the walk below would stop choosing anything at all.
+   * So it is brought into range here rather than trusted, exactly as `relevance.ts` does
+   * with a model's hints — the softmax is no place to find out.
+   */
+  const salienceOf = (area: SamplerArea): number => {
+    const value = input.salience?.get(area.id);
+    return value === undefined || !Number.isFinite(value) ? 0 : clamp(value, 0, 1);
+  };
 
   const rng = createSeededRandom(input.seed);
   const screenIndex = input.screenIndex ?? 0;
