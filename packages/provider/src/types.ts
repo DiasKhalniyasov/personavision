@@ -2,7 +2,7 @@
  * The decision layer's one interface, and the shapes either side of it.
  *
  * Every provider — the offline deterministic policy here, the Meta Model API provider
- * (#43), anything added later — implements `DecisionProvider` and nothing else. The three
+ * (#43), anything added later — implements `DecisionProvider` and nothing else. The four
  * rules this file exists to hold are:
  *
  * 1. **The context carries only what the agent could know.** Its goal, its traits, the
@@ -16,6 +16,11 @@
  * 3. **Every decision reports what the call cost**, including the cached-input and
  *    reasoning figures the owner's model mode bills (`muse-spark-1.3`, #43) — zero
  *    throughout for a provider that costs nothing. The swarm adds them up per run (#32).
+ * 4. **What belongs to one agent session lives on that session's handle**, not in the
+ *    context. `beginSession({ personaId, seed })` hands back the decider for one session,
+ *    and a conversation, a cache key or a trajectory file is kept there — so none of the
+ *    three has to become a field of `DecisionContext` and widen what every provider may
+ *    act on (#138).
  *
  * The types the agent's world is made of — the element, the traits — are declared here
  * structurally, field-for-field as `packages/browser` and `packages/contract` spell them,
@@ -180,7 +185,55 @@ export interface Decision {
 }
 
 /**
- * The decision layer. One method, and three facts about the implementation that a run
+ * Who one agent session is: the persona it runs as, and the seed it decides from — the
+ * `persona.id` and `seed` that `sessions/S-NN.json` records, by those names.
+ *
+ * These two are the whole of a session's identity because they are the whole of what a
+ * provider needs in order to keep one session apart from every other: a cached call's
+ * `prompt_cache_key` is derived from them, a conversation belongs to exactly one pair, and
+ * a trajectory file is named from them (#43, #139).
+ *
+ * The run's **model mode** is deliberately not here. It is configured on the provider and
+ * every session it begins inherits it, so two modes are two model ids that the provider's
+ * cache namespaces for us — a mode argument here would put the same fact in two places and
+ * let a session disagree with the run it belongs to.
+ */
+export interface DecisionSessionIdentity {
+  /** The persona this session runs as. */
+  readonly personaId: string;
+  /** The seed this session decides from. */
+  readonly seed: number;
+}
+
+/**
+ * One agent session's decider: the handle every decision of that session goes through.
+ *
+ * `decide` returns exactly what the stateless `decide` returns — the agent's intent, one
+ * action and its target, optional relevance hints, usage. What the handle adds is
+ * somewhere for a provider to keep what belongs to *this* session and to no other: its
+ * append-only conversation, its cache key, its trajectory file. That is why the handle
+ * exists rather than three more fields on `DecisionContext`: the per-screen context still
+ * carries only what the agent could know, and gains nothing.
+ *
+ * **Two handles never share state.** A swarm runs as many at once as it has sessions, and
+ * what one of them decides, closes or writes is invisible to the rest.
+ *
+ * **A handle is closable**, because a session ends: that is the moment a trajectory sink is
+ * flushed and shut (#139), so that a half-written line is never left behind. `close` waits
+ * for a turn still in flight — that turn is the session's last, and the sink is shut once it
+ * has settled rather than under the line it is meant to contain — and it releases exactly
+ * once however often it is called. Afterwards the handle refuses to decide, with
+ * `DecisionSessionClosedError`, before the provider's own body runs and therefore before
+ * anything could be written.
+ */
+export interface DecisionSession extends DecisionSessionIdentity {
+  decide(context: DecisionContext): Promise<Decision>;
+  /** Ends the session and releases what it held. Idempotent: closing twice is not an error. */
+  close(): Promise<void>;
+}
+
+/**
+ * The decision layer. Two methods, and three facts about the implementation that a run
  * records and the swarm reads before it builds a context.
  */
 export interface DecisionProvider {
@@ -190,5 +243,19 @@ export interface DecisionProvider {
   readonly mode: ProviderMode;
   /** Whether it reads `context.screenshot`; the swarm omits the screenshot when it does not. */
   readonly readsImages: boolean;
+  /**
+   * One decision, belonging to no session. The swarm does not use this: a session's screens
+   * go through the handle `beginSession` returns, which is the only thing that can hold a
+   * conversation, a cache key or a trajectory. It stays because a single decision — a test,
+   * a one-screen probe — is a reasonable thing to ask for and needs no session to answer.
+   */
   decide(context: DecisionContext): Promise<Decision>;
+  /**
+   * Begins one agent session and returns its decider. Every decision of that session goes
+   * through the returned handle, and the handle is closed when the session ends.
+   *
+   * A provider with nothing to remember returns a handle that forwards straight through,
+   * which is what the offline deterministic policy does.
+   */
+  beginSession(identity: DecisionSessionIdentity): DecisionSession;
 }

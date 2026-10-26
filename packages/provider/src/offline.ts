@@ -1,5 +1,6 @@
 import { createSeededRandom } from '@personavision/contract';
 import { FREE_USAGE } from './decision.js';
+import { createDecisionSession } from './session.js';
 import type {
   Decision,
   DecisionAction,
@@ -455,8 +456,27 @@ const decideAction = (
   };
 };
 
+/** One decision, from one seed and one context, with nothing kept between calls. */
+const decideFrom = (seed: number, context: DecisionContext): Promise<Decision> => {
+  const random = createSeededRandom(
+    (hash32(digestOf(context)) ^ Math.imul(seed >>> 0, 0x9e3779b1)) >>> 0,
+  );
+  const { action, target } = decideAction(context, scoreCandidates(context), random);
+  return Promise.resolve({
+    intent: intentFor(action, context, target, random),
+    action,
+    // No relevance hints offline: the engine's relevance is the same lexical reading of
+    // the same words, so a hint from here would only pull it towards itself.
+    usage: FREE_USAGE,
+  });
+};
+
 export interface OfflineProviderOptions {
-  /** The session's seed, as `run.json` records it per session. */
+  /**
+   * The seed the provider's own `decide` works from, for a decision that belongs to no
+   * session. A session decides from the seed its handle was begun with, which is the seed
+   * `sessions/S-NN.json` records for it.
+   */
   readonly seed: number;
 }
 
@@ -472,17 +492,22 @@ export const createOfflineDeterministicProvider = (
   name: OFFLINE_PROVIDER_NAME,
   mode: 'offline',
   readsImages: false,
-  decide: (context: DecisionContext): Promise<Decision> => {
-    const random = createSeededRandom(
-      (hash32(digestOf(context)) ^ Math.imul(options.seed >>> 0, 0x9e3779b1)) >>> 0,
-    );
-    const { action, target } = decideAction(context, scoreCandidates(context), random);
-    return Promise.resolve({
-      intent: intentFor(action, context, target, random),
-      action,
-      // No relevance hints offline: the engine's relevance is the same lexical reading of
-      // the same words, so a hint from here would only pull it towards itself.
-      usage: FREE_USAGE,
-    });
-  },
+  decide: (context: DecisionContext): Promise<Decision> => decideFrom(options.seed, context),
+  /**
+   * The policy keeps nothing between screens — the random stream for a decision is derived
+   * from the seed and the whole context, every time — so a session's handle forwards
+   * straight through, and there is nothing for `close` to release.
+   *
+   * It decides from the **session's** seed, and the persona id changes nothing: the persona
+   * is already in the context, as its traits, and the id is identity for the things a model
+   * provider derives from it — a cache key, a conversation, a file name — of which this
+   * policy has none. So a session's decisions are, screen for screen, the decisions this
+   * policy made for that seed before sessions existed.
+   */
+  beginSession: ({ personaId, seed }) =>
+    createDecisionSession({
+      personaId,
+      seed,
+      decide: (context: DecisionContext): Promise<Decision> => decideFrom(seed, context),
+    }),
 });

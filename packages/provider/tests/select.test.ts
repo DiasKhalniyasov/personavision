@@ -5,17 +5,21 @@ import {
   selectDecisionProvider,
 } from '../src/select.js';
 import { OFFLINE_PROVIDER_NAME } from '../src/offline.js';
+import { createDecisionSession } from '../src/session.js';
 import type { DecisionProvider } from '../src/types.js';
 
 const SECRET = 'sk-not-a-real-key-0000';
+
+const never = (): never => {
+  throw new Error('the selection tests never call the provider');
+};
 
 const fakeModelProvider: DecisionProvider = {
   name: 'fake-model',
   mode: 'model',
   readsImages: true,
-  decide: () => {
-    throw new Error('the selection tests never call the provider');
-  },
+  decide: never,
+  beginSession: ({ personaId, seed }) => createDecisionSession({ personaId, seed, decide: never }),
 };
 
 describe('choosing the decision provider', () => {

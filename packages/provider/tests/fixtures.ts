@@ -6,7 +6,16 @@ import type { FixatedElement, PersonaTraits } from '../src/types.js';
  * screen or a trait added to one is added to both. What is here is what only these tests
  * need.
  */
-export { contextOf, element, GOAL, MATCHING_SCREEN, MIDDLING, seedBand } from '../src/testing.js';
+export {
+  contextOf,
+  element,
+  GOAL,
+  MATCHING_SCREEN,
+  MIDDLING,
+  seedBand,
+  SESSION_STEPS,
+  walkSession,
+} from '../src/testing.js';
 
 export const traitsWith = (overrides: Partial<PersonaTraits>): PersonaTraits => ({
   ...MIDDLING,
