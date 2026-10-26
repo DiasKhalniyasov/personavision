@@ -1,8 +1,8 @@
 # CONTEXT — PersonaVision
 
-PersonaVision is a **hosted web platform** for the person who decides which change ships — the owner or CEO of a website or app, not a designer or front-end engineer. They sign in, describe **the audience their business serves**, and point it at two versions of a page. A swarm of simulated people, *generated from that audience*, works through both, and the product answers in one sentence: which version their audience completes, and the one or two reasons why. Everything else — heatmaps, the friction score, the per-area numbers, individual replays — is one click deeper.
+PersonaVision is a **hosted web platform** for the person who decides which change ships — the owner or CEO of a website or app, not a designer or front-end engineer. They sign in, describe **the audience their business serves**, and point it at two versions of a page. A swarm of simulated people, _generated from that audience_, works through both, and the product answers in one sentence: which version their audience completes, and the one or two reasons why. Everything else — heatmaps, the friction score, the per-area numbers, individual replays — is one click deeper.
 
-A run is still a **directory on disk**, not a database row. Everything else in this repository either writes that directory or reads it. The platform decides *who may read* which run directory; it does not reshape the artifact, and **no account id, workspace id or credential is ever written into a run artifact**.
+A run is still a **directory on disk**, not a database row. Everything else in this repository either writes that directory or reads it. The platform decides _who may read_ which run directory; it does not reshape the artifact, and **no account id, workspace id or credential is ever written into a run artifact**.
 
 The user-facing word for a run is a **test**, and an **audience** is the first-class object personas are generated from. Both are fixed by `docs/FLOW.md` sections 1 and 8.
 
