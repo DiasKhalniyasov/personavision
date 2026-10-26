@@ -92,7 +92,11 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
-  packages/engine: {}
+  packages/engine:
+    dependencies:
+      '@personavision/contract':
+        specifier: workspace:*
+        version: link:../contract
 
   packages/personas: {}
 
