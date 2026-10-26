@@ -21,6 +21,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Playwright's Chromium is the one install-time network dependency in this project,
+      # and it is deliberately not a `postinstall`: `pnpm install` never reaches for a
+      # browser, so the workspace installs the same way with or without one. The cache is
+      # keyed on the Playwright version, so a run downloads a browser only when that
+      # version moves. `packages/browser/README.md` states the same command a fresh clone
+      # runs.
+      - id: playwright-version
+        run: |
+          version="$(pnpm --filter @personavision/browser exec playwright --version | awk '{ print $NF }')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @personavision/browser exec playwright install --with-deps chromium
+
+      # A cached browser is the binary only; the system libraries it links against are not
+      # in the cache and are reinstalled on every run.
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @personavision/browser exec playwright install-deps chromium
+
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
