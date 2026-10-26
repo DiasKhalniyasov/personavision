@@ -40,6 +40,9 @@ export {
 } from './persona.js';
 export type { PersonaSamplingParams, PersonaTraits } from './persona.js';
 
+export { relevanceByArea } from './relevance.js';
+export type { RelevanceArea, RelevanceHints, RelevanceInput } from './relevance.js';
+
 export {
   drawFixationDurationMs,
   drawLandingPoint,
