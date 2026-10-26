@@ -6,7 +6,7 @@ export default defineConfig({
     // rather than editing this configuration.
     include: [
       'tests/**/*.{test,spec}.ts',
-      'packages/*/{src,tests}/**/*.{test,spec}.ts',
+      'packages/*/{src,test,tests}/**/*.{test,spec}.ts',
       'apps/*/{src,tests}/**/*.{test,spec}.{ts,tsx}',
       'demo/*/test/**/*.{test,spec}.ts',
     ],

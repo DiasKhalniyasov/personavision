@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The dataset manifest is committed data imported as a module, so a malformed
+    // manifest is caught by the loader rather than by a missing file at runtime.
+    "resolveJsonModule": true
+  },
+  "include": ["src"]
+}

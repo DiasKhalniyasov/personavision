@@ -9,3 +9,9 @@ coverage/
 .env.*
 
 .DS_Store
+
+# The UEyes benchmark is never committed: it is 12.9 GB and licensed to its authors'
+# terms, so it is downloaded into the OS cache directory instead — see
+# packages/calibration/README.md. A PERSONAVISION_CALIBRATION_CACHE pointing inside the
+# repository by mistake is caught here rather than in a pull request.
+.cache/

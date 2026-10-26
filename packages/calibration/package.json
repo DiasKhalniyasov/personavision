@@ -1,0 +1,26 @@
+{
+  "name": "@personavision/calibration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scores the attention engine against the UEyes eye-tracking benchmark and fits its configuration",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@personavision/contract": "workspace:*",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}
