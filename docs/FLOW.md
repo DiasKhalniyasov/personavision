@@ -24,7 +24,7 @@ taken and remain **(auto)**, overridable the same way: change this file first, t
 | 5   | The headline                              | One plain verdict for the chosen audience: which variant their audience completes, and the one or two reasons why. The 0–100 friction score is one click deeper. | **(owner)** |
 | 6   | Findings in words or numbers only         | In words: a ranked list of sentences with their evidence. At most three reach the Verdict screen.                                                                | (auto)      |
 | 7   | What is on screen at the end of the demo  | The **Verdict** screen                                                                                                                                          | **(owner)** |
-| —   | Visual direction                          | Clean enterprise SaaS, in the visual language of optimizely.com as inspiration only — see section 10                                                             | **(owner)** |
+| —   | Visual direction                          | The styling of optimizely.com — its colours, type roles, radii and motion — with PersonaVision's own name, logo, wording and images. shadcn/ui for the app, Aceternity UI for the animated moments — see section 10 | **(owner)** |
 
 ---
 
@@ -140,9 +140,19 @@ A **New test** is the same journey one step earlier: choose the audience → the
 | **Sessions**        | What happened to each person?               | `/runs/:runId/sessions?variant=&outcome=&aoi=`           |
 | **Session replay**  | What did this one person see, think and do? | `/runs/:runId/sessions/:sessionId?fix=`                  |
 | Running             | How far along is it, and can I look yet?    | `/runs/:runId` while the test is open                    |
+| Landing             | What is this, and why would I trust it?     | `/` when nobody is signed in                             |
+| Demo                | Show me, without signing up.                | `/demo`                                                  |
 
 The route family is still `/runs/:runId` and the artifact is still a run: *run* is the internal word for a test, and the
 contract, the CLI and the directory layout keep it. The user-facing word is **test**.
+
+The last two are **public**: everything above them is behind sign-in. **Landing** is what `/` renders when nobody is
+signed in — the product's own page, which replaces the straight redirect to `/signin`; it states what PersonaVision
+does, shows the verdict it produces, and its only actions are *See the demo* and *Sign in*. **Demo** is the committed
+example run's Verdict, read-only, with no account: the same components as the signed-in Verdict over the same artifact,
+every figure labelled simulated, and one action back to sign-in. Neither page invents a number: both read the committed
+example run. They are the two pages section 10 gives the Aceternity moments to, and they are specified in their own
+tickets rather than in the prototype, which covers the signed-in product.
 
 Supporting states, all built in the prototype: **Signed out**, **No audience yet**, **No tests yet**, **New test with
 invalid input**, **Test failed to start**, **Sessions with no match**, and **an area of interest nobody looked at**.
@@ -336,30 +346,118 @@ scope, and no ticket should build toward one speculatively.
 
 ## 10. Visual direction (owner)
 
-**Clean enterprise SaaS, taking the visual language of optimizely.com as inspiration.** Inspiration only: no logo, name,
-wordmark, illustration, photograph or line of copy is taken from it, and nothing in this product should be mistakable for
-theirs. What is taken is the _grammar_:
+**The styling of optimizely.com, carrying PersonaVision's own name, logo, wording and images.** The colours, the type
+roles, the radii and the motion are copied exactly, from that site's own CSS; the brand is not. No logo, wordmark,
+illustration, photograph, line of copy or **font file** is taken from them, no page of this product reproduces a page of
+theirs, and nothing here should read as published by Optimizely.
 
-- **Large, bold headlines.** The Verdict screen's sentence is display size (`--text-display`), weight 700–800, tracking
-  tightened (`--tracking-tighter`). It is the biggest thing on the page by a wide margin.
-- **Generous whitespace.** Sections are separated by `--section-pad-y` (64px) or `--section-pad-y-lg` (96px), not by
-  rules. Air is how hierarchy is expressed; a dense screen is a bug on the Verdict screen.
-- **White sections**, with a single tinted section (`--color-canvas-alt`) used for rhythm, and a deep navy band
-  (`--color-canvas-dark`) for the sign-in screen and the closing band. Never more than one tinted and one dark band per
-  screen.
-- **Deep navy text** (`--color-text: #0b1733`), with muted and faint navy-greys beneath it. Black is not used.
-- **One bright accent, reserved for actions** (`--color-accent: #2b4aff`): primary buttons, links, focus rings, the
-  active tab. It is never decoration. Severity, outcome and gaze colours are semantic and are not the accent.
-- **Card-based sections.** Content sits in cards with a soft border, `--radius-lg`, and `--shadow-sm` or `--shadow-md`;
-  shadows are soft and low-contrast, never a drop shadow with a hard edge.
-- **Product screenshots framed in neutral space.** A page screenshot is never flush against the layout: it sits on a mat
-  of `--color-surface-sunken` with `--frame-mat-pad` around it, rounded, with the device and viewport labelled. The
-  heatmap on the Verdict screen is the clearest case — it is a product shot, presented as one.
-- **System fonts only.** No web font is fetched: the platform must render identically with no network, which is also what
-  keeps the offline demo honest.
-- **Numbers are tabular** (`font-variant-numeric: tabular-nums`) wherever they are compared, and a figure never appears
+Every value below lives in `docs/design/tokens.css` and nowhere else. A screen references the custom property; a
+component never carries a colour, a radius or a duration of its own. That is what makes the next direction change one
+edit to one file.
+
+### Components
+
+- **shadcn/ui (Radix + Tailwind) for the app.** Every control is a shadcn primitive — button, input, select, dialog,
+  dropdown, tabs, table, tooltip, badge, skeleton, toast — styled by the tokens through the Tailwind theme. A screen
+  ticket that needs a control takes the shadcn one and restyles nothing; a bespoke control is written only where no
+  primitive exists (the heatmap, the scanpath, the scrubber, the step filmstrip), and then it still reads its values
+  from the tokens. Radix is what gives the keyboard and screen-reader behaviour the accessibility rules below demand.
+- **Aceternity UI (Motion-based) for the animated moments, and only for these:**
+  1. **The Verdict reveal** — a number ticker on the two completion figures, a spotlight on the winning version, and an
+     animated beam from the chosen audience to the two versions.
+  2. **The heatmap warming up** where the audience looked, once, as the evidence appears.
+  3. **The landing and demo pages.**
+- Nowhere else moves. A results screen one click deeper (Score breakdown, Attention, Sessions, Session replay) has the
+  base transition and the pulse, and no entrance animation at all: a number a user is reading must not be moving.
+
+### Colour
+
+Taken from optimizely.com's CSS. The names on the left are the tokens.
+
+| Role | Token | Value |
+| --- | --- | --- |
+| Headlines, dark sections, gaze marks | `--color-heading`, `--color-canvas-dark` | dark fir `#08251a` |
+| The deepest band | `--color-canvas-dark-strong` | fir-800 `#061c14` |
+| A panel inside a dark band | `--color-canvas-dark-mid` | mid fir `#0d3a29` |
+| Body copy | `--color-text` | `#101828` |
+| **Primary action** | `--color-accent` / `--color-on-accent` | lime `#abff44` with dark fir text |
+| Primary action, hover and pressed | `--color-accent-strong`, `--color-accent-grass` | lime-100 `#92ec41`, grass `#7ddd3d` |
+| Tinted section | `--color-canvas-alt` | pale green `#e4f0da` |
+| Form fields, soft panels, screenshot mats | `--color-surface-sunken`, `--color-accent-soft` | `#eff6e9` |
+| Borders and dividers | `--color-border`, `--color-border-strong` | `#d8e4cb`, `#c3ceaf` |
+| Links | `--color-link`, `--color-link-hover` | teal `#007b79`, `#00514f` |
+| Success, and a clean outcome | `--outcome-success`, `--score-good` | deep greens `#227d47`, `#2e8c45`, `#3ab533` |
+| Caution, abandonment, the losing band | `--completion-warn`, `--outcome-abandoned` | pinks `#ff99b6`, `#c96384`, `#8f4764` |
+| Information | `--sev-info` | teals `#00514f`, `#2f9b99`; light blue `#91dbda` |
+| Errors | `--sev-critical`, `--sev-high` | `#c80808`, `#f13030` |
+
+Rules that outlive the values:
+
+- **Lime is the action colour and nothing else.** Primary buttons, the pressed segment, the active tab's underline. It
+  never carries meaning — severity, outcome, attribution and gaze colours are semantic — and it is never text on white,
+  because it cannot be read there. That is why links are teal.
+- **Dark fir for headlines, `#101828` for body copy.** Black is not used.
+- **White sections, one pale-green tinted section for rhythm, one dark fir band** (sign-in, the landing and demo pages'
+  closing band). Never more than one tinted and one dark band per screen.
+- Where the palette has no mid-grey, the two muted text tokens are fir mixed with white and are marked `(derived)` in
+  the tokens file. Every other value above is the site's own.
+- Dark mode is a colour override in the tokens file; sizes, spacing and motion are shared. The lime accent is unchanged
+  in dark mode and the greens invert to the lighter grass and lime.
+- A colour is never the only carrier of meaning: severity, outcome and attribution always have their word beside them.
+
+### Type
+
+Four roles, each one token:
+
+| Role | Licensed family | Free stand-in used until the licences are bought | Token |
+| --- | --- | --- | --- |
+| Headlines | VC Nudge (400, 600, 800) | **Bricolage Grotesque** | `--font-display` |
+| Body, buttons, forms | Die Grotesk B (400, 500, 700) | **Schibsted Grotesk** | `--font-sans` |
+| Uppercase overline labels | Roboto Mono | Roboto Mono itself | `--font-mono` |
+| Occasional editorial headline | VC Henrietta Condensed | **Instrument Serif** | `--font-editorial` |
+
+- VC Nudge, Die Grotesk B and VC Henrietta Condensed are **commercial fonts**. No font file is ever copied from
+  optimizely.com. Until the owner buys the licences every role renders in the free Google Fonts match above, and the day
+  a licence exists the swap is one edit per token: put the licensed family first in the stack and vendor its files.
+  `--font-display-licensed`, `--font-sans-licensed` and `--font-editorial-licensed` record the names meanwhile.
+- The stand-ins are **self-hosted from the repository** (the `@fontsource` packages, OFL-licensed), not fetched from a
+  CDN: the platform must still render with no network, which is also what keeps the offline demo honest. The static
+  design prototype is the one exception and links Google Fonts directly, because it is opened as a file.
+- Display weights are 400 / 600 / 800; body, buttons and forms use 400 / 500 / 700. A body face is never set to 600.
+- Overline labels are uppercase, in the mono family, at `--tracking-wide`.
+- Headlines are large, bold and tightly tracked: the Verdict screen's sentence is `--text-display` at weight 800 with
+  `--tracking-tighter`, and it is the biggest thing on the page by a wide margin. Generous whitespace, not rules,
+  separates sections (`--section-pad-y` 64px, `--section-pad-y-lg` 96px); a dense Verdict screen is a bug.
+- Numbers are tabular (`font-variant-numeric: tabular-nums`) wherever they are compared, and a figure never appears
   without the population behind it.
 
-Accessibility is part of the direction, not a later pass: every screen is operable by keyboard, focus is always visible
-at `--border-width-strong`, the area-of-interest table is the accessible representation of the heatmap, and a colour is
-never the only carrier of meaning — severity, outcome and attribution always have their word beside their colour.
+### Radius
+
+`--radius-xl` 20px for cards and large panels, then `--radius-lg` 16px, `--radius-md` 12px (inputs, selects),
+`--radius-sm` 8px and `--radius-xs` 4px. **Every button, chip and tag is fully rounded** (`--radius-full`). Shadows are
+soft and low-contrast (`--shadow-sm`, `--shadow-md`); a hard-edged drop shadow is never used. A page screenshot is never
+flush against the layout: it sits on a mat of `--color-surface-sunken` with `--frame-mat-pad` around it, rounded, with
+the device and viewport labelled.
+
+### Motion
+
+- **The base transition is 150ms `cubic-bezier(.4, 0, .2, 1)`** — `--duration-base` and `--ease` — on hover and on state
+  changes. It is the only transition most of the product has.
+- **A soft pulse for live or loading states**: the `pv-pulse` keyframes in the tokens file, `--pulse-duration` 2s. The
+  progress bar of a running test and the live badge use it; nothing else does.
+- The Aceternity moments listed above come on top, with their durations in the tokens file
+  (`--moment-ticker-duration`, `--moment-spotlight-duration`, `--moment-beam-duration`, `--moment-heat-duration`,
+  `--moment-stagger`). A component never writes its own duration.
+- **Every animation respects `prefers-reduced-motion`.** Under it the transitions and the moment durations become 0ms in
+  the tokens file and the pulse flattens; a component that animates in JavaScript checks the same query (Motion's
+  `useReducedMotion`) and **renders the finished state immediately** — never a shortened animation, never a
+  number mid-count. A test asserts the Verdict screen's figures are the final figures on first paint under that query.
+
+### Accessibility is part of the direction, not a later pass
+
+Every screen is operable by keyboard; focus is always visible at `--border-width-strong` in `--color-focus`, which is
+dark fir on light and lime on dark so that it reads on white, on a pale panel and on a lime button alike. The
+area-of-interest table is the accessible representation of the heatmap. Radix supplies the roles, labels and focus
+management, and a bespoke control copies that behaviour rather than inventing it. Text contrast is checked against the
+tokens, not by eye: lime is never a text colour on white, and the pink and teal semantic colours are the darkest of
+their family for exactly that reason.

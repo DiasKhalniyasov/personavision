@@ -6,6 +6,11 @@
 <title>PersonaVision — flow prototype</title>
 <!-- tokens.css is the single source of visual truth. No value below restates one. -->
 <link rel="stylesheet" href="tokens.css">
+<!-- The free stand-ins for the licensed families, named in tokens.css. The product
+     self-hosts these files; only this static prototype fetches them. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Schibsted+Grotesk:wght@400;500;700&family=Instrument+Serif&family=Roboto+Mono:wght@400;500&display=swap">
 <style>
 /* ===== Base ============================================================== */
 *, *::before, *::after { box-sizing: border-box; }
@@ -16,10 +21,15 @@ body {
   font: var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3, h4 { margin: 0; letter-spacing: var(--tracking-tight); line-height: var(--leading-snug); }
+h1, h2, h3, h4 {
+  margin: 0; letter-spacing: var(--tracking-tight); line-height: var(--leading-snug);
+  font-family: var(--font-display); color: var(--color-heading);
+}
+/* An occasional editorial headline, where a section wants a quieter voice. */
+.editorial { font-family: var(--font-editorial); font-weight: var(--weight-regular); letter-spacing: 0; }
 p { margin: 0; }
-a { color: var(--color-accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--color-link); text-decoration: none; }
+a:hover { color: var(--color-link-hover); text-decoration: underline; }
 :focus-visible { outline: var(--border-width-strong) solid var(--color-focus); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 .grow { flex: 1; }
@@ -81,10 +91,11 @@ a:hover { text-decoration: underline; }
   font-size: var(--text-xs); font-weight: var(--weight-medium);
 }
 .sim-badge .dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
+.sim-badge[data-live="true"] .dot { animation: pv-pulse var(--pulse-duration) var(--ease) infinite; }
 .avatar {
   width: 32px; height: 32px; border-radius: var(--radius-full); cursor: pointer;
   border: var(--border-width) solid var(--color-border-strong); background: var(--color-accent-soft);
-  color: var(--color-accent-strong); font: var(--weight-bold) var(--text-xs)/1 var(--font-sans);
+  color: var(--color-heading); font: var(--weight-bold) var(--text-xs)/1 var(--font-sans);
 }
 
 .tabs { background: var(--color-surface); border-bottom: var(--border-width) solid var(--color-border); }
@@ -95,7 +106,7 @@ a:hover { text-decoration: underline; }
   font: var(--weight-medium) var(--text-sm)/1.4 var(--font-sans);
   color: var(--color-text-muted); border-bottom: var(--border-width-strong) solid transparent;
 }
-.tab[aria-current="page"] { color: var(--color-text); border-bottom-color: var(--color-accent); }
+.tab[aria-current="page"] { color: var(--color-heading); font-weight: var(--weight-bold); border-bottom-color: var(--color-accent); }
 .tab:hover { color: var(--color-text); }
 
 /* ===== Buttons, chips, tags ============================================== */
@@ -103,7 +114,7 @@ a:hover { text-decoration: underline; }
   appearance: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface); color: var(--color-text);
   font: var(--weight-semibold) var(--text-sm)/1 var(--font-sans);
@@ -116,7 +127,7 @@ a:hover { text-decoration: underline; }
 .btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
 .btn-lg { padding: var(--space-4) var(--space-6); font-size: var(--text-base); }
 
-.seg { display: inline-flex; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.seg { display: inline-flex; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-full); overflow: hidden; }
 .seg button {
   appearance: none; border: 0; cursor: pointer; background: var(--color-surface);
   padding: var(--space-2) var(--space-4);
@@ -124,7 +135,7 @@ a:hover { text-decoration: underline; }
   border-right: var(--border-width) solid var(--color-border);
 }
 .seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.seg button[aria-pressed="true"] { background: var(--color-accent); color: var(--color-on-accent); font-weight: var(--weight-bold); }
 
 .tag {
   display: inline-flex; align-items: center; gap: var(--space-1);
@@ -173,13 +184,14 @@ a:hover { text-decoration: underline; }
 .runmeta code { font-family: var(--font-mono); font-size: var(--text-2xs); }
 .card {
   background: var(--color-surface); border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-lg); padding: var(--space-6);
+  border-radius: var(--radius-xl); padding: var(--space-6);
 }
 .card-lg { padding: var(--space-8); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .section { margin-top: var(--space-12); }
 .section > h2 { font-size: var(--text-lg); font-weight: var(--weight-bold); margin-bottom: var(--space-2); }
 .section > .lede { margin-bottom: var(--space-5); font-size: var(--text-sm); }
 .microlabel {
+  font-family: var(--font-mono);
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
   color: var(--color-text-faint); font-weight: var(--weight-semibold);
 }
@@ -203,8 +215,8 @@ a:hover { text-decoration: underline; }
 .audbar .who {
   display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-4); border-radius: var(--radius-full);
-  background: var(--color-accent-soft); color: var(--color-accent-strong);
-  font-weight: var(--weight-semibold); font-size: var(--text-xs);
+  background: var(--color-accent-soft); color: var(--color-heading);
+  font-weight: var(--weight-bold); font-size: var(--text-xs);
 }
 .hero h1 {
   font-size: var(--text-display);
@@ -263,7 +275,7 @@ a:hover { text-decoration: underline; }
 .door:hover { box-shadow: var(--shadow-md); border-color: var(--color-border-strong); }
 .door h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); }
 .door p { font-size: var(--text-sm); color: var(--color-text-muted); }
-.door .more { font-size: var(--text-xs); color: var(--color-accent); font-weight: var(--weight-semibold); }
+.door .more { font-size: var(--text-xs); color: var(--color-link); font-weight: var(--weight-bold); }
 
 /* ===== Score cards (breakdown screen) ==================================== */
 .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); }
@@ -547,12 +559,16 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
   border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface);
   font-size: var(--text-xs); font-weight: var(--weight-medium);
 }
-.chip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.chip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-heading); }
 .formfoot { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; border-top: var(--border-width) solid var(--color-border); padding-top: var(--space-6); }
 
 /* Progress */
 .progress { height: 8px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
-.progress > span { display: block; height: 100%; background: var(--color-accent); }
+.progress > span {
+  display: block; height: 100%; background: var(--color-accent);
+  /* A live state pulses softly; nothing else on a results screen moves. */
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
 .log { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); display: grid; gap: var(--space-1); max-height: 180px; overflow: auto; }
 .log b { color: var(--color-text); font-weight: var(--weight-medium); }
 
