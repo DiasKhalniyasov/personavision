@@ -15,18 +15,27 @@
  *   on the page. A ground truth describing a defect the shop no longer has is worse than
  *   none.
  *
- * **One thing the next ticket has to reconcile, and this file cannot.** `aoiId` is written
- * in the run artifact's scheme, `<variant>-<step>-<data-aoi>`, because that is what
- * `runs/2026-10-24-1402-northwind-demo/run.json` and its findings carry and what
- * `evaluateAgainstPlantedDefects` compares against. The live pipeline does not mint ids
- * that way: `packages/browser/src/extract/stable-id.ts` hashes role, name and box on
- * purpose and deliberately never reads `data-aoi`, and `packages/engine/src/aois/aoi-id.ts`
- * composes the box into the id. So the first real run (#78) will produce area ids that do
- * not equal the ones declared here, and the acceptance harness (#79) has to close that gap
- * — by projecting the shop's `data-aoi` into the artifact's area ids, or by matching on
- * something stabler than an id. Declaring the hashed ids instead is not an option: they are
- * not knowable before the run, and a ground truth that is written from the run it scores is
- * not a ground truth.
+ * **Two things the next tickets have to reconcile, and this file cannot.** Both make recall
+ * read 0.0 today, for reasons no screen explains, and both are recorded on #76.
+ *
+ * 1. **The area ids.** `aoiId` is written in the run artifact's scheme,
+ *    `<variant>-<step>-<data-aoi>`, because that is what the committed example run carries
+ *    in its `aois` and its findings and what `evaluateAgainstPlantedDefects` compares
+ *    against. The live pipeline does not mint ids that way:
+ *    `packages/browser/src/extract/stable-id.ts` hashes role, name and box on purpose and
+ *    deliberately never reads `data-aoi`, and `packages/engine/src/aois/aoi-id.ts` composes
+ *    the box into the id. So the first real run (#78) will produce area ids that are not
+ *    equal to the ones declared here, and the acceptance harness (#79) has to close the gap
+ *    — by projecting the shop's `data-aoi` into the artifact's area ids, or by matching on
+ *    something stabler than an id. Declaring the hashed ids instead is not an option: they
+ *    are not knowable before the run, and a ground truth written from the run it scores is
+ *    not a ground truth.
+ * 2. **The finding ids.** `findingRuleIdOf` reads the rule off the finding's own id, which
+ *    `findings()` spells `<ruleId>@<variant>`. The committed example run is a hand-authored
+ *    seed whose findings are `F-1` … `F-6`, so every one of them derives `ruleId: null` and
+ *    can be credited to nothing. #78 replaces that seed with a generated run, which fixes
+ *    it; until then, a sanity check of this file has to score `findings()` output rather
+ *    than the committed `findings.json`.
  */
 
 import { readFileSync } from 'node:fs';
@@ -43,12 +52,9 @@ const DEFECTS_FILE = new URL('./defects.json', import.meta.url);
 const DECLARED_COUNT = 3;
 
 /** A real defect in the shop that is deliberately **not** one of the declared three. */
-export interface UndeclaredDefect {
+export interface UndeclaredDefect extends DefectLocation {
   /** What it is, in one sentence. */
   readonly what: string;
-  readonly variant: string;
-  readonly step: string;
-  readonly aoiId: string | null;
   /** Why it is left out, and what leaving it out costs. */
   readonly why: readonly string[];
 }
@@ -215,22 +221,34 @@ let loaded: DeclaredDefects | undefined;
 export const declaredDefects = (): DeclaredDefects => (loaded ??= loadDeclaredDefects());
 
 /**
- * The shop's own `data-aoi` value for a declared defect, or `null` when the whole step is
- * the defect.
+ * The three fields that locate a defect, declared or not, so one function serves both. They
+ * travel together everywhere: an area of interest takes all three to identify, because a
+ * rule about a whole step reports `aoiId: null` and two steps of two variants would then
+ * look alike.
+ */
+export interface DefectLocation {
+  readonly variant: string;
+  readonly step: string;
+  readonly aoiId: string | null;
+}
+
+/**
+ * The shop's own `data-aoi` value for a located defect, or `null` when the whole step is the
+ * defect rather than one area of it.
  *
- * The declared `aoiId` is `<variant>-<step>-<data-aoi>`, so the region is what is left once
+ * A declared `aoiId` is `<variant>-<step>-<data-aoi>`, so the region is what is left once
  * its own variant and step are taken off the front. An id that does not start that way is a
  * scheme change rather than a typo, and throws: without the region there is no way to ask
  * the shop whether the defect is still there.
  */
-export const shopRegionOf = (defect: PlantedDefect): string | null => {
-  if (defect.aoiId === null) return null;
-  const prefix = `${defect.variant}-${defect.step}-`;
-  if (!defect.aoiId.startsWith(prefix)) {
+export const shopRegionOf = (located: DefectLocation): string | null => {
+  if (located.aoiId === null) return null;
+  const prefix = `${located.variant}-${located.step}-`;
+  if (!located.aoiId.startsWith(prefix)) {
     throw new DeclaredDefectsError(
-      `/defects (${defect.id})`,
-      `has aoiId "${defect.aoiId}", which is not "${prefix}<data-aoi>"`,
+      `(${located.aoiId})`,
+      `is not in the artifact's scheme "${prefix}<data-aoi>"`,
     );
   }
-  return defect.aoiId.slice(prefix.length);
+  return located.aoiId.slice(prefix.length);
 };

@@ -184,14 +184,10 @@ describe('every declared defect is still in the shop', () => {
     // Left out of the declared set, but it has to exist: the prose below explains the cost
     // of not declaring it, and a cost paid for a defect the shop no longer has is nonsense.
     for (const undeclared of ground.notDeclared) {
+      const region = shopRegionOf(undeclared);
+      expect(region, `${undeclared.what} names a region`).not.toBeNull();
       const url = PAGE_OF_STEP[undeclared.step]!;
-      const prefix = `${undeclared.variant}-${undeclared.step}-`;
-      expect(undeclared.aoiId, `${undeclared.what} names a region`).not.toBeNull();
-      expect(
-        undeclared.aoiId!.startsWith(prefix),
-        `${undeclared.aoiId} is "${prefix}<data-aoi>"`,
-      ).toBe(true);
-      expect(countOf(page(url), undeclared.aoiId!.slice(prefix.length))).toBe(1);
+      expect(countOf(page(url), region!), `data-aoi="${region}" on ${url}`).toBe(1);
     }
   });
 
@@ -302,13 +298,26 @@ describe('nothing else parses the ground truth', () => {
     });
   };
 
-  it('names `defects.json` in the loader and in this suite, and nowhere else', () => {
-    const naming = ['apps', 'demo', 'packages', 'scripts', 'tests']
-      .flatMap(sources)
-      .filter((path) => readFileSync(join(repoRoot, path), 'utf8').includes('defects.json'));
+  /**
+   * Naming the file is fine — a comment or a hand-off note may well point at it. Reading it
+   * is what this guard is about, so a file counts only when it both names `defects.json`
+   * and reaches for its bytes. A second reader would be a second copy of the shape and of
+   * the validation, which is the whole reason the loader exists.
+   */
+  const READS_A_FILE = /readFileSync|readFile\(|createReadStream|JSON\.parse|import\(/;
 
-    expect(naming.sort()).toEqual([
+  it('reads `defects.json` in the loader and in this suite, and nowhere else', () => {
+    const readers = ['apps', 'demo', 'packages', 'scripts', 'tests']
+      .flatMap(sources)
+      .filter((path) => {
+        const source = readFileSync(join(repoRoot, path), 'utf8');
+        return source.includes('defects.json') && READS_A_FILE.test(source);
+      });
+
+    expect(readers.sort(), 'files that read demo/northwind/defects.json').toEqual([
       'demo/northwind/defects.ts',
+      // This suite reads it to spoil a valid document one field at a time; it never takes
+      // typed data from it, which is what the loader is for.
       'demo/northwind/test/defects.test.ts',
     ]);
   });
