@@ -108,7 +108,7 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the corpus loader, the manifest loader and the cache-path helpers, and nothing else', () => {
+  it('exports the types, the corpus loader, the saliency metrics, the manifest loader and the cache-path helpers, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
@@ -119,18 +119,30 @@ describe('the public entry point', () => {
       'MANIFEST_SCHEMA_VERSION',
       'ManifestError',
       'RECORD_CATEGORIES',
+      'SALIENCY_METRICS',
+      'SALIENCY_METRIC_IDS',
+      'SALIENCY_METRIC_PARAMETERS',
+      'SaliencyMetricError',
       'VIEWING_DURATIONS_SECONDS',
+      'aucJudd',
       'cacheRoot',
+      'cc',
       'datasetCachePaths',
       'describeChecksum',
       'isContainedRelativePath',
       'isDatasetId',
+      'kld',
       'loadCorpus',
       'loadCorpusCategory',
       'loadCorpusRecord',
       'loadManifest',
+      'nss',
       'parseManifest',
+      'poolFixations',
       'recordedChecksum',
+      'resampleSaliencyMap',
+      'saliencyMetric',
+      'scoreSaliency',
       'unverifiedFiles',
     ]);
   });

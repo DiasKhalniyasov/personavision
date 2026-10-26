@@ -9,8 +9,9 @@
  *
  * #81 laid the ground the rest of step #11 stands on: the vocabulary, the dataset manifest and
  * the cache policy, and #82 the committed synthetic corpus every later ticket tests against.
- * The metrics, the download, the conversion, the baselines, the scoring and the fit arrive as
- * later tickets and export from here.
+ * #83 adds the four saliency metrics a predicted map is compared with a human one by. The
+ * scanpath metrics, the download, the conversion, the baselines, the scoring and the fit
+ * arrive as later tickets and export from here.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and may later
  * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -69,6 +70,29 @@ export type {
   RecordedChecksum,
   UnverifiedChecksum,
 } from './dataset/manifest.js';
+
+export {
+  SALIENCY_METRIC_IDS,
+  SALIENCY_METRIC_PARAMETERS,
+  SALIENCY_METRICS,
+  SaliencyMetricError,
+  aucJudd,
+  cc,
+  kld,
+  nss,
+  poolFixations,
+  resampleSaliencyMap,
+  saliencyMetric,
+  scoreSaliency,
+} from './metrics/index.js';
+export type {
+  MetricDirection,
+  SaliencyGroundTruth,
+  SaliencyMetricDescriptor,
+  SaliencyMetricId,
+  SaliencyMetricInputs,
+  SaliencyScores,
+} from './metrics/index.js';
 
 export {
   CACHE_ENV_VAR,
