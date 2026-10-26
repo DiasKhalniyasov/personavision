@@ -16,8 +16,14 @@
  * the same variant, and each of them captures the same screens: the captures arriving here
  * are therefore repetitive, while `run.json` records each screen and each area once — that
  * is what makes an area's metrics aggregable across sessions. A repeat is dropped rather
- * than merged, because a screen is one image file and an area is one box: the first capture
- * of a screen is the one its row describes.
+ * than merged, because a screen is one image file and an area is one box.
+ *
+ * **The last capture of a screen is the one recorded**, because it is the one on disk:
+ * `writeScreenshot` overwrites `screenshots/<variant>/<step>.png` in place, so a screen
+ * captured twice with different content — a cart with one item, then with three — leaves
+ * the second image. A row describing the first would state a page height the image does not
+ * have and put every area's box on the wrong layout. The order of the rows is still the
+ * order the screens were first captured in.
  *
  * **A capture with no step is projected nowhere.** A screenshot row and an area of interest
  * are both addressed by variant *and* step: that is how the Attention screen finds the
@@ -60,20 +66,22 @@ const screenKey = (variant: string, step: string): string => `${variant}\u0000${
 const areaKey = (variant: string, step: string, id: string): string =>
   `${screenKey(variant, step)}\u0000${id}`;
 
-/** The entries of `rows` whose key has not been seen before, in the order they arrived. */
-const firstOfEach = <T>(rows: readonly T[], keyOf: (row: T) => string): T[] => {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const key = keyOf(row);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+/**
+ * One entry per key: the last one given, in the order the keys first appeared.
+ *
+ * A `Map` is both halves of that at once — assigning an existing key replaces the value and
+ * keeps its place — so the rows read in capture order while each one describes the latest
+ * capture of its screen.
+ */
+const lastOfEach = <T>(rows: readonly T[], keyOf: (row: T) => string): T[] => {
+  const byKey = new Map<string, T>();
+  for (const row of rows) byKey.set(keyOf(row), row);
+  return [...byKey.values()];
 };
 
 /** `run.json`'s `screenshots`: one row per captured screen, with its geometry. */
 export const toScreenshotEntries: ToScreenshotEntries = (captures) =>
-  firstOfEach(
+  lastOfEach(
     captures.filter(onAStep).flatMap((capture) =>
       // A row is a pointer at an image. A capture that wrote none — a source that measured
       // a page without picturing it — is a row the screens could not draw, so it is left
@@ -96,7 +104,7 @@ export const toScreenshotEntries: ToScreenshotEntries = (captures) =>
 
 /** `run.json`'s `aois`: the DOM- and accessibility-sourced areas of interest. */
 export const toAoiEntries: ToAoiEntries = (captures) =>
-  firstOfEach(
+  lastOfEach(
     captures.filter(onAStep).flatMap((capture) =>
       capture.elements.map((element) => ({
         id: element.id,

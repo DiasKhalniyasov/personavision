@@ -54,12 +54,18 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
  * assertion about the image rather than about the library that wrote it, and needs no
  * decoder.
  */
-const pngSize = (bytes: Buffer): { width: number; height: number; signed: boolean } => ({
-  signed:
-    bytes.subarray(0, 8).equals(PNG_SIGNATURE) && bytes.subarray(12, 16).toString() === 'IHDR',
-  width: bytes.readUInt32BE(16),
-  height: bytes.readUInt32BE(20),
-});
+const pngSize = (bytes: Buffer): { width: number; height: number; signed: boolean } => {
+  // Checked before the integers are read: a short or empty file should fail as "not a PNG"
+  // and not as a buffer out of bounds.
+  const signed =
+    bytes.byteLength >= 24 &&
+    bytes.subarray(0, 8).equals(PNG_SIGNATURE) &&
+    bytes.subarray(12, 16).toString() === 'IHDR';
+
+  return signed
+    ? { signed, width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+    : { signed, width: 0, height: 0 };
+};
 
 describeWithChromium('writeScreenshot', () => {
   let site: FixtureSite;
@@ -158,6 +164,26 @@ describeWithChromium('writeScreenshot', () => {
         await expect(
           writeScreenshot(handle, { runDir, variant: 'A', step: null }),
         ).resolves.toBeNull();
+
+        await expect(readdir(runDir)).resolves.toEqual([]);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'refuses a variant or a step that is not one path segment, and writes nothing',
+    async () => {
+      const handle = await open(DESKTOP);
+      try {
+        await expect(
+          writeScreenshot(handle, { runDir, variant: 'A', step: '../../../escaped' }),
+        ).rejects.toThrow('one path segment');
+        await expect(
+          writeScreenshot(handle, { runDir, variant: 'a/b', step: 'cart' }),
+        ).rejects.toThrow('one path segment');
 
         await expect(readdir(runDir)).resolves.toEqual([]);
       } finally {

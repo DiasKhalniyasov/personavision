@@ -104,6 +104,15 @@ describe('toScreenshotEntries', () => {
     expect(toScreenshotEntries([capture({ screenshot: null })])).toEqual([]);
   });
 
+  it('describes the screen as the last capture of it left it, which is the image on disk', () => {
+    const emptier = capture({ pageHeight: 1400, foldY: 844 });
+    const fuller = capture({ pageHeight: 1800, foldY: 844 });
+
+    expect(toScreenshotEntries([emptier, fuller])).toEqual([
+      expect.objectContaining({ variant: 'A', step: 'cart', pageHeight: 1800 }),
+    ]);
+  });
+
   it('records one row for a screen a dozen sessions all captured', () => {
     const sessions = Array.from({ length: 12 }, () => capture());
 
@@ -183,6 +192,14 @@ describe('toAoiEntries', () => {
 
   it('records an area for a screen that was measured but never pictured', () => {
     expect(toAoiEntries([capture({ screenshot: null })])).toHaveLength(1);
+  });
+
+  it('takes an area from the last capture of its screen, as the screenshot row does', () => {
+    const moved = element({ bbox: { x: 16, y: 980, width: 358, height: 48 }, belowFold: false });
+
+    expect(toAoiEntries([capture(), capture({ elements: [moved] })])).toEqual([
+      expect.objectContaining({ bbox: moved.bbox, belowFold: false }),
+    ]);
   });
 
   it('records one area however many sessions saw it, and keeps the two screens apart', () => {

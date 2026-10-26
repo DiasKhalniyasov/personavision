@@ -105,9 +105,9 @@ hand-off for regions the DOM cannot explain, so that a SAM-based segmenter can a
 
 ## Tests
 
-Two suites, both driving the public entry point against the static fixture site in
-`test/fixtures/site/` (`test/helpers/static-site.ts` serves it from disk, with no dependency
-of its own):
+Four suites, all through the package's public entry point. The first three drive Chromium
+against the static fixture site in `test/fixtures/site/` (`test/helpers/static-site.ts`
+serves it from disk, with no dependency of its own); the last needs no browser at all:
 
 - `test/geometry.test.ts` — the viewport, the page height and the fold at a mobile and a
   desktop device, against the heights `test/fixtures/site/LANDMARKS.md` states.
