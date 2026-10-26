@@ -385,11 +385,11 @@ Taken from optimizely.com's CSS. The names on the left are the tokens.
 | Tinted section | `--color-canvas-alt` | pale green `#e4f0da` |
 | Form fields, soft panels, screenshot mats | `--color-surface-sunken`, `--color-accent-soft` | `#eff6e9` |
 | Borders and dividers | `--color-border`, `--color-border-strong` | `#d8e4cb`, `#c3ceaf` |
-| Links | `--color-link`, `--color-link-hover` | teal `#007b79`, `#00514f` |
+| Links | `--color-link`, `--color-link-hover` | teal `#006765`, `#00514f` |
 | Success, and a clean outcome | `--outcome-success`, `--score-good` | deep greens `#227d47`, `#2e8c45`, `#3ab533` |
-| Caution, abandonment, the losing band | `--completion-warn`, `--outcome-abandoned` | pinks `#ff99b6`, `#c96384`, `#8f4764` |
-| Information | `--sev-info` | teals `#00514f`, `#2f9b99`; light blue `#91dbda` |
-| Errors | `--sev-critical`, `--sev-high` | `#c80808`, `#f13030` |
+| High severity, abandonment, the losing band | `--sev-high`, `--outcome-abandoned`, `--completion-warn` | pinks `#ff99b6`, `#c96384`, `#8f4764` |
+| Medium severity, information | `--sev-medium`, `--sev-info` | teals `#006765`, `#00514f`, `#2f9b99`; light blue `#91dbda`; mid fir `#0d3a29` |
+| Errors, and the critical band | `--sev-critical`, `--sev-critical-border` | `#c80808`, `#f13030` |
 
 Rules that outlive the values:
 
@@ -403,6 +403,12 @@ Rules that outlive the values:
   the tokens file. Every other value above is the site's own.
 - Dark mode is a colour override in the tokens file; sizes, spacing and motion are shared. The lime accent is unchanged
   in dark mode and the greens invert to the lighter grass and lime.
+- **Every semantic pair is at 4.5:1 or better**, in both themes, and that is what fixed the few values that are not the
+  site's own. The severity ramp is five hues of the palette — red, deep pink, deep teal, deep green, mid fir — because
+  the bright red `#f13030` cannot carry text on a near-white tint at any size; it is the critical band's **border**, the
+  current fixation and the error states instead. The teal link is `#006765` rather than `#007b79` because the brighter
+  teal falls to 4.33:1 on the tinted section. Four pale-green chip backgrounds are `#eff6e9` rather than `#e4f0da` for
+  the same reason. A value marked `(derived)` in the tokens file is one the palette does not contain at all.
 - A colour is never the only carrier of meaning: severity, outcome and attribution always have their word beside them.
 
 ### Type

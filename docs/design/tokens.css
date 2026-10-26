@@ -166,7 +166,7 @@
   --color-text: #101828;            /* body copy */
   --color-heading: #08251a;         /* dark fir — every headline */
   --color-text-muted: #4a5c53;      /* (derived) */
-  --color-text-faint: #6b7a72;      /* (derived) */
+  --color-text-faint: #5d6d64;      /* (derived) */
   --color-focus: #08251a;           /* visible on white and on lime */
 
   /* ---- Accent: reserved for actions ------------------------------------
@@ -180,29 +180,34 @@
 
   /* ---- Link ------------------------------------------------------------
      Lime is unreadable as text on white, so links are teal and underlined. */
-  --color-link: #007b79;
+  --color-link: #006765;      /* the next teal down: #007b79 is short of 4.5:1 on the tinted section */
   --color-link-hover: #00514f;
 
   /* ---- Severity (findings) --------------------------------------------- */
+  /* Five bands, five hues of the palette, every one of them dark enough to be
+     read at chip size on its own tint: red, deep pink, deep teal, deep green,
+     mid fir. The bright red #f13030 cannot carry text on a near-white tint at
+     any size, so it is the critical band's border, the current fixation and the
+     error states instead. */
   --sev-critical: #c80808;
   --sev-critical-bg: #fdeaea;      /* (derived) */
-  --sev-critical-border: #f4b9b9;  /* (derived) */
-  --sev-high: #f13030;
-  --sev-high-bg: #fdeeee;          /* (derived) */
-  --sev-high-border: #f8c4c4;      /* (derived) */
-  --sev-medium: #8f4764;
-  --sev-medium-bg: #fdeef2;        /* (derived) */
-  --sev-medium-border: #ff99b6;
+  --sev-critical-border: #f13030;
+  --sev-high: #8f4764;
+  --sev-high-bg: #fdeef2;          /* (derived) */
+  --sev-high-border: #ff99b6;
+  --sev-medium: #006765;
+  --sev-medium-bg: #e3f1f1;        /* (derived) */
+  --sev-medium-border: #91dbda;
   --sev-low: #227d47;
-  --sev-low-bg: #e4f0da;
+  --sev-low-bg: #eff6e9;
   --sev-low-border: #c3ceaf;
-  --sev-info: #00514f;
-  --sev-info-bg: #e3f1f1;          /* (derived) */
-  --sev-info-border: #91dbda;
+  --sev-info: #0d3a29;
+  --sev-info-bg: #eff6e9;
+  --sev-info-border: #c3ceaf;
 
   /* ---- Task outcome ---------------------------------------------------- */
   --outcome-success: #227d47;
-  --outcome-success-bg: #e4f0da;
+  --outcome-success-bg: #eff6e9;
   --outcome-abandoned: #8f4764;
   --outcome-abandoned-bg: #fdeef2;
   --outcome-failed: #c80808;
@@ -221,7 +226,7 @@
   --completion-threshold-good: 0.6;  /* at or above: the audience gets through */
   --completion-threshold-bad: 0.3;   /* at or below: the audience does not */
   --completion-good: #227d47;
-  --completion-good-bg: #e4f0da;
+  --completion-good-bg: #eff6e9;
   --completion-warn: #8f4764;
   --completion-warn-bg: #fdeef2;
   --completion-bad: #c80808;
@@ -233,7 +238,7 @@
   --score-threshold-good: 25;  /* at or below: clean       */
   --score-threshold-bad: 60;   /* at or above: defective   */
   --score-good: #227d47;
-  --score-good-bg: #e4f0da;
+  --score-good-bg: #eff6e9;
   --score-warn: #8f4764;
   --score-warn-bg: #fdeef2;
   --score-bad: #c80808;
@@ -243,7 +248,7 @@
      Teal and deep pink: two hues of the palette that stay apart for a
      colour-blind reader, and neither is the lime accent. */
   --variant-a: #007b79;
-  --variant-a-bg: #e3f1f1;
+  --variant-a-bg: #eef7f7;
   --variant-b: #8f4764;
   --variant-b-bg: #fdeef2;
 
@@ -300,7 +305,7 @@
     --color-text: #e4f0da;
     --color-heading: #ffffff;
     --color-text-muted: #a9c2b2;
-    --color-text-faint: #7e9c8c;
+    --color-text-faint: #8aa99a;
     --color-focus: #abff44;
 
     --color-accent: #abff44;
@@ -314,19 +319,19 @@
 
     --sev-critical: #ff9a9a;
     --sev-critical-bg: #3a1413;
-    --sev-critical-border: #5f2423;
-    --sev-high: #ff8c86;
-    --sev-high-bg: #3a1a18;
-    --sev-high-border: #632c29;
-    --sev-medium: #ff99b6;
-    --sev-medium-bg: #3a1a26;
-    --sev-medium-border: #63303f;
+    --sev-critical-border: #ff8c86;
+    --sev-high: #ff99b6;
+    --sev-high-bg: #3a1a26;
+    --sev-high-border: #63303f;
+    --sev-medium: #91dbda;
+    --sev-medium-bg: #06302f;
+    --sev-medium-border: #0e4b4a;
     --sev-low: #7ddd3d;
     --sev-low-bg: #10301d;
     --sev-low-border: #235234;
-    --sev-info: #91dbda;
-    --sev-info-bg: #06302f;
-    --sev-info-border: #0e4b4a;
+    --sev-info: #e4f0da;
+    --sev-info-bg: #11442f;
+    --sev-info-border: #2b6a50;
 
     --outcome-success: #7ddd3d;
     --outcome-success-bg: #10301d;
@@ -395,7 +400,7 @@
   --color-text: #e4f0da;
   --color-heading: #ffffff;
   --color-text-muted: #a9c2b2;
-  --color-text-faint: #7e9c8c;
+  --color-text-faint: #8aa99a;
   --color-focus: #abff44;
 
   --color-accent: #abff44;
@@ -409,19 +414,19 @@
 
   --sev-critical: #ff9a9a;
   --sev-critical-bg: #3a1413;
-  --sev-critical-border: #5f2423;
-  --sev-high: #ff8c86;
-  --sev-high-bg: #3a1a18;
-  --sev-high-border: #632c29;
-  --sev-medium: #ff99b6;
-  --sev-medium-bg: #3a1a26;
-  --sev-medium-border: #63303f;
+  --sev-critical-border: #ff8c86;
+  --sev-high: #ff99b6;
+  --sev-high-bg: #3a1a26;
+  --sev-high-border: #63303f;
+  --sev-medium: #91dbda;
+  --sev-medium-bg: #06302f;
+  --sev-medium-border: #0e4b4a;
   --sev-low: #7ddd3d;
   --sev-low-bg: #10301d;
   --sev-low-border: #235234;
-  --sev-info: #91dbda;
-  --sev-info-bg: #06302f;
-  --sev-info-border: #0e4b4a;
+  --sev-info: #e4f0da;
+  --sev-info-bg: #11442f;
+  --sev-info-border: #2b6a50;
 
   --outcome-success: #7ddd3d;
   --outcome-success-bg: #10301d;
