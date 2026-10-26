@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEMO_ACCOUNT_EMAIL } from '../src/seed.js';
 import { hashPassword } from '../src/store/password.js';
-import { startTestServer } from './http.js';
+import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 import { writeRunAt } from './workspace.js';
 
@@ -23,22 +23,20 @@ describe('two workspaces, each with a run', () => {
   let theirCookie: string;
 
   const signIn = async (email: string, password: string): Promise<string> => {
-    const response = await served.request('/auth/signin', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    const response = await served.signIn({ email, password });
     expect(response.status).toBe(200);
-    return (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    return cookieOf(response);
   };
 
+  /** The run ids of `GET /runs/index.json`, which the mount lists newest first. */
   const listed = async (cookie?: string): Promise<string[]> => {
     const response = await served.request(
       '/runs/index.json',
       cookie === undefined ? {} : { headers: { cookie } },
     );
     expect(response.status).toBe(200);
-    return (await response.json()) as string[];
+    const runs = (await response.json()) as { runId: string }[];
+    return runs.map((run) => run.runId);
   };
 
   const read = (runId: string, cookie?: string): Promise<Response> =>

@@ -1,9 +1,11 @@
 import { readFile, readdir } from 'node:fs/promises';
+import type { IncomingMessage } from 'node:http';
 import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEMO_ACCOUNT_EMAIL } from '../src/seed.js';
-import { SESSION_COOKIE } from '../src/server/session.js';
-import { startTestServer } from './http.js';
+import type { AuthBody } from '../src/server/routes/auth.js';
+import { isSecureRequest, SESSION_COOKIE } from '../src/server/session.js';
+import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 
 /**
@@ -16,21 +18,8 @@ import type { TestServer } from './http.js';
  * carries a shared link through a sign-in and back.
  */
 
-/** The sign-in answer, as both the chrome and these tests read it. */
-interface SessionBody {
-  signedIn: boolean;
-  account?: { email: string; displayName: string };
-  workspace?: { id: string; name: string };
-  error?: string;
-  next?: string;
-}
-
-const body = async (response: Response): Promise<SessionBody> =>
-  (await response.json()) as SessionBody;
-
-/** The `pv_session=…` pair out of a `set-cookie`, ready to send back. */
-const cookieOf = (response: Response): string =>
-  (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+/** The answer the routes declare, so the shape is read from the compiler, not restated. */
+const body = async (response: Response): Promise<AuthBody> => (await response.json()) as AuthBody;
 
 describe('signing in', () => {
   let served: TestServer;
@@ -38,11 +27,7 @@ describe('signing in', () => {
   let runId: string;
 
   const signIn = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
-    served.request('/auth/signin', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify(fields),
-    });
+    served.signIn(fields, headers);
 
   const signInAsDemo = () => signIn({ email: DEMO_ACCOUNT_EMAIL, password });
 
@@ -70,16 +55,6 @@ describe('signing in', () => {
     expect(read.signedIn).toBe(true);
     expect(read.account?.email).toBe(DEMO_ACCOUNT_EMAIL);
     expect(read.workspace?.name).toBe(served.platform.seeded?.workspaceName);
-  });
-
-  it('accepts the sign-in form submitted by the browser itself', async () => {
-    const response = await served.request('/auth/signin', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ email: DEMO_ACCOUNT_EMAIL, password }).toString(),
-    });
-    expect(response.status).toBe(200);
-    expect((await body(response)).signedIn).toBe(true);
   });
 
   it('keeps the session across a reload, and forgets it on signing out', async () => {
@@ -114,17 +89,20 @@ describe('signing in', () => {
   it('asks for both fields rather than reporting a failure it did not test', async () => {
     expect((await signIn({ email: DEMO_ACCOUNT_EMAIL })).status).toBe(400);
     expect((await signIn({})).status).toBe(400);
+
+    // A body that is not the JSON the sign-in screen sends is a 400 as well: nothing was
+    // tested, so reporting a failed sign-in would be reporting something that never ran.
+    const unreadable = await served.request('/auth/signin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'email=owner@northwind.example&password=hunter2',
+    });
+    expect(unreadable.status).toBe(400);
   });
 
   describe('a cookie this server did not write', () => {
-    const casesOf = async (served: TestServer, password: string): Promise<string[]> => {
-      const good = cookieOf(
-        await served.request('/auth/signin', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email: DEMO_ACCOUNT_EMAIL, password }),
-        }),
-      );
+    const casesOf = async (): Promise<string[]> => {
+      const good = cookieOf(await signInAsDemo());
       const expired = await served.platform.store.sessions.create({
         accountId: served.platform.seeded?.accountId ?? '',
         workspaceId: served.platform.seeded?.workspaceId ?? '',
@@ -141,7 +119,7 @@ describe('signing in', () => {
     };
 
     it('is signed out everywhere, and is never a 500', async () => {
-      for (const cookie of await casesOf(served, password)) {
+      for (const cookie of await casesOf()) {
         const session = await served.request('/auth/session', { headers: { cookie } });
         expect(session.status).toBe(200);
         expect((await body(session)).signedIn).toBe(false);
@@ -188,7 +166,7 @@ describe('signing in', () => {
     });
 
     it('serves the public pages of the product without a session', async () => {
-      for (const path of ['/', '/demo', '/signin']) {
+      for (const path of ['/', '/demo', '/demo/', '/signin']) {
         expect((await served.navigate(path)).status).toBe(200);
       }
       expect((await served.request('/auth/session')).status).toBe(200);
@@ -196,17 +174,28 @@ describe('signing in', () => {
   });
 
   describe('the session cookie', () => {
-    it('is HTTP-only and SameSite=Lax, and Secure only over HTTPS', async () => {
+    it('is HTTP-only and SameSite=Lax, and not Secure over plain HTTP', async () => {
       const plain = (await signInAsDemo()).headers.get('set-cookie') ?? '';
       expect(plain).toContain('HttpOnly');
       expect(plain).toContain('SameSite=Lax');
+      // A loopback server is reached over HTTP, and a cookie marked `Secure` there would
+      // never come back.
       expect(plain).not.toContain('Secure');
+    });
 
-      const https = await signIn(
-        { email: DEMO_ACCOUNT_EMAIL, password },
-        { 'x-forwarded-proto': 'https' },
-      );
-      expect(https.headers.get('set-cookie')).toContain('Secure');
+    it('is Secure when the connection carrying the request is encrypted', () => {
+      const overTls = { headers: {}, socket: { encrypted: true } } as unknown as IncomingMessage;
+      const overTcp = { headers: {}, socket: {} } as unknown as IncomingMessage;
+      // The connection decides it, not a header: `x-forwarded-proto` is written by
+      // whoever is on the other end, and a cookie attribute a client can set is not one.
+      expect(isSecureRequest(overTls)).toBe(true);
+      expect(isSecureRequest(overTcp)).toBe(false);
+      expect(
+        isSecureRequest({
+          headers: { 'x-forwarded-proto': 'https' },
+          socket: {},
+        } as unknown as IncomingMessage),
+      ).toBe(false);
     });
 
     it('carries nothing but a session id and its signature', async () => {

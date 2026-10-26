@@ -45,10 +45,8 @@ export interface AuthRouteOptions {
 }
 
 /**
- * The submitted fields, from JSON or from a form post. Both are accepted because the
- * sign-in screen is a form: built with `fetch` it sends JSON, submitted by the browser
- * itself it sends `application/x-www-form-urlencoded`, and neither should be a 400 that
- * says nothing about which of the two the server wanted.
+ * The submitted fields, as JSON — what the sign-in screen sends (#12). A body this cannot
+ * read is a 400 rather than a failed sign-in, because nothing was tested.
  */
 const readFields = async (request: IncomingMessage): Promise<Record<string, string> | null> => {
   const chunks: Buffer[] = [];
@@ -61,10 +59,6 @@ const readFields = async (request: IncomingMessage): Promise<Record<string, stri
   }
   const body = Buffer.concat(chunks).toString('utf8');
   if (body === '') return {};
-  const type = request.headers['content-type'] ?? '';
-  if (type.includes('x-www-form-urlencoded')) {
-    return Object.fromEntries(new URLSearchParams(body));
-  }
   try {
     const parsed: unknown = JSON.parse(body);
     if (typeof parsed !== 'object' || parsed === null) return null;
@@ -79,12 +73,28 @@ const readFields = async (request: IncomingMessage): Promise<Record<string, stri
   }
 };
 
+/**
+ * What these three routes answer with, read from the compiler at both ends: the chrome's
+ * and the tests'. Every field but `signedIn` is absent when it has nothing to say.
+ */
+export interface AuthBody {
+  signedIn: boolean;
+  account?: { id: string; email: string; displayName: string };
+  workspace?: { id: string; name: string };
+  /** The session's absolute expiry, so the chrome need not guess when it ends. */
+  expiresAt?: string;
+  /** The one sentence a failure reports. */
+  error?: string;
+  /** Where a completed sign-in lands. */
+  next?: string;
+}
+
 /** What `/auth/session` and a completed sign-in say about who is signed in. */
 const signedInBody = (
   account: AccountRecord,
   workspace: WorkspaceRecord,
   session: SessionRecord,
-): Record<string, unknown> => ({
+): AuthBody => ({
   signedIn: true,
   account: { id: account.id, email: account.email, displayName: account.displayName },
   workspace: { id: workspace.id, name: workspace.name },
@@ -96,13 +106,13 @@ const signinHandler =
   async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const fields = await readFields(request);
     if (fields === null) {
-      sendJson(response, 400, { error: 'That sign-in could not be read.' });
+      sendJson(response, 400, { error: 'That sign-in could not be read.', signedIn: false });
       return;
     }
     const email = fields.email ?? '';
     const password = fields.password ?? '';
     if (email === '' || password === '') {
-      sendJson(response, 400, { error: 'Enter your email and your password.' });
+      sendJson(response, 400, { error: 'Enter your email and your password.', signedIn: false });
       return;
     }
 
@@ -127,6 +137,19 @@ const signinHandler =
     });
   };
 
+/**
+ * The answer to a request that is signed out when it is finished with: the cookie emptied
+ * so the browser stops sending it, and that nobody is signed in. Signing out ends here,
+ * and so does a session whose account or workspace has gone.
+ */
+const answerSignedOut = (request: IncomingMessage, response: ServerResponse): void => {
+  response.setHeader(
+    'set-cookie',
+    clearedSessionCookieHeader({ secure: isSecureRequest(request) }),
+  );
+  sendJson(response, 200, { signedIn: false } satisfies AuthBody);
+};
+
 const signoutHandler =
   ({ store, readSession }: AuthRouteOptions) =>
   async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
@@ -134,11 +157,7 @@ const signoutHandler =
     // Deleting the record is what signing out means: the cookie is cleared as well, but a
     // copy of it kept elsewhere is signed out too, because the record it named is gone.
     if (session !== null) await store.sessions.delete(session.id);
-    response.setHeader(
-      'set-cookie',
-      clearedSessionCookieHeader({ secure: isSecureRequest(request) }),
-    );
-    sendJson(response, 200, { signedIn: false });
+    answerSignedOut(request, response);
   };
 
 const sessionHandler =
@@ -148,7 +167,7 @@ const sessionHandler =
     if (session === null) {
       // Not 401: the landing page and `/demo` are public, and their chrome reads this to
       // find out there is nobody signed in. That is an answer, not a failure.
-      sendJson(response, 200, { signedIn: false });
+      sendJson(response, 200, { signedIn: false } satisfies AuthBody);
       return;
     }
     const [account, workspace] = await Promise.all([
@@ -156,14 +175,10 @@ const sessionHandler =
       store.workspaces.byId(session.workspaceId),
     ]);
     if (account === null || workspace === null) {
-      // The record outlived what it pointed at. The session is of no further use, so it
-      // is deleted and the request is signed out rather than being handed a half-answer.
-      await store.sessions.delete(session.id);
-      response.setHeader(
-        'set-cookie',
-        clearedSessionCookieHeader({ secure: isSecureRequest(request) }),
-      );
-      sendJson(response, 200, { signedIn: false });
+      // The record outlived what it pointed at: there is nobody to name, so the request
+      // is signed out rather than handed a half-answer. Reading does not delete — the
+      // record expires on its own clock, and signing out is the route that ends one.
+      answerSignedOut(request, response);
       return;
     }
     sendJson(response, 200, signedInBody(account, workspace, session));

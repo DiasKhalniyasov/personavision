@@ -13,10 +13,10 @@ import type { PlatformStore, WorkspaceRecord } from '../store/types.js';
 /**
  * The workspace a sign-in lands in, or `null` for an account that is a member of none.
  *
- * One account is a member of exactly one workspace today — seeding creates the pair — so
- * the first of the store's answers is the answer. The day an account may belong to two,
- * this is the one place that has to choose between them, and the signed-in chrome gains a
- * switcher rather than every caller gaining a workspace argument.
+ * ponytail: one account is a member of exactly one workspace today — seeding creates the
+ * pair — so the first of the store's answers is the answer. The day an account may belong
+ * to two, this is the one place that has to choose between them, and the signed-in chrome
+ * gains a switcher rather than every caller gaining a workspace argument.
  */
 export const workspaceForAccount = async (
   store: PlatformStore,

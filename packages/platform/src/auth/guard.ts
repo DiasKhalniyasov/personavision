@@ -54,6 +54,11 @@ export interface GuardOptions {
  * workspace's run stays undisclosed rather than becoming a 401 that confirms it exists.
  * The viewer's bundles are the same bytes for everybody and have to load for `/signin`
  * itself to render.
+ *
+ * ponytail: an extension is the test for "names a file", because every screen of
+ * `docs/FLOW.md` section 3 is an extensionless path and every served file has one. A
+ * screen route that one day ends in a dot needs this to ask the mount and the static
+ * handler instead.
  */
 const namesAFile = (pathname: string): boolean => extname(pathname) !== '';
 
@@ -71,13 +76,18 @@ export const safeNextPath = (value: string | null | undefined): string | null =>
   return value;
 };
 
+/** `/demo/` is `/demo`: a trailing slash is the same page, and not a reason to sign in. */
+const withoutTrailingSlash = (pathname: string): string =>
+  pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+
 export const sessionGuard = ({ readSession }: GuardOptions): Middleware => {
   const answer = async (
     request: IncomingMessage,
     response: Parameters<Middleware>[1],
   ): Promise<boolean> => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    if (PUBLIC_PATHS.has(url.pathname) || namesAFile(url.pathname)) return false;
+    if (PUBLIC_PATHS.has(withoutTrailingSlash(url.pathname)) || namesAFile(url.pathname))
+      return false;
     if ((await readSession(request)) !== null) return false;
 
     if (!isNavigation(request)) {

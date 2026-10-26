@@ -23,10 +23,10 @@ export const DEFAULT_HOST = '127.0.0.1';
 export interface PlatformServerOptions {
   /**
    * `createPlatform`'s own guard: signed out means `/signin`, in front of everything
-   * below. Left out, every path answers without a session — which only a test wanting to
-   * drive one layer on its own ever wants.
+   * below. Required rather than defaulted, so a server cannot be composed unprotected by
+   * leaving an argument out.
    */
-  guard?: Middleware;
+  guard: Middleware;
   routes: readonly Route[];
   /** `runDataMount` from `@personavision/cli`, scoped by the platform's `visibleRuns`. */
   runData: Middleware;
@@ -53,9 +53,8 @@ export const startPlatformServer = async ({
   host = DEFAULT_HOST,
 }: PlatformServerOptions): Promise<PlatformServer> => {
   const platformRoutes = routeMount(routes);
-  const protect: Middleware = guard ?? ((_request, _response, next) => next());
   const server: Server = createServer((request, response) => {
-    protect(request, response, () => {
+    guard(request, response, () => {
       platformRoutes(request, response, () => {
         runData(request, response, () => {
           viewer(request, response, () => {
