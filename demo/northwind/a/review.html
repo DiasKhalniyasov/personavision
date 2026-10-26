@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review your order &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="../shared/shop.css" />
+  </head>
+  <body>
+    <header class="shop-bar">
+      <a class="brand" href="cart.html">NORTHWIND</a>
+      <span class="cart" data-aoi="cart-badge">Cart (1)</span>
+    </header>
+    <main class="body">
+      <section>
+        <h1>Review your order</h1>
+        <div class="field" data-aoi="ship-to">
+          <span class="field-label">Ship to</span>
+          <p>14 Mill Lane, Bristol</p>
+        </div>
+        <div class="field" data-aoi="pay-with">
+          <span class="field-label">Pay with</span>
+          <p>Visa &bull;&bull;&bull;&bull; 4242 &middot; <a href="payment.html">Edit</a></p>
+        </div>
+        <!-- The one completing action on the step. -->
+        <form method="get" action="confirmation.html">
+          <button class="cta" data-aoi="complete" type="submit">
+            Place order &middot; $137.95
+          </button>
+        </form>
+      </section>
+      <aside>
+        <h2>Order summary</h2>
+        <div class="summary" data-aoi="summary">
+          <dl>
+            <dt>Ridgeline boots</dt>
+            <dd>$129.00</dd>
+            <dt>Shipping</dt>
+            <dd>$8.95</dd>
+            <dt class="total">Total</dt>
+            <dd class="total">$137.95</dd>
+          </dl>
+        </div>
+      </aside>
+    </main>
+    <footer class="trust" data-aoi="trust">
+      Secure payment &middot; 30-day returns<a
+        class="support"
+        data-aoi="support"
+        href="../shared/help.html"
+        >Need help?</a
+      >
+    </footer>
+  </body>
+</html>

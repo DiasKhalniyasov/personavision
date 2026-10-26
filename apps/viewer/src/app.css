@@ -1,0 +1,76 @@
+/* =============================================================================
+   The document shell.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which this
+   app imports and never copies. No colour, size or spacing value is restated here,
+   and there is no second palette: light and dark both come from that file's own
+   dark-mode block.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: var(--space-0);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: var(--weight-regular) var(--text-base) / var(--leading-normal) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: var(--space-0);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-snug);
+}
+
+p {
+  margin: var(--space-0);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: var(--space-1);
+}
+
+/* ---- Boot placeholder and boot failure ---------------------------------- */
+
+.boot {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--layout-gutter);
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.boot-name {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.boot-line {
+  max-width: var(--layout-max);
+  color: var(--color-text-muted);
+}

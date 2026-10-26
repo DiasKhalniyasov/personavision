@@ -6,8 +6,9 @@ export default defineConfig({
     // rather than editing this configuration.
     include: [
       'tests/**/*.{test,spec}.ts',
-      'packages/*/{src,tests}/**/*.{test,spec}.ts',
+      'packages/*/{src,test,tests}/**/*.{test,spec}.ts',
       'apps/*/{src,tests}/**/*.{test,spec}.{ts,tsx}',
+      'demo/*/test/**/*.{test,spec}.ts',
     ],
     // Node is the default because nothing here needs a DOM. A suite that does declares it
     // per file with a `// @vitest-environment jsdom` docblock and adds its own dependency,

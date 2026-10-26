@@ -75,6 +75,18 @@ const parse = <Schema extends z.ZodType>(
   const result = schema.safeParse(value);
   if (result.success) return result.data;
   for (const issue of result.error.issues) {
+    // A field the contract does not declare is reported where it sits, one violation per
+    // field, rather than as a single issue against the object that carries them.
+    if (issue.code === 'unrecognized_keys') {
+      for (const key of issue.keys) {
+        violations.push({
+          file: label,
+          path: pointer([...issue.path, key]),
+          message: `the contract declares no "${key}" here: an artifact file carries no field the schemas do not name, which is what keeps a run directory portable`,
+        });
+      }
+      continue;
+    }
     violations.push({ file: label, path: pointer(issue.path), message: issue.message });
   }
   return undefined;
@@ -84,8 +96,10 @@ const parse = <Schema extends z.ZodType>(
  * The checks that span more than one value: every reference out of one artifact file names
  * something the run declares, and `run.sessionIds` agrees with the sessions that exist.
  *
- * Step ids are deliberately not checked: `run.steps` enumerates the task's own steps, and
- * a session may legitimately end somewhere the run never planned to go.
+ * A session's step ids are deliberately not checked: `run.steps` enumerates the task's own
+ * steps, and a session may legitimately end somewhere the run never planned to go. A step
+ * caption is different — the pipeline writes it against a step it just measured, and a
+ * caption no screen can find is a silently blank panel — so that one is checked.
  */
 const checkReferences = (
   run: Run,
@@ -99,6 +113,9 @@ const checkReferences = (
     `"${aoiId}" names no area of interest declared in this run's aois`;
   const danglingVariant = (variant: string): string =>
     `"${variant}" names no variant declared in this run's variants`;
+  const declaredSteps = new Set(run.steps.map((step) => step.id));
+  const danglingStep = (step: string): string =>
+    `"${step}" names no step declared in this run's steps`;
 
   run.aoiMetrics.forEach((metric, index) => {
     if (!declaredAois.has(metric.aoiId)) {
@@ -109,6 +126,7 @@ const checkReferences = (
     ['aois', run.aois],
     ['screenshots', run.screenshots],
     ['scores', run.scores],
+    ['stepCaptions', run.stepCaptions],
   ];
   for (const [list, entries] of runVariantReferences) {
     entries.forEach((entry, index) => {
@@ -117,10 +135,91 @@ const checkReferences = (
       }
     });
   }
+  run.stepCaptions.forEach((caption, index) => {
+    if (!declaredSteps.has(caption.step)) {
+      violations.push(
+        at(relative.run, ['stepCaptions', index, 'step'], danglingStep(caption.step)),
+      );
+    }
+  });
   if (!declaredVariants.has(run.verdict.harderVariant)) {
     violations.push(
       at(relative.run, ['verdict', 'harderVariant'], danglingVariant(run.verdict.harderVariant)),
     );
+  }
+  // The verdict names what the product leads with, so everything it points at has to be
+  // there: the variant to ship, and the one heatmap the Verdict screen embeds as evidence.
+  if (!declaredVariants.has(run.verdict.preferredVariant)) {
+    violations.push(
+      at(
+        relative.run,
+        ['verdict', 'preferredVariant'],
+        danglingVariant(run.verdict.preferredVariant),
+      ),
+    );
+  }
+  const hero = run.verdict.heroEvidence;
+  const heroPath = ['verdict', 'heroEvidence'] as const;
+  if (!declaredVariants.has(hero.variant)) {
+    violations.push(at(relative.run, [...heroPath, 'variant'], danglingVariant(hero.variant)));
+  }
+  // A session's step is deliberately unchecked, because a session may end somewhere the run
+  // never planned to go. The hero evidence is the run's own choice of step, so it is held to
+  // the steps the run declares: it is a heatmap the screen has to be able to render.
+  if (!run.steps.some((step) => step.id === hero.step)) {
+    violations.push(
+      at(
+        relative.run,
+        [...heroPath, 'step'],
+        `"${hero.step}" names no step declared in this run's steps`,
+      ),
+    );
+  }
+  // The evidence is a heatmap drawn over a page, so the page has to have been captured.
+  // This is the only thing holding the `aoiId: null` case — "the whole step is the
+  // evidence" — to something the Verdict screen can actually render.
+  if (
+    !run.screenshots.some(
+      (screenshot) => screenshot.variant === hero.variant && screenshot.step === hero.step,
+    )
+  ) {
+    violations.push(
+      at(
+        relative.run,
+        [...heroPath, 'step'],
+        `no screenshot was captured of ${hero.variant} ${hero.step}, so there is no page for the verdict's heatmap to be drawn on`,
+      ),
+    );
+  }
+  if (hero.aoiId !== null) {
+    const heroAoi = run.aois.find((aoi) => aoi.id === hero.aoiId);
+    if (heroAoi === undefined) {
+      violations.push(at(relative.run, [...heroPath, 'aoiId'], danglingAoi(hero.aoiId)));
+    } else if (heroAoi.variant !== hero.variant || heroAoi.step !== hero.step) {
+      violations.push(
+        at(
+          relative.run,
+          [...heroPath, 'aoiId'],
+          `area of interest "${hero.aoiId}" is on ${heroAoi.variant} ${heroAoi.step}, but the hero evidence is of ${hero.variant} ${hero.step}`,
+        ),
+      );
+    }
+  }
+  // Across two files: the Verdict screen shows the findings the run names, so a name that
+  // findings.json does not carry would leave the screen with a place and nothing in it.
+  if (findings !== undefined) {
+    const declaredFindings = new Set(findings.findings.map((finding) => finding.id));
+    run.verdict.headlineFindingIds.forEach((findingId, index) => {
+      if (!declaredFindings.has(findingId)) {
+        violations.push(
+          at(
+            relative.run,
+            ['verdict', 'headlineFindingIds', index],
+            `"${findingId}" names no finding in ${relative.findings}`,
+          ),
+        );
+      }
+    });
   }
 
   for (const session of sessions) {
@@ -176,7 +275,7 @@ const checkReferences = (
         at(relative.findings, ['findings', index, 'aoiId'], danglingAoi(finding.aoiId)),
       );
     }
-    if (!declaredVariants.has(finding.variant)) {
+    if (finding.variant !== null && !declaredVariants.has(finding.variant)) {
       violations.push(
         at(relative.findings, ['findings', index, 'variant'], danglingVariant(finding.variant)),
       );

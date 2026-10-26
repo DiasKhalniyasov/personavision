@@ -96,7 +96,7 @@ describe('a mutated run directory is rejected at the path of the offending value
     const violations = await validate(dir);
 
     expect(offenders(violations)).toContain(`${label.run}/schemaVersion`);
-    expect(violations[0].message).toMatch(/expected 1/);
+    expect(violations[0].message).toMatch(/every artifact file states the schema version/);
   });
 
   it('rejects findings.json with no schemaVersion', async () => {
@@ -200,6 +200,7 @@ describe('a mutated run directory is rejected at the path of the offending value
     run.aois[0].variant = 'Z';
     run.screenshots[0].variant = 'Z';
     run.scores[0].variant = 'Z';
+    run.stepCaptions[0].variant = 'Z';
     await writeFile(runPaths(dir).run, asJson(run));
 
     expect(offenders(await validate(dir))).toEqual(
@@ -208,8 +209,17 @@ describe('a mutated run directory is rejected at the path of the offending value
         `${label.run}/screenshots/0/variant`,
         `${label.run}/scores/0/variant`,
         `${label.run}/verdict/harderVariant`,
+        `${label.run}/stepCaptions/0/variant`,
       ]),
     );
+  });
+
+  it('rejects a step caption against a step that the run does not declare', async () => {
+    const run = validRun();
+    run.stepCaptions[0].step = 'checkout';
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toContain(`${label.run}/stepCaptions/0/step`);
   });
 
   it('rejects a session on a variant that the run does not declare', async () => {

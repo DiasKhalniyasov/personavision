@@ -12,7 +12,17 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "fixtures": "tsx --conditions development scripts/make-fixtures.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@personavision/contract": "workspace:*",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
   }
 }

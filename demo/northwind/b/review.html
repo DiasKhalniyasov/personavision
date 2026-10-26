@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review your order &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="../shared/shop.css" />
+  </head>
+  <body>
+    <header class="shop-bar">
+      <a class="brand" href="cart.html">NORTHWIND</a>
+      <span class="cart" data-aoi="cart-badge">Cart (1)</span>
+    </header>
+    <!-- Defect 3, the banner that takes the first look: above the content, on every step but the last. -->
+    <div class="promo" data-aoi="promo">
+      SPRING SALE &minus;20%<small>code SPRING20 &middot; today only</small>
+    </div>
+    <main class="body">
+      <section>
+        <h1>Review your order</h1>
+        <div class="field" data-aoi="ship-to">
+          <span class="field-label">Ship to</span>
+          <p>14 Mill Lane, Bristol</p>
+        </div>
+        <div class="field" data-aoi="pay-with">
+          <span class="field-label">Pay with</span>
+          <p>Visa &bull;&bull;&bull;&bull; 4242 &middot; <a href="payment.html">Edit</a></p>
+        </div>
+        <!--
+          Defect 1, the completing action nobody sees. Still the one completing action on
+          the step, and still reachable by scrolling, so the task stays completable: the
+          spacer pushes it below the fold at both viewports and the shop's secondary
+          treatment demotes it. The spacer's height is measured, not guessed; the
+          arithmetic is in the variant-B section of `demo/README.md`.
+        -->
+        <form method="get" action="confirmation.html">
+          <div class="pushdown" aria-hidden="true"></div>
+          <button class="cta weak" data-aoi="complete" type="submit">
+            Confirm purchase &middot; $147.95
+          </button>
+        </form>
+      </section>
+      <aside>
+        <h2>Order summary</h2>
+        <div class="summary" data-aoi="summary">
+          <dl>
+            <dt>Ridgeline boots</dt>
+            <dd>$129.00</dd>
+            <dt>Shipping</dt>
+            <dd>$8.95</dd>
+            <!-- Defect 2, the fee that arrives after the card: its first appearance in the flow. -->
+            <dt class="fee-new" data-aoi="fee-row">Service fee</dt>
+            <dd class="fee-new">$9.95</dd>
+            <dt class="total">Total</dt>
+            <dd class="total fee-new">$147.95</dd>
+          </dl>
+        </div>
+      </aside>
+    </main>
+    <footer class="trust" data-aoi="trust">
+      Secure payment &middot; 30-day returns<a
+        class="support"
+        data-aoi="support"
+        href="../shared/help.html"
+        >Need help?</a
+      >
+    </footer>
+  </body>
+</html>

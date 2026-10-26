@@ -14,24 +14,29 @@ It is not restated here. Read it there, and use those words in code, tests, issu
 
 ## Module map
 
-| Package                   | Owns                                                                                                              |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@personavision/contract` | The run artifact: zod schemas, the types inferred from them, the run-directory reader and writer, and `validate`. |
-| `@personavision/cli`      | The `personavision` binary. `serve` starts the platform; `run`, `validate` and `open` are **internal tools**.     |
-| `@personavision/engine`   | Drives a persona through a variant and emits a session.                                                           |
-| `@personavision/browser`  | Browser driving, page screenshots with the fold drawn, area-of-interest extraction.                               |
-| `@personavision/scoring`  | The friction score, its component weights, the per-seed-group spread and the verdict.                             |
-| `@personavision/personas` | The audience schema, the seeded persona **generator**, trait sampling and the device mix.                         |
-| `@personavision/viewer`   | `apps/viewer` — the platform's web app. Added by its own ticket.                                                  |
-| `@personavision/platform` | Accounts, sign-in sessions, workspaces, audience storage and `personavision serve`.                              |
+| Package                      | Owns                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@personavision/contract`    | The run artifact: zod schemas, the types inferred from them, the run-directory reader and writer, and `validate`.                                |
+| `@personavision/cli`         | The `personavision` binary. `serve` starts the platform; `run`, `validate` and `open` are **internal tools**, with the read-only run-data mount. |
+| `@personavision/engine`      | Drives a persona through a variant and emits a session.                                                                                          |
+| `@personavision/browser`     | Browser driving, page screenshots with the fold drawn, area-of-interest extraction.                                                              |
+| `@personavision/scoring`     | The friction score, its component weights, the per-seed-group spread and the verdict.                                                            |
+| `@personavision/personas`    | The audience schema, the seeded persona **generator**, trait sampling and the device mix.                                                        |
+| `@personavision/calibration` | Scores the engine against the UEyes benchmark and fits its configuration. The only place a human-likeness figure is produced. Added by step #11. |
+| `@personavision/viewer`      | `apps/viewer` — the platform's web app. Added by its own ticket.                                                                                 |
+| `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience storage and `personavision serve`.                                                              |
 
-The binary is `personavision`. The library packages exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml`. **`packages/platform` is the one exception**: it arrived with the owner's direction change and is created by the hosted-platform step, which is the only step permitted to add it to `pnpm-workspace.yaml`.
+The binary is `personavision`. The library packages above exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml` — `packages/*` already covers a new one. Two packages are the exceptions, each created by the one step that needs it: `@personavision/calibration` (step #11, because nothing before it needed a home for the human-likeness figure; it depends on `@personavision/contract` and may depend on `@personavision/engine`, and nothing depends on it) and `@personavision/platform` (the hosted-platform step, which arrived with the owner's direction change).
 
 ## `packages/contract` is the only place the artifact is declared
 
 **No package other than `@personavision/contract` declares an artifact field name or a run-directory path.** Not a constant, not a string literal, not a re-derived path. Readers and writers import the schemas and the inferred types, so a field name is read from the compiler rather than from prose, and a round trip through disk is type-checked at both ends.
 
-The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`.
+The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one.
+
+`run.json` carries the **audience** the test was run for — by value, copied when the test started, so that editing the stored audience later cannot restate a finished test. The personas it lists are generated from that audience and carry `audienceId` and a `segment`; `scores[].completionRate` and the verdict's `preferredVariant`, `audienceSentence`, `reasons`, `headlineFindingIds` and `heroEvidence` are what the Verdict screen leads with, stored rather than computed in a browser.
+
+**Every object in the artifact is closed.** A field the schemas do not declare is rejected at its own JSON path rather than quietly dropped, which is how the artifact stays portable: an account id, a workspace id, an email, a password or a token has nowhere to hide.
 
 A step that needs a new field adds it in that package and says so on the contract step's issue. It never writes a sibling file.
 

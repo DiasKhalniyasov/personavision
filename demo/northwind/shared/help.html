@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Need help? &middot; NORTHWIND</title>
+    <link rel="stylesheet" href="shop.css" />
+  </head>
+  <!--
+    Where the trust strip's "Need help?" link goes. It is a real page so that the link is
+    a real link, and a dead end so that a visit to it costs the task nothing but time —
+    which is what the dead-end-revisit term of the friction score measures.
+
+    Nothing here links back into the shop, and that is deliberate now that there are two
+    variants. This one page is shared by both, so a link to `../a/cart.html` would walk a
+    variant-B session into variant A and go on attributing its screenshots and its areas of
+    interest to variant B — the comparison would be measuring the wrong pages. The way back
+    is the browser's back button, which is what the page has always told a reader to use.
+  -->
+  <body>
+    <header class="shop-bar">
+      <span class="brand">NORTHWIND</span>
+      <span class="cart">Cart (1)</span>
+    </header>
+    <main class="body body-single">
+      <section>
+        <h1>Need help?</h1>
+        <p>Email <b>support@northwind.example</b> and we will reply in a day.</p>
+        <p class="faint">
+          Nothing on this page advances the order, and nothing here leads back into the shop. Use
+          your browser's back button.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

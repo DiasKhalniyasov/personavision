@@ -1,0 +1,140 @@
+{
+  "step": "price-and-fees",
+  "screenshot": "screenshots/A/price-and-fees.png",
+  "viewport": {
+    "width": 400,
+    "height": 320
+  },
+  "pageHeight": 320,
+  "foldY": 320,
+  "elements": [
+    {
+      "id": "heading-order-summary",
+      "source": "dom",
+      "role": "heading",
+      "name": "Order summary",
+      "text": "Order summary",
+      "bbox": {
+        "x": 24,
+        "y": 24,
+        "width": 200,
+        "height": 22
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#heading-order-summary"
+    },
+    {
+      "id": "label-item",
+      "source": "dom",
+      "role": "text",
+      "name": "Ridgeline hiking boots",
+      "text": "Ridgeline hiking boots",
+      "bbox": {
+        "x": 24,
+        "y": 72,
+        "width": 180,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#label-item"
+    },
+    {
+      "id": "price-item",
+      "source": "dom",
+      "role": "text",
+      "name": "Item price",
+      "text": "$42.00",
+      "bbox": {
+        "x": 300,
+        "y": 72,
+        "width": 76,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#price-item"
+    },
+    {
+      "id": "label-fee",
+      "source": "dom",
+      "role": "text",
+      "name": "Service fee",
+      "text": "Service fee",
+      "bbox": {
+        "x": 24,
+        "y": 104,
+        "width": 180,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#label-fee"
+    },
+    {
+      "id": "price-fee",
+      "source": "dom",
+      "role": "text",
+      "name": "Service fee",
+      "text": "$6.00",
+      "bbox": {
+        "x": 300,
+        "y": 104,
+        "width": 76,
+        "height": 14
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#price-fee"
+    },
+    {
+      "id": "label-total",
+      "source": "dom",
+      "role": "text",
+      "name": "Total",
+      "text": "Total",
+      "bbox": {
+        "x": 24,
+        "y": 152,
+        "width": 180,
+        "height": 18
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#label-total"
+    },
+    {
+      "id": "price-total",
+      "source": "dom",
+      "role": "text",
+      "name": "Total",
+      "text": "$48.00",
+      "bbox": {
+        "x": 288,
+        "y": 152,
+        "width": 88,
+        "height": 18
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#price-total"
+    },
+    {
+      "id": "cta-pay",
+      "source": "dom",
+      "role": "button",
+      "name": "Pay now",
+      "text": "Pay now",
+      "bbox": {
+        "x": 24,
+        "y": 208,
+        "width": 180,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#cta-pay"
+    }
+  ]
+}

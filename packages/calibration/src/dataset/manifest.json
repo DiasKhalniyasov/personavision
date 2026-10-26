@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "id": "ueyes",
+    "name": "UEyes",
+    "title": "UEyes: Understanding Visual Saliency across User Interface Types",
+    "participants": 62,
+    "screenshots": 1980,
+    "categories": ["webpage", "desktop", "mobile", "poster"],
+    "viewingDurationsSeconds": [1, 3, 7],
+    "paper": {
+      "citation": "Yue Jiang, Luis A. Leiva, Hamed Rezazadegan Tavakoli, Paul R. B. Houssel, Julia Kylmälä, and Antti Oulasvirta. 2023. UEyes: Understanding Visual Saliency across User Interface Types. In Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems (CHI '23). Association for Computing Machinery, New York, NY, USA, Article 285, 1-21.",
+      "doi": "10.1145/3544548.3581096",
+      "url": "https://doi.org/10.1145/3544548.3581096"
+    },
+    "source": {
+      "host": "Zenodo",
+      "recordUrl": "https://zenodo.org/records/8010312",
+      "versionDoi": "10.5281/zenodo.8010312",
+      "conceptDoi": "10.5281/zenodo.8010311",
+      "publishedOn": "2023-06-06",
+      "resolvedOn": "2026-10-26",
+      "resolvedFrom": [
+        "https://zenodo.org/api/records/8010312 - the Zenodo record's own metadata: the file list, the byte size, the MD5 checksum and the licence id below are read from it.",
+        "https://github.com/YueJiang-nj/UEyes-CHI2023 - the authors' repository, which links the Zenodo record and documents the archive layout below.",
+        "https://doi.org/10.1145/3544548.3581096 - the CHI 2023 paper the dataset accompanies."
+      ],
+      "note": "The concept DOI 10.5281/zenodo.8010311 always resolves to the newest version; this manifest pins the version DOI 10.5281/zenodo.8010312, so a new upload by the authors is a reviewable change to this file rather than a silent change of data under a committed score."
+    },
+    "licence": {
+      "spdxId": "CC-BY-4.0",
+      "name": "Creative Commons Attribution 4.0 International",
+      "url": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "The Zenodo record's own licence field (id \"cc-by-4.0\"), with access right \"open\": the dataset needs no account, no credential and no payment.",
+      "attribution": "UEyes dataset, Yue Jiang, Luis A. Leiva, Hamed Rezazadegan Tavakoli, Paul R. B. Houssel, Julia Kylmälä and Antti Oulasvirta, CC BY 4.0, https://doi.org/10.5281/zenodo.8010312",
+      "requires": [
+        "Credit the creators, link to the licence and state whether the material was changed, wherever a figure measured on this dataset is published.",
+        "Pass the same freedoms on: a recipient may not be put under a legal or technical restriction the licence does not impose."
+      ],
+      "forbids": [
+        "Implying that the creators endorse this product or the figures it reports.",
+        "Removing or distorting the attribution and licence notice when the material is shared.",
+        "Treating the licence as permission for anything the licensors did not themselves hold: the screenshots depict third-party interfaces whose own copyright and trade marks are not licensed here, and the participants' gaze data carries the consent the study obtained and no more."
+      ],
+      "notVendoredBecause": "CC BY 4.0 covers the dataset as the authors published it, not the third-party interfaces its 1,980 screenshots depict, and no licence review of those interfaces has been performed. The archive is also 12.9 GB. So this repository commits no UEyes byte: the download lives in a cache outside it and the committed corpus is synthetic (#82)."
+    }
+  },
+  "files": [
+    {
+      "path": "UEyes_dataset.zip",
+      "url": "https://zenodo.org/api/records/8010312/files/UEyes_dataset.zip/content",
+      "sizeBytes": 12912746325,
+      "mediaType": "application/zip",
+      "archive": "zip",
+      "checksum": {
+        "state": "recorded",
+        "algorithm": "md5",
+        "value": "c2d53e6af0a47e1f459416d6839ec2c1",
+        "source": "publisher-metadata",
+        "recordedOn": "2026-10-26",
+        "note": "Read from the Zenodo record's file metadata, not computed from a local copy: it is the publisher's claim about the bytes and is what a download is checked against. The first ticket to download the archive (#85) is the first to confirm it."
+      }
+    }
+  ],
+  "layout": {
+    "root": {
+      "state": "unknown",
+      "reason": "nothing here has opened the 12.9 GB archive, so whether the entries sit at its root or under one directory is not known"
+    },
+    "verifiedAgainstArchive": false,
+    "note": "Documented by the authors' repository README, not yet read from the archive. #85 compares the extracted tree with these entries, resolves `root` to `root` or `directory`, and fails loudly naming any difference — so the next worker corrects this file instead of guessing. An unknown root is not a claim that the entries are at the archive root: it must not be reported as a layout difference.",
+    "entries": [
+      { "path": "images", "kind": "directory", "holds": "Every UI screenshot in the dataset." },
+      {
+        "path": "eyetracker_logs",
+        "kind": "directory",
+        "holds": "The raw eye-tracker logs, per participant and image."
+      },
+      {
+        "path": "saliency_maps/fixmaps_1s",
+        "kind": "directory",
+        "holds": "Human fixation maps at one second of free viewing."
+      },
+      {
+        "path": "saliency_maps/fixmaps_3s",
+        "kind": "directory",
+        "holds": "Human fixation maps at three seconds of free viewing."
+      },
+      {
+        "path": "saliency_maps/fixmaps_7s",
+        "kind": "directory",
+        "holds": "Human fixation maps at seven seconds of free viewing."
+      },
+      {
+        "path": "saliency_maps/heatmaps_1s",
+        "kind": "directory",
+        "holds": "Heatmap renderings at one second, for looking at rather than for scoring."
+      },
+      {
+        "path": "saliency_maps/heatmaps_3s",
+        "kind": "directory",
+        "holds": "Heatmap renderings at three seconds."
+      },
+      {
+        "path": "saliency_maps/heatmaps_7s",
+        "kind": "directory",
+        "holds": "Heatmap renderings at seven seconds."
+      },
+      {
+        "path": "saliency_maps/overlay_heatmaps_1s",
+        "kind": "directory",
+        "holds": "Heatmaps drawn over their screenshots at one second."
+      },
+      {
+        "path": "saliency_maps/overlay_heatmaps_3s",
+        "kind": "directory",
+        "holds": "Heatmaps drawn over their screenshots at three seconds."
+      },
+      {
+        "path": "saliency_maps/overlay_heatmaps_7s",
+        "kind": "directory",
+        "holds": "Heatmaps drawn over their screenshots at seven seconds."
+      },
+      {
+        "path": "scanpaths/paths_1s",
+        "kind": "directory",
+        "holds": "Human scanpaths at one second: ordered fixations with durations."
+      },
+      {
+        "path": "scanpaths/paths_3s",
+        "kind": "directory",
+        "holds": "Human scanpaths at three seconds."
+      },
+      {
+        "path": "scanpaths/paths_7s",
+        "kind": "directory",
+        "holds": "Human scanpaths at seven seconds."
+      },
+      {
+        "path": "info.csv",
+        "kind": "file",
+        "holds": "One row per screenshot: its category and the display the participants were shown it at."
+      },
+      {
+        "path": "README.md",
+        "kind": "file",
+        "holds": "The authors' own description of the archive."
+      }
+    ]
+  }
+}

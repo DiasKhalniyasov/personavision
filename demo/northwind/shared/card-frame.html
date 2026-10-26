@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card number</title>
+    <link rel="stylesheet" href="shop.css" />
+  </head>
+  <!--
+    The card-number field, in its own same-origin document, the way a hosted payment
+    field works. It is embedded by `../a/payment.html` (and, when it lands, by variant B)
+    inside that step's `data-aoi="card"` region.
+
+    This frame is also what the committed run's two automation failures time out on:
+    requesting it with `?stall=1` is accepted by `serve.ts` and never answered, so the
+    run ticket can produce a real selector timeout instead of editing an artifact.
+    See `demo/README.md`.
+  -->
+  <body class="card-frame-body">
+    <label for="card-number">Card number</label>
+    <input
+      id="card-number"
+      name="card-number"
+      type="text"
+      value="4242 4242 4242 4242"
+      inputmode="numeric"
+      autocomplete="cc-number"
+    />
+  </body>
+</html>
