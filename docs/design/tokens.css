@@ -26,11 +26,12 @@
   /* ---- Type ------------------------------------------------------------
      Four roles. The licensed families are commercial (VC Nudge, Die Grotesk B,
      VC Henrietta Condensed) and no font file is ever taken from optimizely.com.
-     Until the owner buys the licences each role renders in the closest free
-     Google Fonts match, self-hosted from the repository so the platform still
-     renders with no network. Buying a licence is one edit per token: put the
-     licensed family first in the stack below and vendor its files. Nothing else
-     in the product mentions a font name. */
+     The owner decided on 2026-10-27 not to licence them, so each role renders
+     in the closest free Google Fonts match, self-hosted from the repository so
+     the platform still renders with no network: those are the product's fonts.
+     Buying a licence later is one edit per token: put the licensed family first
+     in the stack below and vendor its files. Nothing else in the product
+     mentions a font name. */
   --font-display-licensed: "VC Nudge";             /* headlines */
   --font-sans-licensed: "Die Grotesk B";           /* body, buttons, forms */
   --font-editorial-licensed: "VC Henrietta Condensed"; /* editorial headlines */

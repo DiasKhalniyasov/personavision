@@ -409,7 +409,7 @@ Rules that outlive the values:
 
 Four roles, each one token:
 
-| Role | Licensed family | Free stand-in used until the licences are bought | Token |
+| Role | Commercial family, not licensed and not in use | **The family the product uses** | Token |
 | --- | --- | --- | --- |
 | Headlines | VC Nudge (400, 600, 800) | **Bricolage Grotesque** | `--font-display` |
 | Body, buttons, forms | Die Grotesk B (400, 500, 700) | **Schibsted Grotesk** | `--font-sans` |
@@ -417,9 +417,11 @@ Four roles, each one token:
 | Occasional editorial headline | VC Henrietta Condensed | **Instrument Serif** | `--font-editorial` |
 
 - VC Nudge, Die Grotesk B and VC Henrietta Condensed are **commercial fonts**. No font file is ever copied from
-  optimizely.com. Until the owner buys the licences every role renders in the free Google Fonts match above, and the day
-  a licence exists the swap is one edit per token: put the licensed family first in the stack and vendor its files.
-  `--font-display-licensed`, `--font-sans-licensed` and `--font-editorial-licensed` record the names meanwhile.
+  optimizely.com. **The owner decided on 2026-10-27 not to buy the licences**, so the free Google Fonts match above is
+  the product's own family for each role — not a stand-in waiting to be replaced — and the commercial names are kept
+  only as a record of what a purchase would swap in. If a licence is ever bought the swap is one edit per token: put the
+  licensed family first in the stack and vendor its files. `--font-display-licensed`, `--font-sans-licensed` and
+  `--font-editorial-licensed` record those names meanwhile.
 - The stand-ins are **self-hosted from the repository** (the `@fontsource` packages, OFL-licensed), not fetched from a
   CDN: the platform must still render with no network, which is also what keeps the offline demo honest. The static
   design prototype is the one exception and links Google Fonts directly, because it is opened as a file.
