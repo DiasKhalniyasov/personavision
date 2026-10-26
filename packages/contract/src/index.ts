@@ -37,10 +37,10 @@ export type {
   VariantProgress,
 } from './schemas.js';
 
-export { listRunDirs, runDirName, runPaths } from './paths.js';
+export { runDirName, runPaths } from './paths.js';
 export type { RunPaths } from './paths.js';
 
-export { appendFinishedSession, readRun, validate, writeRun } from './io.js';
+export { appendFinishedSession, listRunDirs, readRun, validate, writeRun } from './io.js';
 export type { RunArtifact, Violation } from './io.js';
 
 export { createSeededRandom } from './random.js';
