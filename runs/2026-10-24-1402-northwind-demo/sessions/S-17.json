@@ -1,0 +1,1228 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "S-17",
+  "runId": "2026-10-24-1402-northwind-demo",
+  "variant": "B",
+  "taskId": "buy-boots",
+  "kind": "simulated",
+  "persona": {
+    "id": "careful",
+    "traits": {
+      "persistence": 0.85,
+      "scanningVsReading": 0.2,
+      "detailOrientation": 0.9,
+      "interfaceFamiliarity": 0.6,
+      "patience": 0.85,
+      "riskTolerance": 0.25
+    },
+    "device": {
+      "name": "MacBook Air 13",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "deviceScaleFactor": 2,
+      "touch": false
+    }
+  },
+  "participant": null,
+  "seed": 2,
+  "startedAt": "2026-10-24T14:14:00.000Z",
+  "durationMs": 49700,
+  "screens": [
+    {
+      "index": 0,
+      "step": "cart",
+      "screenshot": "screenshots/B/cart.png",
+      "scrollY": 0,
+      "intent": "Check the size and the shipping before I commit.",
+      "decidedAction": "clicked \"Checkout\""
+    },
+    {
+      "index": 1,
+      "step": "payment",
+      "screenshot": "screenshots/B/payment.png",
+      "scrollY": 0,
+      "intent": "Make sure the card and the email are right.",
+      "decidedAction": "clicked \"Place order · $129.00\""
+    },
+    {
+      "index": 2,
+      "step": "review",
+      "screenshot": "screenshots/B/review.png",
+      "scrollY": 696,
+      "intent": "Read every line of the total before I pay.",
+      "decidedAction": "scrolled to see more of the page"
+    },
+    {
+      "index": 3,
+      "step": "review",
+      "screenshot": "screenshots/B/review.png",
+      "scrollY": 0,
+      "intent": "Read every line of the total before I pay.",
+      "decidedAction": "scrolled to see more of the page"
+    },
+    {
+      "index": 4,
+      "step": "review",
+      "screenshot": "screenshots/B/review.png",
+      "scrollY": 696,
+      "intent": "Read every line of the total before I pay.",
+      "decidedAction": "scrolled to see more of the page"
+    },
+    {
+      "index": 5,
+      "step": "review",
+      "screenshot": "screenshots/B/review.png",
+      "scrollY": 0,
+      "intent": "Read every line of the total before I pay.",
+      "decidedAction": "scrolled to see more of the page"
+    },
+    {
+      "index": 6,
+      "step": "review",
+      "screenshot": "screenshots/B/review.png",
+      "scrollY": 696,
+      "intent": "Read every line of the total before I pay.",
+      "decidedAction": "left without ordering"
+    }
+  ],
+  "fixations": [
+    {
+      "index": 0,
+      "screenIndex": 0,
+      "tMs": 847,
+      "durationMs": 534,
+      "x": 199.7,
+      "y": 94,
+      "pageX": 199.7,
+      "pageY": 94,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 1,
+      "screenIndex": 0,
+      "tMs": 1626,
+      "durationMs": 246,
+      "x": 191.9,
+      "y": 115.6,
+      "pageX": 191.9,
+      "pageY": 115.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 2,
+      "screenIndex": 0,
+      "tMs": 2315,
+      "durationMs": 255,
+      "x": 121.3,
+      "y": 227.7,
+      "pageX": 121.3,
+      "pageY": 227.7,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 3,
+      "screenIndex": 0,
+      "tMs": 3038,
+      "durationMs": 302,
+      "x": 306,
+      "y": 341.4,
+      "pageX": 306,
+      "pageY": 341.4,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 4,
+      "screenIndex": 0,
+      "tMs": 3594,
+      "durationMs": 320,
+      "x": 302.3,
+      "y": 376.6,
+      "pageX": 302.3,
+      "pageY": 376.6,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 5,
+      "screenIndex": 0,
+      "tMs": 4557,
+      "durationMs": 217,
+      "x": 189.5,
+      "y": 103.4,
+      "pageX": 189.5,
+      "pageY": 103.4,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 6,
+      "screenIndex": 0,
+      "tMs": 5230,
+      "durationMs": 495,
+      "x": 187.4,
+      "y": 440.2,
+      "pageX": 187.4,
+      "pageY": 440.2,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 7,
+      "screenIndex": 0,
+      "tMs": 5883,
+      "durationMs": 460,
+      "x": 192.7,
+      "y": 98.6,
+      "pageX": 192.7,
+      "pageY": 98.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 8,
+      "screenIndex": 0,
+      "tMs": 6587,
+      "durationMs": 247,
+      "x": 196,
+      "y": 116.6,
+      "pageX": 196,
+      "pageY": 116.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 9,
+      "screenIndex": 0,
+      "tMs": 7569,
+      "durationMs": 259,
+      "x": 116.1,
+      "y": 224.6,
+      "pageX": 116.1,
+      "pageY": 224.6,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 10,
+      "screenIndex": 0,
+      "tMs": 8141,
+      "durationMs": 278,
+      "x": 310.2,
+      "y": 338.9,
+      "pageX": 310.2,
+      "pageY": 338.9,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 11,
+      "screenIndex": 0,
+      "tMs": 9088,
+      "durationMs": 363,
+      "x": 307.2,
+      "y": 374.5,
+      "pageX": 307.2,
+      "pageY": 374.5,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 12,
+      "screenIndex": 0,
+      "tMs": 9544,
+      "durationMs": 231,
+      "x": 200.4,
+      "y": 94.5,
+      "pageX": 200.4,
+      "pageY": 94.5,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 13,
+      "screenIndex": 0,
+      "tMs": 10390,
+      "durationMs": 484,
+      "x": 194.8,
+      "y": 441.1,
+      "pageX": 194.8,
+      "pageY": 441.1,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 14,
+      "screenIndex": 0,
+      "tMs": 11149,
+      "durationMs": 536,
+      "x": 192.5,
+      "y": 91.3,
+      "pageX": 192.5,
+      "pageY": 91.3,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 15,
+      "screenIndex": 0,
+      "tMs": 11854,
+      "durationMs": 264,
+      "x": 189.2,
+      "y": 123.1,
+      "pageX": 189.2,
+      "pageY": 123.1,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 16,
+      "screenIndex": 0,
+      "tMs": 12626,
+      "durationMs": 307,
+      "x": 127.9,
+      "y": 222.4,
+      "pageX": 127.9,
+      "pageY": 222.4,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 17,
+      "screenIndex": 1,
+      "tMs": 14107,
+      "durationMs": 467,
+      "x": 191.9,
+      "y": 93.3,
+      "pageX": 191.9,
+      "pageY": 93.3,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 18,
+      "screenIndex": 1,
+      "tMs": 14837,
+      "durationMs": 264,
+      "x": 218.5,
+      "y": 126.2,
+      "pageX": 218.5,
+      "pageY": 126.2,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 19,
+      "screenIndex": 1,
+      "tMs": 15811,
+      "durationMs": 244,
+      "x": 120.8,
+      "y": 216.1,
+      "pageX": 120.8,
+      "pageY": 216.1,
+      "aoiId": "B-payment-email"
+    },
+    {
+      "index": 20,
+      "screenIndex": 1,
+      "tMs": 16555,
+      "durationMs": 457,
+      "x": 166.1,
+      "y": 286,
+      "pageX": 166.1,
+      "pageY": 286,
+      "aoiId": "B-payment-card"
+    },
+    {
+      "index": 21,
+      "screenIndex": 1,
+      "tMs": 17244,
+      "durationMs": 215,
+      "x": 95.1,
+      "y": 355.1,
+      "pageX": 95.1,
+      "pageY": 355.1,
+      "aoiId": "B-payment-expiry"
+    },
+    {
+      "index": 22,
+      "screenIndex": 1,
+      "tMs": 17899,
+      "durationMs": 198,
+      "x": 284.4,
+      "y": 350.7,
+      "pageX": 284.4,
+      "pageY": 350.7,
+      "aoiId": "B-payment-cvc"
+    },
+    {
+      "index": 23,
+      "screenIndex": 1,
+      "tMs": 18873,
+      "durationMs": 295,
+      "x": 205.1,
+      "y": 544,
+      "pageX": 205.1,
+      "pageY": 544,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 24,
+      "screenIndex": 1,
+      "tMs": 19369,
+      "durationMs": 366,
+      "x": 124.9,
+      "y": 558.3,
+      "pageX": 124.9,
+      "pageY": 558.3,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 25,
+      "screenIndex": 1,
+      "tMs": 20221,
+      "durationMs": 447,
+      "x": 297.1,
+      "y": 629.3,
+      "pageX": 297.1,
+      "pageY": 629.3,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 26,
+      "screenIndex": 1,
+      "tMs": 21050,
+      "durationMs": 330,
+      "x": 299.1,
+      "y": 562.7,
+      "pageX": 299.1,
+      "pageY": 562.7,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 27,
+      "screenIndex": 1,
+      "tMs": 21748,
+      "durationMs": 211,
+      "x": 198.9,
+      "y": 99.7,
+      "pageX": 198.9,
+      "pageY": 99.7,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 28,
+      "screenIndex": 1,
+      "tMs": 22455,
+      "durationMs": 440,
+      "x": 187.2,
+      "y": 425,
+      "pageX": 187.2,
+      "pageY": 425,
+      "aoiId": "B-payment-primary"
+    },
+    {
+      "index": 29,
+      "screenIndex": 1,
+      "tMs": 23224,
+      "durationMs": 512,
+      "x": 196.8,
+      "y": 86.6,
+      "pageX": 196.8,
+      "pageY": 86.6,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 30,
+      "screenIndex": 1,
+      "tMs": 24058,
+      "durationMs": 314,
+      "x": 212,
+      "y": 115.9,
+      "pageX": 212,
+      "pageY": 115.9,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 31,
+      "screenIndex": 1,
+      "tMs": 24941,
+      "durationMs": 255,
+      "x": 129.6,
+      "y": 214.3,
+      "pageX": 129.6,
+      "pageY": 214.3,
+      "aoiId": "B-payment-email"
+    },
+    {
+      "index": 32,
+      "screenIndex": 1,
+      "tMs": 25517,
+      "durationMs": 499,
+      "x": 165.2,
+      "y": 286.1,
+      "pageX": 165.2,
+      "pageY": 286.1,
+      "aoiId": "B-payment-card"
+    },
+    {
+      "index": 33,
+      "screenIndex": 1,
+      "tMs": 26241,
+      "durationMs": 220,
+      "x": 103.7,
+      "y": 356.9,
+      "pageX": 103.7,
+      "pageY": 356.9,
+      "aoiId": "B-payment-expiry"
+    },
+    {
+      "index": 34,
+      "screenIndex": 1,
+      "tMs": 27199,
+      "durationMs": 192,
+      "x": 291.1,
+      "y": 356.6,
+      "pageX": 291.1,
+      "pageY": 356.6,
+      "aoiId": "B-payment-cvc"
+    },
+    {
+      "index": 35,
+      "screenIndex": 1,
+      "tMs": 27973,
+      "durationMs": 251,
+      "x": 214.4,
+      "y": 541.5,
+      "pageX": 214.4,
+      "pageY": 541.5,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 36,
+      "screenIndex": 1,
+      "tMs": 28649,
+      "durationMs": 343,
+      "x": 122.3,
+      "y": 560.4,
+      "pageX": 122.3,
+      "pageY": 560.4,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 37,
+      "screenIndex": 1,
+      "tMs": 29442,
+      "durationMs": 463,
+      "x": 298.9,
+      "y": 634.6,
+      "pageX": 298.9,
+      "pageY": 634.6,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 38,
+      "screenIndex": 1,
+      "tMs": 30044,
+      "durationMs": 375,
+      "x": 287.4,
+      "y": 561.9,
+      "pageX": 287.4,
+      "pageY": 561.9,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 39,
+      "screenIndex": 1,
+      "tMs": 31010,
+      "durationMs": 226,
+      "x": 201.4,
+      "y": 102.5,
+      "pageX": 201.4,
+      "pageY": 102.5,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 40,
+      "screenIndex": 1,
+      "tMs": 31656,
+      "durationMs": 466,
+      "x": 188.3,
+      "y": 421.4,
+      "pageX": 188.3,
+      "pageY": 421.4,
+      "aoiId": "B-payment-primary"
+    },
+    {
+      "index": 41,
+      "screenIndex": 1,
+      "tMs": 32392,
+      "durationMs": 478,
+      "x": 200.3,
+      "y": 86.7,
+      "pageX": 200.3,
+      "pageY": 86.7,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 42,
+      "screenIndex": 1,
+      "tMs": 33179,
+      "durationMs": 292,
+      "x": 217.9,
+      "y": 125.6,
+      "pageX": 217.9,
+      "pageY": 125.6,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 43,
+      "screenIndex": 1,
+      "tMs": 34057,
+      "durationMs": 235,
+      "x": 118.8,
+      "y": 222.7,
+      "pageX": 118.8,
+      "pageY": 222.7,
+      "aoiId": "B-payment-email"
+    },
+    {
+      "index": 44,
+      "screenIndex": 1,
+      "tMs": 34667,
+      "durationMs": 440,
+      "x": 157.3,
+      "y": 283.2,
+      "pageX": 157.3,
+      "pageY": 283.2,
+      "aoiId": "B-payment-card"
+    },
+    {
+      "index": 45,
+      "screenIndex": 1,
+      "tMs": 35643,
+      "durationMs": 208,
+      "x": 99.1,
+      "y": 346.9,
+      "pageX": 99.1,
+      "pageY": 346.9,
+      "aoiId": "B-payment-expiry"
+    },
+    {
+      "index": 46,
+      "screenIndex": 2,
+      "tMs": 37039,
+      "durationMs": 561,
+      "x": 219.2,
+      "y": 494,
+      "pageX": 219.2,
+      "pageY": 1190,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 47,
+      "screenIndex": 2,
+      "tMs": 37729,
+      "durationMs": 566,
+      "x": 149.3,
+      "y": 522.1,
+      "pageX": 149.3,
+      "pageY": 1218.1,
+      "aoiId": "B-review-fee-row"
+    },
+    {
+      "index": 48,
+      "screenIndex": 2,
+      "tMs": 38430,
+      "durationMs": 515,
+      "x": 311.7,
+      "y": 598.5,
+      "pageX": 311.7,
+      "pageY": 1294.5,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 49,
+      "screenIndex": 2,
+      "tMs": 39290,
+      "durationMs": 531,
+      "x": 270,
+      "y": 517.7,
+      "pageX": 270,
+      "pageY": 1213.7,
+      "aoiId": "B-review-fee-row"
+    },
+    {
+      "index": 50,
+      "screenIndex": 3,
+      "tMs": 40027,
+      "durationMs": 269,
+      "x": 136.8,
+      "y": 282.3,
+      "pageX": 136.8,
+      "pageY": 282.3,
+      "aoiId": "B-review-pay-with"
+    },
+    {
+      "index": 51,
+      "screenIndex": 4,
+      "tMs": 40726,
+      "durationMs": 520,
+      "x": 228.1,
+      "y": 603.2,
+      "pageX": 228.1,
+      "pageY": 1299.2,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 52,
+      "screenIndex": 4,
+      "tMs": 41390,
+      "durationMs": 361,
+      "x": 299,
+      "y": 660.4,
+      "pageX": 299,
+      "pageY": 1356.4,
+      "aoiId": "B-review-support"
+    },
+    {
+      "index": 53,
+      "screenIndex": 4,
+      "tMs": 42258,
+      "durationMs": 500,
+      "x": 218.7,
+      "y": 498.6,
+      "pageX": 218.7,
+      "pageY": 1194.6,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 54,
+      "screenIndex": 4,
+      "tMs": 42904,
+      "durationMs": 652,
+      "x": 145.4,
+      "y": 520.4,
+      "pageX": 145.4,
+      "pageY": 1216.4,
+      "aoiId": "B-review-fee-row"
+    },
+    {
+      "index": 55,
+      "screenIndex": 4,
+      "tMs": 43641,
+      "durationMs": 440,
+      "x": 314.5,
+      "y": 600.6,
+      "pageX": 314.5,
+      "pageY": 1296.6,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 56,
+      "screenIndex": 4,
+      "tMs": 44496,
+      "durationMs": 563,
+      "x": 272.4,
+      "y": 527.7,
+      "pageX": 272.4,
+      "pageY": 1223.7,
+      "aoiId": "B-review-fee-row"
+    },
+    {
+      "index": 57,
+      "screenIndex": 5,
+      "tMs": 45359,
+      "durationMs": 265,
+      "x": 146.1,
+      "y": 290.8,
+      "pageX": 146.1,
+      "pageY": 290.8,
+      "aoiId": "B-review-pay-with"
+    },
+    {
+      "index": 58,
+      "screenIndex": 6,
+      "tMs": 45935,
+      "durationMs": 523,
+      "x": 223,
+      "y": 601.2,
+      "pageX": 223,
+      "pageY": 1297.2,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 59,
+      "screenIndex": 6,
+      "tMs": 46590,
+      "durationMs": 293,
+      "x": 292.3,
+      "y": 651.1,
+      "pageX": 292.3,
+      "pageY": 1347.1,
+      "aoiId": "B-review-support"
+    },
+    {
+      "index": 60,
+      "screenIndex": 6,
+      "tMs": 47401,
+      "durationMs": 474,
+      "x": 213.8,
+      "y": 498.8,
+      "pageX": 213.8,
+      "pageY": 1194.8,
+      "aoiId": "B-review-summary"
+    },
+    {
+      "index": 61,
+      "screenIndex": 6,
+      "tMs": 48222,
+      "durationMs": 541,
+      "x": 144.8,
+      "y": 520.6,
+      "pageX": 144.8,
+      "pageY": 1216.6,
+      "aoiId": "B-review-fee-row"
+    },
+    {
+      "index": 62,
+      "screenIndex": 6,
+      "tMs": 49045,
+      "durationMs": 344,
+      "x": 297.9,
+      "y": 657.3,
+      "pageX": 297.9,
+      "pageY": 1353.3,
+      "aoiId": "B-review-support"
+    }
+  ],
+  "saccades": [
+    {
+      "fromFixation": 0,
+      "toFixation": 1,
+      "amplitudePx": 23,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 1,
+      "toFixation": 2,
+      "amplitudePx": 132.5,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 2,
+      "toFixation": 3,
+      "amplitudePx": 216.9,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 3,
+      "toFixation": 4,
+      "amplitudePx": 35.4,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 4,
+      "toFixation": 5,
+      "amplitudePx": 295.6,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 5,
+      "toFixation": 6,
+      "amplitudePx": 336.8,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 6,
+      "toFixation": 7,
+      "amplitudePx": 341.6,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 7,
+      "toFixation": 8,
+      "amplitudePx": 18.3,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 8,
+      "toFixation": 9,
+      "amplitudePx": 134.3,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 9,
+      "toFixation": 10,
+      "amplitudePx": 225.3,
+      "durationMs": 27
+    },
+    {
+      "fromFixation": 10,
+      "toFixation": 11,
+      "amplitudePx": 35.7,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 11,
+      "toFixation": 12,
+      "amplitudePx": 299.7,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 12,
+      "toFixation": 13,
+      "amplitudePx": 346.6,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 13,
+      "toFixation": 14,
+      "amplitudePx": 349.8,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 14,
+      "toFixation": 15,
+      "amplitudePx": 32,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 15,
+      "toFixation": 16,
+      "amplitudePx": 116.7,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 16,
+      "toFixation": 17,
+      "amplitudePx": 144.1,
+      "durationMs": 24
+    },
+    {
+      "fromFixation": 17,
+      "toFixation": 18,
+      "amplitudePx": 42.3,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 18,
+      "toFixation": 19,
+      "amplitudePx": 132.8,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 19,
+      "toFixation": 20,
+      "amplitudePx": 83.3,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 20,
+      "toFixation": 21,
+      "amplitudePx": 99.1,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 21,
+      "toFixation": 22,
+      "amplitudePx": 189.4,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 22,
+      "toFixation": 23,
+      "amplitudePx": 208.9,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 23,
+      "toFixation": 24,
+      "amplitudePx": 81.5,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 24,
+      "toFixation": 25,
+      "amplitudePx": 186.3,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 25,
+      "toFixation": 26,
+      "amplitudePx": 66.6,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 26,
+      "toFixation": 27,
+      "amplitudePx": 473.7,
+      "durationMs": 37
+    },
+    {
+      "fromFixation": 27,
+      "toFixation": 28,
+      "amplitudePx": 325.5,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 28,
+      "toFixation": 29,
+      "amplitudePx": 338.5,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 29,
+      "toFixation": 30,
+      "amplitudePx": 33,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 30,
+      "toFixation": 31,
+      "amplitudePx": 128.3,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 31,
+      "toFixation": 32,
+      "amplitudePx": 80.1,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 32,
+      "toFixation": 33,
+      "amplitudePx": 93.8,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 33,
+      "toFixation": 34,
+      "amplitudePx": 187.4,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 34,
+      "toFixation": 35,
+      "amplitudePx": 200.2,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 35,
+      "toFixation": 36,
+      "amplitudePx": 94,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 36,
+      "toFixation": 37,
+      "amplitudePx": 191.6,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 37,
+      "toFixation": 38,
+      "amplitudePx": 73.6,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 38,
+      "toFixation": 39,
+      "amplitudePx": 467.4,
+      "durationMs": 37
+    },
+    {
+      "fromFixation": 39,
+      "toFixation": 40,
+      "amplitudePx": 319.2,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 40,
+      "toFixation": 41,
+      "amplitudePx": 334.9,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 41,
+      "toFixation": 42,
+      "amplitudePx": 42.7,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 42,
+      "toFixation": 43,
+      "amplitudePx": 138.7,
+      "durationMs": 24
+    },
+    {
+      "fromFixation": 43,
+      "toFixation": 44,
+      "amplitudePx": 71.7,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 44,
+      "toFixation": 45,
+      "amplitudePx": 86.3,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 45,
+      "toFixation": 46,
+      "amplitudePx": 851.6,
+      "durationMs": 52
+    },
+    {
+      "fromFixation": 46,
+      "toFixation": 47,
+      "amplitudePx": 75.3,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 47,
+      "toFixation": 48,
+      "amplitudePx": 179.5,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 48,
+      "toFixation": 49,
+      "amplitudePx": 90.9,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 49,
+      "toFixation": 50,
+      "amplitudePx": 940.9,
+      "durationMs": 56
+    },
+    {
+      "fromFixation": 50,
+      "toFixation": 51,
+      "amplitudePx": 1021,
+      "durationMs": 59
+    },
+    {
+      "fromFixation": 51,
+      "toFixation": 52,
+      "amplitudePx": 91.1,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 52,
+      "toFixation": 53,
+      "amplitudePx": 180.6,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 53,
+      "toFixation": 54,
+      "amplitudePx": 76.5,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 54,
+      "toFixation": 55,
+      "amplitudePx": 187.2,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 55,
+      "toFixation": 56,
+      "amplitudePx": 84.2,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 56,
+      "toFixation": 57,
+      "amplitudePx": 941.4,
+      "durationMs": 56
+    },
+    {
+      "fromFixation": 57,
+      "toFixation": 58,
+      "amplitudePx": 1009.3,
+      "durationMs": 58
+    },
+    {
+      "fromFixation": 58,
+      "toFixation": 59,
+      "amplitudePx": 85.4,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 59,
+      "toFixation": 60,
+      "amplitudePx": 171.3,
+      "durationMs": 25
+    },
+    {
+      "fromFixation": 60,
+      "toFixation": 61,
+      "amplitudePx": 72.4,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 61,
+      "toFixation": 62,
+      "amplitudePx": 205.2,
+      "durationMs": 26
+    }
+  ],
+  "actions": [
+    {
+      "tMs": 13211,
+      "type": "click",
+      "target": "Checkout",
+      "aoiId": "B-cart-cart-checkout",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 24850,
+      "type": "type",
+      "target": "Card number",
+      "aoiId": "B-payment-card",
+      "value": "autofilled",
+      "ok": true
+    },
+    {
+      "tMs": 36089,
+      "type": "click",
+      "target": "Place order · $129.00",
+      "aoiId": "B-payment-primary",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 36919,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 40606,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 45815,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "696",
+      "ok": true
+    },
+    {
+      "tMs": 49700,
+      "type": "abandon",
+      "target": null,
+      "aoiId": null,
+      "value": "Review — service fee revealed, 3 revisits, then left",
+      "ok": true
+    }
+  ],
+  "outcome": {
+    "status": "abandoned",
+    "step": "review",
+    "reason": "Review — service fee revealed, 3 revisits, then left",
+    "attribution": "product",
+    "excludedFromScores": false
+  },
+  "integrity": {
+    "selectorFailures": 0,
+    "retries": 0
+  }
+}

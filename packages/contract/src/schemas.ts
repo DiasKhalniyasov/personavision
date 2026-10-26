@@ -235,6 +235,13 @@ export const runSchema = z
     task: taskSchema,
     variants: z.array(variantSchema).min(1),
     steps: z.array(z.strictObject({ id: name, label: name })).min(1),
+    /**
+     * The sentence the Attention screen reads out under one variant's step. It is written
+     * by the pipeline, not by the screen; a run that records none still parses.
+     */
+    stepCaptions: z
+      .array(z.strictObject({ variant: name, step: name, caption: name }))
+      .default([]),
     /** Copied by value when the run started: see `audienceSchema`. */
     audience: audienceSchema,
     personas: z.array(personaSchema),
@@ -498,7 +505,8 @@ export const findingsSchema = z
         severity: severitySchema,
         claim: name,
         evidence: name,
-        variant: name,
+        /** `null` when the finding concerns the run itself rather than one variant. */
+        variant: name.nullable(),
         step: name,
         aoiId: name.nullable(),
         sessionIds: z.array(name),
