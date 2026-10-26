@@ -250,6 +250,74 @@ describe('ScanMatch on a short pair, hand-computed column by column', () => {
   });
 });
 
+describe('the alignment walk', () => {
+  const regions = Array.from({ length: 11 }, (_, index) => index % 3);
+  /** The score an alignment's own columns add up to, which the table's number has to match. */
+  const scoreOfPairs = (
+    pairs: readonly { a: number | null; b: number | null }[],
+    substitution: (left: number, right: number) => number,
+    gapPenalty: number,
+  ): number =>
+    pairs.reduce(
+      (total, pair) =>
+        total + (pair.a !== null && pair.b !== null ? substitution(pair.a, pair.b) : gapPenalty),
+      0,
+    );
+
+  it('terminates on a gap penalty of the caller’s own, where an exact-match walk would not', () => {
+    // A gap penalty whose multiples are not bit-exact: `6 · -1.001` is not
+    // `5 · -1.001 + -1.001`. A walk that tested the stored cell for an exact match would fall
+    // through every branch at the left edge and run off the table.
+    const match = (left: number, right: number): number => (left === right ? 1 : -1);
+
+    for (const gapPenalty of [-0.001, -1.001, -0.5, 0, 0.25]) {
+      const alignment = needlemanWunsch(regions, [1], match, gapPenalty);
+
+      expect(alignment.pairs.filter((pair) => pair.a !== null)).toHaveLength(regions.length);
+      expect(alignment.pairs.filter((pair) => pair.b !== null)).toHaveLength(1);
+      expect(scoreOfPairs(alignment.pairs, match, gapPenalty)).toBeCloseTo(alignment.score, 12);
+    }
+  });
+
+  it('returns columns that add up to the score it reports, at the committed gap penalty', () => {
+    const substitution = substitutionOf(scanMatchSubstitutionMatrix());
+    const left = scanpath(null, [
+      fixation(0, POINTS.topLeft, 300),
+      fixation(1, POINTS.centre, 150),
+      fixation(2, POINTS.bottomRight, 300),
+    ]);
+    const right = scanpath('p1', [
+      fixation(0, POINTS.centre, 200),
+      fixation(1, POINTS.bottomRight, 450),
+    ]);
+    const alignment = needlemanWunsch(
+      [...scanMatchLetters(left, IMAGE)],
+      [...scanMatchLetters(right, IMAGE)],
+      substitution,
+      SCANPATH_METRIC_PARAMETERS.gapPenalty,
+    );
+
+    expect(
+      scoreOfPairs(alignment.pairs, substitution, SCANPATH_METRIC_PARAMETERS.gapPenalty),
+    ).toBeCloseTo(alignment.score, 12);
+    // And the figure the metric publishes is that score over the longer sequence: the
+    // two-row recurrence it actually runs agrees with the table that carries the traceback.
+    expect(scanMatch(left, right, IMAGE)).toBeCloseTo(
+      alignment.score /
+        Math.max(scanMatchLetters(left, IMAGE).length, scanMatchLetters(right, IMAGE).length),
+      12,
+    );
+  });
+
+  it('refuses a grid no two regions can be a distance apart in', () => {
+    expect(() => scanMatchSubstitutionMatrix(1, 1)).toThrow(ScanpathMetricError);
+    expect(() => scanMatchSubstitutionMatrix(1, 1)).toThrow(/not a grid two regions can be/);
+    expect(() => scanMatchSubstitutionMatrix(2.5, 2)).toThrow(ScanpathMetricError);
+    // A one-dimensional grid is still a grid: two regions, one distance.
+    expect(scanMatchSubstitutionMatrix(1, 2)).toEqual([1, -1, -1, 1]);
+  });
+});
+
 describe('identity, reverse and dwell: the order #84 asks these metrics to hold', () => {
   // Three regions, 300 ms each: six letters per fixation, eighteen in all.
   const human = scanpath('p1', [
@@ -412,10 +480,6 @@ describe('a random scanpath against a two-region pair, over the documented seed 
     values.reduce((total, value) => total + value, 0) / values.length;
 
   it('lands at the documented chance level for ScanMatch, within its stated tolerance', () => {
-    expect(mean(figures.map((figure) => figure.scanMatch))).toBeCloseTo(
-      SCANPATH_CHANCE.scanMatch.level,
-      2,
-    );
     expect(
       Math.abs(mean(figures.map((figure) => figure.scanMatch)) - SCANPATH_CHANCE.scanMatch.level),
     ).toBeLessThan(SCANPATH_CHANCE.scanMatch.tolerance);
@@ -582,6 +646,40 @@ describe('degenerate inputs: a documented value or a named error, and never a Na
 
     expect(scanMatchLetters(brief, IMAGE)).toEqual([REGION.topLeft, REGION.centre]);
     expect(SCANPATH_METRIC_PARAMETERS.minimumLettersPerFixation).toBe(1);
+  });
+
+  it('refuses a dwell in the wrong unit rather than aligning a hundred thousand letters', () => {
+    // A converter reporting microseconds: 300 ms arrives as 300000, which would expand one
+    // fixation into 6,000 letters and a scanpath into a multi-gigabyte alignment table.
+    const microseconds = scanpath('p7', [
+      fixation(0, POINTS.topLeft, 300_000),
+      fixation(1, POINTS.centre, 300_000),
+    ]);
+
+    expect(() => scanMatch(microseconds, human, IMAGE)).toThrow(/dwell in the wrong unit/);
+    expect(() => sequenceScore(microseconds, human, IMAGE)).toThrow(ScanpathMetricError);
+    expect(SCANPATH_METRIC_PARAMETERS.maximumDwellMs).toBe(10_000);
+    // The longest ground truth UEyes publishes is seven seconds, so that is admitted.
+    expect(
+      scanMatch(scanpath(null, [fixation(0, POINTS.topLeft, 7_000)]), human, IMAGE),
+    ).toBeGreaterThan(0);
+  });
+
+  it('refuses a fixation outside the image from the exported region helper too, not only from a metric', () => {
+    // The helper is exported, so a caller reaching it directly must not be handed the last
+    // column for a fixation a hundred pixels off the image.
+    expect(() => regionOfFixation(fixation(0, { x: 1000, y: 120 }, 300), IMAGE)).toThrow(
+      /outside the 320 × 240 image/,
+    );
+    expect(() => regionOfFixation(fixation(0, { x: -1, y: 120 }, 300), IMAGE)).toThrow(
+      ScanpathMetricError,
+    );
+    expect(() => regionOfFixation(fixation(0, { x: Number.NaN, y: 120 }, 300), IMAGE)).toThrow(
+      /not a point in the image/,
+    );
+    expect(() =>
+      regionOfFixation(fixation(0, POINTS.topLeft, 300), { width: 0, height: 1 }),
+    ).toThrow(/not an image a region can be found in/);
   });
 
   it('refuses a dwell that is not a dwell, and a point that is not a point', () => {

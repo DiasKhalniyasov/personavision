@@ -188,10 +188,11 @@ whisker of zero.
 | --- | --- |
 | a scanpath with **no fixation** | `ScanpathMetricError`, "has no fixation, so there is no order to measure" — nothing is ordered, and the normalisation would divide by zero |
 | a **single** fixation | ordinary, not degenerate: `1` against itself, and against the three-region human above, `1/3` on both metrics |
-| a fixation **outside the image** | `ScanpathMetricError` naming its position in the scanpath and its coordinates |
+| a fixation **outside the image** | `ScanpathMetricError` naming its position in the scanpath and its coordinates — from the exported `regionOfFixation` as well, not only from a metric |
 | a fixation **exactly on the right or bottom edge** | the last region, by `fixationEdgeRule` |
 | a dwell **shorter than half a temporal bin** | kept, as one letter — see the departures below |
 | a dwell of `0` ms | one letter; the scanpath keeps its shape |
+| a dwell **longer than 10 s** (`maximumDwellMs`) | `ScanpathMetricError`, "a dwell in the wrong unit is refused rather than aligned" — a converter reporting microseconds would otherwise expand one fixation into thousands of letters and an alignment into a multi-gigabyte table |
 | a **negative or non-finite** dwell, or a non-finite coordinate | `ScanpathMetricError`, "not a dwell" / "not a point in the image" |
 | fixations **out of order** | `ScanpathMetricError` naming the position and the participant |
 | an image of **zero or non-finite** size | `ScanpathMetricError`, "not an image a region can be found in" |
@@ -242,6 +243,7 @@ its reason in the code beside it:
 | `humanToHumanAggregation` | `mean-over-distinct-pairs` | the ceiling the prediction is read against |
 | `fixationEdgeRule` | `inclusive-upper-edge` | the saliency metrics' own rule |
 | `emptyScanpathRule` | `reject` | nothing is ordered |
+| `maximumDwellMs` | `10000` | UEyes cuts its ground truth at seven seconds, so no fixation of a record can dwell longer; ten seconds leaves room and still catches a dwell in the wrong unit |
 
 That object is the surface #88 carries as provenance, so no figure is quoted without saying what produced it. It is
 **fixed**: it is **not** part of any fitting search space, because the auto-decision on #11 commits the project to
@@ -270,7 +272,9 @@ vitest-reported duration (of which about 27 ms is the tests themselves), or **0.
 process start, over three consecutive runs. Measured on an **Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin
 27.0.0)**.
 
-Both metrics are `O(n · m)` in the two letter counts: the Needleman–Wunsch table is kept whole for the traceback, and
-the edit distance keeps one row. A seven-second UEyes scanpath of twenty fixations is about 120 letters, so the
+Both metrics are `O(n · m)` in the two letter counts. The metric runs the Needleman–Wunsch recurrence over **two
+rows** and builds no traceback — `scoreScanpathAgainstHumans` on a 62-participant record aligns 1,891 pairs of humans
+and 62 more against the prediction, and not one of those alignments is read — while the exported `needlemanWunsch`
+keeps the whole table so that a reader, and the test, can see the columns. The edit distance keeps one row. A seven-second UEyes scanpath of twenty fixations is about 120 letters, so the
 table is 120 × 120 — microseconds. The 96 × 96 substitution matrix is built once, when the module loads. If a longer
 corpus ever makes the table matter, Hirschberg's linear-space variant computes the same alignment.

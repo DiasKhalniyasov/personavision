@@ -88,7 +88,7 @@ export const SCANPATH_METRICS: {
     summary:
       'How well the two scanpaths align once each fixation is written as the letter of its region, repeated once per bin of dwell: 1 is the same regions in the same order for the same time, and 0 no alignment worth making.',
     degenerate:
-      'A scanpath with no fixation is refused by name, because there is no order to measure; a single fixation is ordinary and scores the substitution value of its own region against the other path’s best match.',
+      'A scanpath with no fixation is refused by name, because there is no order to measure; a single fixation is ordinary, and scores at most the share of the longer letter sequence its own dwell covers — a third against three fixations of the same dwell.',
   }),
   sequenceScore: Object.freeze({
     id: 'sequenceScore',
@@ -195,6 +195,15 @@ export const SCANPATH_METRIC_PARAMETERS = Object.freeze({
   fixationEdgeRule: 'inclusive-upper-edge',
   /** A scanpath with no fixation is refused rather than scored, because nothing is ordered. */
   emptyScanpathRule: 'reject',
+  /**
+   * The longest dwell a fixation may claim, in milliseconds. UEyes publishes its ground truth
+   * at one, three and seven seconds of free viewing, so no single fixation of a record can
+   * exceed seven seconds; ten leaves room and still refuses the failure this bound exists
+   * for — a converter reporting microseconds, which would expand one fixation into tens of
+   * thousands of letters and turn an alignment into a multi-gigabyte table rather than a
+   * figure.
+   */
+  maximumDwellMs: 10_000,
 } as const);
 
 /**
@@ -295,6 +304,11 @@ const assertScanpath = (scanpath: Scanpath, imageSize: ImageSize): void => {
         `fixation ${String(position)} of ${where} dwells for ${String(fixation.durationMs)} ms, which is not a dwell`,
       );
     }
+    if (fixation.durationMs > SCANPATH_METRIC_PARAMETERS.maximumDwellMs) {
+      throw new ScanpathMetricError(
+        `fixation ${String(position)} of ${where} dwells for ${String(fixation.durationMs)} ms, longer than the ${String(SCANPATH_METRIC_PARAMETERS.maximumDwellMs)} ms a fixation of a record viewed for at most seven seconds can claim; a dwell in the wrong unit is refused rather than aligned`,
+      );
+    }
   });
 };
 
@@ -307,9 +321,39 @@ const assertScanpath = (scanpath: Scanpath, imageSize: ImageSize): void => {
  * the last column rather than failing, because a converter that reports a boundary pixel is
  * not wrong about where the human looked. This is `SaliencyMap`'s own rule for a fixation to
  * a cell, at this metric's grid instead of a map's.
+ *
+ * Anything strictly outside the image is refused by name here rather than merely clamped, as
+ * `saliency.ts`'s own `cellOfFixation` refuses it: this function is exported, and a caller
+ * reaching it directly would otherwise be handed the last column for a fixation a hundred
+ * pixels off the image, which is a wrong answer rather than a figure.
  */
 export const regionOfFixation = (fixation: Fixation, imageSize: ImageSize): number => {
   const { gridWidth, gridHeight } = SCANPATH_METRIC_PARAMETERS;
+  if (
+    !isFiniteNumber(imageSize.width) ||
+    !isFiniteNumber(imageSize.height) ||
+    imageSize.width <= 0 ||
+    imageSize.height <= 0
+  ) {
+    throw new ScanpathMetricError(
+      `the image is ${String(imageSize.width)} × ${String(imageSize.height)}, which is not an image a region can be found in`,
+    );
+  }
+  if (!isFiniteNumber(fixation.x) || !isFiniteNumber(fixation.y)) {
+    throw new ScanpathMetricError(
+      `a fixation at (${String(fixation.x)}, ${String(fixation.y)}) is not a point in the image`,
+    );
+  }
+  if (
+    fixation.x < 0 ||
+    fixation.y < 0 ||
+    fixation.x > imageSize.width ||
+    fixation.y > imageSize.height
+  ) {
+    throw new ScanpathMetricError(
+      `a fixation at (${String(fixation.x)}, ${String(fixation.y)}) is outside the ${String(imageSize.width)} × ${String(imageSize.height)} image`,
+    );
+  }
   const column = Math.min(gridWidth - 1, Math.floor((fixation.x * gridWidth) / imageSize.width));
   const row = Math.min(gridHeight - 1, Math.floor((fixation.y * gridHeight) / imageSize.height));
   return row * gridWidth + column;
@@ -383,6 +427,11 @@ export const scanMatchSubstitutionMatrix = (
 ): readonly number[] => {
   const { substitutionMaximum, substitutionZeroFraction } = SCANPATH_METRIC_PARAMETERS;
   const count = gridWidth * gridHeight;
+  if (!Number.isInteger(gridWidth) || !Number.isInteger(gridHeight) || count < 2) {
+    throw new ScanpathMetricError(
+      `a ${String(gridWidth)} × ${String(gridHeight)} grid is not a grid two regions can be a distance apart in, so there is no matrix to build from its distances`,
+    );
+  }
   const furthest = Math.hypot((gridWidth - 1) / gridWidth, (gridHeight - 1) / gridHeight);
   const matrix = new Array<number>(count * count);
   for (let left = 0; left < count; left += 1) {
@@ -422,7 +471,9 @@ export interface Alignment {
  * makes the printed alignment the same on every machine.
  *
  * Exported so the test can assert a hand-computed alignment, column by column, rather than
- * only the number that came out of it.
+ * only the number that came out of it. The metric itself calls `alignmentScore` below, the
+ * same recurrence over two rows with no traceback: a 62-participant record is nearly two
+ * thousand pairs of scanpaths, and not one of those alignments is ever read.
  *
  * ponytail: the plain O(n·m) matrix, retained whole for the traceback. A 7-second scanpath of
  * 20 fixations is about 120 letters, so this is a 120 × 120 table; if a longer corpus ever
@@ -449,20 +500,25 @@ export const needlemanWunsch = (
     }
   }
 
+  // The walk recomputes the three candidates at each step and takes the greatest, rather than
+  // testing the stored cell against each candidate in turn: a caller's own gap penalty can
+  // make `row · gapPenalty` and `(row − 1) · gapPenalty + gapPenalty` differ in their last
+  // bit, and a walk that needed an exact match would then fall through every branch. The two
+  // drain loops are what guarantee it reaches the origin.
   const pairs: AlignedPair[] = [];
   let row = a.length;
   let column = b.length;
-  while (row > 0 || column > 0) {
-    const here = scores[row * columns + column];
-    if (
-      row > 0 &&
-      column > 0 &&
-      here === scores[(row - 1) * columns + (column - 1)] + substitution(a[row - 1], b[column - 1])
-    ) {
+  while (row > 0 && column > 0) {
+    const diagonal =
+      scores[(row - 1) * columns + (column - 1)] + substitution(a[row - 1], b[column - 1]);
+    const gapInB = scores[(row - 1) * columns + column] + gapPenalty;
+    const gapInA = scores[row * columns + (column - 1)] + gapPenalty;
+    const best = Math.max(diagonal, gapInB, gapInA);
+    if (diagonal === best) {
       pairs.push({ a: a[row - 1], b: b[column - 1] });
       row -= 1;
       column -= 1;
-    } else if (row > 0 && here === scores[(row - 1) * columns + column] + gapPenalty) {
+    } else if (gapInB === best) {
       pairs.push({ a: a[row - 1], b: null });
       row -= 1;
     } else {
@@ -470,8 +526,47 @@ export const needlemanWunsch = (
       column -= 1;
     }
   }
+  while (row > 0) {
+    pairs.push({ a: a[row - 1], b: null });
+    row -= 1;
+  }
+  while (column > 0) {
+    pairs.push({ a: null, b: b[column - 1] });
+    column -= 1;
+  }
   pairs.reverse();
   return { score: scores[a.length * columns + b.length], pairs };
+};
+
+/**
+ * The alignment score alone, by the same recurrence over two rows: what the metric needs, and
+ * all it needs.
+ *
+ * `scoreScanpathAgainstHumans` on a 62-participant record aligns 1,891 pairs of humans and 62
+ * more against the prediction, so `needlemanWunsch`'s traceback would be two thousand arrays
+ * nobody reads. The test asserts the two agree on the figures this package publishes.
+ */
+const alignmentScore = (
+  a: readonly number[],
+  b: readonly number[],
+  substitution: (left: number, right: number) => number,
+  gapPenalty: number,
+): number => {
+  let previous = new Float64Array(b.length + 1);
+  for (let column = 1; column <= b.length; column += 1) previous[column] = column * gapPenalty;
+  for (let row = 1; row <= a.length; row += 1) {
+    const current = new Float64Array(b.length + 1);
+    current[0] = row * gapPenalty;
+    for (let column = 1; column <= b.length; column += 1) {
+      current[column] = Math.max(
+        previous[column - 1] + substitution(a[row - 1], b[column - 1]),
+        previous[column] + gapPenalty,
+        current[column - 1] + gapPenalty,
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length];
 };
 
 const finite = (value: number, metric: string): number => {
@@ -501,7 +596,7 @@ export const scanMatch = (a: Scanpath, b: Scanpath, imageSize: ImageSize): numbe
   const lettersA = scanMatchLetters(a, imageSize);
   const lettersB = scanMatchLetters(b, imageSize);
   const count = SCANPATH_REGION_COUNT;
-  const { score } = needlemanWunsch(
+  const score = alignmentScore(
     lettersA,
     lettersB,
     (left, right) => COMMITTED_SUBSTITUTION_MATRIX[left * count + right],
