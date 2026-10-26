@@ -44,11 +44,26 @@ Every landmark on these pages is absolutely positioned from the document origin,
 - `x` and `y` below are page space. Where a landmark sits inside another, its box is the sum
   of the `left` and `top` values along the chain, which is what the table already records.
 
+## Landmarks, and why there is no `data-aoi`
+
+A **landmark** here is simply an element of this site that carries an `id` and is recorded
+below. It is this document's word for a row in these tables, not a product term: the run
+artifact's word for a region attention is attributed to is an **area of interest**, and those
+are what an extractor _produces_ from a page.
+
+Which is why these pages carry no `data-aoi` attributes, unlike `demo/northwind`'s, whose ids
+are the ones `docs/design/prototype.html` declares and the Attention screen reads. An element
+id on this site is minted by the extractor from role, accessible name and document position —
+never read off an attribute — so a fixture that handed out ids would test the wrong thing. The
+`id`s below exist so that a test can _find_ an element and so that this record can name one;
+they are not the ids under test.
+
 ## Roles
 
 The `role` columns below are **ARIA role names**: what a `role=` attribute would spell, and
-what a role-based locator matches. Every one of them was read back out of Chromium's own
-accessibility tree (Chrome 155) against these pages, and two are spelled differently there:
+what a role-based locator matches. Each one was read back out of Chromium's own accessibility
+tree — Chrome 155, over the DevTools protocol, on 2026-10-27 — and two are spelled differently
+there:
 
 | ARIA name | Chromium's accessibility tree |
 | --------- | ----------------------------- |
@@ -61,6 +76,13 @@ DevTools protocol therefore sees `image` and `Iframe`; one that goes through ARI
 sees what this document says. A name recorded as — is empty in the accessibility tree, not
 missing: Chromium reports no accessible name for the paragraphs or for the two regions the
 DOM cannot explain.
+
+That reading was done out of band, and it is the one claim in this document that
+`../../fixture-site.test.ts` cannot keep honest: this package has no browser yet, so the suite
+checks each role against the rules above — the markup that implies it — and not against a live
+accessibility tree. **#45 is where the claim becomes enforced**: it drives Chromium against
+these pages and asserts the roles and names recorded here. If one of them disagrees, the
+accessibility tree is right and this document is wrong.
 
 ## Pages
 

@@ -25,12 +25,30 @@ import type { FixtureSite } from './helpers/static-site.js';
 /** The fold at each of the two viewports `LANDMARKS.md` documents positions for. */
 const FOLDS = { '390x844': 844, '1440x900': 900 } as const;
 
-/** The two fold columns of a geometry table: `id | x | y | width | height | 390x844 | 1440x900`. */
-const MOBILE_COLUMN = 5;
-const DESKTOP_COLUMN = 6;
+/**
+ * A row of a landmarks table, read once by name. Two of the document's tables are about the
+ * same landmark and differ only in their columns, so every test reads a row through one of
+ * these rather than by index: inserting a column then moves a name, which fails loudly,
+ * instead of shifting an index, which would pass.
+ */
+interface LandmarkRow {
+  readonly id: string;
+  readonly tag: string;
+  readonly role: string;
+  readonly name: string;
+  readonly text: string;
+  readonly isPrimaryAction: boolean;
+}
 
-/** The primary-action column of a landmarks table, which holds `yes` for one row per step page. */
-const PRIMARY_ACTION_COLUMN = 5;
+/** A row of a geometry table: the box in page space, and the side of the fold at each viewport. */
+interface GeometryRow {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly foldSide: Readonly<Record<keyof typeof FOLDS, string>>;
+}
 
 /* -------------------------------------------------------------------- reading the doc */
 
@@ -96,6 +114,22 @@ const table = (key: string): string[][] => {
 /** The text inside backticks, for the columns that quote an id, a page or a route. */
 const unquote = (cell: string): string => cell.replace(/^`(.*)`$/, '$1');
 
+const landmarkRows = (page: string): LandmarkRow[] =>
+  table(`Page: ${page} > Landmarks`).map((cells) => {
+    const [id, tag, role, name, text, primaryAction] = cells.map(unquote);
+    return { id, tag, role, name, text, isPrimaryAction: primaryAction === 'yes' };
+  });
+
+const geometryRows = (page: string): GeometryRow[] =>
+  table(`Page: ${page} > Geometry`).map((cells) => ({
+    id: unquote(cells[0]),
+    x: Number(cells[1]),
+    y: Number(cells[2]),
+    width: Number(cells[3]),
+    height: Number(cells[4]),
+    foldSide: { '390x844': cells[5], '1440x900': cells[6] },
+  }));
+
 interface StepRule {
   readonly id: string;
   readonly urlPattern: string;
@@ -159,13 +193,16 @@ const visibleText = (html: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const ATTRIBUTE = /([a-zA-Z_:][\w:.-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+/**
+ * An attribute, either `name="value"` or bare. Prettier formats these pages, and it writes
+ * every value in double quotes, so there is no single-quoted or unquoted form to read.
+ */
+const ATTRIBUTE = /([a-zA-Z_:][\w:.-]*)(?:="([^"]*)")?/g;
 
 const parseAttributes = (raw: string): Record<string, string> => {
   const attributes: Record<string, string> = {};
-  for (const match of raw.matchAll(ATTRIBUTE)) {
-    const [, name, doubleQuoted, singleQuoted, bare] = match;
-    attributes[name.toLowerCase()] = doubleQuoted ?? singleQuoted ?? bare ?? '';
+  for (const [, name, value] of raw.matchAll(ATTRIBUTE)) {
+    attributes[name.toLowerCase()] = value ?? '';
   }
   return attributes;
 };
@@ -441,7 +478,7 @@ describe('the fixture pages', () => {
 
   it('documents every id on every page, and every documented id is on its page', () => {
     for (const page of PAGES) {
-      const documented = table(`Page: ${page.file} > Landmarks`).map(([id]) => unquote(id));
+      const documented = landmarkRows(page.file).map((row) => row.id);
       const present = [...pageOf(page.file).elements.keys()];
       expect(new Set(documented), `ids documented for ${page.file}`).toEqual(new Set(present));
       expect(documented.length, `no id documented twice for ${page.file}`).toBe(
@@ -454,8 +491,7 @@ describe('the fixture pages', () => {
     for (const page of PAGES) {
       const { html, elements } = pageOf(page.file);
       const labels = labelsByField(html);
-      for (const row of table(`Page: ${page.file} > Landmarks`)) {
-        const [id, tag, role, name, text] = row.map(unquote);
+      for (const { id, tag, role, name, text } of landmarkRows(page.file)) {
         const element = elements.get(id);
         expect(element, `#${id} is on ${page.file}`).toBeDefined();
         if (element === undefined) continue;
@@ -475,9 +511,7 @@ describe('the fixture pages', () => {
   it('places each landmark at its documented box, the same at both viewports', () => {
     for (const page of PAGES) {
       const { elements } = pageOf(page.file);
-      for (const row of table(`Page: ${page.file} > Geometry`)) {
-        const id = unquote(row[0]);
-        const [x, y, width, height] = row.slice(1, 5).map(Number);
+      for (const { id, x, y, width, height, foldSide } of geometryRows(page.file)) {
         const element = elements.get(id);
         expect(element, `#${id} is on ${page.file}`).toBeDefined();
         if (element === undefined) continue;
@@ -502,12 +536,11 @@ describe('the fixture pages', () => {
         ).toEqual({ x, y, width, height });
 
         // The two fold columns are the record of `belowFold`, which is `y >= foldY`.
-        expect(row[MOBILE_COLUMN], `#${id} at 390x844`).toBe(
-          pageY >= FOLDS['390x844'] ? 'below' : 'above',
-        );
-        expect(row[DESKTOP_COLUMN], `#${id} at 1440x900`).toBe(
-          pageY >= FOLDS['1440x900'] ? 'below' : 'above',
-        );
+        for (const viewport of ['390x844', '1440x900'] as const) {
+          expect(foldSide[viewport], `#${id} at ${viewport}`).toBe(
+            pageY >= FOLDS[viewport] ? 'below' : 'above',
+          );
+        }
         expect(pageY + own.height, `#${id} fits in the page`).toBeLessThanOrEqual(page.height);
       }
     }
@@ -515,22 +548,20 @@ describe('the fixture pages', () => {
 
   it('has a control that is below the fold on mobile and above it on desktop', () => {
     const crossing = PAGES.flatMap((page) =>
-      table(`Page: ${page.file} > Geometry`).filter(
-        (row) => row[MOBILE_COLUMN] === 'below' && row[DESKTOP_COLUMN] === 'above',
+      geometryRows(page.file).filter(
+        (row) => row.foldSide['390x844'] === 'below' && row.foldSide['1440x900'] === 'above',
       ),
     );
     expect(crossing.length, 'landmarks that change side with the viewport').toBeGreaterThan(0);
     for (const row of crossing) {
-      const y = Number(row[2]);
-      expect(y).toBeGreaterThanOrEqual(FOLDS['390x844']);
-      expect(y).toBeLessThan(FOLDS['1440x900']);
+      expect(row.y, `#${row.id} is past the mobile fold`).toBeGreaterThanOrEqual(FOLDS['390x844']);
+      expect(row.y, `#${row.id} is short of the desktop fold`).toBeLessThan(FOLDS['1440x900']);
     }
   });
 
   it('has two controls with the same words in different places', () => {
     const byText = new Map<string, string[]>();
-    for (const row of table('Page: cart.html > Landmarks')) {
-      const [id, , role, , text] = row.map(unquote);
+    for (const { id, role, text } of landmarkRows('cart.html')) {
       if (text === NONE || !NAMED_BY_CONTENT.has(role)) continue;
       byText.set(text, [...(byText.get(text) ?? []), id]);
     }
@@ -647,9 +678,9 @@ describe('the step match rules', () => {
 
   it('marks exactly one primary action per step page, the one the rule declares', () => {
     for (const page of STEP_PAGES) {
-      const marked = table(`Page: ${page.file} > Landmarks`)
-        .filter((row) => row[PRIMARY_ACTION_COLUMN] === 'yes')
-        .map((row) => unquote(row[0]));
+      const marked = landmarkRows(page.file)
+        .filter((row) => row.isPrimaryAction)
+        .map((row) => row.id);
       expect(marked.length, `primary actions documented on ${page.file}`).toBe(1);
       const rule = STEP_RULES.find((candidate) => candidate.id === page.step);
       expect(`#${marked[0]}`, `the primary action of ${page.step}`).toBe(rule?.primaryAction);

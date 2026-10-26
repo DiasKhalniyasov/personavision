@@ -12,7 +12,16 @@
  * to look like a customer's checkout. This site is test substrate: its pages are
  * adversarial on purpose (a control that crosses the fold between two viewports, two
  * controls with the same words, a step page missing its own required element, frames that
- * never arrive), and `packages/browser` does not depend on `demo/*`.
+ * never arrive).
+ *
+ * The two servers' mechanics are therefore the same shape — the traversal guard, the
+ * listen handshake, the destroy-on-close — and that repetition is accepted rather than
+ * shared. Sharing it would mean either a dependency on `demo/*`, which this package does
+ * not have and cannot gain here (the ticket adds none, and the repo guards which way
+ * imports between packages point), or a new shared package. The routes differ where it
+ * matters: the shop stalls one named frame document, this site has whole routes for
+ * stalling and for failing, and it serves no markdown so that its own record cannot be
+ * fetched as a page.
  *
  * Three behaviours here exist only so that failures can be provoked:
  *
