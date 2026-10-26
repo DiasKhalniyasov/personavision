@@ -20,17 +20,13 @@ const THRESHOLD_TOKEN = {
 export type ScoreThreshold = keyof typeof THRESHOLD_TOKEN;
 
 /**
- * The value of a score-band threshold as the cascade currently resolves it.
+ * One custom property as a number.
  *
- * Throws rather than falling back to a number of its own: a threshold that cannot be read
- * means the tokens did not load, and a plausible-looking default would hide that.
+ * Throws rather than falling back to a number of its own: a token that cannot be read
+ * means the stylesheet did not load, and a plausible-looking default would hide that.
  */
-export function readScoreThreshold(
-  threshold: ScoreThreshold,
-  element: Element = document.documentElement,
-): number {
-  const property = THRESHOLD_TOKEN[threshold];
-  const raw = getComputedStyle(element).getPropertyValue(property).trim();
+function numericToken(style: CSSStyleDeclaration, property: string): number {
+  const raw = style.getPropertyValue(property).trim();
   const value = Number(raw);
 
   if (raw === '' || !Number.isFinite(value)) {
@@ -43,13 +39,43 @@ export function readScoreThreshold(
   return value;
 }
 
+/** The value of a score-band threshold as the cascade currently resolves it. */
+export function readScoreThreshold(threshold: ScoreThreshold): number {
+  return numericToken(getComputedStyle(document.documentElement), THRESHOLD_TOKEN[threshold]);
+}
+
+/**
+ * Throws unless `docs/design/tokens.css` has reached the page.
+ *
+ * Both thresholds are checked, not one sentinel: a stylesheet that loaded but no longer
+ * declares a threshold has to fail at boot, where the message can name the file, rather
+ * than at the first score somebody tries to band.
+ */
+export function assertTokensLoaded(): void {
+  const style = getComputedStyle(document.documentElement);
+  numericToken(style, THRESHOLD_TOKEN.good);
+  numericToken(style, THRESHOLD_TOKEN.bad);
+}
+
 /**
  * The band a friction score falls in, by the thresholds the tokens declare. Scores run
  * 0-100 and higher is worse, so `good` is at or below the good threshold and `bad` is at
  * or above the bad one.
+ *
+ * Both thresholds come from one `getComputedStyle`, because a screen bands a score per
+ * table row and they cannot change between the two reads.
  */
-export function scoreBand(score: number, element: Element = document.documentElement): ScoreBand {
-  if (score <= readScoreThreshold('good', element)) return 'good';
-  if (score >= readScoreThreshold('bad', element)) return 'bad';
+export function scoreBand(score: number): ScoreBand {
+  if (!Number.isFinite(score)) {
+    throw new Error(
+      `A friction score must be a finite number (got ${JSON.stringify(score)}). ` +
+        'Banding a missing or malformed score would show it as a clean result.',
+    );
+  }
+
+  const style = getComputedStyle(document.documentElement);
+
+  if (score <= numericToken(style, THRESHOLD_TOKEN.good)) return 'good';
+  if (score >= numericToken(style, THRESHOLD_TOKEN.bad)) return 'bad';
   return 'warn';
 }

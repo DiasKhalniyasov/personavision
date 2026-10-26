@@ -1,14 +1,9 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from './setup';
-import { readScoreThreshold, scoreBand } from '../src/tokens';
+import { assertTokensLoaded, readScoreThreshold, scoreBand } from '../src/tokens';
 
 describe('the score-band thresholds come from the design tokens', () => {
-  beforeEach(() => {
-    document.head.replaceChildren();
-    document.documentElement.removeAttribute('style');
-  });
-
   it('reads the committed values out of docs/design/tokens.css', () => {
     loadDesignTokens();
 
@@ -30,12 +25,29 @@ describe('the score-band thresholds come from the design tokens', () => {
   });
 });
 
-describe('scoreBand', () => {
-  beforeEach(() => {
-    document.head.replaceChildren();
-    document.documentElement.removeAttribute('style');
+describe('assertTokensLoaded', () => {
+  it('passes once the tokens are in the document', () => {
     loadDesignTokens();
+
+    expect(() => assertTokensLoaded()).not.toThrow();
   });
+
+  it('names the file when the stylesheet never arrived', () => {
+    expect(() => assertTokensLoaded()).toThrow('docs/design/tokens.css');
+  });
+
+  it('fails at boot when a threshold no longer resolves to a number', () => {
+    loadDesignTokens();
+    document.documentElement.style.setProperty('--score-threshold-bad', 'auto');
+
+    // Checking both thresholds is what catches this at boot rather than at the first
+    // score a screen tries to band.
+    expect(() => assertTokensLoaded()).toThrow('--score-threshold-bad');
+  });
+});
+
+describe('scoreBand', () => {
+  beforeEach(loadDesignTokens);
 
   it('bands a friction score by the thresholds, boundaries included', () => {
     expect(scoreBand(0)).toBe('good');
@@ -52,5 +64,11 @@ describe('scoreBand', () => {
     document.documentElement.style.setProperty('--score-threshold-good', '20');
 
     expect(scoreBand(22)).toBe('warn');
+  });
+
+  it('rejects a score that is not a finite number instead of calling it clean', () => {
+    for (const score of [Number.NaN, Number.POSITIVE_INFINITY, null, undefined]) {
+      expect(() => scoreBand(score as number), String(score)).toThrow('finite number');
+    }
   });
 });

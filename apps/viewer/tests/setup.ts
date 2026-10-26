@@ -7,6 +7,9 @@
  * as the root Vitest configuration asks, rather than editing that configuration. jsdom and
  * Testing Library are dependencies of this package, so a screen step adds a test and no
  * tooling.
+ *
+ * Importing it registers the teardown below, so no suite has to write its own reset and a
+ * test cannot inherit another's stylesheet, inline override or leftover DOM.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -23,8 +26,14 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(cleanup);
 
-// Under jsdom the global `URL` is jsdom's, and `fileURLToPath` rejects one of those, so
-// this resolves the path from the string form of `import.meta.url` instead.
+afterEach(() => {
+  document.head.replaceChildren();
+  document.body.replaceChildren();
+  document.documentElement.removeAttribute('style');
+});
+
+// Under the jsdom environment `fileURLToPath(new URL(…, import.meta.url))` throws
+// "The URL must be of scheme file", so the path comes from the string form instead.
 const tokensPath = join(dirname(fileURLToPath(import.meta.url)), '../../../docs/design/tokens.css');
 
 /**

@@ -10,6 +10,6 @@ From the repository root: `pnpm dev` serves it on localhost, `pnpm build` builds
 
 ## For the screen steps
 
-- `src/tokens.ts` — `readScoreThreshold('good' | 'bad')` and `scoreBand(score)`. Use them instead of a number of your own.
-- Tests: a suite that needs a DOM opens with `// @vitest-environment jsdom` and imports `./setup` from `tests/`, as the root Vitest configuration asks. jsdom and Testing Library are already dependencies here.
+- `src/tokens.ts` — `readScoreThreshold('good' | 'bad')` and `scoreBand(score)`. Use them instead of a number of your own. `scoreBand` throws on a score that is not a finite number rather than banding it as clean, so a malformed score surfaces instead of rendering green.
+- Tests: a suite that needs a DOM opens with `// @vitest-environment jsdom` and imports `./setup` from `tests/`, as the root Vitest configuration asks. That import also resets the document after each test, so no suite writes its own teardown, and `loadDesignTokens()` puts the real `docs/design/tokens.css` in the document. jsdom and Testing Library are already dependencies here.
 - Run data arrives over HTTP as static files under `/runs/`; the mount is `packages/cli`'s and is wired into this app's dev server by the CLI step. See `docs/adr/0001-run-data-over-http-as-static-files.md`.

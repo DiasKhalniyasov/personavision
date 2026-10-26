@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, relative } from 'node:path';
+import { extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { build } from 'vite';
@@ -23,7 +23,7 @@ const filesUnder = (directory: string): string[] =>
 
 /** The app's own source — everything it ships, tests aside. */
 const appSource = (): string[] =>
-  filesUnder(appDir).filter((path) => !relative(appDir, path).startsWith('tests'));
+  filesUnder(appDir).filter((path) => relative(appDir, path).split(sep)[0] !== 'tests');
 
 /** The app's own stylesheets: where a restated value would hide. */
 const appStylesheets = (): string[] =>
@@ -65,6 +65,9 @@ describe('the app imports the design tokens and never copies them', () => {
   });
 
   it('declares no custom property of its own, so the tokens are the only source', () => {
+    // Guards the three stylesheet checks below from passing on an empty list.
+    expect(appStylesheets().length).toBeGreaterThan(0);
+
     for (const stylesheet of appStylesheets()) {
       const declarations = read(stylesheet).match(/^\s*--[\w-]+\s*:/gm) ?? [];
       expect(declarations, relative(repoRoot, stylesheet)).toEqual([]);
@@ -74,10 +77,15 @@ describe('the app imports the design tokens and never copies them', () => {
   it('restates no colour, size or spacing value in its own CSS', () => {
     // Viewport units and percentages are layout primitives with no token of their own;
     // every colour, and everything else carrying a unit, comes through a custom property.
+    //
+    // Scope: stylesheets, not `.tsx`. A screen positions a fixation dot or sizes a heatmap
+    // cell from computed run data, so an inline style carrying a number is legitimate
+    // there and a scan of it would cry wolf. What is forbidden in a component is a *token*
+    // value, and the sibling tests above cover the thresholds specifically.
     const restated = [
       /#[0-9a-fA-F]{3,8}\b/,
       /\b(?:rgba?|hsla?|oklch|lab|color-mix)\(/,
-      /\d(?:\.\d+)?(?:px|rem|em|pt|ch|ex|cm|mm|in)\b/,
+      /\d(?:\.\d+)?(?:px|rem|em|pt|ch|ex|cm|mm|in|ms|s|deg)\b/,
     ];
 
     for (const stylesheet of appStylesheets()) {
@@ -102,13 +110,18 @@ describe('the app imports the design tokens and never copies them', () => {
 
 describe('the skeleton owns the document shell and nothing else', () => {
   it("stubs none of the prototype's screens, so no later step has to unpick one", () => {
-    const owned = ['tabbar', 'screen-empty', 'screen-newrun', 'screen-running', 'screen-error']
-      .concat(['screen-comparison', 'screen-attention', 'screen-sessions', 'screen-replay'])
-      .flatMap((id) =>
-        appSource()
-          .filter((path) => read(path).includes(id))
-          .map((path) => `${relative(repoRoot, path)}: ${id}`),
-      );
+    const ids = [
+      'tabbar',
+      'screen-empty',
+      'screen-newrun',
+      'screen-running',
+      'screen-error',
+    ].concat(['screen-comparison', 'screen-attention', 'screen-sessions', 'screen-replay']);
+    const sources = appSource().map((path) => [relative(repoRoot, path), read(path)] as const);
+
+    const owned = sources.flatMap(([path, source]) =>
+      ids.filter((id) => source.includes(id)).map((id) => `${path}: ${id}`),
+    );
 
     expect(owned).toEqual([]);
   });
@@ -196,6 +209,8 @@ describe('the build output', () => {
     expect(references.filter((reference) => remote.test(reference))).toEqual([]);
 
     expect(css).not.toContain('@import');
-    expect([...css.matchAll(/url\(\s*['"]?([^'")]*)/g)].map((match) => match[1] ?? '')).toEqual([]);
+    // A bundled or inlined asset is not a network fetch; only a remote one is.
+    const urls = [...css.matchAll(/url\(\s*['"]?([^'")]*)/g)].map((match) => match[1] ?? '');
+    expect(urls.filter((url) => remote.test(url))).toEqual([]);
   });
 });
