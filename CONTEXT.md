@@ -21,7 +21,7 @@ It is not restated here. Read it there, and use those words in code, tests, issu
 | `@personavision/engine`      | Drives a persona through a variant and emits a session.                                                                                          |
 | `@personavision/browser`     | Browser driving, page screenshots with the fold drawn, area-of-interest extraction.                                                              |
 | `@personavision/scoring`     | The friction score, its component weights, the per-seed-group spread and the verdict.                                                            |
-| `@personavision/personas`    | The audience schema, the seeded persona **generator**, trait sampling and the device mix.                                                        |
+| `@personavision/personas`    | The seeded persona **generator**: an audience in, people out. Trait sampling and the device mix.                                                 |
 | `@personavision/calibration` | Scores the engine against the UEyes benchmark and fits its configuration. The only place a human-likeness figure is produced. Added by step #11. |
 | `@personavision/viewer`      | `apps/viewer` — the platform's web app. Added by its own ticket.                                                                                 |
 | `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience storage and `personavision serve`.                                                              |
