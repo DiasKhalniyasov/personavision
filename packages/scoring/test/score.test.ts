@@ -1,10 +1,10 @@
 import { runSchema, sessionSchema, type Session } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
+import { acceptanceThresholds } from '../src/bands.js';
 import {
   FINDING_RULE_IDS,
   score,
   scoringConfig,
-  verdict,
   type AoiMetric,
   type VariantScore,
 } from '../src/index.js';
@@ -23,12 +23,14 @@ import {
 /**
  * The band thresholds `docs/FLOW.md` section 5's acceptance table states. They are
  * presentation — the viewer reads them from `--score-threshold-*` in the tokens — and the
- * one shared constant lives with the verdict and its gate (#27). They are written out here
- * because this is the test that measures them, not a part of the formula.
+ * one shared constant now lives with the verdict and its gate (`src/bands.ts`, #27), so
+ * these names read it rather than keeping a second copy of the same three numbers. The
+ * whole table is measured in `test/acceptance.test.ts`; what is asserted here is that the
+ * formula puts the two fixture sets on the right sides of it.
  */
-const CLEAN_AT_MOST = 25;
-const DEFECTIVE_AT_LEAST = 60;
-const SEPARATED_BY_AT_LEAST = 30;
+const CLEAN_AT_MOST = acceptanceThresholds.frictionCleanAtMost;
+const DEFECTIVE_AT_LEAST = acceptanceThresholds.frictionDefectiveAtLeast;
+const SEPARATED_BY_AT_LEAST = acceptanceThresholds.gapPointsAtLeast;
 
 /** One session of a one-step scenario, written as the two readings a component needs. */
 interface MiniRow {
@@ -649,8 +651,12 @@ describe("section 5's acceptance table, over the committed fixtures", () => {
   });
 
   it('completes on the clean checkout and not on the defective one', () => {
-    expect(clean.completionRate).toBeGreaterThanOrEqual(0.6);
-    expect(defective.completionRate).toBeLessThanOrEqual(0.3);
+    expect(clean.completionRate).toBeGreaterThanOrEqual(
+      acceptanceThresholds.completionCleanAtLeast,
+    );
+    expect(defective.completionRate).toBeLessThanOrEqual(
+      acceptanceThresholds.completionDefectiveAtMost,
+    );
     expect(clean.completionRate).toBeCloseTo(9 / 11, 12);
     expect(defective.completionRate).toBeCloseTo(2 / 11, 12);
   });
@@ -661,12 +667,8 @@ describe("section 5's acceptance table, over the committed fixtures", () => {
   });
 });
 
-describe('the functions this package has agreed to export but has not built', () => {
-  // The findings generator was one of these until #28 built it, and the planted-defect
-  // evaluation until #29; `test/findings.test.ts` and `test/evaluate.test.ts` now hold
-  // those two to the contract instead of to an error message.
-
-  it('names the ticket that fills the verdict', () => {
-    expect(() => verdict([], [], {} as never)).toThrow(/#27/);
-  });
-});
+// The three functions this package declared before it built them are all built now:
+// `findings` by #28, `evaluateAgainstPlantedDefects` by #29 and `verdict` by #27. The
+// describe block that held each of them to its own "not implemented yet" error is gone
+// with the last of them; `test/findings.test.ts`, `test/evaluate.test.ts` and
+// `test/verdict.test.ts` hold them to the contract instead.
