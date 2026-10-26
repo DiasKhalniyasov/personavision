@@ -15,7 +15,6 @@ import {
   fixationShareOn,
   median,
   metricOf,
-  orderOverlap,
   primaryActionId,
   resetCaches,
   runSession,
@@ -174,6 +173,15 @@ describe('a control below the fold is fixated later than one above it, or not at
      * they never scrolled to, and the engine does not pretend otherwise — so the right
      * number of fixations is exactly zero, in all twenty-four sessions, and the metric a
      * screen reads has to carry that through as a `null` and a 0.
+     *
+     * **What it proves, and what it does not.** It proves the whole path carries an
+     * absence honestly: the sampler is never handed the area, `aggregate` answers the two
+     * nulls rather than a near-zero, and the share's denominator is still twenty-four. It
+     * does not prove the engine *declined* an area it could see — on these five fixtures
+     * at the default weights no on-screen area is missed by every session (the lowest
+     * share any of them reaches is 0.58), so that second kind of never-fixated case is
+     * not producible here. If calibration (#11) sharpens the terms until one appears, it
+     * belongs beside this test.
      */
     expect(runs.every((run) => run.session.screens.length === 1)).toBe(true);
     expect(allFixations(runs).filter((fixation) => fixation.aoiId === primary)).toEqual([]);
@@ -265,7 +273,7 @@ describe('two personas on the same page produce visibly different scanpaths', ()
   const fixture = 'price-and-fees' as const;
   const PAYING = { text: 'pay for the boots' };
 
-  it('differ in order, in length and in dwell, on every seed in the set', async () => {
+  it('differ in the areas they reach, in the order they reach them, and in dwell', async () => {
     const [hurried, patient] = await Promise.all([
       runSessions(
         { fixture, personaId: 'hurried-scanner', persona: HURRIED_SCANNER, goal: PAYING },
@@ -277,31 +285,51 @@ describe('two personas on the same page produce visibly different scanpaths', ()
       ),
     ]);
 
-    const overlaps = SEEDS.map((_seed, at) => orderOverlap(hurried[at], patient[at]));
+    const scanpath = (run: SessionRun): readonly (string | null)[] =>
+      run.session.fixations.map((fixation) => fixation.aoiId);
+    const areasReached = (run: SessionRun): string => [...new Set(scanpath(run))].sort().join('|');
 
     /**
-     * "Visibly different" as a number: the scanpaths agree on at most 0.818 of their
-     * positions on any of the twenty-four seeds, so no seed produces the same scanpath
-     * twice. The bound is 0.85 — above the measured worst case, below 1 — because the
-     * claim is that they differ, not that they differ by this much.
+     * "Visibly different" as the two numbers #70 names — the set of areas reached, and
+     * the order they are reached in — and never as an overlap ratio, which on sequences
+     * of different lengths is satisfied by the length difference alone and so measures
+     * nothing.
+     *
+     * No seed produces the same scanpath: the hurried scanner takes 9 looks and the
+     * patient reader 11, which is the count and persistence rows of the trait table.
      */
-    expect(Math.max(...overlaps)).toBeLessThan(0.85);
+    SEEDS.forEach((seed, at) => {
+      expect({ seed, scanpath: scanpath(patient[at]) }).not.toEqual({
+        seed,
+        scanpath: scanpath(hurried[at]),
+      });
+    });
 
     /**
-     * Where the difference comes from, stated so a later change to the engine is read
-     * against it: the hurried scanner takes 9 looks and the patient reader 11 (the count
-     * and persistence rows), and the reader's dwell is more than twice the scanner's (the
-     * duration and dwell rows). The *order* of areas moves only through
-     * `interfaceFamiliarity`, which scales the role prior — one of the six salience terms
-     * — so on most seeds the two agree until the shorter scanpath runs out, and on 5 of
-     * the 24 they diverge inside the common prefix. The floor below is 3 rather than 5
-     * because 5 is this seed set's number and the claim is that the order moves at all. A
-     * trait with a more direct path into the area draw would raise it; #67 and #7 own that
-     * decision, not this suite.
+     * The areas reached differ on 10 of the 24 seeds — the reader's two extra looks land
+     * somewhere the scanner never went, or its different role prior sends it elsewhere.
+     * The floor is 6 rather than 10 because 10 is this seed set's number and the claim is
+     * that the two personas see different parts of the page, not that they differ this
+     * much.
+     */
+    const differentAreas = SEEDS.filter(
+      (_seed, at) => areasReached(hurried[at]) !== areasReached(patient[at]),
+    );
+    expect(differentAreas.length).toBeGreaterThanOrEqual(6);
+
+    /**
+     * And the order moves, not only the length: on 5 of the 24 seeds the two diverge
+     * inside the stretch they both have, before the shorter one runs out.
+     *
+     * It is 5 and not 24 because the *order* of areas is persona-dependent through one
+     * route only — `interfaceFamiliarity` scales the role prior, which is one of the six
+     * salience terms — while the count, the durations and the dwell are the other rows.
+     * The floor below is 3 rather than 5 for the usual reason. A trait with a more direct
+     * path into the area draw would raise it; #67 and #7 own that decision, not this suite.
      */
     const divergedEarly = SEEDS.filter((_seed, at) => {
-      const a = hurried[at].session.fixations.map((fixation) => fixation.aoiId);
-      const b = patient[at].session.fixations.map((fixation) => fixation.aoiId);
+      const a = scanpath(hurried[at]);
+      const b = scanpath(patient[at]);
       const shared = Math.min(a.length, b.length);
       return a.slice(0, shared).some((aoiId, position) => aoiId !== b[position]);
     });
@@ -481,15 +509,23 @@ describe('the suite tests the engine the way a caller gets it', () => {
   it('imports the package only through its published entry point', () => {
     /**
      * `package.json`'s `exports` publishes `src/index.ts` and nothing else, so a claim
-     * made through `../src/sampling/index.js` would be a claim about a module a caller
-     * cannot reach — and would keep passing after the package stopped publishing the
-     * function it tests. The fixtures and this harness are the suite's own material and
-     * are imported by path; everything the engine publishes comes from the one barrel.
+     * made through a deeper module would be a claim about something a caller cannot
+     * reach — and would keep passing after the package stopped publishing the function it
+     * tests. The fixtures and this harness are the suite's own material and are imported
+     * by path; everything the engine publishes comes from the one barrel.
+     *
+     * Every specifier is read, static and dynamic, so no spelling of the same mistake
+     * slips through: a deeper relative path at any depth, a path out through `../../`, and
+     * a subpath of the package's own name.
      */
     const reaching = sources.flatMap(({ file, text }) =>
-      [...text.matchAll(/from '(\.\.\/src\/[^']*)'/g)]
+      [...text.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)]
         .map((match) => match[1])
-        .filter((specifier) => specifier !== '../src/index.js')
+        .filter(
+          (specifier) =>
+            (specifier.includes('src/') && specifier !== '../src/index.js') ||
+            specifier.startsWith('@personavision/engine/'),
+        )
         .map((specifier) => `${file} imports ${specifier}`),
     );
 

@@ -8,6 +8,7 @@ import {
   metricsOf,
   primaryActionId,
   runSessions,
+  segmentedAreaIds,
 } from './harness.js';
 
 /**
@@ -108,8 +109,9 @@ describe('the share of sessions that fixated an area falls in its band', () => {
      * because eight areas share nine looks: the six cards sit beside a heading and a
      * filter link, so no card can be in every session.
      */
-    const cards = metricsOf(runs).filter((metric) => metric.aoiId.includes('-region-'));
-    expect(cards.length).toBe(6);
+    const regions = await segmentedAreaIds(fixture, 6);
+    const cards = metricsOf(runs).filter((metric) => regions.includes(metric.aoiId));
+    expect(cards.length).toBe(regions.length);
     expect(Math.min(...cards.map((metric) => metric.lookedAtShare))).toBeGreaterThanOrEqual(0.5);
     expect(Math.max(...cards.map((metric) => metric.lookedAtShare))).toBeLessThanOrEqual(1);
   });

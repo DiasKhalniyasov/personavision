@@ -71,7 +71,7 @@ import { loadFixture } from './fixtures/index.js';
 import type { FixtureName } from './fixtures/index.js';
 
 /** One variant, since every claim here is about a page and not about a comparison. */
-export const VARIANT = 'A';
+const VARIANT = 'A';
 
 /**
  * A fixed instant, because a session's `startedAt` is a timestamp and a harness that read
@@ -156,7 +156,6 @@ export interface SessionRequest {
 export interface SessionRun {
   readonly session: Session;
   readonly aois: readonly Aoi[];
-  readonly capture: Capture;
 }
 
 /** The fixture's capture with the committed screenshot's real path, as a reader needs it. */
@@ -230,7 +229,7 @@ const salienceOf = async (
  * time, with the last screen resting on the page's bottom edge the way a scrolled page
  * does. A page no taller than the viewport is one screen at offset zero.
  */
-export const screenOffsets = (capture: Capture): readonly number[] => {
+const screenOffsets = (capture: Capture): readonly number[] => {
   const band = capture.viewport.height;
   const bottom = Math.max(0, capture.pageHeight - band);
   const offsets: number[] = [];
@@ -240,7 +239,7 @@ export const screenOffsets = (capture: Capture): readonly number[] => {
 };
 
 /** The areas the screen at `scrollY` shows: the ones whose box meets its viewport band. */
-export const areasOnScreen = (
+const areasOnScreen = (
   aois: readonly Aoi[],
   scrollY: number,
   viewportHeight: number,
@@ -254,7 +253,7 @@ export const areasOnScreen = (
  * from the persona-trait table through `personaSamplingParams`, so a calibration that
  * refits `screenPersistenceScale` moves this harness with it.
  */
-export const screensVisited = (
+const screensVisited = (
   persona: PersonaTraits,
   capture: Capture,
   weights?: EngineConfigOverrides,
@@ -314,6 +313,12 @@ export const runSession = async (request: SessionRequest): Promise<SessionRun> =
   const last = fixations.at(-1);
   const session: Session = {
     schemaVersion: SCHEMA_VERSION,
+    /**
+     * The shape `sessionSchema` requires of a session id, and the schema is the only
+     * authority on it: `assertContractShape` parses a session built here, so this string
+     * cannot drift from the contract without a named failure. The seed is in it so that a
+     * failure message names the session that produced the number.
+     */
     sessionId: `S-${String(seed).padStart(2, '0')}`,
     runId: 'engine-claims',
     variant: VARIANT,
@@ -358,7 +363,7 @@ export const runSession = async (request: SessionRequest): Promise<SessionRun> =
     integrity: { selectorFailures: 0, retries: 0 },
   };
 
-  return { session, aois, capture };
+  return { session, aois };
 };
 
 /**
@@ -380,9 +385,6 @@ export const runSessions = async (
 export const assertContractShape = (session: Session): void => {
   sessionSchema.parse(session);
 };
-
-/** The areas of a fixture, for a claim that needs an area it did not build itself. */
-export const areasOfFixture = (fixture: FixtureName): Promise<readonly Aoi[]> => areasOf(fixture);
 
 /**
  * The id of the area the capture declares its primary action, or a thrown error.
@@ -427,6 +429,26 @@ export const areaIdsLabelled = async (
 /** The one area a fixture labels exactly `label`. */
 export const areaIdLabelled = async (fixture: FixtureName, label: string): Promise<string> =>
   (await areaIdsLabelled(fixture, label, 1))[0];
+
+/**
+ * The ids of the areas the **segmenter** found on a fixture — the regions the DOM never
+ * explained — selected by `source`, which is a published field of an `Aoi` and the same
+ * way `heuristic-segmenter.test.ts` tells them apart. Not by the shape of the id: an id is
+ * minted from the variant, step, role, name and box, and a test that matched on part of
+ * one would be asserting against a private format.
+ */
+export const segmentedAreaIds = async (
+  fixture: FixtureName,
+  count: number,
+): Promise<readonly string[]> => {
+  const found = (await areasOf(fixture)).filter((area) => area.source === 'sam');
+  if (found.length !== count) {
+    throw new Error(
+      `${fixture} has ${found.length} segmented regions, not ${count} — the segmenter's answer moved.`,
+    );
+  }
+  return found.map((area) => area.id);
+};
 
 /**
  * The per-area metrics of a set of sessions, through `aggregate` — the numbers the screens
@@ -482,23 +504,6 @@ export const sessionShareReaching = (
 export const firstPositionOf = (run: SessionRun, aoiId: string): number | null => {
   const at = run.session.fixations.findIndex((fixation) => fixation.aoiId === aoiId);
   return at === -1 ? null : at;
-};
-
-/**
- * How much two scanpaths agree, position by position, over the longer of the two: 1 is the
- * same areas in the same order and the same length, and a difference in length alone costs
- * the pair the positions the shorter one does not have. The measure two personas are said
- * to differ by — "visibly different" stated as a number, as #70 asks.
- */
-export const orderOverlap = (left: SessionRun, right: SessionRun): number => {
-  const a = left.session.fixations.map((fixation) => fixation.aoiId);
-  const b = right.session.fixations.map((fixation) => fixation.aoiId);
-  const longest = Math.max(a.length, b.length);
-  if (longest === 0) throw new Error('two empty scanpaths have no overlap to measure');
-  return (
-    Array.from({ length: longest }, (_unused, at) => a[at] === b[at]).filter(Boolean).length /
-    longest
-  );
 };
 
 /** The total dwell of a session: what the agent spent looking, in milliseconds. */

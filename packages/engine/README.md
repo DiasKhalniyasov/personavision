@@ -398,8 +398,9 @@ A control below the fold is fixated later than a heading above it — and, for a
 never scrolls to it, by no session at all, which the metrics carry through as a `null` and a
 `0` rather than a near-zero. A goal that names the total raises the share of fixations on
 the total over the same page with an unrelated goal. A scanning persona makes more and
-shorter fixations than a reading one on the same page and seed. Two personas produce
-scanpaths that agree on at most 0.82 of their positions on any seed in the set.
+shorter fixations than a reading one on the same page and seed. Two personas reach a
+different set of areas on 10 of the 24 seeds and diverge in order on 5, and no seed gives
+the two of them the same scanpath.
 
 **What the suite says about the uncalibrated defaults.** The salience preference is real but
 _small_: the banner clears a chance baseline of about 0.49 by a session and a half, and its
