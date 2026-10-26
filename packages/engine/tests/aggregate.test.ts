@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '@personavision/contract';
-import { runSchema, sessionSchema } from '@personavision/contract';
+import { runSchema, SCHEMA_VERSION, sessionSchema } from '@personavision/contract';
 import type { Aoi, AoiMetric } from '../src/index.js';
 import { aggregate } from '../src/index.js';
 
@@ -48,7 +48,7 @@ const session = ({
   excluded = false,
   looks = [],
 }: SessionSpec): Session => ({
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   sessionId: id,
   runId: '2026-10-26-1100-aggregate-fixture',
   variant,

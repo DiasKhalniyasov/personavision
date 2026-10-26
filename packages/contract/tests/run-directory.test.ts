@@ -96,7 +96,7 @@ describe('a mutated run directory is rejected at the path of the offending value
     const violations = await validate(dir);
 
     expect(offenders(violations)).toContain(`${label.run}/schemaVersion`);
-    expect(violations[0].message).toMatch(/expected 1/);
+    expect(violations[0].message).toMatch(/every artifact file states the schema version/);
   });
 
   it('rejects findings.json with no schemaVersion', async () => {

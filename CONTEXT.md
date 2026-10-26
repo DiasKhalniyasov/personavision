@@ -28,7 +28,11 @@ The binary is `personavision`. The library packages exist as buildable placehold
 
 **No package other than `@personavision/contract` declares an artifact field name or a run-directory path.** Not a constant, not a string literal, not a re-derived path. Readers and writers import the schemas and the inferred types, so a field name is read from the compiler rather than from prose, and a round trip through disk is type-checked at both ends.
 
-The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`.
+The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one.
+
+`run.json` carries the **audience** the test was run for — by value, copied when the test started, so that editing the stored audience later cannot restate a finished test. The personas it lists are generated from that audience and carry `audienceId` and a `segment`; `scores[].completionRate` and the verdict's `preferredVariant`, `audienceSentence`, `reasons`, `headlineFindingIds` and `heroEvidence` are what the Verdict screen leads with, stored rather than computed in a browser.
+
+**Every object in the artifact is closed.** A field the schemas do not declare is rejected at its own JSON path rather than quietly dropped, which is how the artifact stays portable: an account id, a workspace id, an email, a password or a token has nowhere to hide.
 
 A step that needs a new field adds it in that package and says so on the contract step's issue. It never writes a sibling file.
 

@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Findings, Run, RunArtifact, Session } from '../src/index.js';
-import { runPaths } from '../src/index.js';
+import type { Audience, Findings, Run, RunArtifact, Session } from '../src/index.js';
+import { runPaths, SCHEMA_VERSION } from '../src/index.js';
 
 /**
  * A valid run artifact, built here rather than read from disk: the committed example run
@@ -14,6 +14,8 @@ const screenshotPath = (variant: string, step: string): string =>
   runPaths('').screenshot(variant, step);
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
+const AUDIENCE_ID = 'outdoor-gear-shoppers';
+const FINDING_ID = 'F-01';
 const CART = 'cart';
 const CONFIRM = 'confirm';
 const CHECKOUT_AOI = 'a-cart-checkout';
@@ -25,6 +27,33 @@ const device = () => ({
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 1,
   touch: false,
+});
+
+/**
+ * The audience the run was started for, copied into the artifact by value. One persona is
+ * generated from it here, so its `size` is one: the size is how many people it generates.
+ */
+const audience = (): Audience => ({
+  id: AUDIENCE_ID,
+  name: 'Outdoor-gear shoppers',
+  ageRange: { min: 25, max: 45 },
+  roles: ['First-time buyer', 'Returning customer'],
+  regions: ['United Kingdom', 'Ireland'],
+  goals: ['Buy one item quickly', 'Compare prices first'],
+  devices: [
+    { ...device(), share: 0.6 },
+    {
+      name: 'Mobile 390',
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      touch: true,
+      share: 0.4,
+    },
+  ],
+  techSavviness: 0.55,
+  priceSensitivity: 0.75,
+  size: 1,
+  generatedFrom: { seed: 20_261_024, generatorVersion: 'persona-gen-1' },
 });
 
 const traits = () => ({
@@ -40,6 +69,8 @@ const score = (variant: string, median: number) => ({
   variant,
   taskId: 'buy-boots',
   frictionScore: { median, sd: 3 },
+  // One scored session, and it completed: the rate the counts underneath it state.
+  completionRate: 1,
   components: {
     taskFailureRate: 0.1,
     abandonment: 0.2,
@@ -52,7 +83,7 @@ const score = (variant: string, median: number) => ({
 });
 
 export const validRun = (): Run => ({
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   runId: RUN_ID,
   createdAt: '2026-10-24T14:02:00.000Z',
   task: { id: 'buy-boots', prompt: 'Buy the Ridgeline hiking boots in size 43.' },
@@ -64,7 +95,17 @@ export const validRun = (): Run => ({
     { id: CART, label: 'Cart' },
     { id: CONFIRM, label: 'Confirmation' },
   ],
-  personas: [{ id: 'rushed-buyer', name: 'Rushed buyer', traits: traits(), device: device() }],
+  audience: audience(),
+  personas: [
+    {
+      id: 'rushed-buyer',
+      name: 'Rushed buyer',
+      audienceId: AUDIENCE_ID,
+      segment: 'desktop · price-sensitive',
+      traits: traits(),
+      device: device(),
+    },
+  ],
   seedGroups: [1, 2],
   engine: {
     mode: 'offline',
@@ -146,12 +187,18 @@ export const validRun = (): Run => ({
     bandsDisjoint: true,
     seedGroupsAgreeing: 2,
     sentence: 'Variant B is harder, by 45 points.',
+    preferredVariant: 'A',
+    audienceSentence:
+      'Your audience completes the purchase on the current checkout, not on the redesign.',
+    reasons: ['The button that completes the order was never seen on the redesign.'],
+    headlineFindingIds: [FINDING_ID],
+    heroEvidence: { variant: 'B', step: CONFIRM, aoiId: COMPLETE_AOI },
   },
   calibration: null,
 });
 
 export const validSession = (sessionId: string, variant: string): Session => ({
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   sessionId,
   runId: RUN_ID,
   variant,
@@ -225,11 +272,11 @@ export const validSession = (sessionId: string, variant: string): Session => ({
 });
 
 export const validFindings = (): Findings => ({
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   runId: RUN_ID,
   findings: [
     {
-      id: 'F-01',
+      id: FINDING_ID,
       rank: 1,
       severity: 'critical',
       claim: 'Complete order sits below the fold on variant B.',
@@ -260,4 +307,4 @@ export const temporaryRunDir = async (): Promise<{ dir: string; cleanup: () => P
   };
 };
 
-export { RUN_ID, CHECKOUT_AOI, COMPLETE_AOI, CART, CONFIRM };
+export { RUN_ID, AUDIENCE_ID, FINDING_ID, CHECKOUT_AOI, COMPLETE_AOI, CART, CONFIRM };
