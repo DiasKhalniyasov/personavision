@@ -7,8 +7,27 @@
  * them instead of restating a name.
  */
 
-export { findingsSchema, runRequestSchema, runSchema, sessionSchema } from './schemas.js';
-export type { Findings, Run, RunRequest, Session } from './schemas.js';
+export {
+  audienceSchema,
+  findingsSchema,
+  personaSchema,
+  runRequestSchema,
+  runSchema,
+  SCHEMA_VERSION,
+  sessionSchema,
+  verdictSchema,
+} from './schemas.js';
+export type {
+  Audience,
+  AudienceDevice,
+  Findings,
+  Persona,
+  Run,
+  RunRequest,
+  Score,
+  Session,
+  Verdict,
+} from './schemas.js';
 
 export { listRunDirs, runDirName, runPaths } from './paths.js';
 export type { RunPaths } from './paths.js';

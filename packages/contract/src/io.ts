@@ -75,6 +75,18 @@ const parse = <Schema extends z.ZodType>(
   const result = schema.safeParse(value);
   if (result.success) return result.data;
   for (const issue of result.error.issues) {
+    // A field the contract does not declare is reported where it sits, one violation per
+    // field, rather than as a single issue against the object that carries them.
+    if (issue.code === 'unrecognized_keys') {
+      for (const key of issue.keys) {
+        violations.push({
+          file: label,
+          path: pointer([...issue.path, key]),
+          message: `the contract declares no "${key}" here: an artifact file carries no field the schemas do not name, which is what keeps a run directory portable`,
+        });
+      }
+      continue;
+    }
     violations.push({ file: label, path: pointer(issue.path), message: issue.message });
   }
   return undefined;
@@ -121,6 +133,64 @@ const checkReferences = (
     violations.push(
       at(relative.run, ['verdict', 'harderVariant'], danglingVariant(run.verdict.harderVariant)),
     );
+  }
+  // The verdict names what the product leads with, so everything it points at has to be
+  // there: the variant to ship, and the one heatmap the Verdict screen embeds as evidence.
+  if (!declaredVariants.has(run.verdict.preferredVariant)) {
+    violations.push(
+      at(
+        relative.run,
+        ['verdict', 'preferredVariant'],
+        danglingVariant(run.verdict.preferredVariant),
+      ),
+    );
+  }
+  const hero = run.verdict.heroEvidence;
+  const heroPath = ['verdict', 'heroEvidence'] as const;
+  if (!declaredVariants.has(hero.variant)) {
+    violations.push(at(relative.run, [...heroPath, 'variant'], danglingVariant(hero.variant)));
+  }
+  // A session's step is deliberately unchecked, because a session may end somewhere the run
+  // never planned to go. The hero evidence is the run's own choice of step, so it is held to
+  // the steps the run declares: it is a heatmap the screen has to be able to render.
+  if (!run.steps.some((step) => step.id === hero.step)) {
+    violations.push(
+      at(
+        relative.run,
+        [...heroPath, 'step'],
+        `"${hero.step}" names no step declared in this run's steps`,
+      ),
+    );
+  }
+  if (hero.aoiId !== null) {
+    const heroAoi = run.aois.find((aoi) => aoi.id === hero.aoiId);
+    if (heroAoi === undefined) {
+      violations.push(at(relative.run, [...heroPath, 'aoiId'], danglingAoi(hero.aoiId)));
+    } else if (heroAoi.variant !== hero.variant || heroAoi.step !== hero.step) {
+      violations.push(
+        at(
+          relative.run,
+          [...heroPath, 'aoiId'],
+          `area of interest "${hero.aoiId}" is on ${heroAoi.variant} ${heroAoi.step}, but the hero evidence is of ${hero.variant} ${hero.step}`,
+        ),
+      );
+    }
+  }
+  // Across two files: the Verdict screen shows the findings the run names, so a name that
+  // findings.json does not carry would leave the screen with a place and nothing in it.
+  if (findings !== undefined) {
+    const declaredFindings = new Set(findings.findings.map((finding) => finding.id));
+    run.verdict.headlineFindingIds.forEach((findingId, index) => {
+      if (!declaredFindings.has(findingId)) {
+        violations.push(
+          at(
+            relative.run,
+            ['verdict', 'headlineFindingIds', index],
+            `"${findingId}" names no finding in ${relative.findings}`,
+          ),
+        );
+      }
+    });
   }
 
   for (const session of sessions) {
