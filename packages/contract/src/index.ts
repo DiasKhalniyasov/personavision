@@ -13,9 +13,11 @@ export {
   personaSchema,
   runRequestSchema,
   runSchema,
+  runUsageSchema,
   SCHEMA_VERSION,
   sessionSchema,
   verdictSchema,
+  ZERO_USAGE,
 } from './schemas.js';
 export type {
   Audience,
@@ -23,16 +25,22 @@ export type {
   Findings,
   Persona,
   Run,
+  RunFailure,
+  RunProgress,
   RunRequest,
+  RunStatus,
+  RunUsage,
   Score,
   Session,
+  SessionProgress,
   Verdict,
+  VariantProgress,
 } from './schemas.js';
 
 export { listRunDirs, runDirName, runPaths } from './paths.js';
 export type { RunPaths } from './paths.js';
 
-export { readRun, validate, writeRun } from './io.js';
+export { appendFinishedSession, readRun, validate, writeRun } from './io.js';
 export type { RunArtifact, Violation } from './io.js';
 
 export { createSeededRandom } from './random.js';

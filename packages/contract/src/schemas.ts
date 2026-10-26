@@ -50,6 +50,8 @@ const pixels = z.number().min(0);
 const coordinate = z.number();
 /** Timestamps are ISO 8601; an offset is accepted so an imported real session keeps its own. */
 const timestamp = z.iso.datetime({ offset: true });
+/** `S-01`, `S-02` … `S-NN` — a session's id, and the name of its file under `sessions/`. */
+const sessionId = z.string().regex(/^S-\d{2,}$/, 'a session id is S-01, S-02 … S-NN');
 
 const viewportSchema = z.strictObject({
   width: z.int().positive(),
@@ -155,6 +157,82 @@ const attributionSchema = z.enum(['product', 'automation']);
 
 const severitySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 
+/**
+ * Where a run has got to: `open` while the swarm is still landing sessions, `failed` when
+ * the run never started, `finished` when it is done. The Running screen reads this rather
+ * than inferring a status from what happens to be on disk (`docs/FLOW.md` sections 7, 8).
+ */
+const runStatusSchema = z.enum(['open', 'failed', 'finished']);
+
+/**
+ * One finished session, as the Running screen's log reads it: **structured fields, never a
+ * pre-composed sentence**. The screen and the CLI each render the wording from these, in
+ * the vocabulary `docs/FLOW.md` section 8 fixes, and the artifact stores no display text.
+ */
+const sessionProgressSchema = z.strictObject({
+  sessionId,
+  /** Who it was, as this run's `personas` name them: the log reads a name, not an id. */
+  personaName: name,
+  variant: name,
+  /** `null` for a real session, which carries a participant and no seed. */
+  seed: z.int().nullable(),
+  /** When it landed: the log's timestamp, and what elapsed time is measured against. */
+  finishedAt: timestamp,
+  durationMs: milliseconds,
+  status: outcomeStatusSchema,
+  /** The step it ended on. Unchecked against `steps`, as a session's own step is: a session
+   * may end somewhere the run never planned to go. */
+  step: name,
+  reason: z.string(),
+  attribution: attributionSchema,
+});
+
+/** One variant's share of the swarm: a `.segbar` count, and the width of its bar. */
+const variantProgressSchema = z.strictObject({
+  variant: name,
+  totalSessions: count,
+  finishedSessions: count,
+});
+
+/**
+ * How far along the run is — "17 of 24 sessions finished", the same two counts per variant,
+ * and one entry per finished session. `runSchema` holds the counts to each other and to the
+ * entries beneath them, so a screen rendering all three is rendering one claim.
+ */
+const runProgressSchema = z.strictObject({
+  totalSessions: count,
+  finishedSessions: count,
+  perVariant: z.array(variantProgressSchema).default([]),
+  /** Append order, which is the order they finished in; the screen shows newest first. */
+  sessions: z.array(sessionProgressSchema).default([]),
+});
+
+/** Why a run never started. The Test failed screen shows both and fabricates neither. */
+const runFailureSchema = z.strictObject({
+  reason: name,
+  /** What was captured — a stderr line, a status code. Empty when nothing was. */
+  detail: z.string(),
+});
+
+/**
+ * What the whole run spent. Cached input and reasoning output are fields of their own
+ * because the model mode the owner chose reports both (`muse-spark-1.3` with cached input):
+ * a cached run must not be reported as more expensive than it was, and reasoning tokens are
+ * billed as output. A provider that reports neither records zero for both, and an offline
+ * run records zero truthfully rather than leaving its cost unknown.
+ */
+export const runUsageSchema = z.strictObject({
+  calls: count,
+  inputTokens: count,
+  /** Of `inputTokens`, how many the model served from its prompt cache. */
+  cachedInputTokens: count,
+  outputTokens: count,
+  /** Of `outputTokens`, how many were reasoning tokens. */
+  reasoningTokens: count,
+  /** US dollars, estimated from the provider's prices at call time. */
+  estimatedCostUsd: z.number().min(0),
+});
+
 const frictionScoreSchema = z.strictObject({ median: points, sd: z.number().min(0) });
 
 const scoreSchema = z.strictObject({
@@ -232,6 +310,20 @@ export const runSchema = z
     schemaVersion,
     runId: name,
     createdAt: timestamp,
+    /**
+     * The four fields the Running and Test failed screens read. All of them are optional:
+     * a `run.json` written before this step carries none, and an absent status is a run
+     * that never recorded one rather than a status guessed from the sessions on disk.
+     */
+    status: runStatusSchema.optional(),
+    /** When the swarm started. `createdAt` is when the run was asked for. */
+    startedAt: timestamp.optional(),
+    /** When it stopped, either way. Absent while the run is open. */
+    finishedAt: timestamp.optional(),
+    progress: runProgressSchema.optional(),
+    /** Present only on a failed run; a run that finished carries none. */
+    failure: runFailureSchema.optional(),
+    usage: runUsageSchema.optional(),
     task: taskSchema,
     variants: z.array(variantSchema).min(1),
     steps: z.array(z.strictObject({ id: name, label: name })).min(1),
@@ -360,6 +452,150 @@ export const runSchema = z
       }
     });
 
+    // A run says where it got to once. A failed run says why, and a run that is not failed
+    // has no failure to report — the Test failed screen is reached by the status, so the two
+    // disagreeing would leave the viewer with a reason for a run that ran.
+    if (run.status === 'failed' && run.failure === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['failure'],
+        message:
+          'a run that failed records why it failed: the Test failed screen shows the reason and the captured detail',
+      });
+    }
+    if (run.failure !== undefined && run.status !== 'failed') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['status'],
+        message: `this run carries a failure but its status is ${run.status === undefined ? 'absent' : `"${run.status}"`}: only a failed run has a failure`,
+      });
+    }
+    // An open run has not stopped, so a finishing time would be a claim about a future.
+    if (run.status === 'open' && run.finishedAt !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['finishedAt'],
+        message: 'a run whose status is open has not finished, so it records no finishedAt',
+      });
+    }
+    if (run.finishedAt !== undefined) {
+      if (run.startedAt === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['startedAt'],
+          message: 'a run that records when it finished records when it started',
+        });
+      } else if (run.finishedAt < run.startedAt) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['finishedAt'],
+          message: `this run finished at ${run.finishedAt}, before it started at ${run.startedAt}`,
+        });
+      }
+    }
+
+    const { progress } = run;
+    if (progress !== undefined) {
+      if (progress.finishedSessions > progress.totalSessions) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['progress', 'finishedSessions'],
+          message: `${progress.finishedSessions} finished of ${progress.totalSessions} planned: a run finishes no more sessions than it has`,
+        });
+      }
+      // The count and the log are one claim: "17 of 24 finished" above seventeen lines.
+      if (progress.sessions.length !== progress.finishedSessions) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['progress', 'sessions'],
+          message: `progress counts ${progress.finishedSessions} finished sessions but carries ${progress.sessions.length} of them`,
+        });
+      }
+      const logged = new Set<string>();
+      progress.sessions.forEach((entry, index) => {
+        if (logged.has(entry.sessionId)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['progress', 'sessions', index, 'sessionId'],
+            message: `session "${entry.sessionId}" is recorded as finished more than once`,
+          });
+        }
+        logged.add(entry.sessionId);
+      });
+      progress.perVariant.forEach((entry, index) => {
+        if (entry.finishedSessions > entry.totalSessions) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['progress', 'perVariant', index, 'finishedSessions'],
+            message: `${entry.finishedSessions} finished of ${entry.totalSessions} planned on variant "${entry.variant}"`,
+          });
+        }
+      });
+      // The two bars are the one bar, split: the variants carry the whole swarm between
+      // them, so a per-variant breakdown that does not add up to the total is wrong twice.
+      if (progress.perVariant.length > 0) {
+        for (const key of ['totalSessions', 'finishedSessions'] as const) {
+          const split = progress.perVariant.reduce((total, entry) => total + entry[key], 0);
+          if (split !== progress[key]) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['progress', 'perVariant'],
+              message: `the variants account for ${split} ${key} but the run records ${progress[key]}`,
+            });
+          }
+        }
+      }
+      // "Nobody was simulated and no result was saved" is what the Test failed screen says,
+      // so a failed run has no progress to show rather than a fabricated one.
+      if (
+        run.status === 'failed' &&
+        (progress.finishedSessions > 0 || progress.sessions.length > 0)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['progress'],
+          message: 'a run that failed to start simulated nobody: it records no finished sessions',
+        });
+      }
+    }
+
+    const { usage } = run;
+    if (usage !== undefined) {
+      if (usage.cachedInputTokens > usage.inputTokens) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['usage', 'cachedInputTokens'],
+          message: `${usage.cachedInputTokens} cached of ${usage.inputTokens} input tokens: the cached tokens are part of the input tokens, not extra to them`,
+        });
+      }
+      if (usage.reasoningTokens > usage.outputTokens) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['usage', 'reasoningTokens'],
+          message: `${usage.reasoningTokens} reasoning of ${usage.outputTokens} output tokens: reasoning tokens are part of the output tokens, not extra to them`,
+        });
+      }
+      // Zero calls and a non-zero bill is a writer that forgot to count one of the two.
+      const spent = usage.inputTokens + usage.outputTokens > 0 || usage.estimatedCostUsd > 0;
+      if (usage.calls === 0 && spent) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['usage', 'calls'],
+          message:
+            'this run records tokens or a cost but no model calls: one of the two was not counted',
+        });
+      }
+      // The offline provider costs nothing, and a run's mode is never silently upgraded, so
+      // an offline run billing for calls is a mode that was recorded wrongly.
+      if (run.engine.mode === 'offline' && usage.calls > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['usage', 'calls'],
+          message: `this run ran the offline deterministic engine, which makes no model calls, but records ${usage.calls}`,
+        });
+      }
+    }
+
     // The headline findings are a ranked three at most, so naming one twice spends a place
     // the Verdict screen has only three of.
     const named = new Set<string>();
@@ -379,7 +615,7 @@ export const runSchema = z
 export const sessionSchema = z
   .strictObject({
     schemaVersion,
-    sessionId: z.string().regex(/^S-\d{2,}$/, 'a session id is S-01, S-02 … S-NN'),
+    sessionId,
     runId: name,
     variant: name,
     taskId: name,
@@ -557,6 +793,25 @@ export type Persona = z.infer<typeof personaSchema>;
 export type Verdict = z.infer<typeof verdictSchema>;
 export type Score = z.infer<typeof scoreSchema>;
 export type Run = z.infer<typeof runSchema>;
+export type RunStatus = z.infer<typeof runStatusSchema>;
+export type RunProgress = z.infer<typeof runProgressSchema>;
+export type SessionProgress = z.infer<typeof sessionProgressSchema>;
+export type VariantProgress = z.infer<typeof variantProgressSchema>;
+export type RunFailure = z.infer<typeof runFailureSchema>;
+export type RunUsage = z.infer<typeof runUsageSchema>;
+
+/**
+ * A run that made no model calls: the offline deterministic engine's whole bill, and what
+ * a run's totals start at, so that zero is recorded rather than left unknown.
+ */
+export const ZERO_USAGE: RunUsage = {
+  calls: 0,
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0,
+  estimatedCostUsd: 0,
+};
 export type Session = z.infer<typeof sessionSchema>;
 export type Findings = z.infer<typeof findingsSchema>;
 export type RunRequest = z.infer<typeof runRequestSchema>;
