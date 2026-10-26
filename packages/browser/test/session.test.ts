@@ -237,9 +237,12 @@ describeWithChromium('a browser session', () => {
       await expect(extractElements(handle, geometry, 'cart')).resolves.toEqual([]);
     });
 
-    it('writes no screenshot yet', async () => {
+    // The screenshot seam is filled (#46) and asserted as files on disk in
+    // `screenshot.test.ts`. What belongs here is the one case that writes nothing: a page
+    // the task does not recognise, which is what `capture` above still passes it.
+    it('writes no screenshot for a page with no step', async () => {
       await expect(
-        writeScreenshot(handle, { runDir: 'runs/x', variant: 'v', step: 'cart' }),
+        writeScreenshot(handle, { runDir: 'runs/x', variant: 'v', step: null }),
       ).resolves.toBeNull();
     });
 
@@ -282,7 +285,9 @@ describeWithChromium('a browser session', () => {
 });
 
 describe('the seams that need no browser', () => {
-  it('projects no run entries yet', () => {
+  // Filled by #46 and asserted in `run-projection.test.ts`: nothing to project is still
+  // nothing, which is what the pipeline hands these before the first capture.
+  it('projects no run entries from no captures', () => {
     expect(toScreenshotEntries([])).toEqual([]);
     expect(toAoiEntries([])).toEqual([]);
   });

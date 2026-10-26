@@ -72,8 +72,6 @@ tests and captures.
 | Seam                                     | Until its ticket lands        |
 | ---------------------------------------- | ----------------------------- |
 | `extractElements`                        | no elements                   |
-| `writeScreenshot`                        | `null`, writes nothing        |
-| `toScreenshotEntries` `toAoiEntries`     | no rows                       |
 | `detectStep`                             | `null`                        |
 | `resolvePrimaryAction`                   | the elements, unchanged       |
 | `act`                                    | throws `act: not implemented` |
@@ -83,7 +81,9 @@ tests and captures.
 | `createFixtureSource` `createLiveSource` | throw                         |
 
 A capture with only these in place is real geometry and a real content hash, a `null`
-screenshot, a `null` step and no elements — and it does not throw.
+screenshot, a `null` step and no elements — and it does not throw. The screenshot is `null`
+there because the step is: `writeScreenshot` has landed, and an unrecognised screen has no
+name to write an image under.
 
 ## `capture()` is composed once
 
@@ -114,6 +114,10 @@ of its own):
 - `test/session.test.ts` — that device emulation is real, read back out of the page; that a
   capture carries its variant, geometry and content hash; and that every neutral seam
   behaves as the table above says.
+- `test/screenshot.test.ts` — the written PNG, read back from the run directory: its path,
+  that it covers the whole document at the device's pixels, and that one screen is one file.
+- `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
+  example run and parsed by `@personavision/contract`. No browser.
 
 No test asserts a Playwright internal. `test/fixture-site.test.ts` holds the fixture site to
 its own record and needs no browser at all.
