@@ -17,3 +17,7 @@ coverage/
 # PERSONAVISION_CALIBRATION_CACHE set to `$PWD/.cache`. An override naming any other
 # directory in the repository is deliberately not ignored: it should be noticed.
 .cache/
+
+# The data directory `personavision serve` creates: the workspace's accounts, sessions and
+# the key that signs its cookies. Local state, never committed. `--data-dir` names another.
+.personavision/
