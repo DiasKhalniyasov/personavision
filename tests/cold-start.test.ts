@@ -288,7 +288,7 @@ describe('the command leaves nothing behind, so the cold start runs twice in a r
 
       const second = await openTheApp();
       try {
-          expect(await getJson(second.base, 'runs/index.json')).toEqual(listing);
+        expect(await getJson(second.base, 'runs/index.json')).toEqual(listing);
       } finally {
         await second.stop();
       }
