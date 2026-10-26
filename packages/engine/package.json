@@ -1,0 +1,18 @@
+{
+  "name": "@personavision/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The session engine that drives personas through a variant",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

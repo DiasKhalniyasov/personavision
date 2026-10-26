@@ -1,0 +1,10 @@
+node_modules
+dist
+pnpm-lock.yaml
+
+# The design contract is authored, not formatted: `docs/design/tokens.css` and
+# `docs/design/prototype.html` are the visual source of truth and must not drift.
+docs
+
+# Run directories are generated artifacts.
+runs
