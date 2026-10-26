@@ -72,10 +72,29 @@ export {
   drawFixationDurationMs,
   drawLandingPoint,
   drawSaccadeAmplitudePx,
+  heldByInhibition,
+  historyByArea,
+  historyTermFor,
+  inHistoryOrder,
+  isDeliberateReturn,
   nextFixationStart,
   saccadeDurationMsFor,
-} from './sampling/distributions.js';
-export type { FixationClock, LandingPoint, NextFixationStart } from './sampling/distributions.js';
+  sampleFixations,
+  screenFixationCount,
+} from './sampling/index.js';
+export type {
+  AreaHistory,
+  FixationClock,
+  HistoryFixation,
+  LandingPoint,
+  NextFixationStart,
+  SampleFixationsInput,
+  SampledFixation,
+  SampledSaccade,
+  SampledScanpath,
+  SamplerArea,
+  ViewingHistory,
+} from './sampling/index.js';
 
 export type {
   BoundingBox,

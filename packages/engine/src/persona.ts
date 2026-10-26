@@ -115,9 +115,10 @@ export const fixationDurationMedianMsFor = (
  * How many fixations this persona's screen gets, clamped to the configured bounds — so no
  * trait combination can ask for a screen with no fixations on it at all.
  *
- * `fixationCountScale` only: `screenPersistenceScale` is how long the agent keeps looking
- * at one screen *before moving on*, which the run loop spends on the decision to leave,
- * not on the count drawn here.
+ * `fixationCountScale` only. `screenPersistenceScale` — how long the agent keeps looking
+ * at one screen *before moving on* — is applied by the sampler, where
+ * `screenFixationCount` in `src/sampling/sample-fixations.ts` composes it with this row
+ * into the number of fixations a screen actually gets. This row is not the place for it.
  */
 export const fixationCountFor = (
   traits: PersonaTraits,
