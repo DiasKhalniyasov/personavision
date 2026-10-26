@@ -1,50 +1,26 @@
-import type { DecisionContext, FixatedElement, PersonaTraits } from '../src/types.js';
+import { element, MIDDLING } from '../src/testing.js';
+import type { FixatedElement, PersonaTraits } from '../src/types.js';
 
-/** Mid-scale on every trait, so a test can move exactly one of them. */
-export const MIDDLING: PersonaTraits = {
-  persistence: 0.5,
-  scanningVsReading: 0.5,
-  detailOrientation: 0.5,
-  interfaceFamiliarity: 0.5,
-  patience: 0.5,
-  riskTolerance: 0.5,
-};
+/**
+ * The package's own tests build on the fixtures the exported contract suite scores, so a
+ * screen or a trait added to one is added to both. What is here is what only these tests
+ * need.
+ */
+export { contextOf, element, GOAL, MATCHING_SCREEN, MIDDLING, seedBand } from '../src/testing.js';
 
 export const traitsWith = (overrides: Partial<PersonaTraits>): PersonaTraits => ({
   ...MIDDLING,
   ...overrides,
 });
 
-export const element = (
-  id: string,
-  text: string,
-  role: string | null,
-  overrides: Partial<FixatedElement> = {},
-): FixatedElement => ({ id, text, role, fixationCount: 2, dwellMs: 400, ...overrides });
-
-/** The demo shop's goal, and a screen with one answer to it and two distractors. */
-export const GOAL = { text: 'Find the price of the waterproof jacket' } as const;
-
-export const MATCHING_SCREEN: readonly FixatedElement[] = [
-  element('el-jacket', 'Waterproof jacket — £129', 'link'),
-  element('el-newsletter', 'Newsletter signup', 'button'),
-  element('el-home', 'Home', 'link'),
-];
-
-/** Nothing on this screen has anything to do with the goal. */
+/** Nothing on this screen has anything to do with the goal, and none of it is a control. */
 export const BARREN_SCREEN: readonly FixatedElement[] = [
   element('el-cookies', 'Cookie preferences', null),
 ];
 
-export const contextOf = (overrides: Partial<DecisionContext> = {}): DecisionContext => ({
-  goal: GOAL,
-  traits: MIDDLING,
-  step: { id: 'browse', index: 1, label: 'Browse the catalogue' },
-  fixatedElements: MATCHING_SCREEN,
-  history: [],
-  ...overrides,
-});
-
-/** A fixed band of seeds: every assertion over it is reproducible, so none can flake. */
-export const seedBand = (size: number): readonly number[] =>
-  Array.from({ length: size }, (_, index) => index);
+/** A screen of navigation: every element is a control, and none of it answers the goal. */
+export const NAVIGATION_SCREEN: readonly FixatedElement[] = [
+  element('el-about', 'About us', 'link'),
+  element('el-careers', 'Careers', 'link'),
+  element('el-contact', 'Contact', 'button'),
+];

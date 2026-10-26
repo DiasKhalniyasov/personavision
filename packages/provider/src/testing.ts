@@ -22,8 +22,13 @@ import type {
  * was targeted, what kind of action it was, what the call cost.
  */
 
+/**
+ * The fixtures, exported: a provider's own tests build on the same screen the contract
+ * suite scores, so the two never drift apart.
+ */
+
 /** Mid-scale on every trait, so a fixture persona has no opinion of its own. */
-const MIDDLING: PersonaTraits = {
+export const MIDDLING: PersonaTraits = {
   persistence: 0.5,
   scanningVsReading: 0.5,
   detailOrientation: 0.5,
@@ -32,33 +37,34 @@ const MIDDLING: PersonaTraits = {
   riskTolerance: 0.5,
 };
 
-const element = (
+export const element = (
   id: string,
   text: string,
   role: string | null,
   overrides: Partial<FixatedElement> = {},
-): FixatedElement => ({ id, text, role, fixationCount: 2, dwellMs: 420, ...overrides });
+): FixatedElement => ({ id, text, role, fixationCount: 2, dwellMs: 400, ...overrides });
 
 /** A shopping screen whose primary control answers the goal and whose others do not. */
-const GOAL = { text: 'Find the price of the waterproof jacket' } as const;
+export const GOAL = { text: 'Find the price of the waterproof jacket' } as const;
 
-const SCREEN: readonly FixatedElement[] = [
-  element('el-match', 'Waterproof jacket — £129', 'link'),
-  element('el-distractor', 'Newsletter signup', 'button'),
-  element('el-nav', 'Home', 'link'),
+export const MATCHING_SCREEN: readonly FixatedElement[] = [
+  element('el-jacket', 'Waterproof jacket — £129', 'link'),
+  element('el-newsletter', 'Newsletter signup', 'button'),
+  element('el-home', 'Home', 'link'),
 ];
 
-const contextOf = (overrides: Partial<DecisionContext> = {}): DecisionContext => ({
+export const contextOf = (overrides: Partial<DecisionContext> = {}): DecisionContext => ({
   goal: GOAL,
   traits: MIDDLING,
   step: { id: 'browse', index: 1, label: 'Browse the catalogue' },
-  fixatedElements: SCREEN,
+  fixatedElements: MATCHING_SCREEN,
   history: [],
   ...overrides,
 });
 
 /** A band of seeds, fixed, so that every assertion over it is reproducible, never flaky. */
-const band = (size: number): readonly number[] => Array.from({ length: size }, (_, index) => index);
+export const seedBand = (size: number): readonly number[] =>
+  Array.from({ length: size }, (_, index) => index);
 
 export interface DecisionProviderContractOptions {
   /** What to call the provider in the test names. */
@@ -80,7 +86,7 @@ export interface DecisionProviderContractOptions {
 export const describeDecisionProviderContract = (
   options: DecisionProviderContractOptions,
 ): void => {
-  const seeds = band(options.seedBand ?? 32);
+  const seeds = seedBand(options.seedBand ?? 32);
   const decideAll = async (context: DecisionContext): Promise<readonly Decision[]> =>
     Promise.all(seeds.map((seed) => options.createProvider({ seed }).decide(context)));
 
@@ -114,13 +120,13 @@ export const describeDecisionProviderContract = (
       const context = contextOf({
         // The distractor is gone from this screen: a provider that remembers it from the
         // fixture above, or that invents an id, is caught here.
-        fixatedElements: [element('el-match', 'Waterproof jacket — £129', 'link')],
-        history: [{ step: 'browse', kind: 'read', targetElementId: 'el-distractor', ok: true }],
+        fixatedElements: [element('el-jacket', 'Waterproof jacket — £129', 'link')],
+        history: [{ step: 'browse', kind: 'read', targetElementId: 'el-newsletter', ok: true }],
       });
 
       for (const decision of await decideAll(context)) {
         expect(validateDecision(context, decision)).toEqual([]);
-        expect([null, 'el-match']).toContain(decision.action.targetElementId);
+        expect([null, 'el-jacket']).toContain(decision.action.targetElementId);
       }
     });
 
@@ -159,8 +165,8 @@ export const describeDecisionProviderContract = (
         .map((decision) => decision.action.targetElementId)
         .filter((id): id is string => id !== null);
 
-      const onMatch = targeted.filter((id) => id === 'el-match').length;
-      const onDistractor = targeted.filter((id) => id !== 'el-match').length;
+      const onMatch = targeted.filter((id) => id === 'el-jacket').length;
+      const onDistractor = targeted.filter((id) => id !== 'el-jacket').length;
 
       expect(targeted.length).toBeGreaterThan(0);
       expect(onMatch).toBeGreaterThan(onDistractor);

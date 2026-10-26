@@ -7,6 +7,7 @@ import type {
   DecisionProvider,
   FixatedElement,
   Goal,
+  PastAction,
   PersonaTraits,
 } from './types.js';
 
@@ -22,9 +23,10 @@ import type {
  * demo run is produced by this policy, so it has to read as credible to a designer.
  *
  * **Deterministic per call, not per provider.** The random stream for a decision is
- * derived from the seed *and* a digest of the context, so the same context and seed give
- * the same decision wherever it is asked and in whatever order — a surprising session can
- * be re-run screen by screen, and a provider that has already decided twenty screens
+ * derived from the seed *and* a digest of the whole context — the persona's traits
+ * included, so that two people on one seed are two people — so the same context and seed
+ * give the same decision wherever it is asked and in whatever order. A surprising session
+ * can be re-run screen by screen, and a provider that has already decided twenty screens
  * decides the twenty-first exactly as a fresh one would.
  *
  * **It never widens the agent's knowledge.** It reads only `DecisionContext`, it ignores
@@ -51,20 +53,39 @@ const POLICY = {
    * makes a swarm of seeds a spread rather than one session repeated.
    */
   selectionTemperature: 0.22,
-  /** Below this, the best thing on the screen is not worth acting on: look further down. */
-  scrollThreshold: 0.35,
+  /**
+   * How much `riskTolerance` widens that spread: a cautious person goes for the best match
+   * it can see, and a risk-tolerant one is readier to try the odd-looking thing. Half the
+   * span either side of the temperature above, so mid-scale risk leaves it unchanged.
+   */
+  riskTemperatureSpan: 0.8,
+  /**
+   * Below this, the best thing the agent has looked at is not worth acting on: look further
+   * down the page. Above a control it has no reason to touch (role alone, `0.35`, plus a
+   * full attention term, `0.15`) and below anything whose words answer even a quarter of
+   * the goal — so a screen of navigation links is scrolled past rather than clicked.
+   */
+  scrollThreshold: 0.55,
   /** How much of a reader the persona has to be before it reads text instead of acting. */
   readThreshold: 0.3,
   /** Reading something entirely beside the point is not credible either. */
   readScoreFloor: 0.15,
-  /** Attempts on one screen before the agent pauses: 1 at no patience, 5 at full. */
+  /**
+   * Attempts on one screen before the agent pauses: 1 where it has no patience and knows
+   * nothing of interfaces, 6 where it has both.
+   */
   patienceBase: 1,
   patiencePerPatience: 4,
-  /** Actions in a session before the agent gives up: 2 at nothing, 16 at full traits. */
+  patiencePerFamiliarity: 1,
+  /**
+   * Actions that got it nowhere before it gives up: 2 at no traits, 16 at full. Counted
+   * from its last click that actually advanced, so a session that is going well never runs
+   * out of budget — only a stuck one does.
+   */
   abandonBase: 2,
   abandonPerPersistence: 10,
   abandonPerPatience: 4,
-  /** Failures and pauses before the agent gives up early: 2 at no persistence, 8 at full. */
+  /** Failures and pauses on one screen before it gives up early: 2 at no persistence, 8 at full. */
   frustrationBase: 2,
   frustrationPerPersistence: 6,
 } as const;
@@ -94,7 +115,9 @@ const READABLE_ROLES = new Set([null, 'paragraph', 'text', 'generic', 'heading',
 /**
  * Words that carry no intent. Short enough to read, long enough that a goal sentence's
  * content words are what is left — the same job `packages/engine`'s relevance does, kept
- * here because this package depends on `packages/contract` only.
+ * here because this package depends on `packages/contract` only. The two lists are not
+ * identical and the shared tokeniser belongs in `packages/contract`, which is a change to
+ * a package this ticket does not touch: noted on #33 as a follow-up.
  */
 const STOPWORDS = new Set([
   'a',
@@ -155,10 +178,9 @@ const tokenise = (text: string): string[] =>
 /**
  * How much of the goal's content this element's words answer, on `[0, 1]`. Lexical, with
  * no model and no network: the goal's tokens against the element's text and accessible
- * name, plus a point for the goal's own verb appearing on a control.
+ * name. The goal is tokenised once per screen, not once per element.
  */
-const goalMatch = (goal: Goal, element: FixatedElement): number => {
-  const goalTokens = tokenise(goal.text);
+const goalMatch = (goalTokens: readonly string[], element: FixatedElement): number => {
   if (goalTokens.length === 0) return 0;
   const elementTokens = new Set(tokenise(`${element.text} ${element.name ?? ''}`));
   if (elementTokens.size === 0) return 0;
@@ -174,19 +196,27 @@ interface Candidate {
   readonly score: number;
 }
 
-/** Highest score first, and by id within a tie so the order never depends on input order. */
-const scoreCandidates = (context: DecisionContext): readonly Candidate[] =>
-  context.fixatedElements
+/**
+ * Highest score first, and by id within a tie — compared as code units, not with
+ * `localeCompare`, whose order depends on the host's locale and ICU build and would make
+ * the same context and seed decide differently on two machines.
+ */
+const scoreCandidates = (context: DecisionContext): readonly Candidate[] => {
+  const goalTokens = tokenise(context.goal.text);
+  return context.fixatedElements
     .map((element) => ({
       element,
       score:
-        POLICY.goalWeight * goalMatch(context.goal, element) +
+        POLICY.goalWeight * goalMatch(goalTokens, element) +
         POLICY.roleWeight * rolePrior(element.role) +
         (POLICY.attentionWeight * Math.min(element.fixationCount, 3)) / 3,
     }))
-    .sort(
-      (left, right) => right.score - left.score || left.element.id.localeCompare(right.element.id),
-    );
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      if (left.element.id === right.element.id) return 0;
+      return left.element.id < right.element.id ? -1 : 1;
+    });
+};
 
 /** FNV-1a over the context, so that the stream depends on the whole situation. */
 const digestOf = (context: DecisionContext): string =>
@@ -194,6 +224,14 @@ const digestOf = (context: DecisionContext): string =>
     context.step.id,
     context.step.index,
     context.goal.text,
+    [
+      context.traits.persistence,
+      context.traits.scanningVsReading,
+      context.traits.detailOrientation,
+      context.traits.interfaceFamiliarity,
+      context.traits.patience,
+      context.traits.riskTolerance,
+    ].join(','),
     context.fixatedElements
       .map(
         (element) =>
@@ -218,11 +256,13 @@ const hash32 = (text: string): number => {
 };
 
 /** One candidate, sampled by softmax over the scores, so the better one wins more seeds. */
-const chooseCandidate = (candidates: readonly Candidate[], random: () => number): Candidate => {
+const chooseCandidate = (
+  candidates: readonly Candidate[],
+  temperature: number,
+  random: () => number,
+): Candidate => {
   const best = candidates[0]?.score ?? 0;
-  const weights = candidates.map((candidate) =>
-    Math.exp((candidate.score - best) / POLICY.selectionTemperature),
-  );
+  const weights = candidates.map((candidate) => Math.exp((candidate.score - best) / temperature));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
   let cursor = random() * total;
   for (let index = 0; index < candidates.length; index += 1) {
@@ -234,16 +274,29 @@ const chooseCandidate = (candidates: readonly Candidate[], random: () => number)
 
 const budgets = (traits: PersonaTraits) => ({
   /** Attempts on one screen before pausing. */
-  patience: Math.round(POLICY.patienceBase + POLICY.patiencePerPatience * traits.patience),
-  /** Actions in the session before giving up. */
+  patience: Math.round(
+    POLICY.patienceBase +
+      POLICY.patiencePerPatience * traits.patience +
+      POLICY.patiencePerFamiliarity * traits.interfaceFamiliarity,
+  ),
+  /** Actions that got it nowhere before giving up. */
   abandon: Math.round(
     POLICY.abandonBase +
       POLICY.abandonPerPersistence * traits.persistence +
       POLICY.abandonPerPatience * traits.patience,
   ),
-  /** Failures and pauses before giving up early. */
+  /** Failures and pauses on this screen before giving up early. */
   frustration: POLICY.frustrationBase + POLICY.frustrationPerPersistence * traits.persistence,
 });
+
+/** How much the agent has done since the last click that actually got it somewhere. */
+const fruitlessEffort = (history: readonly PastAction[]): number => {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const action = history[index] as PastAction;
+    if (action.kind === 'click' && action.ok) return history.length - 1 - index;
+  }
+  return history.length;
+};
 
 /** What the agent has already done on this screen. */
 const screenHistory = (context: DecisionContext) => {
@@ -335,17 +388,19 @@ const intentFor = (
  * The escalation, in the order it is checked. Each rule reads the agent's own history and
  * its traits, and the first one that fires is the decision:
  *
- * 1. **abandon** — its budget of actions is spent, or failures and pauses have passed what
- *    its persistence tolerates.
+ * 1. **abandon** — it has done enough since it last got anywhere, or failures and pauses on
+ *    this screen have passed what its persistence tolerates. The budget counts from its
+ *    last click that advanced, so an agent that is completing the task never runs out.
  * 2. **backtrack** — it has already paused on this screen, something it tried failed, and
  *    there is a screen behind it. Once per screen: a loop of going back is not behaviour.
- * 3. **hesitate** — attempts on this screen have passed what its patience allows. Once per
- *    screen, so that a pause is followed by an attempt rather than by another pause.
+ * 3. **hesitate** — attempts on this screen have passed what its patience and its
+ *    familiarity with interfaces allow. Once per screen, so that a pause is followed by an
+ *    attempt rather than by another pause.
  * 4. **scroll** — nothing it has looked at is worth acting on, and it has not looked
  *    further down this screen yet.
  * 5. **read** — there is text it has not read, and it is enough of a reader to read it.
- * 6. **click** — the best candidate, sampled with seeded noise so that a near-tie is
- *    decided differently from seed to seed.
+ * 6. **click** — the best candidate, sampled with seeded noise whose spread its risk
+ *    tolerance sets, so that a near-tie is decided differently from seed to seed.
  */
 const decideAction = (
   context: DecisionContext,
@@ -356,7 +411,7 @@ const decideAction = (
   const limits = budgets(context.traits);
   const frustration = here.failures + here.hesitations;
 
-  if (context.history.length >= limits.abandon || frustration >= limits.frustration) {
+  if (fruitlessEffort(context.history) >= limits.abandon || frustration >= limits.frustration) {
     return { action: { kind: 'abandon', targetElementId: null } };
   }
   if (here.hesitations >= 1 && here.failures >= 1 && context.step.index > 0 && !here.backtracked) {
@@ -388,7 +443,12 @@ const decideAction = (
     }
   }
 
-  const chosen = chooseCandidate(candidates, random);
+  const temperature =
+    POLICY.selectionTemperature *
+    (1 -
+      POLICY.riskTemperatureSpan / 2 +
+      POLICY.riskTemperatureSpan * context.traits.riskTolerance);
+  const chosen = chooseCandidate(candidates, temperature, random);
   return {
     action: { kind: 'click', targetElementId: chosen.element.id },
     target: chosen.element,

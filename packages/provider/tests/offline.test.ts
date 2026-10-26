@@ -13,6 +13,7 @@ import {
   element,
   GOAL,
   MATCHING_SCREEN,
+  NAVIGATION_SCREEN,
   seedBand,
   traitsWith,
 } from './fixtures.js';
@@ -132,6 +133,29 @@ describe('the offline deterministic provider', () => {
     expect(decision.action.targetElementId).toBeNull();
   });
 
+  it('scrolls past a screen of navigation rather than clicking a link at random', async () => {
+    // Every element here is a control the agent looked at, and none of them answers the
+    // goal: being clickable is not a reason to click.
+    for (const seed of seedBand(16)) {
+      const decision = await decide(contextOf({ fixatedElements: NAVIGATION_SCREEN }), seed);
+      expect(decision.action.kind).toBe('scroll');
+    }
+  });
+
+  it('decides differently for two personas that differ only in risk and familiarity', async () => {
+    const cautious = traitsWith({ riskTolerance: 0.05, interfaceFamiliarity: 0.95 });
+    const chancer = traitsWith({ riskTolerance: 0.95, interfaceFamiliarity: 0.05 });
+
+    const theirs = await Promise.all(
+      seedBand(32).map(async (seed) => [
+        (await decide(contextOf({ traits: cautious }), seed)).action.targetElementId,
+        (await decide(contextOf({ traits: chancer }), seed)).action.targetElementId,
+      ]),
+    );
+
+    expect(theirs.some(([mine, yours]) => mine !== yours)).toBe(true);
+  });
+
   it('reads the text when the persona is a careful reader', async () => {
     const screen = [
       element('el-spec', 'Fully taped seams, 10,000 mm waterproof rating', null, {
@@ -196,6 +220,30 @@ describe('persona traits change what the agent does', () => {
 
     expect(kinds).toContain('backtrack');
     expect(kinds.filter((kind) => kind === 'backtrack')).toHaveLength(1);
+  });
+
+  it('never gives up on a session that is going well', async () => {
+    // Every click advances, so the budget of fruitless actions never runs down: a task of
+    // twenty screens is not an abandonment.
+    const provider = createOfflineDeterministicProvider({ seed: 8 });
+    const history: PastAction[] = [];
+
+    for (let screen = 0; screen < 20; screen += 1) {
+      const { action } = await provider.decide({
+        goal: GOAL,
+        traits: traitsWith({}),
+        step: { id: `step-${screen}`, index: screen },
+        fixatedElements: MATCHING_SCREEN,
+        history,
+      });
+      expect(action.kind).toBe('click');
+      history.push({
+        step: `step-${screen}`,
+        kind: action.kind,
+        targetElementId: action.targetElementId,
+        ok: true,
+      });
+    }
   });
 
   it('never goes back from the first screen of a session', async () => {

@@ -86,8 +86,38 @@ describe('validating a decision against its context', () => {
 
   it('catches an empty intent', () => {
     expect(validateDecision(context, decision({ intent: '  ' })).join(' ')).toContain(
-      'intent is empty',
+      'intent in its own words',
     );
+  });
+
+  it('catches a target on an action that is not aimed at an element', () => {
+    for (const kind of ['scroll', 'hesitate', 'backtrack', 'abandon'] as const) {
+      const violations = validateDecision(
+        context,
+        decision({ action: { kind, targetElementId: 'el-jacket' } }),
+      );
+
+      expect(violations.join(' ')).toContain('is not aimed at an element');
+    }
+  });
+
+  it('reports a malformed decision rather than throwing', () => {
+    // What a model provider parses out of a reply can be missing a field altogether, and
+    // the run needs the violation in words, not a TypeError from inside the swarm.
+    const malformed: readonly unknown[] = [
+      { action: { kind: 'click', targetElementId: 'el-jacket' }, usage: usage() },
+      { intent: 'Click it.', usage: usage() },
+      { intent: 'Click it.', action: { kind: 'click', targetElementId: 'el-jacket' } },
+      { intent: 'Click it.', action: { kind: 'click' }, usage: {} },
+      { intent: 7, action: 'click', usage: 'free', relevanceHints: 'all of it' },
+      null,
+      'click the jacket',
+    ];
+
+    for (const shape of malformed) {
+      const violations = validateDecision(context, shape as Decision);
+      expect(violations.length).toBeGreaterThan(0);
+    }
   });
 
   it('catches impossible usage', () => {
