@@ -72,6 +72,14 @@ describe('the runs a request may read', () => {
     expect(await platform.visibleRuns(requestWith(tampered))).toEqual([demoRun]);
   });
 
+  it('treats a cookie that is not valid percent-encoding as signed out', async () => {
+    // `%E0%A4%A` is a truncated escape: decoding it throws, and a browser holding one
+    // would otherwise get a 500 on every request until it cleared the cookie.
+    expect(await platform.visibleRuns(requestWith(`${SESSION_COOKIE}=%E0%A4%A`))).toEqual([
+      demoRun,
+    ]);
+  });
+
   it('treats an unknown and an expired session as signed out', async () => {
     const unknown = `${SESSION_COOKIE}=${platform.signSession('no-such-session')}`;
     expect(await platform.visibleRuns(requestWith(unknown))).toEqual([demoRun]);

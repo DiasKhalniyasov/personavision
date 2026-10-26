@@ -76,9 +76,17 @@ export interface NewAccount {
 }
 
 export interface AccountStore {
+  /** The email is normalised: trimmed and lower-cased, so it is stored as it is looked up. */
   create(account: NewAccount): Promise<AccountRecord>;
   byId(accountId: string): Promise<AccountRecord | null>;
-  /** Case-insensitive: an email address is not two addresses because of its capitals. */
+  /**
+   * The account for an email, normalised the same way, or `null`.
+   *
+   * One email can carry more than one record: a first start interrupted between creating
+   * the demo account and finishing the seed leaves one behind whose password was never
+   * printed, and the next start seeds again. **The newest record wins** — every
+   * implementation owes that, because it is the one whose password somebody has.
+   */
   byEmail(email: string): Promise<AccountRecord | null>;
 }
 

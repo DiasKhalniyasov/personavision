@@ -300,6 +300,60 @@ describe('personavision serve, as the command', () => {
     expect(second.stdout()).not.toMatch(/Password/);
   });
 
+  it('hands over the password even when the port it was given is taken', async () => {
+    // The workspace is seeded before the port is bound and will not be seeded again, so
+    // a start that cannot listen still has to print the only copy of the password.
+    const taken: Server = createServer();
+    await new Promise<void>((listening) => taken.listen(0, '127.0.0.1', listening));
+    const port = String((taken.address() as AddressInfo).port);
+    const dataDir = join(workspace.dir, 'refused-port');
+
+    try {
+      const refused = await personavision(
+        [
+          'serve',
+          '--no-open',
+          '--no-build',
+          '--port',
+          port,
+          '--data-dir',
+          dataDir,
+          '--viewer',
+          workspace.viewerDist,
+        ],
+        workspace.dir,
+      );
+      expect(refused.code).not.toBe(0);
+      const password = /^\s*Password\s+(\S+)$/m.exec(refused.stdout)?.[1];
+      expect(password, refused.stdout).toBeDefined();
+      expect(refused.stdout).toContain('will not be');
+
+      // And the next start, which does come up, signs in with that same password.
+      const started = startPersonavision(
+        [
+          'serve',
+          '--no-open',
+          '--no-build',
+          '--port',
+          '0',
+          '--data-dir',
+          dataDir,
+          '--viewer',
+          workspace.viewerDist,
+        ],
+        workspace.dir,
+      );
+      try {
+        await started.waitForLine(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+      } finally {
+        await started.stop();
+      }
+      expect(started.stdout()).not.toContain(password);
+    } finally {
+      await new Promise<void>((closed) => taken.close(() => closed()));
+    }
+  });
+
   it('fails with a message naming the port when the port is taken', async () => {
     const taken: Server = createServer();
     await new Promise<void>((listening) => taken.listen(0, '127.0.0.1', listening));

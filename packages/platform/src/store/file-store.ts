@@ -33,36 +33,53 @@ const FILE_MODE = 0o600;
 /** A collection of records on disk, addressed by id. */
 class JsonCollection<T extends { readonly id: string }> {
   readonly #file: string;
-  #records: Map<string, T> | null = null;
+  /**
+   * The read, not the result: two callers arriving while the first read is still in
+   * flight would otherwise each build a map of their own, and whichever wrote last would
+   * drop the other's record. They share this promise and so share one map.
+   */
+  #records: Promise<Map<string, T>> | null = null;
+  /** Writes run one after another, so the file ends as the last writer left the map. */
+  #writes: Promise<void> = Promise.resolve();
 
   constructor(dataDir: string, name: string) {
     this.#file = join(dataDir, `${name}.json`);
   }
 
-  async #load(): Promise<Map<string, T>> {
-    if (this.#records !== null) return this.#records;
+  async #read(): Promise<Map<string, T>> {
     let body: string;
     try {
       body = await readFile(this.#file, 'utf8');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      this.#records = new Map();
-      return this.#records;
+      return new Map();
     }
     // A corrupt file throws rather than being read as "no records": losing a workspace
     // silently is worse than failing to start.
     const parsed = JSON.parse(body) as T[];
-    this.#records = new Map(parsed.map((record) => [record.id, record]));
+    return new Map(parsed.map((record) => [record.id, record]));
+  }
+
+  #load(): Promise<Map<string, T>> {
+    this.#records ??= this.#read();
     return this.#records;
   }
 
-  async #flush(records: Map<string, T>): Promise<void> {
+  #write(records: Map<string, T>): Promise<void> {
     const body = `${JSON.stringify([...records.values()], null, 2)}\n`;
     // Written beside the file and renamed over it, so a crash mid-write leaves the
     // previous collection intact rather than half of the new one.
     const temporary = `${this.#file}.${randomUUID()}.tmp`;
-    await writeFile(temporary, body, { encoding: 'utf8', mode: FILE_MODE });
-    await rename(temporary, this.#file);
+    return writeFile(temporary, body, { encoding: 'utf8', mode: FILE_MODE }).then(() =>
+      rename(temporary, this.#file),
+    );
+  }
+
+  #flush(records: Map<string, T>): Promise<void> {
+    // Queued rather than started: two renames racing could leave the earlier state on
+    // disk while the map in memory holds both records.
+    this.#writes = this.#writes.then(() => this.#write(records));
+    return this.#writes;
   }
 
   async all(): Promise<T[]> {
@@ -89,22 +106,31 @@ class JsonCollection<T extends { readonly id: string }> {
 
 const now = (): string => new Date().toISOString();
 
+/** An email address is one address whatever its capitals or the spaces around it. */
+const normaliseEmail = (email: string): string => email.trim().toLowerCase();
+
 const missing = (what: string, id: string): Error => new Error(`There is no ${what} "${id}".`);
 
 const fileAccountStore = (collection: JsonCollection<AccountRecord>): AccountStore => ({
   create: async (account: NewAccount) =>
     collection.put({
       id: randomUUID(),
-      email: account.email,
+      email: normaliseEmail(account.email),
       displayName: account.displayName,
       password: account.password,
       createdAt: now(),
     }),
   byId: (accountId) => collection.get(accountId),
   byEmail: async (email) => {
-    const wanted = email.trim().toLowerCase();
+    const wanted = normaliseEmail(email);
+    const matches = (await collection.all()).filter((account) => account.email === wanted);
+    // The newest wins, as `AccountStore` states: a first start interrupted between
+    // creating the account and writing the settings file seeds again, and the account
+    // that works is the one the seed that finished wrote. The sort is stable, so two
+    // records created in the same millisecond fall back to the order they were written.
     return (
-      (await collection.all()).find((account) => account.email.toLowerCase() === wanted) ?? null
+      [...matches].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).at(-1) ??
+      null
     );
   },
 });
@@ -128,10 +154,14 @@ const fileWorkspaceStore = (collection: JsonCollection<WorkspaceRecord>): Worksp
     if (workspace.runIds.includes(runId)) return workspace;
     return collection.put({ ...workspace, runIds: [...workspace.runIds, runId] });
   },
-  publicRunIds: async () =>
-    (await collection.all())
-      .map((workspace) => workspace.demoRunId)
-      .filter((runId): runId is string => runId !== null),
+  publicRunIds: async () => [
+    // A set, so that two workspaces naming the same demo run do not list it twice.
+    ...new Set(
+      (await collection.all())
+        .map((workspace) => workspace.demoRunId)
+        .filter((runId): runId is string => runId !== null),
+    ),
+  ],
 });
 
 const fileAudienceStore = (collection: JsonCollection<AudienceRecord>): AudienceStore => {

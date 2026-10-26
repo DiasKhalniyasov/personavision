@@ -68,10 +68,14 @@ export const seedDemoWorkspace = async ({
     password: await hashPassword(password),
   });
 
-  // Newest first, so the demo run is the newest run present when the directory was
-  // seeded — the committed example run on a fresh clone.
+  // Newest first, so the audience below is the one the newest test was run for.
   const runIds = await listRunDirs(runsRoot);
-  const demoRunId = runIds[0] ?? null;
+  const newestRunId = runIds[0] ?? null;
+  // The demo run is readable with no session, so it is only ever the one run of a runs
+  // root that holds exactly one — the committed example on a fresh clone. A developer
+  // whose `./runs` already holds tests of their own gets a workspace that owns them all
+  // and publishes none of them: nothing is made public by having been run most recently.
+  const demoRunId = runIds.length === 1 ? newestRunId : null;
 
   const workspace = await store.workspaces.create({
     name: DEMO_WORKSPACE_NAME,
@@ -80,7 +84,7 @@ export const seedDemoWorkspace = async ({
     demoRunId,
   });
 
-  const audience = demoRunId === null ? null : await audienceOfRun(runsRoot, demoRunId);
+  const audience = newestRunId === null ? null : await audienceOfRun(runsRoot, newestRunId);
   const audienceRecord =
     audience === null ? null : await store.audiences.create(workspace.id, audience);
 

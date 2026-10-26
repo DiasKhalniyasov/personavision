@@ -45,7 +45,15 @@ const cookies = (request: IncomingMessage): Map<string, string> => {
 export const readSessionId = (request: IncomingMessage, signingKey: string): string | null => {
   const value = cookies(request).get(SESSION_COOKIE);
   if (value === undefined || value === '') return null;
-  return verify(decodeURIComponent(value), signingKey);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    // A cookie that is not valid percent-encoding is a cookie we did not write, and so
+    // is signed out — not a 500 on every request the browser makes until it is cleared.
+    return null;
+  }
+  return verify(decoded, signingKey);
 };
 
 /**

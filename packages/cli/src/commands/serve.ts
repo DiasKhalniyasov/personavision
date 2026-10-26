@@ -62,6 +62,19 @@ const credentials = (seeded: SeededWorkspace, dataDir: string): string =>
     '',
   ].join('\n');
 
+/**
+ * The same block when the server then failed to come up. The directory is seeded either
+ * way, so a later start prints nothing — without this, a start that is refused its port
+ * would create a workspace whose password nobody ever sees.
+ */
+const credentialsDespiteFailure = (seeded: SeededWorkspace, dataDir: string): string =>
+  [
+    credentials(seeded, dataDir),
+    '  The server did not start, but the workspace above was created and will not be',
+    '  created again. Keep this password: the next start signs in with it.',
+    '',
+  ].join('\n');
+
 export const serveCommand = async ({
   dataDir,
   runsRoot,
@@ -80,8 +93,7 @@ export const serveCommand = async ({
   const platform = await createPlatform({ dataDir, runsRoot });
 
   if (platform.seeded !== null) {
-    announce(credentials(platform.seeded, platform.dataDir));
-    if (platform.seeded.demoRunId === null) {
+    if (platform.seeded.runIds.length === 0) {
       log(
         `No test under ${platform.runsRoot} yet, so the new workspace has none. Generate the committed example with \`pnpm seed:example-run\` and restart.`,
       );
@@ -101,6 +113,11 @@ export const serveCommand = async ({
   try {
     server = await startPlatformServer({ routes: platform.routes, runData, viewer, port });
   } catch (error) {
+    // The workspace was seeded before the port was bound, and it will not be seeded
+    // again — so a start that cannot listen still has to hand over the password.
+    if (platform.seeded !== null) {
+      announce(credentialsDespiteFailure(platform.seeded, platform.dataDir));
+    }
     if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
       throw new CliError(
         `Port ${String(port)} is already in use. Pass --port <port> to use another one, or stop what is on it.`,
@@ -109,6 +126,7 @@ export const serveCommand = async ({
     throw error;
   }
 
+  if (platform.seeded !== null) announce(credentials(platform.seeded, platform.dataDir));
   log(server.url);
   if (openBrowser) {
     try {

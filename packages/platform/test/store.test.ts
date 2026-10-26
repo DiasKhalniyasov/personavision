@@ -26,6 +26,8 @@ describe('the file-backed store', () => {
 
   afterEach(() => rm(dataDir, { recursive: true, force: true }));
 
+  const inAnHour = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
   const anAccount = async (email = 'owner@northwind.example') =>
     store.accounts.create({
       email,
@@ -100,6 +102,17 @@ describe('the file-backed store', () => {
       expect(twice.runIds).toEqual(['2026-10-25-0900-second']);
     });
 
+    it('names a demo run once however many workspaces point at it', async () => {
+      for (const name of ['One', 'Two']) {
+        await store.workspaces.create({
+          name,
+          memberAccountIds: [],
+          demoRunId: '2026-10-24-1402-northwind-demo',
+        });
+      }
+      expect(await store.workspaces.publicRunIds()).toEqual(['2026-10-24-1402-northwind-demo']);
+    });
+
     it('refuses to register a run against a workspace that does not exist', async () => {
       await expect(store.workspaces.addRun('nobody', 'a-run')).rejects.toThrow(/nobody/);
     });
@@ -139,8 +152,6 @@ describe('the file-backed store', () => {
   });
 
   describe('sessions', () => {
-    const inAnHour = (): string => new Date(Date.now() + 3_600_000).toISOString();
-
     it('reads a session back and forgets it when it is deleted', async () => {
       const session = await store.sessions.create({
         accountId: 'account',
@@ -160,6 +171,28 @@ describe('the file-backed store', () => {
       });
       expect(await store.sessions.byId(session.id)).toBeNull();
     });
+  });
+
+  it('loses neither of two records written at the same moment', async () => {
+    // Both creates find the collection's cache cold and race its first read. Sharing one
+    // read is what keeps the second from overwriting the first's map and its file.
+    const [first, second] = await Promise.all([
+      store.sessions.create({ accountId: 'a', workspaceId: 'w', expiresAt: inAnHour() }),
+      store.sessions.create({ accountId: 'b', workspaceId: 'w', expiresAt: inAnHour() }),
+    ]);
+
+    expect(await store.sessions.byId(first.id)).toEqual(first);
+    expect(await store.sessions.byId(second.id)).toEqual(second);
+
+    const reopened = await openFileStore(dataDir);
+    expect(await reopened.sessions.byId(first.id)).toEqual(first);
+    expect(await reopened.sessions.byId(second.id)).toEqual(second);
+  });
+
+  it('finds an account created with stray capitals and spaces', async () => {
+    const created = await anAccount('  Owner@Northwind.Example  ');
+    expect(created.email).toBe('owner@northwind.example');
+    expect(await store.accounts.byEmail('owner@northwind.example')).toEqual(created);
   });
 
   it('keeps what it stored across a restart', async () => {

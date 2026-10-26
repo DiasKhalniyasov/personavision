@@ -48,13 +48,36 @@ describe('seeding a fresh data directory', () => {
     expect(audiences[0]?.audience).toEqual(validArtifact().run.audience);
   });
 
-  it('registers the runs it found, and the newest as the public demo run', async () => {
+  it('registers every run it found', async () => {
     const platform = await createPlatform(directories);
     const workspace = await platform.store.workspaces.byId(platform.seeded?.workspaceId ?? '');
 
     expect(workspace?.runIds).toEqual([newest, older]);
-    expect(workspace?.demoRunId).toBe(newest);
-    expect(await platform.store.workspaces.publicRunIds()).toEqual([newest]);
+  });
+
+  it('publishes nothing when the runs root already held tests of its own', async () => {
+    // Two runs is a developer's checkout, not a fresh clone: being the most recent test
+    // is not a reason to serve it to a request with no session.
+    const platform = await createPlatform(directories);
+
+    expect(platform.seeded?.demoRunId).toBeNull();
+    expect(await platform.store.workspaces.publicRunIds()).toEqual([]);
+  });
+
+  it('publishes the one run of a fresh clone as the demo run', async () => {
+    const clone = await temporaryDirectories();
+    try {
+      const only = await writeRunAt(clone.runsRoot, {
+        stamp: '2026-10-24T14:02:00.000Z',
+        name: 'northwind demo',
+      });
+      const platform = await createPlatform(clone);
+
+      expect(platform.seeded?.demoRunId).toBe(only);
+      expect(await platform.store.workspaces.publicRunIds()).toEqual([only]);
+    } finally {
+      await clone.cleanup();
+    }
   });
 
   it('generates a password that verifies against the stored record', async () => {
