@@ -212,6 +212,9 @@ importers:
       '@personavision/contract':
         specifier: workspace:*
         version: link:../contract
+      '@personavision/personas':
+        specifier: workspace:*
+        version: link:../personas
     devDependencies:
       vitest:
         specifier: ^5.0.5

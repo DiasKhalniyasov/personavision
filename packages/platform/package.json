@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
-    "@personavision/contract": "workspace:*"
+    "@personavision/contract": "workspace:*",
+    "@personavision/personas": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^5.0.5"

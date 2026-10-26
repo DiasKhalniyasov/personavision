@@ -97,7 +97,7 @@ export const createPlatform = async ({ dataDir, runsRoot }: PlatformOptions): Pr
         sessionCookie,
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
-      ...audienceRoutes,
+      ...audienceRoutes({ store, readSession }),
     ],
     guard: sessionGuard({ readSession }),
     seeded,

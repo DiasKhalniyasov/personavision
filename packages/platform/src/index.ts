@@ -7,8 +7,11 @@
  * managed database and no API key. A managed database later is a second implementation
  * of the store interfaces and nothing else.
  *
- * It depends on `@personavision/contract` and on nothing else in the repository: the
- * run-data mount and the built viewer are passed to `startPlatformServer` by
+ * It depends on `@personavision/contract` for every stored shape, and on
+ * `@personavision/personas` for the generator that turns a stored audience into the people
+ * a test would run on — the Audience screens read them beside the audience itself, so the
+ * generator is called here rather than in a browser (#102). Nothing else in the repository:
+ * the run-data mount and the built viewer are passed to `startPlatformServer` by
  * `@personavision/cli`, which owns them.
  */
 
@@ -34,8 +37,15 @@ export type { Credentials, SignedIn, SignInOptions } from './auth/signin.js';
 
 export { workspaceForAccount } from './workspace/membership.js';
 
+export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
+export { withPeople } from './audience/people.js';
+export type { AudienceWithPeople } from './audience/people.js';
+
+export { audienceRoutes } from './server/routes/audiences.js';
+export type { AudienceRouteOptions } from './server/routes/audiences.js';
+
 export { isNavigation, routeMount } from './server/router.js';
-export { notImplemented, sendJson } from './server/routes/types.js';
+export { notImplemented, readJsonBody, sendJson } from './server/routes/types.js';
 export type { Middleware, Route } from './server/routes/types.js';
 
 export {
