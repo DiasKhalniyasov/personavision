@@ -1,9 +1,37 @@
 /**
- * `@personavision/scoring` — the friction score.
+ * `@personavision/scoring` — the friction score, the verdict and the findings.
  *
  * Owns the component weights and turns sessions into a friction score, its components, the
  * per-seed-group spread and the verdict. The score band thresholds themselves are read from
  * `docs/design/tokens.css`, never restated here.
  *
- * Placeholder: filled by the scoring step.
+ * Pure functions over contract-typed data: no disk, no network, no browser. Every field
+ * name comes from `@personavision/contract`, which is this package's only dependency.
+ *
+ * The whole agreed surface is declared here, including the three functions that are not
+ * built yet (`verdict`, `findings`, `evaluateAgainstPlantedDefects`), whose bodies throw
+ * and name the ticket that fills them. That is deliberate scaffolding, not an oversight:
+ * #27, #28 and #29 each replace one body and none of them has to edit this file.
  */
+
+export { FINDING_RULE_IDS, scoringConfig } from './config.js';
+export type {
+  ComponentWeights,
+  FindingRuleId,
+  FindingThresholds,
+  Normalisation,
+  ScoringConfig,
+  Severity,
+} from './config.js';
+
+export { score } from './score.js';
+export type { Aoi, AoiMetric, Task, VariantScore } from './score.js';
+
+export { verdict } from './verdict.js';
+export type { VerdictWriter } from './verdict.js';
+
+export { findings } from './findings/index.js';
+export type { Finding, FindingsGenerator } from './findings/index.js';
+
+export { evaluateAgainstPlantedDefects } from './evaluate.js';
+export type { PlantedDefect, PlantedDefectEvaluation, PlantedDefectEvaluator } from './evaluate.js';
