@@ -1,5 +1,5 @@
 import type { Audience, AudienceDevice, Persona } from '@personavision/contract';
-import { GENERATOR_VERSION } from '../src/index.js';
+import { GENERATOR_VERSION } from '../src/audience.js';
 
 /** The two device classes the demo audience is authored with, as `audienceSchema` spells them. */
 export const MOBILE_CLASS: AudienceDevice = {

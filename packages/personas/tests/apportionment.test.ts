@@ -1,7 +1,9 @@
 import { createSeededRandom } from '@personavision/contract';
 import type { Audience } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
-import { GENERATOR_VERSION, deviceQuota, generatePersonas } from '../src/index.js';
+import { deviceQuota } from '../src/devices.js';
+import { generatePersonas } from '../src/index.js';
+import { audienceWith } from './helpers.js';
 
 /**
  * The device mix over the whole input space, rather than over the handful of mixes a demo
@@ -22,26 +24,18 @@ const randomShares = (count: number): number[] => {
   return shares;
 };
 
-const audienceOf = (size: number, shares: readonly number[]): Audience => ({
-  id: 'apportionment-probe',
-  name: 'Apportionment probe',
-  ageRange: { min: 20, max: 60 },
-  roles: ['Shopper'],
-  regions: ['United Kingdom'],
-  goals: ['Buy one item quickly'],
-  devices: shares.map((share, index) => ({
-    name: `device-${index}`,
-    viewport: { width: 400 + index, height: 800 },
-    deviceScaleFactor: 1,
-    // Alternating, so both archetype affinities compete for the mix at every length.
-    touch: index % 2 === 0,
-    share,
-  })),
-  techSavviness: 0.5,
-  priceSensitivity: 0.5,
-  size,
-  generatedFrom: { seed: 1, generatorVersion: GENERATOR_VERSION },
-});
+const audienceOf = (size: number, shares: readonly number[]): Audience =>
+  audienceWith({
+    size,
+    devices: shares.map((share, index) => ({
+      name: `device-${index}`,
+      viewport: { width: 400 + index, height: 800 },
+      deviceScaleFactor: 1,
+      // Alternating, so both archetype affinities compete for the mix at every length.
+      touch: index % 2 === 0,
+      share,
+    })),
+  });
 
 const SIZES = [1, 2, 3, 4, 5, 7, 11, 24, 97];
 const MIXES = Array.from({ length: 6 }, (_unused, index) =>
@@ -111,3 +105,39 @@ describe.each(MIXES.map((mixes, index) => [index + 1, mixes] as const))(
     });
   },
 );
+
+/**
+ * The contract holds a device mix to summing to one within `1e-6`, which is a tolerance and
+ * not an equality: `size * share` summed over a legal mix need not be `size` at all, and over
+ * millions of people it is out by whole people. The apportionment promises to account for
+ * every person regardless, because the assignment relies on it to always have a device left
+ * to hand out — without it, the last person of a very large audience got no device and the
+ * failure arrived as a `TypeError` from inside a `reduce`.
+ */
+describe('a mix whose shares only nearly sum to one', () => {
+  const nearly = [
+    { what: 'a whisker under one', shares: [0.5, 0.499999] },
+    { what: 'a whisker over one', shares: [0.5, 0.500001] },
+    { what: 'under one across three devices', shares: [0.4, 0.3, 0.299999] },
+    { what: 'over one on a single device', shares: [1.000001] },
+  ];
+
+  for (const { what, shares } of nearly) {
+    it.each([3, 1_000, 2_000_000, 6_000_000])(
+      `accounts for every one of %i people with shares ${what}`,
+      (size) => {
+        const quota = deviceQuota(audienceOf(size, shares));
+
+        expect(quota.reduce((running, count) => running + count, 0)).toBe(size);
+        expect(quota.every((count) => count >= 0)).toBe(true);
+      },
+    );
+  }
+
+  it('still hands every person a device at a size where the drift is whole people', () => {
+    // 2000 people is enough to run, and the repair is the same code path the millions take.
+    const audience = audienceOf(2_000, [0.5, 0.499999]);
+
+    expect(generatePersonas(audience)).toHaveLength(audience.size);
+  });
+});

@@ -105,12 +105,34 @@ export const ARCHETYPES: readonly Archetype[] = [
   },
 ];
 
+/**
+ * Every trait at rest.
+ *
+ * An offset table cannot avoid naming the traits it displaces, so this is the one place in
+ * the package that writes them down, and it is typed as the contract's own traits so that the
+ * compiler holds it to all of them: a trait added in `@personavision/contract` fails the build
+ * here rather than at run time. `TRAIT_NAMES` is derived from it instead of restating it.
+ */
+const AT_REST: Readonly<Persona['traits']> = {
+  persistence: 0,
+  scanningVsReading: 0,
+  detailOrientation: 0,
+  interfaceFamiliarity: 0,
+  patience: 0,
+  riskTolerance: 0,
+};
+
 /** The traits, in the order the contract declares them, so a draw order is stated once. */
-export const TRAIT_NAMES = [
-  'persistence',
-  'scanningVsReading',
-  'detailOrientation',
-  'interfaceFamiliarity',
-  'patience',
-  'riskTolerance',
-] as const satisfies readonly (keyof Persona['traits'])[];
+export const TRAIT_NAMES = Object.keys(AT_REST) as readonly (keyof Persona['traits'])[];
+
+/**
+ * The furthest any corner sits from the centre, read off the table rather than stated beside
+ * it. Generation scales a person's displacement against this, so the archetype at the far
+ * corner of an audience reaches the end of the scale and no other lands past it — and editing
+ * an offset moves the geometry with it instead of leaving a second number to remember.
+ */
+export const MAX_OFFSET = Math.max(
+  ...ARCHETYPES.flatMap((archetype) =>
+    TRAIT_NAMES.map((trait) => Math.abs(archetype.offsets[trait])),
+  ),
+);

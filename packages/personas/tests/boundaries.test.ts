@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import * as personas from '../src/index.js';
 
 /**
  * What this package is not. Generation is the whole of its behaviour: the trait-to-sampling
@@ -62,5 +63,21 @@ describe('the package holds generation and nothing else', () => {
     // The generated person is parsed by the contract's own schema on the way out, so a
     // field this package mis-spelled could not reach a caller.
     expect(generator?.text).toContain('personaSchema.parse');
+  });
+
+  /**
+   * The package's whole surface. A source grep can only say that the symbols it names are
+   * absent; this says what the package offers, so behaviour cannot be added to the interface
+   * without this list changing and somebody reading why.
+   */
+  it('exports generation, the preset and the audience validation, and nothing else', () => {
+    expect(Object.keys(personas).sort()).toStrictEqual([
+      'AudienceValidationError',
+      'DEMO_AUDIENCE_SEED',
+      'GENERATOR_VERSION',
+      'OUTDOOR_GEAR_SHOPPERS',
+      'generatePersonas',
+      'parseAudience',
+    ]);
   });
 });

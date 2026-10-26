@@ -43,14 +43,14 @@ seed jitters them away from it. So:
 
 `traitCentre(audience)`. Every coefficient is a named constant in `src/audience.ts`.
 
-| Trait                  | Centre                                    | Why                                                                                                   |
-| ---------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `interfaceFamiliarity` | `techSavviness`                           | The contract says `techSavviness` moves it **directly**, so it is the field and not a function of it. |
-| `scanningVsReading`    | `0.5 + 0.40·(tech − 0.5) − 0.20·ageSkew`  | Tech-confident eyes scan; a younger audience scans. Both directions are the contract's.               |
-| `detailOrientation`    | `0.5 + 0.50·(price − 0.5)`                | Price sensitivity is read closely: a total and a fee get looked at.                                   |
-| `patience`             | `0.5 − 0.30·(price − 0.5) + 0.25·ageSkew` | Price sensitivity costs patience once a price moves; an older audience gives up later.                |
-| `persistence`          | `0.5`                                     | No audience field is connected to it, so none moves it.                                               |
-| `riskTolerance`        | `0.5`                                     | The same.                                                                                             |
+| Trait                  | Centre                                    | Why                                                                                                                                                            |
+| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interfaceFamiliarity` | `0.5 + 0.80·(tech − 0.5)`                 | The contract says `techSavviness` moves it **directly**: it is the trait that field is about, so it takes the largest coefficient and nothing else touches it. |
+| `scanningVsReading`    | `0.5 + 0.40·(tech − 0.5) − 0.20·ageSkew`  | Tech-confident eyes scan; a younger audience scans. Both directions are the contract's.                                                                        |
+| `detailOrientation`    | `0.5 + 0.50·(price − 0.5)`                | Price sensitivity is read closely: a total and a fee get looked at.                                                                                            |
+| `patience`             | `0.5 − 0.30·(price − 0.5) + 0.25·ageSkew` | Price sensitivity costs patience once a price moves; an older audience gives up later.                                                                         |
+| `persistence`          | `0.5`                                     | No audience field is connected to it, so none moves it.                                                                                                        |
+| `riskTolerance`        | `0.5`                                     | The same.                                                                                                                                                      |
 
 `ageSkew` is `(ageMidpoint − 40) / 25`, clamped to ±1: 40 is the middle of the adult
 web-using range and 15 and 65 are the ends of it. Beyond them the age terms stop moving rather
@@ -58,11 +58,12 @@ than running off the scale.
 
 Three choices worth stating:
 
-**The coefficients are short of the full range.** A centre that reached 0 or 1 would leave the
-archetypes and the jitter nothing to spread into, and an audience of one strong opinion would
-generate `size` identical people — which is the one failure that would destroy the product's
-acceptance criterion while passing a naive test. `interfaceFamiliarity` is the exception the
-contract asks for, and it is the trait whose spread the clamp does eat at the extremes.
+**Every coefficient is short of the full range, `interfaceFamiliarity` included.** A centre on
+0 or 1 has room on one side only: everybody an archetype pushes the other way arrives at the
+boundary together, and an audience of one strong opinion reports clones on that trait — the one
+failure that would pass a naive bounds test and leave the product with nothing to report. The
+contract's "directly" is about which trait `techSavviness` moves, not about the arithmetic, so
+familiarity takes the largest coefficient of the five rather than the identity.
 
 **`goals` and `roles` move no trait.** `goals` are carried through to the engine's top-down
 goal relevance, which the contract is explicit about. `roles` name no generated person either:
@@ -110,12 +111,28 @@ The seeded jitter is ±0.1, uniform, six draws per person in the contract's trai
 small on purpose: the corner is the claim about behaviour and the jitter is individual
 variation around it, not a second source of spread.
 
+**A displacement is a fraction of the room left, not a sum.** Offset plus jitter is measured
+against the furthest corner the table holds — `MAX_OFFSET`, read off the table so that editing
+an offset moves the geometry with it — and that fraction is applied to the distance from the
+centre to whichever end of the scale it points at. Where there is room on both sides it works
+out as the plain sum, so the ordinary case is the obvious arithmetic; near an end it bends
+instead of flattening. The clamp is still the last word and, by construction, has nothing left
+to do: `tests/generate.test.ts` asserts that none of the extreme audiences generates two
+identical people, and that nobody shares a boundary value with anybody else.
+
 ### What this reproduces
 
 Generated from the committed preset at seed `20261024`, the four people land within **0.1 of
-the traits a human hand-wrote for them** in the committed example run on 20 of 24 values, mean
-0.08, worst 0.24 — without the generator having seen them. The ids, names, segments and devices
+the traits a human hand-wrote for them** in the committed example run on 19 of 24 values, mean
+0.07, worst 0.24 — without the generator having seen them. The ids, names, segments and devices
 match exactly, and `tests/preset.test.ts` pins all four.
+
+What it does **not** reproduce is those traits themselves, and the committed artifact overstates
+its own provenance because of it: `run.json` names `generatorVersion: "persona-gen-1"` beside
+four people whose traits were transcribed from the prototype by hand, not generated. The pin
+here is deliberately on who the four people are — id, name, segment, device — and
+`tests/preset.test.ts` says so. Closing the gap means regenerating the artifact's personas and
+the traits each session file embeds with them, which is #78's work, not this package's.
 
 ## 3. The device mix
 
@@ -129,7 +146,8 @@ viewports_.
 
 **How many** people are on each device is largest-remainder apportionment of `size` over the
 shares: a declared 60% is 60% of the people, to within one person, at every size and for every
-seed. Drawing each person's device independently would leave the mix a test reports some way
+seed — except where the representation floor below raises a device with less than one person's
+worth of share, which is the one thing allowed to overrule a share. Drawing each person's device independently would leave the mix a test reports some way
 from the mix the user authored, and at the demo's size of four it could leave a declared device
 with nobody on it at all.
 
@@ -174,6 +192,21 @@ An audience whose `generatedFrom.generatorVersion` is not this build's `GENERATO
 rejected, the same promise the artifact's `schemaVersion` makes: its people were reproducible
 against that version and would not be against this one. Build an audience with
 `GENERATOR_VERSION` rather than with a literal.
+
+A device mix is held to summing to one within the contract's `1e-6`, which is a tolerance and
+not an equality, so `size × share` summed over a legal mix need not be `size`: over millions of
+people it is out by whole people in either direction. The apportionment repairs that, because
+the assignment relies on every person being accounted for to always have a device left to hand
+out.
+
+## What a caller sees
+
+`generatePersonas`, `OUTDOOR_GEAR_SHOPPERS`, `DEMO_AUDIENCE_SEED`, `GENERATOR_VERSION`,
+`parseAudience` and `AudienceValidationError` — and nothing else. The archetype table, the
+trait centres and the device apportionment are the derivation rather than an interface: this
+file states their choices and `tests/` reaches them by module, as the engine's own tests do.
+`tests/boundaries.test.ts` asserts that list, so behaviour cannot join the interface without
+somebody reading why.
 
 ## Properties
 

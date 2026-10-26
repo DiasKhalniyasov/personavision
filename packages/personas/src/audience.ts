@@ -37,11 +37,16 @@ const AGE_SATURATION = 25;
 
 /**
  * How far each audience field may move a centre, on the 0..1 trait scale, when it is at the
- * end of its own scale. They are deliberately short of the full range: a centre that reached
- * 0 or 1 would leave the archetypes and the seeded jitter nothing to spread into, and an
- * audience of one opinion would generate `size` identical people. `interfaceFamiliarity` is
- * the exception — the contract says `techSavviness` moves it *directly*, so it is the field.
+ * end of its own scale. Every one is short of the full range, so that a centre never lands on
+ * 0 or 1: a centre on the boundary has no room on one side of it, every person the archetypes
+ * displace that way arrives at the same boundary value, and an audience of one strong opinion
+ * reports clones on that trait — which is exactly what the swarm exists to avoid.
+ *
+ * `interfaceFamiliarity` carries the largest coefficient of the five, because it is the trait
+ * `techSavviness` is *about* — the contract's word is "directly", and nothing else moves it —
+ * but it is not the identity, for the reason above.
  */
+const TECH_ON_FAMILIARITY = 0.8;
 const TECH_ON_SCANNING = 0.4;
 const AGE_ON_SCANNING = 0.2;
 const PRICE_ON_DETAIL = 0.5;
@@ -65,7 +70,7 @@ export const traitCentre = (audience: Audience): Persona['traits'] => {
       0.5 + TECH_ON_SCANNING * techDeviation - AGE_ON_SCANNING * ageSkew,
     ),
     detailOrientation: clampUnit(0.5 + PRICE_ON_DETAIL * priceDeviation),
-    interfaceFamiliarity: audience.techSavviness,
+    interfaceFamiliarity: clampUnit(0.5 + TECH_ON_FAMILIARITY * techDeviation),
     patience: clampUnit(0.5 - PRICE_ON_PATIENCE * priceDeviation + AGE_ON_PATIENCE * ageSkew),
     riskTolerance: 0.5,
   };

@@ -47,13 +47,17 @@ export const CONCRETE_DEVICES: Readonly<Record<string, ConcreteDevice>> = {
   },
 };
 
-/** The class as its own device: the audience's word for it, without the share. */
-const asItself = (device: AudienceDevice): ConcreteDevice => ({
-  name: device.name,
-  viewport: device.viewport,
-  deviceScaleFactor: device.deviceScaleFactor,
-  touch: device.touch,
-});
+/**
+ * The class as its own device: the audience's word for it, without the share. Taken as the
+ * rest of the object rather than field by field, so this file spells no artifact field name.
+ */
+const asItself = (device: AudienceDevice): ConcreteDevice => {
+  // What is left once the share is taken off is exactly a persona's device, so the fields come
+  // from the contract's own types rather than being spelled out again here.
+  const { share, ...withoutShare } = device;
+  void share;
+  return withoutShare;
+};
 
 export const concreteDeviceFor = (device: AudienceDevice): ConcreteDevice => {
   // A device class is named by whoever authored the audience, so the name is looked up as a
@@ -86,11 +90,27 @@ export const deviceQuota = (audience: Audience): number[] => {
   const assigned = quota.reduce((total, count) => total + count, 0);
 
   // The spare people go to the largest remainders, with the mix's own order breaking a tie.
+  //
+  // The shares are a distribution only to within the contract's tolerance, so `exact` does
+  // not have to add up to `size`: an audience whose shares sum to 1 - 1e-6 over millions of
+  // people is short by whole people, and one summing to 1 + 1e-6 is over. Both are repaired
+  // here, by cycling rather than by one pass, so the quota accounts for every person at every
+  // size — which is the invariant the assignment below relies on to always have a device left.
   const byRemainder = exact
     .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
     .sort((left, right) => right.remainder - left.remainder || left.index - right.index);
-  for (const { index } of byRemainder.slice(0, audience.size - assigned)) {
+  for (let spare = audience.size - assigned, step = 0; spare > 0; spare -= 1, step += 1) {
+    const { index } = byRemainder[step % byRemainder.length] as { index: number };
     quota[index] = (quota[index] ?? 0) + 1;
+  }
+  for (let over = assigned - audience.size, step = 0; over > 0; step += 1) {
+    const { index } = byRemainder[byRemainder.length - 1 - (step % byRemainder.length)] as {
+      index: number;
+    };
+    if ((quota[index] ?? 0) > 0) {
+      quota[index] = (quota[index] ?? 0) - 1;
+      over -= 1;
+    }
   }
 
   if (audience.size < audience.devices.length) return quota;

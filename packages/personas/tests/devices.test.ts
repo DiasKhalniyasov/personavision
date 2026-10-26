@@ -1,6 +1,7 @@
 import type { Persona } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
-import { CONCRETE_DEVICES, generatePersonas } from '../src/index.js';
+import { CONCRETE_DEVICES } from '../src/devices.js';
+import { generatePersonas } from '../src/index.js';
 import { DESKTOP_CLASS, MOBILE_CLASS, audienceWith, withShare } from './helpers.js';
 
 const countBy = (personas: readonly Persona[]) => {

@@ -8,24 +8,17 @@
  * copy of it; what lives here is the behaviour — which audience field moves which trait, how
  * the spread around the audience's centre is drawn, and how the device mix is honoured.
  *
- * `README.md` states each choice in the derivation and why it is that way.
+ * What is exported is what a caller outside this package needs, and no more: generation, the
+ * committed preset, the generator's version for anyone building an audience, and the
+ * validation an audience form reports field by field. The archetype table, the trait centres
+ * and the device apportionment are the derivation, not an interface — `README.md` states each
+ * of their choices, and `tests/` reaches them by module.
  */
 
 export { generatePersonas } from './generate.js';
 export type { GeneratePersonasOptions } from './generate.js';
 
-export {
-  AudienceValidationError,
-  GENERATOR_VERSION,
-  parseAudience,
-  traitCentre,
-} from './audience.js';
+export { AudienceValidationError, GENERATOR_VERSION, parseAudience } from './audience.js';
 export type { AudienceIssue } from './audience.js';
-
-export { ARCHETYPES, TRAIT_NAMES } from './archetypes.js';
-export type { Archetype } from './archetypes.js';
-
-export { CONCRETE_DEVICES, concreteDeviceFor, deviceQuota } from './devices.js';
-export type { ConcreteDevice } from './devices.js';
 
 export { DEMO_AUDIENCE_SEED, OUTDOOR_GEAR_SHOPPERS } from './presets.js';

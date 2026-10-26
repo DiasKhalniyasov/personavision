@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ARCHETYPES, TRAIT_NAMES, traitCentre } from '../src/index.js';
+import { ARCHETYPES, MAX_OFFSET, TRAIT_NAMES } from '../src/archetypes.js';
+import { traitCentre } from '../src/audience.js';
 import { audienceWith } from './helpers.js';
 
 /**
@@ -15,10 +16,20 @@ describe('the archetype table', () => {
     expect(total).toBeCloseTo(0, 10);
   });
 
-  it.each(TRAIT_NAMES)('leaves %s reachable inside 0..1 from any centre', (trait) => {
+  it.each(TRAIT_NAMES)('keeps %s a direction and a distance, never an absolute value', (trait) => {
     for (const archetype of ARCHETYPES) {
       expect(Math.abs(archetype.offsets[trait])).toBeLessThan(0.5);
     }
+  });
+
+  it('is what the displacement scale is read off, so editing an offset moves it', () => {
+    const furthest = Math.max(
+      ...ARCHETYPES.flatMap((archetype) =>
+        TRAIT_NAMES.map((trait) => Math.abs(archetype.offsets[trait])),
+      ),
+    );
+
+    expect(MAX_OFFSET).toBe(furthest);
   });
 
   it('names the four people the design contract names, in the prototype order', () => {
@@ -38,8 +49,37 @@ describe('the archetype table', () => {
 });
 
 describe('the audience centre', () => {
-  it('reads interfaceFamiliarity straight off techSavviness', () => {
-    expect(traitCentre(audienceWith({ techSavviness: 0.37 })).interfaceFamiliarity).toBe(0.37);
+  it('moves interfaceFamiliarity further than any other trait, and only by techSavviness', () => {
+    const moved = (techSavviness: number, priceSensitivity = 0.5) =>
+      traitCentre(audienceWith({ techSavviness, priceSensitivity })).interfaceFamiliarity;
+
+    // The contract's word is "directly": it is the trait techSavviness is about, so it takes
+    // the largest coefficient of the five and nothing else touches it.
+    expect(moved(1) - moved(0)).toBeGreaterThan(
+      traitCentre(audienceWith({ techSavviness: 1 })).scanningVsReading -
+        traitCentre(audienceWith({ techSavviness: 0 })).scanningVsReading,
+    );
+    expect(moved(0.4, 0)).toBe(moved(0.4, 1));
+    expect(moved(0.2)).toBeLessThan(moved(0.8));
+  });
+
+  it('stops every centre short of the ends of the scale, so a spread always has room', () => {
+    // A centre of 0 or 1 has nothing on one side of it: everybody an archetype pushes that
+    // way lands on the boundary together, and the swarm reports clones on that trait.
+    for (const techSavviness of [0, 1]) {
+      for (const priceSensitivity of [0, 1]) {
+        for (const ageRange of [
+          { min: 0, max: 1 },
+          { min: 110, max: 120 },
+        ]) {
+          const centre = traitCentre(audienceWith({ techSavviness, priceSensitivity, ageRange }));
+          for (const trait of TRAIT_NAMES) {
+            expect(centre[trait]).toBeGreaterThan(0);
+            expect(centre[trait]).toBeLessThan(1);
+          }
+        }
+      }
+    }
   });
 
   it('leaves the two traits no audience field moves at the midpoint', () => {

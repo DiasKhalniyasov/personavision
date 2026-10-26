@@ -1,6 +1,6 @@
 import { createSeededRandom, personaSchema } from '@personavision/contract';
 import type { Audience, Persona } from '@personavision/contract';
-import { ARCHETYPES, TRAIT_NAMES } from './archetypes.js';
+import { ARCHETYPES, MAX_OFFSET, TRAIT_NAMES } from './archetypes.js';
 import type { Archetype } from './archetypes.js';
 import { parseAudience, traitCentre } from './audience.js';
 import { concreteDeviceFor, deviceQuota } from './devices.js';
@@ -28,6 +28,9 @@ import { concreteDeviceFor, deviceQuota } from './devices.js';
  */
 const JITTER = 0.1;
 
+/** The largest displacement an archetype and the jitter together can ask for. */
+const MAX_DISPLACEMENT = MAX_OFFSET + JITTER;
+
 /** Three decimals: enough to tell two sampled people apart, few enough to read. */
 const TRAIT_PRECISION = 1000;
 
@@ -40,8 +43,26 @@ export interface GeneratePersonasOptions {
   readonly seed?: number;
 }
 
-const roundTrait = (value: number): number =>
-  Math.round(Math.min(1, Math.max(0, value)) * TRAIT_PRECISION) / TRAIT_PRECISION;
+/**
+ * A person's trait: the audience's centre, displaced towards whichever end of the scale the
+ * archetype and the jitter point at.
+ *
+ * The displacement is read as a **fraction of the room left** on that side rather than added
+ * outright, so it cannot run off the scale and never has to be clamped flat. That matters
+ * because a clamp makes clones: with a centre near 1, every person an archetype pushes upwards
+ * would arrive at exactly 1, and the swarm would report one person several times over on that
+ * trait — the one thing a swarm exists to avoid.
+ *
+ * The fraction is measured against the furthest corner the table holds, so a centre at the
+ * middle of the scale works out as the plain sum and only a centre near an end bends. The
+ * clamp below is the last word and, by construction, never has anything left to do.
+ */
+const displace = (centre: number, displacement: number): number => {
+  const fraction = Math.min(1, Math.max(-1, displacement / MAX_DISPLACEMENT));
+  const room = fraction >= 0 ? 1 - centre : centre;
+  const value = centre + fraction * room;
+  return Math.round(Math.min(1, Math.max(0, value)) * TRAIT_PRECISION) / TRAIT_PRECISION;
+};
 
 /**
  * The device class each person is on: the quota says how many of each, the archetype says
@@ -50,10 +71,21 @@ const roundTrait = (value: number): number =>
  */
 const assignDeviceClasses = (audience: Audience, people: readonly Archetype[]): number[] => {
   const remaining = deviceQuota(audience);
-  const pickFrom = (wanted: readonly number[]): number =>
-    wanted.reduce((best, index) =>
-      (remaining[index] ?? 0) > (remaining[best] ?? 0) ? index : best,
+  // The quota accounts for every person, so there is always a class with somebody left to
+  // place. Saying so by name beats a `reduce` over an empty array saying it for us.
+  const pickFrom = (wanted: readonly number[]): number => {
+    const best = wanted.reduce<number | null>(
+      (chosen, index) =>
+        chosen === null || (remaining[index] ?? 0) > (remaining[chosen] ?? 0) ? index : chosen,
+      null,
     );
+    if (best === null) {
+      throw new Error(
+        `the device quota accounts for all ${audience.size} people, so one of them cannot be left without a device`,
+      );
+    }
+    return best;
+  };
   const withPeopleLeft = (test: (index: number) => boolean): number[] =>
     remaining.flatMap((count, index) => (count > 0 && test(index) ? [index] : []));
 
@@ -103,14 +135,17 @@ export const generatePersonas = (
       throw new Error('the audience declares a device mix, so a person always has a device');
     }
 
-    // Six draws per person, in the contract's own trait order, so the draw order is stated
-    // once and a person's traits do not depend on how many people come after them.
-    const traits = Object.fromEntries(
-      TRAIT_NAMES.map((trait) => [
-        trait,
-        roundTrait(centre[trait] + archetype.offsets[trait] + (random() - 0.5) * 2 * JITTER),
-      ]),
-    ) as Persona['traits'];
+    // One draw per trait, in the contract's own trait order, so the draw order is stated once
+    // and a person's traits do not depend on how many people come after them. Starting from
+    // the archetype's own offsets gives the object every trait the contract declares without
+    // a cast that would survive a trait being added to it.
+    const traits = { ...archetype.offsets };
+    for (const trait of TRAIT_NAMES) {
+      traits[trait] = displace(
+        centre[trait],
+        archetype.offsets[trait] + (random() - 0.5) * 2 * JITTER,
+      );
+    }
 
     return personaSchema.parse({
       id: occurrence === 1 ? archetype.id : `${archetype.id}-${occurrence}`,

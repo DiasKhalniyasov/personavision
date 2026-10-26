@@ -1,18 +1,10 @@
 import { personaSchema } from '@personavision/contract';
 import type { Persona } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
+import { TRAIT_NAMES } from '../src/archetypes.js';
 import { AudienceValidationError, GENERATOR_VERSION, generatePersonas } from '../src/index.js';
 import { audienceWith, median, spread, traitValues, withShare } from './helpers.js';
 import { DESKTOP_CLASS, MOBILE_CLASS } from './helpers.js';
-
-const TRAITS = [
-  'persistence',
-  'scanningVsReading',
-  'detailOrientation',
-  'interfaceFamiliarity',
-  'patience',
-  'riskTolerance',
-] as const satisfies readonly (keyof Persona['traits'])[];
 
 describe('generatePersonas: determinism', () => {
   it('produces byte-identical people for the same audience and seed', () => {
@@ -93,7 +85,7 @@ describe('generatePersonas: spread', () => {
   it('spreads every trait, not only the two the audience moves', () => {
     const personas = generatePersonas(audienceWith({ size: 12 }), { seed: 4 });
 
-    for (const trait of TRAITS) {
+    for (const trait of TRAIT_NAMES) {
       expect(spread(traitValues(personas, trait))).toBeGreaterThan(0.1);
     }
   });
@@ -109,26 +101,60 @@ describe('generatePersonas: spread', () => {
   });
 });
 
-describe('generatePersonas: every trait stays on the 0..1 scale', () => {
-  const extremes = [
-    audienceWith({ techSavviness: 0 }),
-    audienceWith({ techSavviness: 1 }),
-    audienceWith({ priceSensitivity: 0 }),
-    audienceWith({ priceSensitivity: 1 }),
-    audienceWith({ ageRange: { min: 0, max: 0 } }),
-    audienceWith({ ageRange: { min: 100, max: 120 } }),
-    audienceWith({ ageRange: { min: 18, max: 24 }, techSavviness: 1, priceSensitivity: 1 }),
-    audienceWith({ ageRange: { min: 65, max: 95 }, techSavviness: 0, priceSensitivity: 0 }),
-  ];
+/** Audiences at the ends of every field the generator reads, including both ends at once. */
+const EXTREMES = [
+  audienceWith({ techSavviness: 0 }),
+  audienceWith({ techSavviness: 1 }),
+  audienceWith({ priceSensitivity: 0 }),
+  audienceWith({ priceSensitivity: 1 }),
+  audienceWith({ ageRange: { min: 0, max: 0 } }),
+  audienceWith({ ageRange: { min: 100, max: 120 } }),
+  audienceWith({ ageRange: { min: 18, max: 24 }, techSavviness: 1, priceSensitivity: 1 }),
+  audienceWith({ ageRange: { min: 65, max: 95 }, techSavviness: 0, priceSensitivity: 0 }),
+];
 
-  for (const audience of extremes) {
+describe('generatePersonas: every trait stays on the 0..1 scale', () => {
+  for (const audience of EXTREMES) {
     const label = `tech ${audience.techSavviness}, price ${audience.priceSensitivity}, ages ${audience.ageRange.min}-${audience.ageRange.max}`;
     it(`holds every trait inside 0..1 for ${label}`, () => {
       for (const persona of generatePersonas({ ...audience, size: 24 }, { seed: 6 })) {
-        for (const trait of TRAITS) {
+        for (const trait of TRAIT_NAMES) {
           expect(persona.traits[trait]).toBeGreaterThanOrEqual(0);
           expect(persona.traits[trait]).toBeLessThanOrEqual(1);
         }
+      }
+    });
+  }
+});
+
+describe('generatePersonas: an audience of one strong opinion is still a spread', () => {
+  /**
+   * The bounds test above passes for a generator that clamps every trait flat, because a
+   * clamped value is in range. This is the test that does not: at the end of a scale the
+   * centre has room on one side only, and a derivation that added the offset outright would
+   * land everybody it pushed the other way on the boundary together. A swarm of clones is
+   * the one result that would pass a naive test and leave the product with nothing to report.
+   */
+  for (const audience of EXTREMES) {
+    const label = `tech ${audience.techSavviness}, price ${audience.priceSensitivity}, ages ${audience.ageRange.min}-${audience.ageRange.max}`;
+
+    it(`generates no two identical people for ${label}`, () => {
+      const personas = generatePersonas({ ...audience, size: 12 }, { seed: 6 });
+      const distinct = new Set(personas.map((persona) => JSON.stringify(persona.traits)));
+
+      expect(distinct.size).toBe(personas.length);
+    });
+
+    it(`spreads every trait for ${label}`, () => {
+      const personas = generatePersonas({ ...audience, size: 12 }, { seed: 6 });
+
+      for (const trait of TRAIT_NAMES) {
+        expect(spread(traitValues(personas, trait))).toBeGreaterThan(0.1);
+        // Nobody is sitting on the boundary with somebody else: that is what a clamp does.
+        const onEachEnd = traitValues(personas, trait).filter(
+          (value) => value === 0 || value === 1,
+        );
+        expect(new Set(onEachEnd).size).toBe(onEachEnd.length);
       }
     });
   }
