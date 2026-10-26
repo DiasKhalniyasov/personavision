@@ -28,6 +28,17 @@ import { temporaryDirectories } from './workspace.js';
 /** The audience the seeded workspace takes from the run written before the platform starts. */
 const fixtureAudience = (): Audience => validArtifact().run.audience;
 
+/**
+ * A second audience for the seeded workspace. It is the committed preset under an id of its
+ * own, because an audience's `id` names one audience of a workspace: the preset's own id is
+ * the one the seeded audience already carries, having come from the committed example run.
+ */
+const secondAudience = (): Audience => ({
+  ...OUTDOOR_GEAR_SHOPPERS,
+  id: 'winter-gear-shoppers',
+  name: 'Winter-gear shoppers',
+});
+
 /** What a route answers with. Only what these tests read: the rest is the compiler's. */
 interface AudienceBody {
   id: string;
@@ -88,19 +99,31 @@ describe('the audience routes', () => {
 
   describe('an audience saved through the store', () => {
     it('comes back from GET /audiences/:id with every field intact', async () => {
-      const created = await send('/audiences', 'POST', OUTDOOR_GEAR_SHOPPERS);
+      const created = await send('/audiences', 'POST', secondAudience());
       expect(created.status).toBe(201);
       const { id } = await bodyOf(created);
 
       const read = await send(`/audiences/${id}`, 'GET');
       expect(read.status).toBe(200);
-      expect((await bodyOf(read)).audience).toStrictEqual(OUTDOOR_GEAR_SHOPPERS);
+      expect((await bodyOf(read)).audience).toStrictEqual(secondAudience());
     });
 
     it('is listed by GET /audiences for its own workspace', async () => {
-      const { id } = await bodyOf(await send('/audiences', 'POST', OUTDOOR_GEAR_SHOPPERS));
+      const { id } = await bodyOf(await send('/audiences', 'POST', secondAudience()));
 
       expect((await listed()).map((entry) => entry.id)).toStrictEqual([seededAudienceId, id]);
+    });
+
+    it('keeps the fields a PATCH does not name, down to the one inside the field it does', async () => {
+      const patched = await send(`/audiences/${seededAudienceId}`, 'PATCH', {
+        ageRange: { max: 55 },
+      });
+
+      expect(patched.status).toBe(200);
+      expect((await bodyOf(patched)).audience).toStrictEqual({
+        ...fixtureAudience(),
+        ageRange: { min: fixtureAudience().ageRange.min, max: 55 },
+      });
     });
 
     it('is edited in place by PATCH, which answers with the audience as it now stands', async () => {
@@ -231,6 +254,49 @@ describe('the audience routes', () => {
       expect((await bodyOf(read)).audience).toStrictEqual(fixtureAudience());
     });
 
+    it('is rejected, and not stored, when nobody can be generated from it', async () => {
+      // `size` is a positive integer and nothing narrower, so an audience can ask for more
+      // people than an array can hold. It is refused rather than stored: every answer
+      // carries the people, so a stored record nothing can be generated from would answer
+      // for itself and for every list it appears in, and no route deletes one.
+      const response = await send('/audiences', 'POST', {
+        ...secondAudience(),
+        size: 5_000_000_000,
+      });
+
+      expect(response.status).toBe(400);
+      expect((await bodyOf(response)).issues).not.toStrictEqual([]);
+      expect((await listed()).map((entry) => entry.id)).toStrictEqual([seededAudienceId]);
+    });
+
+    it('is rejected at the id another audience of this workspace already carries', async () => {
+      // The seeded audience came from the committed example run, so it already carries the
+      // preset's id. A second record under it would leave a finished test unable to say
+      // which stored audience it was run for.
+      expect(await refusedAt(OUTDOOR_GEAR_SHOPPERS)).toStrictEqual(['id']);
+
+      const created = await send('/audiences', 'POST', secondAudience());
+      expect(created.status).toBe(201);
+      const patched = await send(`/audiences/${(await bodyOf(created)).id}`, 'PATCH', {
+        id: OUTDOOR_GEAR_SHOPPERS.id,
+      });
+      expect(patched.status).toBe(400);
+      expect((await bodyOf(patched)).issues.map((issue) => issue.path)).toStrictEqual(['id']);
+    });
+
+    it('is rejected when the body is a list rather than an audience', async () => {
+      for (const [path, method] of [
+        ['/audiences', 'POST'],
+        [`/audiences/${seededAudienceId}`, 'PATCH'],
+      ] as [string, 'POST' | 'PATCH'][]) {
+        const response = await send(path, method, []);
+        expect(response.status, `${method} ${path}`).toBe(400);
+      }
+
+      const read = await send(`/audiences/${seededAudienceId}`, 'GET');
+      expect((await bodyOf(read)).audience).toStrictEqual(fixtureAudience());
+    });
+
     it('says what could not be read when the body is not JSON at all', async () => {
       const response = await served.request('/audiences', {
         method: 'POST',
@@ -245,15 +311,15 @@ describe('the audience routes', () => {
 
   describe('the people an audience would generate', () => {
     it('are carried by every answer, as many as the audience generates', async () => {
-      const created = await bodyOf(await send('/audiences', 'POST', OUTDOOR_GEAR_SHOPPERS));
-      expect(created.people).toHaveLength(OUTDOOR_GEAR_SHOPPERS.size);
+      const created = await bodyOf(await send('/audiences', 'POST', secondAudience()));
+      expect(created.people).toHaveLength(secondAudience().size);
       expect(created.issues).toStrictEqual([]);
 
       const read = await bodyOf(await send(`/audiences/${created.id}`, 'GET'));
       expect(read.people).toStrictEqual(created.people);
       expect((await listed()).map((entry) => entry.people.length)).toStrictEqual([
         fixtureAudience().size,
-        OUTDOOR_GEAR_SHOPPERS.size,
+        secondAudience().size,
       ]);
     });
 
@@ -340,6 +406,18 @@ describe('the audience routes', () => {
       await expect(startTest(seededAudienceId, 'too late')).rejects.toBeInstanceOf(
         AudienceNotOfferedError,
       );
+    });
+
+    it('refuses an edit to the audience it froze once that audience is retired', async () => {
+      const runId = await startTest(seededAudienceId, 'retired audience');
+      await served.platform.store.audiences.softDelete(workspaceId, seededAudienceId);
+
+      const patched = await send(`/audiences/${seededAudienceId}`, 'PATCH', { name: 'Revived' });
+      expect(patched.status).toBe(404);
+      expect(await reportedAudience(runId)).toStrictEqual(fixtureAudience());
+      expect(
+        (await bodyOf(await send(`/audiences/${seededAudienceId}`, 'GET'))).audience,
+      ).toStrictEqual(fixtureAudience());
     });
 
     it('is not offered another workspace’s audience either', async () => {

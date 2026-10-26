@@ -36,12 +36,31 @@ export interface AudienceWithPeople {
   readonly issues: readonly AudienceIssue[];
 }
 
-const peopleOf = (audience: Audience): { people: Persona[]; issues: AudienceIssue[] } => {
+/** The people an audience generates, or why it generates none. */
+export interface GeneratedPeople {
+  readonly people: readonly Persona[];
+  readonly issues: readonly AudienceIssue[];
+}
+
+export const peopleOf = (audience: Audience): GeneratedPeople => {
   try {
     return { people: generatePersonas(audience), issues: [] };
   } catch (error) {
     if (error instanceof AudienceValidationError) return { people: [], issues: [...error.issues] };
-    throw error;
+    // Everything else the generator refuses is reported the same way, against the audience
+    // as a whole: a `size` no array can hold, a seed it cannot sample from, a device mix it
+    // cannot apportion. The reason this is not a rethrow is the one above — a list maps
+    // every record through here, and one record it cannot generate from must say so on its
+    // own card rather than taking the whole list down with it.
+    return {
+      people: [],
+      issues: [
+        {
+          path: '(the audience)',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
   }
 };
 
@@ -53,10 +72,15 @@ const peopleOf = (audience: Audience): { people: Persona[]; issues: AudienceIssu
  * belongs in an audience either way — a run artifact carries a copy of this audience, and it
  * never carries an account id or a workspace id (`CONTEXT.md`).
  */
-export const withPeople = (record: AudienceRecord): AudienceWithPeople => ({
+export const withPeople = (
+  record: AudienceRecord,
+  /** The people, where the caller has already generated them to decide whether to store. */
+  generated: GeneratedPeople = peopleOf(record.audience),
+): AudienceWithPeople => ({
   id: record.id,
   audience: record.audience,
-  ...peopleOf(record.audience),
+  people: generated.people,
+  issues: generated.issues,
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
   deletedAt: record.deletedAt,

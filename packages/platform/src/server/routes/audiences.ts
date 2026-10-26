@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AudienceValidationError, parseAudience } from '@personavision/personas';
 import type { Audience } from '@personavision/contract';
-import { withPeople } from '../../audience/people.js';
-import type { AudienceWithPeople } from '../../audience/people.js';
-import type { PlatformStore, SessionRecord } from '../../store/types.js';
+import type { AudienceIssue } from '@personavision/personas';
+import { peopleOf, withPeople } from '../../audience/people.js';
+import type { AudienceWithPeople, GeneratedPeople } from '../../audience/people.js';
+import type { AudienceStore, PlatformStore, SessionRecord } from '../../store/types.js';
 import { readJsonBody, sendJson } from './types.js';
 import type { Route } from './types.js';
 
@@ -56,18 +57,35 @@ const answer = (response: ServerResponse, status: number, record: AudienceWithPe
   sendJson(response, status, record);
 
 /**
- * An audience the contract's schema refuses, reported **at the path it is wrong at** so that
- * the form can render each message against the field it concerns (#109). The messages are
- * the schema's own: the audience is declared once, so what is wrong with one is stated once.
+ * An audience that cannot be saved, reported **at the path it is wrong at** so that the form
+ * can render each message against the field it concerns (#109). The messages are the
+ * schema's own: the audience is declared once, so what is wrong with one is stated once.
  */
-const refuse = (response: ServerResponse, error: AudienceValidationError): void =>
-  sendJson(response, 400, {
-    error: 'That audience could not be saved.',
-    issues: error.issues,
-  });
+const refuse = (response: ServerResponse, issues: readonly AudienceIssue[]): void =>
+  sendJson(response, 400, { error: 'That audience could not be saved.', issues });
+
+/** A plain object: something a `PATCH` merges into rather than replaces. */
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The stored audience with the submitted fields over it, as deep as the submission goes: a
+ * `PATCH` naming one end of the age range leaves the other end as it was.
+ *
+ * A list the submission names replaces the stored list rather than being merged into it
+ * position by position — the second device of a mix is not an edit to the first — and a
+ * body that is not an object at all replaces the audience, which the schema then refuses.
+ */
+const merge = (stored: unknown, submitted: unknown): unknown => {
+  if (!isPlainObject(stored) || !isPlainObject(submitted)) return submitted;
+  return Object.fromEntries([
+    ...Object.entries(stored),
+    ...Object.entries(submitted).map(([key, value]) => [key, merge(stored[key], value)]),
+  ]);
+};
 
 /** The submitted audience, validated, or the 400 that says where it is wrong. */
-const submitted = async (
+const validated = async (
   request: IncomingMessage,
   response: ServerResponse,
   /** What a `PATCH` is merged over; `null` for a `POST`, which carries the whole audience. */
@@ -78,22 +96,60 @@ const submitted = async (
     sendJson(response, 400, { error: 'That audience could not be read.' });
     return null;
   }
-  // A `PATCH` names the fields it changes and the rest stay as they are; a body carrying
-  // the whole audience replaces it, which is what the form submits. Either way the merged
-  // result is validated whole, so a changed field cannot break an invariant across two.
-  const merged =
-    stored !== null && typeof body.value === 'object' && body.value !== null
-      ? { ...stored, ...body.value }
-      : body.value;
+  // The merged result is validated whole, so a changed field cannot break an invariant
+  // that spans two of them: the device shares and the age range are checked against the
+  // audience as it would stand, not against the fields the submission happened to name.
   try {
-    return parseAudience(merged);
+    return parseAudience(stored === null ? body.value : merge(stored, body.value));
   } catch (error) {
     if (error instanceof AudienceValidationError) {
-      refuse(response, error);
+      refuse(response, error.issues);
       return null;
     }
     throw error;
   }
+};
+
+/**
+ * The people the audience generates, or the 400 that says why it generates none.
+ *
+ * Generated **before** the audience is stored, so that a record nothing can be generated
+ * from is never written: every answer carries the people, so one such record would answer
+ * for the audience it is in and for every list it appears in — and with no route to delete
+ * it, the workspace's audiences would stay unreadable until somebody edited the file.
+ */
+const generatedOrRefused = (
+  response: ServerResponse,
+  audience: Audience,
+): GeneratedPeople | null => {
+  const generated = peopleOf(audience);
+  if (generated.issues.length === 0) return generated;
+  refuse(response, generated.issues);
+  return null;
+};
+
+/**
+ * `null`, or the 400 saying this workspace already has an audience under the `id` the
+ * submission carries.
+ *
+ * An audience's own `id` is what a run artifact carries by value and what every generated
+ * person's `audienceId` names, so it has to name one audience per workspace: a second
+ * record under the same id leaves a finished test unable to say which stored audience it
+ * was run for, and the people of two audiences indistinguishable by the field that exists
+ * to tell them apart. A soft-deleted record keeps its id for the same reason — the tests
+ * that used it still name it.
+ */
+const idTaken = async (
+  audiences: AudienceStore,
+  workspaceId: string,
+  audience: Audience,
+  /** The record being edited, whose own id is not a clash with itself. */
+  exceptRecordId: string | null,
+): Promise<boolean> => {
+  const records = await audiences.list(workspaceId, { includeDeleted: true });
+  return records.some(
+    (record) => record.id !== exceptRecordId && record.audience.id === audience.id,
+  );
 };
 
 /** A handler that needs a workspace: the session's, or 401. */
@@ -126,16 +182,27 @@ export const audienceRoutes = (options: AudienceRouteOptions): Route[] => {
       handle: inWorkspace(options, async (workspaceId, _request, response) => {
         // Soft-deleted audiences are left out: this is the list a new test chooses from.
         const records = await audiences.list(workspaceId);
-        sendJson(response, 200, { audiences: records.map(withPeople) });
+        sendJson(response, 200, { audiences: records.map((record) => withPeople(record)) });
       }),
     },
     {
       method: 'POST',
       path: /^\/audiences$/,
       handle: inWorkspace(options, async (workspaceId, request, response) => {
-        const audience = await submitted(request, response, null);
+        const audience = await validated(request, response, null);
         if (audience === null) return;
-        answer(response, 201, withPeople(await audiences.create(workspaceId, audience)));
+        if (await idTaken(audiences, workspaceId, audience, null)) {
+          refuse(response, [
+            {
+              path: 'id',
+              message: `this workspace already has an audience with the id "${audience.id}": a test records the audience it ran for by this id, so it names one audience`,
+            },
+          ]);
+          return;
+        }
+        const generated = generatedOrRefused(response, audience);
+        if (generated === null) return;
+        answer(response, 201, withPeople(await audiences.create(workspaceId, audience), generated));
       }),
     },
     {
@@ -159,16 +226,30 @@ export const audienceRoutes = (options: AudienceRouteOptions): Route[] => {
       handle: inWorkspace(options, async (workspaceId, request, response) => {
         const audienceId = audienceIdOf(request);
         const record = await audiences.byId(workspaceId, audienceId);
-        if (record === null) {
+        // A soft-deleted audience is readable and is not editable: the user said they were
+        // done describing these customers, and the tests that used it report what it was
+        // then. It is the same answer `audienceForNewTest` gives for the same reason.
+        if (record === null || record.deletedAt !== null) {
           sendJson(response, 404, { error: NO_SUCH_AUDIENCE });
           return;
         }
-        const audience = await submitted(request, response, record.audience);
+        const audience = await validated(request, response, record.audience);
         if (audience === null) return;
+        if (await idTaken(audiences, workspaceId, audience, record.id)) {
+          refuse(response, [
+            {
+              path: 'id',
+              message: `this workspace already has another audience with the id "${audience.id}"`,
+            },
+          ]);
+          return;
+        }
+        const generated = generatedOrRefused(response, audience);
+        if (generated === null) return;
         answer(
           response,
           200,
-          withPeople(await audiences.update(workspaceId, audienceId, audience)),
+          withPeople(await audiences.update(workspaceId, audienceId, audience), generated),
         );
       }),
     },
