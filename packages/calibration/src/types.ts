@@ -212,9 +212,13 @@ export interface Prediction {
  * The seed makes a reported score reproducible: the same image and seed give the same
  * prediction, which is what lets the fit (#90) repeat a run exactly.
  *
- * **This package does not import `packages/engine`.** The engine's `predict` satisfies this
- * type structurally, and `test/types.test.ts` holds a value shaped as its return to prove
- * it. The dependency runs one way — calibration may read the engine, never the reverse —
- * and `test/dependency-direction.test.ts` asserts that too.
+ * **This package does not import `packages/engine`.** The engine's `predict` is expected to
+ * satisfy this type structurally, and `test/types.test.ts` assigns a value shaped as its
+ * documented return to a `Predictor` — which pins **this side** of the seam: the shape #68
+ * has to return. It cannot see the engine's side, because `predict` does not exist yet and
+ * this package may not import it, so #68 is asked on its own issue to assign its real
+ * `predict` to this type where that function lives. Until it does, nothing here would catch
+ * a divergence. The dependency runs one way — calibration may read the engine, never the
+ * reverse — and `test/dependency-direction.test.ts` asserts that.
  */
 export type Predictor = (image: PredictorImage, seed: number) => Prediction | Promise<Prediction>;

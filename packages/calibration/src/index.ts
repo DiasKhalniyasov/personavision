@@ -45,6 +45,7 @@ export {
 } from './dataset/manifest.js';
 export type {
   ArchiveLayout,
+  ArchiveRoot,
   ChecksumAlgorithm,
   ChecksumSource,
   DatasetDescription,
@@ -65,5 +66,6 @@ export {
   cacheRoot,
   datasetCachePaths,
   isContainedRelativePath,
+  isDatasetId,
 } from './dataset/cache.js';
 export type { CacheEnvironment, DatasetCachePaths } from './dataset/cache.js';

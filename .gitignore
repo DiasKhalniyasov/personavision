@@ -12,6 +12,8 @@ coverage/
 
 # The UEyes benchmark is never committed: it is 12.9 GB and licensed to its authors'
 # terms, so it is downloaded into the OS cache directory instead — see
-# packages/calibration/README.md. A PERSONAVISION_CALIBRATION_CACHE pointing inside the
-# repository by mistake is caught here rather than in a pull request.
+# packages/calibration/README.md. The resolved default never lands in here; this rule
+# covers the one in-repo cache a mistake realistically creates, a
+# PERSONAVISION_CALIBRATION_CACHE set to `$PWD/.cache`. An override naming any other
+# directory in the repository is deliberately not ignored: it should be noticed.
 .cache/

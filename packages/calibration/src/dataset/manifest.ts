@@ -17,7 +17,7 @@ import {
   type RecordCategory,
   type ViewingDurationSeconds,
 } from '../types.js';
-import { isContainedRelativePath } from './cache.js';
+import { isContainedRelativePath, isDatasetId } from './cache.js';
 import committedManifest from './manifest.json' with { type: 'json' };
 
 /** The schema version this reader understands. A newer manifest is refused, not guessed at. */
@@ -132,10 +132,25 @@ export interface LayoutEntry {
   readonly holds: string;
 }
 
+/**
+ * Where the entries sit inside the archive.
+ *
+ * `unknown` is a third state rather than an absent prefix, for the reason
+ * `UnverifiedChecksum` is not a zeroed hash: "the entries are at the archive root" and
+ * "nobody has opened the archive" are different claims, and a reader that cannot tell them
+ * apart reports a layout difference for a prefix the manifest never asserted.
+ */
+export type ArchiveRoot =
+  /** The entries sit at the archive root, confirmed. */
+  | { readonly state: 'root' }
+  /** They sit under this one directory, confirmed. */
+  | { readonly state: 'directory'; readonly path: string }
+  /** Nobody has looked yet, and why. #85 is the first that can. */
+  | { readonly state: 'unknown'; readonly reason: string };
+
 /** What the archive is expected to contain once unpacked. */
 export interface ArchiveLayout {
-  /** The directory the entries sit under inside the archive, or `null` for the root. */
-  readonly rootPrefix: string | null;
+  readonly root: ArchiveRoot;
   /**
    * `false` while the layout is the publisher's documentation rather than a reading of the
    * archive. A download that finds a different tree fails naming the difference (#85).
@@ -317,7 +332,7 @@ const parseDataset = (value: unknown, path: string): DatasetDescription => {
   const dataset = asObject(value, path);
   const paper = asObject(dataset.paper, `${path}.paper`);
   const id = asText(dataset.id, `${path}.id`);
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) {
+  if (!isDatasetId(id)) {
     fail(`${path}.id`, 'expected lower-case letters, digits and hyphens: it names a directory');
   }
 
@@ -347,25 +362,56 @@ const parseDataset = (value: unknown, path: string): DatasetDescription => {
   };
 };
 
+const parseArchiveRoot = (value: unknown, path: string): ArchiveRoot => {
+  const root = asObject(value, path);
+  const state = asOneOf(root.state, `${path}.state`, ['root', 'directory', 'unknown'] as const);
+
+  if (state === 'directory') return { state, path: asCachePath(root.path, `${path}.path`) };
+  if (state === 'unknown') return { state, reason: asText(root.reason, `${path}.reason`) };
+  return { state };
+};
+
 const parseLayout = (value: unknown, path: string): ArchiveLayout => {
   const layout = asObject(value, path);
+  const entries = asList(layout.entries, `${path}.entries`, 1).map((entry, position) => {
+    const at = `${path}.entries[${position}]`;
+    const item = asObject(entry, at);
+    return {
+      path: asCachePath(item.path, `${at}.path`),
+      kind: asOneOf(item.kind, `${at}.kind`, ['file', 'directory'] as const),
+      holds: asText(item.holds, `${at}.holds`),
+    };
+  });
+
+  // The entries describe one tree, so they have to be able to be one: #85 compares the
+  // extracted archive against them, and a layout no archive could hold would have it report
+  // a difference whose cause is this file rather than the download.
+  const duplicate = entries.find(
+    (entry, position) => entries.findIndex((other) => other.path === entry.path) !== position,
+  );
+  if (duplicate !== undefined) {
+    fail(`${path}.entries`, `two entries describe the same path: ${duplicate.path}`);
+  }
+
+  const files = new Set(entries.filter((entry) => entry.kind === 'file').map(({ path }) => path));
+  const nested = entries.find((entry) => {
+    const segments = entry.path.split('/');
+    return segments
+      .slice(0, -1)
+      .some((_, depth) => files.has(segments.slice(0, depth + 1).join('/')));
+  });
+  if (nested !== undefined) {
+    fail(`${path}.entries`, `${nested.path} is nested under an entry declared a file`);
+  }
+
   return {
-    rootPrefix:
-      layout.rootPrefix === null ? null : asCachePath(layout.rootPrefix, `${path}.rootPrefix`),
+    root: parseArchiveRoot(layout.root, `${path}.root`),
     verifiedAgainstArchive: asBoolean(
       layout.verifiedAgainstArchive,
       `${path}.verifiedAgainstArchive`,
     ),
     note: asText(layout.note, `${path}.note`),
-    entries: asList(layout.entries, `${path}.entries`, 1).map((entry, position) => {
-      const at = `${path}.entries[${position}]`;
-      const item = asObject(entry, at);
-      return {
-        path: asCachePath(item.path, `${at}.path`),
-        kind: asOneOf(item.kind, `${at}.kind`, ['file', 'directory'] as const),
-        holds: asText(item.holds, `${at}.holds`),
-      };
-    }),
+    entries,
   };
 };
 
@@ -403,6 +449,13 @@ export const parseManifest = (value: unknown): DatasetManifest => {
   };
 };
 
+/** `readonly` is a compile-time promise only, and this object graph is shared. */
+const deepFreeze = <T>(value: T): T => {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value as object)) deepFreeze(child);
+  return Object.freeze(value);
+};
+
 let loaded: DatasetManifest | undefined;
 
 /**
@@ -410,8 +463,14 @@ let loaded: DatasetManifest | undefined;
  *
  * Pure: the manifest is a build-time import, so nothing here reads the filesystem or the
  * network, and a malformed committed manifest fails the first test that loads it.
+ *
+ * Every caller is handed the **same frozen** object. Frozen because they share it: #85
+ * writing a confirmed checksum back onto `files[0].checksum` would otherwise change what
+ * #86 and the CLI read, in-process and with no validation pass. Recording a checksum is an
+ * edit to `manifest.json`, reviewed like any other.
  */
-export const loadManifest = (): DatasetManifest => (loaded ??= parseManifest(committedManifest));
+export const loadManifest = (): DatasetManifest =>
+  (loaded ??= deepFreeze(parseManifest(committedManifest)));
 
 /**
  * The checksum a download can be verified against, or `null` when there is none.

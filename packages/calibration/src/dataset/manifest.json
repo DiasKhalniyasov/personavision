@@ -63,9 +63,12 @@
     }
   ],
   "layout": {
-    "rootPrefix": null,
+    "root": {
+      "state": "unknown",
+      "reason": "nothing here has opened the 12.9 GB archive, so whether the entries sit at its root or under one directory is not known"
+    },
     "verifiedAgainstArchive": false,
-    "note": "Documented by the authors' repository README, not yet read from the archive: nothing here has opened the 12.9 GB zip. `rootPrefix` is null because whether the entries sit at the archive root or under one directory is unknown. #85 compares the extracted tree with these entries and fails loudly naming the difference, so the next worker corrects this file instead of guessing.",
+    "note": "Documented by the authors' repository README, not yet read from the archive. #85 compares the extracted tree with these entries, resolves `root` to `root` or `directory`, and fails loudly naming any difference — so the next worker corrects this file instead of guessing. An unknown root is not a claim that the entries are at the archive root: it must not be reported as a layout difference.",
     "entries": [
       { "path": "images", "kind": "directory", "holds": "Every UI screenshot in the dataset." },
       {

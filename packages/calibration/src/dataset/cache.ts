@@ -8,6 +8,13 @@
  * a file or opens a socket. The platform, the environment and the home directory are read
  * once per call from the process and can be passed in instead, which is how the tests check
  * macOS, Linux and Windows from one machine.
+ *
+ * **What is guaranteed, exactly.** The *resolved default* is under the OS cache directory on
+ * every platform and so never inside the repository. An absolute override is the caller's
+ * deliberate choice and is honoured as given — these helpers do no filesystem access, so they
+ * cannot know where the repository is and do not pretend to check. What they do enforce is
+ * that no path *derived* from a manifest entry or an archive member escapes the root they
+ * were given, whichever platform resolves it.
  */
 
 import { homedir, tmpdir } from 'node:os';
@@ -47,20 +54,69 @@ export class CachePathError extends Error {
   }
 }
 
+/** A segment that no platform can hold, or that one platform would silently rewrite. */
+const UNUSABLE_SEGMENT = [
+  // A drive or stream prefix. `win32.isAbsolute('C:foo')` is false, but `C:foo` is
+  // *drive-relative*: resolved against drive C:'s working directory it leaves the cache
+  // entirely, and on NTFS `a:b` names an alternate data stream on a file named `a`.
+  /:/,
+  // Control characters. Node's fs rejects a NUL far from the field that carried it.
+  /[\u0000-\u001f\u007f]/,
+  // The Win32 API strips a trailing space or dot, so two distinct manifest paths would
+  // collide on disk after the loader's duplicate check had already passed.
+  /[ .]$/,
+] as const;
+
 /**
  * Whether a path can be joined onto a cache directory without leaving it.
  *
- * Forward slashes only, no empty, `.` or `..` segment, and not absolute on any platform —
- * so a manifest entry or an archive member cannot write outside the cache, whichever
- * machine unpacks it.
+ * Forward slashes only; no empty, blank, `.` or `..` segment; not absolute and not
+ * drive-relative on any platform; no control character, and nothing a platform would
+ * rewrite behind the caller's back. So a manifest entry or an archive member cannot write
+ * outside the cache, whichever machine unpacks it — and a path that no platform can hold
+ * fails here, naming the field, rather than deep inside `fs`.
  */
 export const isContainedRelativePath = (value: string): boolean => {
   if (value === '' || value.includes('\\')) return false;
   if (posix.isAbsolute(value) || win32.isAbsolute(value)) return false;
-  return value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+  return value
+    .split('/')
+    .every(
+      (segment) =>
+        segment.trim() !== '' &&
+        segment !== '.' &&
+        segment !== '..' &&
+        !UNUSABLE_SEGMENT.some((unusable) => unusable.test(segment)),
+    );
 };
 
+/**
+ * Whether a name can be one directory of the cache: lower-case letters, digits and hyphens.
+ *
+ * `manifest.ts` validates `dataset.id` with this rather than a second copy of the rule, so
+ * the manifest cannot accept an id the cache would refuse.
+ */
+export const isDatasetId = (value: string): boolean => DATASET_ID.test(value);
+
 const platformPath = (platform: string): typeof posix => (platform === 'win32' ? win32 : posix);
+
+/**
+ * The process's values with a caller's overrides laid over them.
+ *
+ * A `Partial` can carry an explicit `undefined` — `cacheRoot({ homeDir: process.env.HOME })`
+ * type-checks, because the base configuration sets no `exactOptionalPropertyTypes` — and a
+ * plain spread would copy that over a real value and crash in `path.join`. So an undefined
+ * field means "not overridden", which is what a reader of the call expects.
+ */
+const withOverrides = (
+  base: CacheEnvironment,
+  overrides: Partial<CacheEnvironment>,
+): CacheEnvironment => ({
+  platform: overrides.platform ?? base.platform,
+  env: overrides.env ?? base.env,
+  homeDir: overrides.homeDir ?? base.homeDir,
+  tmpDir: overrides.tmpDir ?? base.tmpDir,
+});
 
 const processEnvironment = (): CacheEnvironment => {
   let home = '';
@@ -106,18 +162,25 @@ const osCacheDirectory = ({ platform, env, homeDir, tmpDir }: CacheEnvironment):
  * to be run from, and inside the repository if that was the repository.
  */
 export const cacheRoot = (environment: Partial<CacheEnvironment> = {}): string => {
-  const resolved: CacheEnvironment = { ...processEnvironment(), ...environment };
+  const resolved = withOverrides(processEnvironment(), environment);
   const path = platformPath(resolved.platform);
   const override = resolved.env[CACHE_ENV_VAR];
 
   if (override !== undefined && override.trim() !== '') {
-    const absolute = absoluteFrom(override, resolved.platform);
-    if (absolute === null) {
+    if (!path.isAbsolute(override)) {
       throw new CachePathError(
         `${CACHE_ENV_VAR} must be an absolute path, found ${JSON.stringify(override)}: a relative cache root would put the dataset wherever the command was run from`,
       );
     }
-    return absolute;
+    // Used as given, so it is refused rather than quietly rewritten: normalising it would
+    // turn a typo like `/mnt/data/../..` into `/`, retargeting 12.9 GB at a system
+    // directory without a word.
+    if (override.split(/[/\\]/).some((segment) => segment === '.' || segment === '..')) {
+      throw new CachePathError(
+        `${CACHE_ENV_VAR} must not contain a \`.\` or \`..\` segment, found ${JSON.stringify(override)}: name the directory the dataset should live in`,
+      );
+    }
+    return override;
   }
 
   return path.join(osCacheDirectory(resolved), VENDOR_DIRECTORY, PACKAGE_DIRECTORY);
@@ -147,13 +210,13 @@ export const datasetCachePaths = (
   datasetId: string,
   environment: Partial<CacheEnvironment> = {},
 ): DatasetCachePaths => {
-  if (!DATASET_ID.test(datasetId)) {
+  if (!isDatasetId(datasetId)) {
     throw new CachePathError(
       `a dataset id is one directory name of lower-case letters, digits and hyphens, found ${JSON.stringify(datasetId)}`,
     );
   }
 
-  const resolved: CacheEnvironment = { ...processEnvironment(), ...environment };
+  const resolved = withOverrides(processEnvironment(), environment);
   const path = platformPath(resolved.platform);
   const root = path.join(cacheRoot(resolved), datasetId);
   const downloads = path.join(root, DOWNLOADS_DIRECTORY);

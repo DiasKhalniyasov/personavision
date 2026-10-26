@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { FileChecksum } from '../src/dataset/manifest.js';
 import {
   ManifestError,
   describeChecksum,
@@ -12,6 +13,17 @@ import committed from '../src/dataset/manifest.json' with { type: 'json' };
 
 /** The committed manifest as plain data, so a case can break one field and leave the rest. */
 const valid = (): Record<string, unknown> => structuredClone(committed) as Record<string, unknown>;
+
+/** The layout's entry list, for the cases that break the tree it describes. */
+const layoutEntries = (manifest: Record<string, unknown>): Record<string, unknown>[] =>
+  (manifest.layout as Record<string, unknown>).entries as Record<string, unknown>[];
+
+/** Sets `layout.root`, which has three states and so three ways to be wrong. */
+const withArchiveRoot = (root: unknown): unknown => {
+  const manifest = valid();
+  (manifest.layout as Record<string, unknown>).root = root;
+  return manifest;
+};
 
 /** Sets `files[0].checksum`, the field most of the checksum cases need. */
 const withChecksum = (checksum: unknown): unknown => {
@@ -72,6 +84,10 @@ describe('the committed UEyes manifest', () => {
     // Nothing in this ticket opened the 12.9 GB archive, so the layout is the authors'
     // documentation rather than a reading of the bytes. #85 is the first to know.
     expect(layout.verifiedAgainstArchive).toBe(false);
+    // And an unknown root is a third state, not a claim that the entries are at the root:
+    // #85 must not report a layout difference for a prefix nobody ever asserted.
+    expect(layout.root.state).toBe('unknown');
+    if (layout.root.state === 'unknown') expect(layout.root.reason).not.toBe('');
     expect(layout.entries.map((entry) => entry.path)).toContain('images');
     expect(layout.entries.map((entry) => entry.path)).toContain('scanpaths/paths_7s');
     expect(layout.entries.map((entry) => entry.path)).toContain('info.csv');
@@ -87,6 +103,26 @@ describe('the committed UEyes manifest', () => {
 
   it('is loaded once and returns the same object', () => {
     expect(loadManifest()).toBe(loadManifest());
+  });
+
+  it('is frozen, because every caller shares it', () => {
+    const manifest = loadManifest();
+
+    // `readonly` is a compile-time promise only. #85 writing a confirmed checksum back onto
+    // the loaded manifest would otherwise change what #86 and the CLI read, in-process and
+    // with no validation pass: recording a checksum is an edit to `manifest.json`.
+    expect(Object.isFrozen(manifest)).toBe(true);
+    expect(Object.isFrozen(manifest.files)).toBe(true);
+    expect(Object.isFrozen(manifest.files[0])).toBe(true);
+    expect(Object.isFrozen(manifest.dataset.licence.forbids)).toBe(true);
+
+    const overwriteChecksum = (): void => {
+      (manifest.files[0] as { checksum: FileChecksum }).checksum = {
+        state: 'unverified',
+        reason: 'a later ticket mutating what every other ticket reads',
+      };
+    };
+    expect(overwriteChecksum).toThrow(TypeError);
   });
 });
 
@@ -220,6 +256,44 @@ describe('a malformed manifest', () => {
           return manifest;
         })(),
         at: 'dataset.viewingDurationsSeconds[1]',
+      },
+      {
+        name: 'leaves the archive root in a state that is neither known nor unknown',
+        value: withArchiveRoot({ state: 'probably-the-root' }),
+        at: 'layout.root.state',
+      },
+      {
+        name: 'says the archive root is unknown without saying why',
+        value: withArchiveRoot({ state: 'unknown' }),
+        at: 'layout.root.reason',
+      },
+      {
+        name: 'puts the archive root in a directory that climbs out of the cache',
+        value: withArchiveRoot({ state: 'directory', path: '../elsewhere' }),
+        at: 'layout.root.path',
+      },
+      {
+        name: 'describes the same layout path twice',
+        value: (() => {
+          const manifest = valid();
+          const entries = layoutEntries(manifest);
+          entries.push(structuredClone(entries[0]!));
+          return manifest;
+        })(),
+        at: 'layout.entries',
+      },
+      {
+        name: 'nests a layout entry under one it calls a file, which no archive can hold',
+        value: (() => {
+          const manifest = valid();
+          layoutEntries(manifest).push({
+            path: 'info.csv/rows',
+            kind: 'directory',
+            holds: 'the rows of a file this manifest calls a file',
+          });
+          return manifest;
+        })(),
+        at: 'layout.entries',
       },
       {
         name: 'describes a layout entry that is neither a file nor a directory',

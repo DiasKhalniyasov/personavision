@@ -99,9 +99,15 @@ One documented environment variable overrides it:
 export PERSONAVISION_CALIBRATION_CACHE=/mnt/datasets/personavision
 ```
 
-It must be an **absolute** path — a relative one would put 12.9 GB wherever the command happened to be run from —
-and it is used exactly as given. When there is no home directory to be had, the last resort is a directory under the
+It must be an **absolute** path with no `.` or `..` segment — a relative one would put 12.9 GB wherever the command
+happened to be run from, and a typo like `/mnt/data/../..` would silently retarget it at a system directory — and it
+is then used exactly as given. When there is no home directory to be had, the last resort is a directory under the
 system temporary directory, which is still outside the repository.
+
+An absolute override is your deliberate choice and is honoured: these helpers do no filesystem access, so they
+cannot know where this repository is and do not pretend to check. What they guarantee is that the _default_ lands
+outside it on every platform, and that nothing derived from a manifest entry or an archive member escapes the root
+they were given.
 
 Within one dataset's directory (`<cache root>/ueyes`):
 
@@ -113,9 +119,11 @@ Within one dataset's directory (`<cache root>/ueyes`):
 
 [`src/dataset/cache.ts`](src/dataset/cache.ts) is the only place these paths are decided. The helpers are pure path
 arithmetic: they create no directory, read no file and open no socket, and they refuse a path that would climb out of
-the cache, so neither a hand-edited manifest nor a hostile archive member can write outside it. `.gitignore` covers
-`.cache/` so that a `PERSONAVISION_CALIBRATION_CACHE` pointed inside the repository by mistake is caught here rather
-than in a pull request.
+the cache — absolute, drive-relative (`C:foo` is not absolute on Windows but does leave), `..`, or carrying a
+control character or a segment a platform would silently rewrite — so neither a hand-edited manifest nor a hostile
+archive member can write outside it. `.gitignore` covers `.cache/`, which catches the one in-repo cache a mistake
+realistically creates; an override naming some other in-repo directory is not ignored and would show up in a pull
+request, where it is meant to be noticed.
 
 ## The vocabulary
 
@@ -149,9 +157,11 @@ This package reads `@personavision/contract`, and may later read `@personavision
 figure flows engine configuration → run artifact → viewer, never by either of them calling calibration.
 `test/dependency-direction.test.ts` asserts both directions.
 
-The engine's `predict` is not imported here at all: it satisfies the `Predictor` seam **structurally**, and
-`test/types.test.ts` holds a value shaped as its return to prove it. If that fixture stops compiling, the two sides
-have drifted and nothing else would have said so.
+The engine's `predict` is not imported here at all: it is expected to satisfy the `Predictor` seam **structurally**.
+`test/types.test.ts` assigns a value shaped as its documented return to a `Predictor`, which pins _this_ side of the
+seam — the shape #68 has to produce. It cannot pin the engine's side: `predict` does not exist yet, and this package
+may not import it, so #68 is asked on its own issue to assign its real `predict` to `Predictor` where that function
+lives. Until it does, a divergence would show up as a failing score rather than as a type error.
 
 ## Running it
 

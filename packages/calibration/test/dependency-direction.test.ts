@@ -1,19 +1,19 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const repositoryRoot = (): string => {
-  let directory = dirname(fileURLToPath(import.meta.url));
-  while (!existsSync(join(directory, 'pnpm-workspace.yaml'))) {
-    const parent = dirname(directory);
-    if (parent === directory) throw new Error('no pnpm-workspace.yaml above this test');
-    directory = parent;
-  }
-  return directory;
-};
+/** The repository root, three directories above `packages/calibration/test`. */
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
-const ROOT = repositoryRoot();
+/**
+ * The workspace directories this file makes claims about.
+ *
+ * Asserted to exist before anything is asserted about their contents: a renamed or moved
+ * workspace would otherwise turn "no file in apps/viewer imports it" into
+ * `expect([]).toEqual([])` — green, and checking nothing.
+ */
+const CONSUMERS = ['packages/engine', 'apps/viewer'] as const;
 
 const packageJson = (workspacePath: string): Record<string, Record<string, string> | undefined> =>
   JSON.parse(readFileSync(join(ROOT, workspacePath, 'package.json'), 'utf8')) as Record<
@@ -25,15 +25,19 @@ const packageJson = (workspacePath: string): Record<string, Record<string, strin
  * Whether a file imports a module, rather than merely mentioning its name: a test that
  * matched a mention would be failed by the sentence explaining it.
  */
-const imports = (text: string, specifier: string): boolean =>
-  new RegExp(String.raw`(?:from|import|require)\s*\(?\s*['"]${specifier}(?:/[^'"]*)?['"]`).test(
-    text,
-  );
+const imports = (text: string, specifier: string): boolean => {
+  // The specifier is escaped: a name carrying a regex metacharacter would otherwise match
+  // the wrong text, or throw.
+  const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    String.raw`(?:from|import|require)\s*\(?\s*['"]${escaped}(?:/[^'"]*)?['"]`,
+  ).test(text);
+};
 
 /** Every TypeScript file under a workspace directory, with its text. */
 const sources = (workspacePath: string): readonly { path: string; text: string }[] => {
   const directory = join(ROOT, workspacePath);
-  if (!existsSync(directory)) return [];
+  if (!existsSync(directory)) throw new Error(`${workspacePath} is not in this repository`);
   return readdirSync(directory, { recursive: true, encoding: 'utf8' })
     .filter((entry) => /\.(ts|tsx|mts|cts)$/.test(entry))
     .map((entry) => ({
@@ -59,8 +63,11 @@ describe('the calibration package reads the contract', () => {
 });
 
 describe('nothing reads the calibration package back', () => {
-  it.each(['packages/engine', 'apps/viewer'])('%s does not depend on it', (workspacePath) => {
-    if (!existsSync(join(ROOT, workspacePath, 'package.json'))) return;
+  it.each(CONSUMERS)('%s is where this test thinks it is', (workspacePath) => {
+    expect(existsSync(join(ROOT, workspacePath, 'package.json')), workspacePath).toBe(true);
+  });
+
+  it.each(CONSUMERS)('%s does not depend on it', (workspacePath) => {
     const manifest = packageJson(workspacePath);
 
     for (const field of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
@@ -68,7 +75,7 @@ describe('nothing reads the calibration package back', () => {
     }
   });
 
-  it.each(['packages/engine', 'apps/viewer'])('no file in %s imports it', (workspacePath) => {
+  it.each(CONSUMERS)('no file in %s imports it', (workspacePath) => {
     // The engine is pure and the viewer only formats: a figure flows engine configuration →
     // run artifact → viewer, never by either of them calling calibration (#11).
     const importers = sources(workspacePath).filter(({ text }) =>
@@ -81,6 +88,9 @@ describe('nothing reads the calibration package back', () => {
 
 describe('the Predictor seam is structural', () => {
   it('so no module of this package imports the engine', () => {
+    // What this asserts is the direction, not that the seam is in step: `predict` does not
+    // exist in the engine yet (#68), and this test is part of why it cannot be checked from
+    // here. #68 is asked to assign its real `predict` to `Predictor` on its own side.
     // #81 forbids it here, and the seam in `src/types.ts` is what makes it unnecessary: the
     // engine's `predict` satisfies `Predictor` field for field. A later ticket of step #11
     // that genuinely needs the engine may depend on it — the direction allows that — but it

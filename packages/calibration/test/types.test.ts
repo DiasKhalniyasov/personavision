@@ -9,11 +9,14 @@ import {
 } from '../src/types.js';
 
 /**
- * A value shaped exactly as the engine's `predict` returns (#68): the saliency map, the
- * scanpath, and the display it assumed for a bare image.
+ * A value shaped exactly as the engine's `predict` is documented to return (#68): the
+ * saliency map, the scanpath, and the display it assumed for a bare image.
  *
- * Declared here with **no import of `packages/engine`**. If this stops compiling, the two
- * sides have drifted apart — the seam is structural, so nothing else would say so.
+ * Declared here with **no import of `packages/engine`**, which is what this package is held
+ * to. So it pins **this** side of the seam — the shape #68 has to produce — and not the
+ * engine's: `predict` does not exist yet, and when it does this fixture will not see it.
+ * #68 is asked on its own issue to assign its real `predict` to `Predictor`, where the
+ * function lives.
  */
 const predict = (image: { readonly bytes: Uint8Array; readonly size: ImageSize }, seed: number) => {
   const width = 4;
@@ -40,7 +43,7 @@ const predict = (image: { readonly bytes: Uint8Array; readonly size: ImageSize }
   };
 };
 
-/** The compile-time proof: the engine's `predict` satisfies the seam, unchanged. */
+/** The assignment is the assertion: the documented return shape satisfies the seam. */
 const seam: Predictor = predict;
 
 const imageOf = (size: ImageSize): Parameters<Predictor>[0] => ({
@@ -50,7 +53,7 @@ const imageOf = (size: ImageSize): Parameters<Predictor>[0] => ({
 });
 
 describe('the Predictor seam', () => {
-  it('is satisfied by a value shaped as the engine’s predict return, with no engine import', async () => {
+  it('accepts a value shaped as the engine’s documented predict return, with no engine import', async () => {
     const prediction = await seam(imageOf({ width: 1280, height: 1024 }), 7);
 
     expect(prediction.saliencyMap.normalisation).toBe('sum-to-one');
@@ -119,6 +122,7 @@ describe('the public entry point', () => {
       'datasetCachePaths',
       'describeChecksum',
       'isContainedRelativePath',
+      'isDatasetId',
       'loadManifest',
       'parseManifest',
       'recordedChecksum',

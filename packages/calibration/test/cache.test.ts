@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, posix, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -9,19 +9,12 @@ import {
   cacheRoot,
   datasetCachePaths,
   isContainedRelativePath,
+  isDatasetId,
 } from '../src/dataset/cache.js';
 import { loadManifest } from '../src/dataset/manifest.js';
 
-/** The repository root: the directory holding the workspace file. */
-const repositoryRoot = (): string => {
-  let directory = dirname(fileURLToPath(import.meta.url));
-  while (!existsSync(join(directory, 'pnpm-workspace.yaml'))) {
-    const parent = dirname(directory);
-    if (parent === directory) throw new Error('no pnpm-workspace.yaml above this test');
-    directory = parent;
-  }
-  return directory;
-};
+/** The repository root, three directories above `packages/calibration/test`. */
+const repositoryRoot = (): string => fileURLToPath(new URL('../../../', import.meta.url));
 
 /**
  * Whether a path the helpers returned lands outside the repository.
@@ -32,7 +25,7 @@ const repositoryRoot = (): string => {
 const landsOutsideRepository = (path: string, platform: string): boolean => {
   const platformPath = platform === 'win32' ? win32 : posix;
   if (!platformPath.isAbsolute(path)) return false;
-  const root = repositoryRoot();
+  const root = repositoryRoot().replace(/\/$/, '');
   return path !== root && !path.startsWith(root + platformPath.sep);
 };
 
@@ -110,6 +103,31 @@ describe('the cache root', () => {
     expect(resolveRelative).toThrow(CACHE_ENV_VAR);
   });
 
+  it('refuses a climbing override rather than normalising the typo away', () => {
+    // `/mnt/data/../..` normalises to `/`, which would retarget 12.9 GB at a system
+    // directory without a word. The variable is documented as used exactly as given.
+    const climb = (): string =>
+      cacheRoot({
+        platform: 'linux',
+        homeDir: '/home/dev',
+        env: { [CACHE_ENV_VAR]: '/mnt/data/../..' },
+      });
+
+    expect(climb).toThrow(CachePathError);
+    expect(climb).toThrow('..');
+  });
+
+  it('treats an explicitly undefined field as not overridden, rather than crashing on it', () => {
+    // `cacheRoot({ homeDir: process.env.HOME })` type-checks — the base configuration sets
+    // no `exactOptionalPropertyTypes` — and `HOME` can be undefined.
+    expect(cacheRoot({ platform: 'linux', env: {}, homeDir: undefined })).toBe(
+      cacheRoot({ platform: 'linux', env: {} }),
+    );
+    expect(() =>
+      cacheRoot({ platform: 'linux', homeDir: '/home/dev', env: undefined }),
+    ).not.toThrow(TypeError);
+  });
+
   it('falls back to the temporary directory when there is no home to put a cache under', () => {
     const root = cacheRoot({ platform: 'linux', homeDir: '', env: {}, tmpDir: '/tmp' });
 
@@ -151,6 +169,14 @@ describe("one dataset's cache", () => {
     ['/etc/passwd', 'is absolute'],
     ['images/../../escape.png', 'climbs out halfway through'],
     ['', 'is empty'],
+    // `win32.isAbsolute('C:secret.txt')` is false, but the path is drive-relative: resolved
+    // against drive C:'s working directory it leaves the cache, and on NTFS `a:b` names an
+    // alternate data stream on a file called `a`.
+    ['C:secret.txt', 'is drive-relative'],
+    ['images/a:b.png', 'names an alternate data stream'],
+    ['a\u0000b.zip', 'carries a NUL that fs would reject far from here'],
+    ['images/ /a.png', 'has a blank segment'],
+    ['images /a.png', 'has a segment Windows would silently strip a space from'],
   ])('refuses a path that %s, rather than joining it', (path) => {
     expect(() => paths.download(path)).toThrow(CachePathError);
     expect(() => paths.extractedFile(path)).toThrow(CachePathError);
@@ -166,7 +192,7 @@ describe("one dataset's cache", () => {
   });
 });
 
-describe('no cached byte lands inside the repository', () => {
+describe('the resolved default lands outside the repository', () => {
   /** Every path the helpers hand out for one dataset. */
   const allPaths = (environment: Parameters<typeof datasetCachePaths>[1]): readonly string[] => {
     const paths = datasetCachePaths('ueyes', environment);
@@ -217,7 +243,7 @@ describe('no cached byte lands inside the repository', () => {
     }
   });
 
-  it('and .gitignore covers the in-repo path a mistaken override could create', () => {
+  it('and .gitignore covers the in-repo cache a mistake realistically creates', () => {
     const ignored = readFileSync(join(repositoryRoot(), '.gitignore'), 'utf8');
 
     expect(ignored).toContain('.cache/');
@@ -225,12 +251,14 @@ describe('no cached byte lands inside the repository', () => {
 });
 
 describe('a contained relative path', () => {
-  it.each(['UEyes_dataset.zip', 'images/webpage_001.png', 'scanpaths/paths_7s/a.json'])(
-    'accepts %s',
-    (path) => {
-      expect(isContainedRelativePath(path)).toBe(true);
-    },
-  );
+  it.each([
+    'UEyes_dataset.zip',
+    'images/webpage_001.png',
+    'scanpaths/paths_7s/a.json',
+    '.hidden/a.png',
+  ])('accepts %s', (path) => {
+    expect(isContainedRelativePath(path)).toBe(true);
+  });
 
   it.each([
     '',
@@ -241,7 +269,25 @@ describe('a contained relative path', () => {
     'C:\\images',
     'images\\a.png',
     'images//a.png',
+    'C:images',
+    'images/a:b',
+    'a\u0000b',
+    'a\u001fb',
+    ' ',
+    'images ',
+    'images.',
   ])('rejects %s', (path) => {
     expect(isContainedRelativePath(path)).toBe(false);
+  });
+});
+
+describe('a dataset id', () => {
+  it('is one directory name, by the rule the manifest validates `dataset.id` with', () => {
+    // One rule in one place: the manifest cannot accept an id the cache would refuse.
+    expect(isDatasetId(loadManifest().dataset.id)).toBe(true);
+    expect(isDatasetId('ueyes-v2')).toBe(true);
+    for (const rejected of ['', '../other', 'UEyes', 'ueyes/v2', 'ueyes_v2', '-ueyes']) {
+      expect(isDatasetId(rejected), rejected).toBe(false);
+    }
   });
 });

@@ -20,8 +20,22 @@ const sourceFiles = (): string[] =>
     .split('\0')
     .filter((path) => path.length > 0);
 
-/** The library packages this step fixes, so that no later ticket invents a name. */
-const LIBRARY_PACKAGES = ['contract', 'cli', 'engine', 'browser', 'scoring', 'personas'] as const;
+/**
+ * The library packages, so that no later ticket invents a name.
+ *
+ * The first six exist as placeholders from the first commit. `calibration` is the one
+ * package a step creates rather than fills — step #11 needs a home for the human-likeness
+ * figure — and it is listed here so it is held to the same five invariants as the rest.
+ */
+const LIBRARY_PACKAGES = [
+  'contract',
+  'cli',
+  'engine',
+  'browser',
+  'scoring',
+  'personas',
+  'calibration',
+] as const;
 
 /** The root scripts this step fixes. */
 const ROOT_SCRIPTS = [
