@@ -73,8 +73,8 @@ export const concreteDeviceFor = (device: AudienceDevice): ConcreteDevice => {
  * every declared device gets at least one of them, taken from the largest count. A device
  * declared at 1% is part of the audience; a swarm that puts nobody on it reports nothing
  * about it, and the user who added it would not know. Below that size the people go to the
- * largest shares, because there is no honest way to cover every device with fewer people
- * than devices.
+ * largest shares — nobody is left out while a smaller share is covered — because there is no
+ * honest way to cover every device with fewer people than devices.
  */
 export const deviceQuota = (audience: Audience): number[] => {
   const exact = audience.devices.map((device) => audience.size * device.share);

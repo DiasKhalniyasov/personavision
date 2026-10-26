@@ -136,7 +136,10 @@ with nobody on it at all.
 **Every declared device gets somebody**, once the audience has at least as many people as
 devices: a device declared at 1% is part of the audience, and a swarm that puts nobody on it
 reports nothing about it. The person comes from the largest count. Below that size the people
-go to the largest shares, because there is no honest way to cover more devices than people.
+go to the largest shares — nobody is left out while a smaller share is covered, and a share
+worth more than one of the few people still takes more than one of them — because there is no
+honest way to cover more devices than people. `tests/apportionment.test.ts` holds all of this
+over random share vectors at every size a swarm plausibly runs at.
 
 **Who** gets which device is the archetype's affinity: a hurried shopper is a phone behaviour
 and a careful comparer sits at a desk, so the phone-shaped behaviours fill the phone share
