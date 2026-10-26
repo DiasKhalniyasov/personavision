@@ -322,6 +322,21 @@ valid map and a non-empty scanpath led by the position priors. `tests/predict.te
 states that as the expected behaviour and holds the direction of both priors, rather than
 treating an empty image as degenerate.
 
+**A segmenter that fails is not an image with nothing in it.** `buildAois` swallows a
+segmenter's throw because a segmenter is additive to the areas the elements explain — but
+here there are no elements, so it is the only source of areas and "additive" has no content
+left. `predict` therefore raises the error rather than answering the position priors, which
+is what it already does with bytes `sharp` cannot decode: a caller scoring one image reports
+a failed record instead of a figure nobody can tell from a weak one.
+
+**Page space to image space is read from the image.** The sampler works in page space — the
+image in CSS pixels — and the seam's fixations are image pixels, so the factor is the
+image's own dimensions over the page's, per axis, exactly as `src/salience.ts` reads an
+area's box. It is not `display.scale`, which equals that factor whenever a given display
+agrees with the bytes and would silently relocate the whole scanpath whenever it does not:
+`Display` is two independent numbers, and nothing holds `viewport * scale` to the image's
+size.
+
 A bare image has no persona, so every trait takes `prediction.neutralTrait` — the middle of
 each row of the trait table, not a claim about a population — and no goal, so
 `relevanceByArea` leaves every area at `relevance.floor`. Free viewing has no task to be

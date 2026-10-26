@@ -247,8 +247,18 @@ const UNEXPLAINED: Aoi['source'] = 'sam';
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
-/** A viewport is a positive whole number of CSS pixels, as the contract's schema requires. */
-const atLeastOneWhole = (value: number): number => Math.max(1, Math.round(value));
+/**
+ * A positive whole number: what a viewport is in CSS pixels, as the contract's schema
+ * requires, and what a count of cells is.
+ *
+ * A value that is not a number at all answers one rather than `NaN`. `resolveEngineConfig`
+ * validates nothing — a leaf is whatever the calibrated file or an in-process caller put
+ * there — and a `NaN` reaching here would ask for an array of invalid length or lay out a
+ * grid of no cells and answer an empty scanpath, which is the one thing this path must
+ * never do.
+ */
+const atLeastOneWhole = (value: number): number =>
+  Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1;
 
 const isUsable = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value > 0;
@@ -358,26 +368,75 @@ const priorGrid = (page: PageBox, config: EngineConfig): Aoi[] => {
 };
 
 /**
- * The scanpath in image space: the sampler's page-space landing points times the scale.
+ * The segmenter, with a failure of it recorded on the way past rather than swallowed.
+ *
+ * `buildAois` swallows a segmenter's throw by design: a segmenter is *additive* to the
+ * areas the capture's elements explain, so a missing credential or a broken image is a
+ * screen with fewer areas on it and never a failed run (`aois/segmenter.ts`). On this path
+ * there are no elements, so the segmenter is the only source of areas and "additive" has no
+ * content left: a throw would come back as a position-prior prediction indistinguishable
+ * from an image that honestly has nothing in it, and a whole benchmark sweep could report
+ * weak-but-valid figures with nothing said about why.
+ *
+ * So the error is kept and raised again once `buildAois` has returned — which is what this
+ * function already does with bytes `sharp` cannot decode, and leaves the caller scoring one
+ * image to report a failed record rather than a bad score.
+ */
+const watchingForFailure = (
+  segmenter: Segmenter,
+): {
+  readonly segmenter: Segmenter;
+  readonly thrown: () => { readonly error: unknown } | undefined;
+} => {
+  let thrown: { readonly error: unknown } | undefined;
+  return {
+    segmenter: {
+      segment: async (input) => {
+        try {
+          return await segmenter.segment(input);
+        } catch (error) {
+          thrown = { error };
+          throw error;
+        }
+      },
+    },
+    thrown: () => thrown,
+  };
+};
+
+/**
+ * The scanpath in image space: the sampler's page-space landing points, scaled.
  *
  * The sampler works in page space, which for a bare image is the image in CSS pixels, and
- * the seam's fixations are in image pixels. `index` is re-stated as the position along the
- * scanpath, which is what the seam promises it is.
+ * the seam's fixations are in image pixels. The factor is the **image's own dimensions over
+ * the page's**, per axis, which is how every other module here crosses the same boundary:
+ * `salience.ts` reads an area's box at `pixels.width / page.width` and the segmenter builds
+ * its grid the same way. It is not `display.scale`, which equals that factor whenever a
+ * given display agrees with the bytes and silently relocates the whole scanpath whenever it
+ * does not — `Display` is two independent numbers and nothing in the dataset, the corpus or
+ * the manifest holds `viewport * scale` to the image's size. Taking the factor from the
+ * image keeps the fixations in the same space as the regions they were drawn in.
+ *
+ * `index` is re-stated as the position along the scanpath, which is what the seam promises.
  */
 const scanpathOf = (
   fixations: readonly SampledFixation[],
   size: ImageSize,
-  display: Display,
-): PredictedScanpath => ({
-  participantId: NO_PARTICIPANT,
-  fixations: fixations.map((fixation, position) => ({
-    index: position,
-    tMs: fixation.tMs,
-    durationMs: fixation.durationMs,
-    x: clamp(fixation.pageX * display.scale, 0, size.width),
-    y: clamp(fixation.pageY * display.scale, 0, size.height),
-  })),
-});
+  page: PageBox,
+): PredictedScanpath => {
+  const scaleX = size.width / page.width;
+  const scaleY = size.height / page.height;
+  return {
+    participantId: NO_PARTICIPANT,
+    fixations: fixations.map((fixation, position) => ({
+      index: position,
+      tMs: fixation.tMs,
+      durationMs: fixation.durationMs,
+      x: clamp(fixation.pageX * scaleX, 0, size.width),
+      y: clamp(fixation.pageY * scaleY, 0, size.height),
+    })),
+  };
+};
 
 /**
  * The map's resolution: the image downscaled by `cellPx`, never below one cell a side.
@@ -522,12 +581,17 @@ export const predict = async (
   const page: PageBox = { width: display.viewport.width, height: display.viewport.height };
   const traits = neutralTraits(config);
 
+  const watched = watchingForFailure(
+    options.segmenter ?? heuristicSegmenter({ config: options.weights, readImage: () => pixels }),
+  );
   const segmented = await buildAois({
     capture: captureFor(display.viewport),
     variant: PREDICTION_VARIANT,
-    segmenter:
-      options.segmenter ?? heuristicSegmenter({ config: options.weights, readImage: () => pixels }),
+    segmenter: watched.segmenter,
   });
+  const failure = watched.thrown();
+  if (failure !== undefined) throw failure.error;
+  /** Nothing found is an image with nothing in it, and the position priors answer for it. */
   const aois = segmented.length > 0 ? segmented : priorGrid(page, config);
 
   const salience = await salienceByArea({ screenshot: pixels, page, aois, traits, config });
@@ -540,6 +604,6 @@ export const predict = async (
     salience,
   });
 
-  const scanpath = scanpathOf(fixations, size, display);
+  const scanpath = scanpathOf(fixations, size, page);
   return { saliencyMap: saliencyMapOf(scanpath.fixations, size, config), scanpath, display };
 };

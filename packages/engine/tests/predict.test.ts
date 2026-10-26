@@ -433,12 +433,87 @@ describe('the display a prediction was made at', () => {
     expect(prediction.display).toEqual({ viewport: { width: 320, height: 240 }, scale: 1 });
   });
 
+  it('reads the scanpath in the image’s space even when the display disagrees', async () => {
+    const bytes = await withRegion();
+
+    // A display that cannot be true of a 320x240 image: 320 CSS pixels at 2 image pixels
+    // each would be a 640-pixel-wide image. The regions are still laid out in the page the
+    // viewport describes, so the fixations have to come back in the same space — scaling
+    // them by `display.scale` would push every one of them off the region it was drawn in,
+    // and the clamp would hide it as a plausible prediction.
+    const prediction = await predict(
+      { bytes, size: IMAGE, display: { viewport: { width: 320, height: 240 }, scale: 2 } },
+      SEED,
+    );
+
+    expect(inside(prediction.scanpath.fixations[0], REGION)).toBe(true);
+    expect(inside(peakOf(prediction.saliencyMap), REGION)).toBe(true);
+  });
+
+  it('scales each axis by its own factor when the viewport’s shape disagrees', async () => {
+    const bytes = await withRegion();
+
+    // Half the width in CSS pixels and the full height: the horizontal factor is 2 and the
+    // vertical factor is 1, which one scale cannot express.
+    const prediction = await predict(
+      { bytes, size: IMAGE, display: { viewport: { width: 160, height: 240 }, scale: 2 } },
+      SEED,
+    );
+
+    for (const fixation of prediction.scanpath.fixations) {
+      expect({ inRegion: true, x: fixation.x }).toEqual({
+        inRegion: inside(fixation, REGION),
+        x: fixation.x,
+      });
+    }
+  });
+
   it('describes the image the bytes decoded to, not a declared size that disagrees', async () => {
     const bytes = await withRegion();
 
     const { saliencyMap } = await predict({ bytes, size: { width: 9999, height: 1 } }, SEED);
 
     expect(saliencyMap.imageSize).toEqual(IMAGE);
+  });
+});
+
+/**
+ * Two ways a prediction could come back plausible and wrong, and does not.
+ *
+ * `buildAois` swallows a segmenter's throw because a segmenter is additive to the areas the
+ * elements explain. Here there are no elements, so a swallowed throw would be reported as
+ * an image with nothing in it; and `resolveEngineConfig` validates no override, so a leaf
+ * that is not a number could ask for an array of invalid length or a grid of no cells.
+ */
+describe('a failure is not reported as a flat image', () => {
+  it('raises a segmenter’s error rather than falling back to the position priors', async () => {
+    const bytes = await withRegion();
+    const broken = {
+      segment: () => {
+        throw new Error('the segmenter broke');
+      },
+    };
+
+    await expect(predict(bare(bytes), SEED, { segmenter: broken })).rejects.toThrow(
+      'the segmenter broke',
+    );
+  });
+
+  it('still answers a valid prediction when a configured leaf is not a number', async () => {
+    const bytes = await flatField();
+
+    const coarse = await predict(bare(bytes), SEED, {
+      weights: { prediction: { map: { cellPx: Number.NaN } } },
+    });
+    const gridless = await predict(bare(bytes), SEED, {
+      weights: { prediction: { priorGridCellsAcross: Number.NaN } },
+    });
+
+    // One image pixel a cell, which is the floor of the documented relationship.
+    expect({ width: coarse.saliencyMap.width, height: coarse.saliencyMap.height }).toEqual(IMAGE);
+    expect(Number(sumOf(coarse.saliencyMap).toFixed(9))).toBe(1);
+    expect(gridless.scanpath.fixations.length).toBeGreaterThan(0);
+    expect(Number(sumOf(gridless.saliencyMap).toFixed(9))).toBe(1);
   });
 });
 
