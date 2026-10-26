@@ -24,7 +24,7 @@ import type { FileHandle } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { createInflateRaw } from 'node:zlib';
+import { crc32, createInflateRaw } from 'node:zlib';
 import { isContainedRelativePath } from './cache.js';
 
 /** `PK\x05\x06` — the end-of-central-directory record. */
@@ -95,27 +95,6 @@ export class ArchiveError extends Error {
   }
 }
 
-/** The CRC-32 table, built once: the check every unpacked entry is held to. */
-const CRC_TABLE = ((): Uint32Array => {
-  const table = new Uint32Array(256);
-  for (let index = 0; index < 256; index += 1) {
-    let value = index;
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-    }
-    table[index] = value >>> 0;
-  }
-  return table;
-})();
-
-const updateCrc = (crc: number, bytes: Uint8Array): number => {
-  let value = crc;
-  for (const byte of bytes) {
-    value = (CRC_TABLE[(value ^ byte) & 0xff] as number) ^ (value >>> 8);
-  }
-  return value >>> 0;
-};
-
 /** A 64-bit field read as a JavaScript number, refused when it cannot be one exactly. */
 const readU64 = (buffer: Buffer, offset: number, what: string): number => {
   const value = buffer.readBigUInt64LE(offset);
@@ -147,16 +126,24 @@ const findEndOfCentralDirectory = async (
   handle: FileHandle,
   fileSize: number,
 ): Promise<{ record: Buffer; position: number }> => {
-  const length = Math.min(fileSize, MOST_TRAILING_BYTES);
-  const start = fileSize - length;
-  const tail = Buffer.alloc(length);
-  await handle.read(tail, 0, length, start);
+  const wanted = Math.min(fileSize, MOST_TRAILING_BYTES);
+  const start = fileSize - wanted;
+  const tail = Buffer.alloc(wanted);
+  // One `read` may return fewer bytes than asked for. Searching the whole buffer would then
+  // search a zero-filled tail, and every candidate record would fail its own length check —
+  // so a sound archive would be reported as not being one. Read until the tail is whole.
+  let length = 0;
+  while (length < wanted) {
+    const { bytesRead } = await handle.read(tail, length, wanted - length, start + length);
+    if (bytesRead === 0) break;
+    length += bytesRead;
+  }
 
   for (let index = length - END_OF_CENTRAL_DIRECTORY_SIZE; index >= 0; index -= 1) {
     if (tail.readUInt32LE(index) !== END_OF_CENTRAL_DIRECTORY) continue;
     const commentLength = tail.readUInt16LE(index + 20);
     if (index + END_OF_CENTRAL_DIRECTORY_SIZE + commentLength !== length) continue;
-    return { record: tail.subarray(index), position: start + index };
+    return { record: tail.subarray(index, length), position: start + index };
   }
   throw new ArchiveError(
     'this is not a zip archive: no end-of-central-directory record in its last 64 KiB',
@@ -215,12 +202,32 @@ const locateDirectory = async (
   };
 };
 
-/** The four fields zip64 moves out of the 46-byte header, in the order they appear. */
+/** The three fields zip64 moves out of the 46-byte header, in the order it writes them. */
+const ZIP64_FIELDS = [
+  { key: 'sizeBytes', what: 'the unpacked size' },
+  { key: 'compressedBytes', what: 'the stored size' },
+  { key: 'localHeaderOffset', what: 'the header position' },
+] as const;
+
+type Zip64Field = (typeof ZIP64_FIELDS)[number]['key'];
+
+/**
+ * The 64-bit values an entry's zip64 extra field carries.
+ *
+ * Which of them are in it is stated nowhere: they sit in a fixed order, and a reader works
+ * out which are present. Two conventions exist and the real archive could use either — a
+ * writer records exactly the fields whose 32-bit slot is all ones, or it records a longer
+ * prefix of the order, because the format says a zip64 field carrying a size must carry
+ * both sizes. The field's own length tells them apart, and it has to: a member past the
+ * four-gigabyte mark whose sizes are small needs the offset alone, and reading a
+ * three-value field positionally against that one need would take the member's unpacked
+ * size for its position and send the unpacking to a byte with no header at it.
+ */
 const readZip64Extra = (
   extra: Buffer,
-  needed: { size: boolean; compressed: boolean; offset: boolean },
+  needed: Readonly<Record<Zip64Field, boolean>>,
   entryPath: string,
-): { sizeBytes?: number; compressedBytes?: number; localHeaderOffset?: number } => {
+): Partial<Record<Zip64Field, number>> => {
   for (let at = 0; at + 4 <= extra.length;) {
     const id = extra.readUInt16LE(at);
     const length = extra.readUInt16LE(at + 2);
@@ -228,19 +235,20 @@ const readZip64Extra = (
     at += 4 + length;
     if (id !== 0x0001) continue;
 
-    const read: { sizeBytes?: number; compressedBytes?: number; localHeaderOffset?: number } = {};
-    let cursor = 0;
-    const next = (what: string): number => {
-      if (cursor + 8 > body.length) {
-        throw new ArchiveError(`the zip64 extra field is too short to hold ${what}`, entryPath);
-      }
-      const value = readU64(body, cursor, what);
-      cursor += 8;
-      return value;
-    };
-    if (needed.size) read.sizeBytes = next('the unpacked size');
-    if (needed.compressed) read.compressedBytes = next('the stored size');
-    if (needed.offset) read.localHeaderOffset = next('the header position');
+    const wanted = ZIP64_FIELDS.filter((field) => needed[field.key]);
+    const slots = Math.floor(body.length / 8);
+    const present = slots > wanted.length ? ZIP64_FIELDS.slice(0, slots) : wanted;
+    if (present.length < wanted.length) {
+      throw new ArchiveError(
+        `the zip64 extra field holds ${slots} value${slots === 1 ? '' : 's'} where this entry needs ${wanted.length}`,
+        entryPath,
+      );
+    }
+
+    const read: Partial<Record<Zip64Field, number>> = {};
+    present.forEach((field, position) => {
+      if (needed[field.key]) read[field.key] = readU64(body, position * 8, field.what);
+    });
     return read;
   }
   throw new ArchiveError('a header asks for zip64 fields that the entry does not carry', entryPath);
@@ -292,11 +300,11 @@ const parseCentralDirectory = (directory: Buffer, expected: number): readonly Ar
     let localHeaderOffset = directory.readUInt32LE(headerAt + 42);
 
     const needed = {
-      size: sizeBytes === NEEDS_ZIP64_32,
-      compressed: compressedBytes === NEEDS_ZIP64_32,
-      offset: localHeaderOffset === NEEDS_ZIP64_32,
+      sizeBytes: sizeBytes === NEEDS_ZIP64_32,
+      compressedBytes: compressedBytes === NEEDS_ZIP64_32,
+      localHeaderOffset: localHeaderOffset === NEEDS_ZIP64_32,
     };
-    if (needed.size || needed.compressed || needed.offset) {
+    if (needed.sizeBytes || needed.compressedBytes || needed.localHeaderOffset) {
       const zip64 = readZip64Extra(extra, needed, rawName);
       sizeBytes = zip64.sizeBytes ?? sizeBytes;
       compressedBytes = zip64.compressedBytes ?? compressedBytes;
@@ -409,7 +417,8 @@ async function* readRange(
 
 /** Counts bytes and CRC-32s them on the way past, so a corrupt member is caught as it lands. */
 class CrcCounter extends Transform {
-  crc = 0 ^ -1;
+  /** `node:zlib`'s own CRC-32, which is native and takes the running value. */
+  crc = 0;
   bytes = 0;
 
   override _transform(
@@ -417,13 +426,13 @@ class CrcCounter extends Transform {
     _encoding: BufferEncoding,
     done: (error?: Error | null, data?: Buffer) => void,
   ): void {
-    this.crc = updateCrc(this.crc, chunk);
+    this.crc = crc32(chunk, this.crc);
     this.bytes += chunk.length;
     done(null, chunk);
   }
 
   get digest(): number {
-    return (this.crc ^ -1) >>> 0;
+    return this.crc >>> 0;
   }
 }
 
@@ -461,6 +470,15 @@ const extractEntry = async (
   await mkdir(dirname(destination), { recursive: true });
 
   if (entry.compressedBytes === 0 && entry.sizeBytes === 0) {
+    // An empty file's CRC-32 is zero. An entry declaring another one is describing bytes it
+    // does not carry, and writing an empty file for it would be the one member this reader
+    // let past without checking.
+    if (entry.crc32 !== 0) {
+      throw new ArchiveError(
+        'this entry declares no bytes and a checksum that is not the empty one: its directory entry describes a file it does not carry',
+        entry.path,
+      );
+    }
     await writeFile(destination, '');
     return;
   }

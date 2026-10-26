@@ -8,12 +8,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readArchiveDirectory } from '../src/dataset/archive.js';
+import { extractArchive, readArchiveDirectory } from '../src/dataset/archive.js';
 import type { ArchiveEntry } from '../src/dataset/archive.js';
 import type { CacheEnvironment } from '../src/dataset/cache.js';
 import { DatasetFetchError, fetchDataset, withoutSecrets } from '../src/dataset/fetch.js';
@@ -339,6 +339,25 @@ describe('an interrupted transfer', () => {
     expect(await exists(part)).toBe(false);
   });
 
+  it('discards a part file longer than the manifest records and starts over', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
+    const part = join(cacheRoot, DATASET_ID, 'downloads', 'stub_dataset.zip.part');
+    await mkdir(join(cacheRoot, DATASET_ID, 'downloads'), { recursive: true });
+    await writeFile(part, Buffer.alloc(ARCHIVE.length * 2, 9));
+
+    const result = await run(manifestFor([archiveFile(origin)]), cacheRoot, {
+      retry: { attempts: 1, delayMs: 0 },
+    });
+
+    // One request, with no Range header: resuming past the end of a file that has just
+    // been deleted would be answered 416 and burn the only attempt.
+    expect(origin.requests).toHaveLength(1);
+    expect(origin.requests[0]?.range).toBeNull();
+    const downloaded = await readFile(join(result.downloads, 'stub_dataset.zip'));
+    expect(downloaded.equals(ARCHIVE)).toBe(true);
+  });
+
   it('starts again from the first byte when the origin ignores the range', async () => {
     const cacheRoot = await temporaryCache();
     const half = Math.floor(ARCHIVE.length / 2);
@@ -383,6 +402,23 @@ describe('a checksum that does not match', () => {
     expect(await exists(join(result.extracted, 'info.csv'))).toBe(true);
   });
 
+  it('takes the receipts with the file when it quarantines it', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
+    await run(manifestFor([archiveFile(origin)]), cacheRoot);
+
+    const downloads = join(cacheRoot, DATASET_ID, 'downloads');
+    expect(await readdir(downloads)).toHaveLength(3);
+    await writeFile(join(downloads, 'stub_dataset.zip'), ARCHIVE.subarray(0, 10));
+
+    await expect(run(manifestFor([archiveFile(origin)]), cacheRoot)).rejects.toThrow(
+      DatasetFetchError,
+    );
+
+    // No receipt is left asserting a verification of bytes that are no longer there.
+    expect(await readdir(downloads)).toEqual([]);
+  });
+
   it('refuses a cached copy whose size is not the one the manifest records', async () => {
     const cacheRoot = await temporaryCache();
     const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
@@ -424,14 +460,57 @@ describe('a cache that is already complete', () => {
     const manifest = manifestFor([archiveFile(origin)]);
     await run(manifest, cacheRoot);
 
-    const receipt = join(cacheRoot, DATASET_ID, 'downloads', 'stub_dataset.zip.verified.json');
-    const written = JSON.parse(await readFile(receipt, 'utf8')) as { mtimeMs: number };
-    await writeFile(receipt, JSON.stringify({ ...written, mtimeMs: written.mtimeMs + 1 }));
+    const downloaded = join(cacheRoot, DATASET_ID, 'downloads', 'stub_dataset.zip');
+    const later = new Date(Date.now() + 60_000);
+    await utimes(downloaded, later, later);
 
     const result = await run(manifest, cacheRoot);
 
     expect(result.files[0]?.state).toBe('already-present');
     expect(logged()).toContain(`verified (md5 ${md5(ARCHIVE)})`);
+    expect(logged()).not.toContain('already present and verified');
+  });
+
+  it('unpacks again over the tree already there, replacing it rather than mixing into it', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
+    const manifest = manifestFor([archiveFile(origin)]);
+    const first = await run(manifest, cacheRoot);
+
+    // A file from an older unpacking, and a receipt that no longer matches the archive:
+    // the next run rebuilds the tree, and what was there has to go with it.
+    await writeFile(join(first.extracted, 'images', 'from-an-older-archive.png'), 'stale');
+    const receipt = join(cacheRoot, DATASET_ID, 'downloads', 'stub_dataset.zip.extracted.json');
+    await writeFile(
+      receipt,
+      JSON.stringify({ checksum: 'something else', root: { state: 'root' }, entries: 1 }),
+    );
+
+    const result = await run(manifest, cacheRoot);
+
+    expect(result.extractions[0]?.state).toBe('unpacked');
+    expect(await exists(join(result.extracted, 'images', 'from-an-older-archive.png'))).toBe(false);
+    expect(await readFile(join(result.extracted, 'images', 'webpage-one.png'), 'utf8')).toBe(
+      'a screenshot, in spirit',
+    );
+    expect(await exists(`${result.extracted}.superseded`)).toBe(false);
+    expect(await exists(join(cacheRoot, DATASET_ID, '.staging'))).toBe(false);
+  });
+
+  it('unpacks again rather than failing when the extraction receipt cannot be read', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
+    const manifest = manifestFor([archiveFile(origin)]);
+    await run(manifest, cacheRoot);
+
+    // A process killed part-way through writing the receipt.
+    const receipt = join(cacheRoot, DATASET_ID, 'downloads', 'stub_dataset.zip.extracted.json');
+    await writeFile(receipt, '{"checksum": "7f');
+
+    const result = await run(manifest, cacheRoot);
+
+    expect(result.extractions[0]?.state).toBe('unpacked');
+    expect(await exists(join(result.extracted, 'info.csv'))).toBe(true);
   });
 });
 
@@ -497,6 +576,49 @@ describe('secret hygiene', () => {
       'https://example.org/a/b',
     );
     expect(withoutSecrets('not a url')).toBe('[an unparseable URL]');
+  });
+
+  it('refuses a redirect that would leave https, and follows one that does not', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve(
+      { 'stub_dataset.zip': ARCHIVE },
+      { redirects: { 'moved.zip': 'http://example.org/stub_dataset.zip' } },
+    );
+    const manifest = manifestFor([{ ...archiveFile(origin), url: origin.url('moved.zip') }]);
+
+    const failure = await run(manifest, cacheRoot).catch((error: unknown) => error);
+
+    expect((failure as DatasetFetchError).message).toContain('redirects to a location that');
+    expect((failure as DatasetFetchError).message).toContain('https');
+    expect(await exists(join(cacheRoot, DATASET_ID, 'dataset'))).toBe(false);
+
+    const followed = await serve({ 'stub_dataset.zip': ARCHIVE }, { redirects: {} });
+    const viaRedirect = await serve(
+      {},
+      { redirects: { 'moved.zip': followed.url('stub_dataset.zip') } },
+    );
+    const result = await run(
+      manifestFor([{ ...archiveFile(followed), url: viaRedirect.url('moved.zip') }]),
+      await temporaryCache(),
+    );
+
+    expect(result.files[0]?.verifiedAgainstManifest).toBe(true);
+    expect(logged()).toContain('following a redirect to');
+  });
+
+  it('stops rather than reporting every remaining file as unfetchable when cancelled', async () => {
+    const cacheRoot = await temporaryCache();
+    const origin = await serve({ 'stub_dataset.zip': ARCHIVE });
+    const manifest = manifestFor([archiveFile(origin)]);
+
+    const failure = await run(manifest, cacheRoot, {
+      signal: AbortSignal.abort(),
+    }).catch((error: unknown) => error);
+
+    expect((failure as DatasetFetchError).failures).toEqual([
+      { path: 'stub_dataset.zip', reason: 'the run was cancelled before this file' },
+    ]);
+    expect(origin.requests).toHaveLength(0);
   });
 
   it('refuses a download location that is not https', async () => {
@@ -670,6 +792,42 @@ describe('the archive reader', () => {
     expect(entries).toEqual([
       expect.objectContaining({ path: 'info.csv', kind: 'file', sizeBytes: 4 }),
     ]);
+  });
+
+  it('reads a zip64 field that carries more values than the entry marks as needing', async () => {
+    // What a writer produces for a member past the four-gigabyte mark whose own sizes are
+    // small: all three values in the extra field, only the header position marked. Read
+    // positionally against the one marked field, the unpacked size becomes the position.
+    const bytes = makeZip(
+      [
+        { path: 'info.csv', data: Buffer.from('a,b\n') },
+        { path: 'images/one.png', data: Buffer.from('a screenshot'), deflate: true },
+      ],
+      { zip64OffsetOnly: true },
+    );
+    const path = await writeArchive(bytes);
+
+    const entries = await readArchiveDirectory(path);
+
+    expect(entries.map((entry) => [entry.path, entry.sizeBytes])).toEqual([
+      ['info.csv', 4],
+      ['images/one.png', 12],
+    ]);
+    const into = await temporaryCache();
+    await extractArchive({ archivePath: path, entries, into });
+    expect(await readFile(join(into, 'images', 'one.png'), 'utf8')).toBe('a screenshot');
+  });
+
+  it('refuses an entry that declares no bytes and a checksum that is not the empty one', async () => {
+    const path = await writeArchive(
+      makeZip([{ path: 'info.csv', data: Buffer.alloc(0), brokenCrc: 0x1234 }]),
+    );
+    const entries = await readArchiveDirectory(path);
+    const into = await temporaryCache();
+
+    await expect(extractArchive({ archivePath: path, entries, into })).rejects.toThrow(
+      /declares no bytes and a checksum that is not the empty one/,
+    );
   });
 
   it('refuses a member whose path would be written outside the cache', async () => {

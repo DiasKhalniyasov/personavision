@@ -27,7 +27,7 @@
  */
 
 import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { once } from 'node:events';
 import { Readable } from 'node:stream';
@@ -44,11 +44,12 @@ import {
   localChecksum,
   quarantineFile,
   readReceipt,
+  readReceiptFile,
   recordChecksum,
   verifyFile,
   writeReceipt,
 } from './verify.js';
-import type { ManifestChecksumChange } from './verify.js';
+import type { LayoutComparison, ManifestChecksumChange } from './verify.js';
 
 /** Where the dataset is unpacked while it is still incomplete. */
 const STAGING_DIRECTORY = '.staging';
@@ -239,19 +240,24 @@ const networkReason = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error);
 };
 
+/**
+ * Waits, and stops waiting if the run is cancelled.
+ *
+ * The listener is removed whichever way the wait ends. A caller's signal outlives this
+ * command, and one listener left behind per retry per file is a leak with a warning
+ * attached.
+ */
 const delay = (ms: number, signal?: AbortSignal): Promise<void> =>
   ms <= 0
     ? Promise.resolve()
     : new Promise((resolve) => {
-        const timer = setTimeout(resolve, ms);
-        signal?.addEventListener(
-          'abort',
-          () => {
-            clearTimeout(timer);
-            resolve();
-          },
-          { once: true },
-        );
+        const done = (): void => {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        signal?.addEventListener('abort', done, { once: true });
       });
 
 interface DownloadContext {
@@ -268,6 +274,51 @@ interface TransferResult {
 }
 
 /** One request's worth of bytes, appended to the part file. Throws on anything unexpected. */
+/** Beyond this many hops a redirect is a loop, not a location. */
+const MOST_REDIRECTS = 5;
+
+/**
+ * One request, following redirects by hand.
+ *
+ * `fetch` follows them itself and applies no rule about the scheme it lands on, so a
+ * publisher's HTTPS URL redirecting to a plain-HTTP storage host would pull 12.9 GB in
+ * clear while the README said otherwise. Each hop is put through `checkUrl` before it is
+ * followed, so the rule the manifest's own URL is held to holds all the way down.
+ */
+const request = async (
+  context: DownloadContext,
+  file: ManifestFile,
+  headers: Record<string, string>,
+): Promise<Response> => {
+  let current = file.url;
+  for (let hop = 0; hop <= MOST_REDIRECTS; hop += 1) {
+    const response = await context.fetchImpl(current, {
+      headers,
+      redirect: 'manual',
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+    });
+    if (response.status < 300 || response.status >= 400) return response;
+
+    const location = response.headers.get('location');
+    await response.body?.cancel();
+    if (location === null) {
+      throw new Error(
+        `${withoutSecrets(current)} answered ${response.status} with no location to follow`,
+      );
+    }
+    const next = new URL(location, current).toString();
+    const problem = checkUrl(next);
+    if (problem !== null) {
+      throw new Error(`${withoutSecrets(current)} redirects to a location that ${problem}`);
+    }
+    context.log(`  ${file.path}  following a redirect to ${withoutSecrets(next)}`);
+    current = next;
+  }
+  throw new Error(
+    `${withoutSecrets(file.url)} redirects more than ${MOST_REDIRECTS} times without serving anything`,
+  );
+};
+
 const transferOnce = async (
   context: DownloadContext,
   file: ManifestFile,
@@ -276,10 +327,7 @@ const transferOnce = async (
   onBytes: (received: number) => void,
 ): Promise<void> => {
   const headers: Record<string, string> = already > 0 ? { Range: `bytes=${already}-` } : {};
-  const response = await context.fetchImpl(file.url, {
-    headers,
-    ...(context.signal === undefined ? {} : { signal: context.signal }),
-  });
+  const response = await request(context, file, headers);
 
   if (!response.ok) {
     await response.body?.cancel();
@@ -369,18 +417,24 @@ const download = async (
   let interruptions = 0;
   const report = progressReporter(file, context.log);
   let lastError: unknown;
+  let attempted = 0;
 
   for (let attempt = 1; attempt <= context.attempts; attempt += 1) {
-    const already = (await fileSizeOf(partPath)) ?? 0;
-    if (already > file.sizeBytes) {
-      // A part file longer than the manifest's size belongs to something else.
+    attempted = attempt;
+    const onDisk = (await fileSizeOf(partPath)) ?? 0;
+    let already = onDisk;
+    if (onDisk > file.sizeBytes) {
+      // A part file longer than the manifest's size belongs to something else: it goes, and
+      // the transfer starts from the first byte rather than asking the origin to resume
+      // past the end of a file that is no longer there.
       await rm(partPath, { force: true });
-    } else if (already === file.sizeBytes && already > 0) {
+      already = 0;
+    } else if (onDisk === file.sizeBytes && onDisk > 0) {
       await rename(partPath, targetPath);
       return { resumedFromBytes, interruptions };
     }
 
-    const from = Math.min(already, file.sizeBytes);
+    const from = already;
     if (from > 0) {
       if (resumedFromBytes === 0) resumedFromBytes = from;
       context.log(
@@ -399,7 +453,9 @@ const download = async (
     } catch (error) {
       lastError = error;
       interruptions += 1;
-      if (context.signal?.aborted === true) break;
+      if (context.signal?.aborted === true) {
+        throw new Error(`the transfer of ${file.path} was cancelled`);
+      }
       if (attempt < context.attempts) {
         context.log(
           `  ${file.path}  the transfer stopped (${networkReason(error)}); picking it up again`,
@@ -410,7 +466,7 @@ const download = async (
   }
 
   throw new Error(
-    `could not fetch ${withoutSecrets(file.url)} after ${context.attempts} attempt${context.attempts === 1 ? '' : 's'}: ${networkReason(lastError)}`,
+    `could not fetch ${withoutSecrets(file.url)} after ${attempted} attempt${attempted === 1 ? '' : 's'}: ${networkReason(lastError)}`,
   );
 };
 
@@ -532,7 +588,23 @@ interface ExtractionContext {
   readonly manifest: DatasetManifest;
 }
 
-const extractedReceiptPath = (targetPath: string): string => `${targetPath}.extracted.json`;
+/** Something went wrong unpacking one named archive. */
+class UnpackError extends Error {
+  readonly filePath: string;
+
+  constructor(filePath: string, message: string) {
+    super(message);
+    this.name = 'UnpackError';
+    this.filePath = filePath;
+  }
+}
+
+/** One archive of the manifest, with the bytes that verified. */
+interface ArchiveToUnpack {
+  readonly file: ManifestFile;
+  readonly targetPath: string;
+  readonly checksumValue: string;
+}
 
 /** An archive of twenty thousand images takes a while; this says how far along it is. */
 const SILENT_BELOW_ENTRIES = 200;
@@ -553,76 +625,144 @@ const unpackingProgress = (
   };
 };
 
-const unpack = async (
+/** What the receipt beside an unpacked archive records. */
+interface ExtractionReceipt {
+  readonly checksum: string;
+  readonly root: ArchiveRoot;
+  readonly entries: number;
+}
+
+const asExtractionReceipt = (value: unknown): ExtractionReceipt | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  const receipt = value as Partial<ExtractionReceipt>;
+  if (typeof receipt.checksum !== 'string' || typeof receipt.entries !== 'number') return null;
+  if (typeof receipt.root !== 'object' || receipt.root === null) return null;
+  return receipt as ExtractionReceipt;
+};
+
+/**
+ * Puts a finished tree where the dataset lives, in one move.
+ *
+ * The tree it replaces goes aside first and is removed afterwards, so `dataset/` is never
+ * half of one unpacking and half of another — and if the move fails, what was there is put
+ * back. Merging the new tree into the old one directory at a time was the alternative, and
+ * it both fails outright when a directory already exists and leaves a mixture behind when
+ * it fails part-way.
+ */
+const swapIntoPlace = async (staging: string, extracted: string): Promise<void> => {
+  const superseded = `${extracted}.superseded`;
+  await rm(superseded, { recursive: true, force: true });
+  await mkdir(dirname(extracted), { recursive: true });
+
+  const replacing = await directoryExists(extracted);
+  if (replacing) await rename(extracted, superseded);
+  try {
+    await rename(staging, extracted);
+  } catch (error) {
+    if (replacing) await rename(superseded, extracted);
+    throw error;
+  }
+  await rm(superseded, { recursive: true, force: true });
+};
+
+const layoutDifference = (comparison: LayoutComparison): string =>
+  [
+    `the archive's layout is not the one the manifest declares, so nothing was unpacked:`,
+    ...comparison.differences.map((difference) => `      - ${difference}`),
+    `      the entries sit ${describeResolvedRoot(comparison.root)}; correct \`layout\` in the manifest and run this again`,
+  ].join('\n');
+
+/**
+ * Unpacks every archive the manifest lists into the cache.
+ *
+ * All of them together, into one staging tree that replaces `dataset/` in a single move:
+ * the dataset is one tree however many archives it arrives in, so it is replaced as one.
+ * An archive already unpacked is re-unpacked when any of its siblings is not, because the
+ * tree they share is being rebuilt — with the one archive this manifest declares, that
+ * never arises, and with more it is the only answer that cannot leave a mixture behind.
+ *
+ * Nothing is written until every archive's directory has been read and compared with the
+ * declared layout, so an archive that contradicts the manifest leaves the cache untouched.
+ */
+const unpackAll = async (
   context: ExtractionContext,
-  file: ManifestFile,
-  targetPath: string,
-  checksumValue: string,
-): Promise<ExtractionOutcome> => {
-  const receiptPath = extractedReceiptPath(targetPath);
-  if ((await fileSizeOf(receiptPath)) !== null && (await directoryExists(context.extracted))) {
-    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as {
-      checksum?: string;
-      root?: ArchiveRoot;
-      entries?: number;
-    };
-    if (receipt.checksum === checksumValue && receipt.root !== undefined) {
+  archives: readonly ArchiveToUnpack[],
+): Promise<readonly ExtractionOutcome[]> => {
+  const receipts = await Promise.all(
+    archives.map(async ({ targetPath }) =>
+      asExtractionReceipt(await readReceiptFile(targetPath, 'extracted')),
+    ),
+  );
+  const upToDate =
+    (await directoryExists(context.extracted)) &&
+    receipts.every((receipt, position) => receipt?.checksum === archives[position]?.checksumValue);
+
+  if (upToDate) {
+    return archives.map(({ file }, position) => {
+      const receipt = receipts[position] as ExtractionReceipt;
       context.log(`  ${file.path}  already unpacked into ${context.extracted}`);
       return {
         path: file.path,
         state: 'already-unpacked',
         root: receipt.root,
-        entries: receipt.entries ?? 0,
+        entries: receipt.entries,
       };
+    });
+  }
+
+  const read = [];
+  for (const archive of archives) {
+    try {
+      const entries = await readArchiveDirectory(archive.targetPath);
+      const comparison = compareArchiveLayout(context.manifest.layout, entries);
+      if (comparison.differences.length > 0) {
+        throw new Error(layoutDifference(comparison));
+      }
+      context.log(
+        `  ${archive.file.path}  ${entries.length} entries, ${describeResolvedRoot(comparison.root)}`,
+      );
+      read.push({ archive, entries, root: comparison.root });
+    } catch (error) {
+      throw new UnpackError(archive.file.path, (error as Error).message);
     }
   }
-
-  const entries: readonly ArchiveEntry[] = await readArchiveDirectory(targetPath);
-  const comparison = compareArchiveLayout(context.manifest.layout, entries);
-  if (comparison.differences.length > 0) {
-    throw new Error(
-      [
-        `the archive's layout is not the one the manifest declares, so nothing was unpacked:`,
-        ...comparison.differences.map((difference) => `      - ${difference}`),
-        `      the entries sit ${describeResolvedRoot(comparison.root)}; correct \`layout\` in the manifest and run this again`,
-      ].join('\n'),
-    );
-  }
-
-  context.log(
-    `  ${file.path}  ${entries.length} entries, ${describeResolvedRoot(comparison.root)}`,
-  );
 
   await rm(context.staging, { recursive: true, force: true });
   try {
-    await extractArchive({
-      archivePath: targetPath,
-      entries,
-      into: context.staging,
-      ...(comparison.root.state === 'directory' ? { stripPrefix: comparison.root.path } : {}),
-      onEntry: unpackingProgress(file, entries.length, context.log),
-    });
-    await mkdir(dirname(context.extracted), { recursive: true });
-    if (await directoryExists(context.extracted)) {
-      for (const child of await readdir(context.staging)) {
-        await rename(join(context.staging, child), join(context.extracted, child));
+    for (const { archive, entries, root } of read) {
+      try {
+        await extractArchive({
+          archivePath: archive.targetPath,
+          entries,
+          into: context.staging,
+          ...(root.state === 'directory' ? { stripPrefix: root.path } : {}),
+          onEntry: unpackingProgress(archive.file, entries.length, context.log),
+        });
+      } catch (error) {
+        throw new UnpackError(archive.file.path, (error as Error).message);
       }
-      await rm(context.staging, { recursive: true, force: true });
-    } else {
-      await rename(context.staging, context.extracted);
     }
-  } catch (error) {
+    await swapIntoPlace(context.staging, context.extracted);
+  } finally {
     await rm(context.staging, { recursive: true, force: true });
-    throw error;
   }
 
-  await writeFile(
-    receiptPath,
-    `${JSON.stringify({ checksum: checksumValue, root: comparison.root, entries: entries.length }, null, 2)}\n`,
-    'utf8',
-  );
-  context.log(`  ${file.path}  unpacked into ${context.extracted}`);
-  return { path: file.path, state: 'unpacked', root: comparison.root, entries: entries.length };
+  const outcomes: ExtractionOutcome[] = [];
+  for (const { archive, entries, root } of read) {
+    await writeReceipt(
+      archive.targetPath,
+      { checksum: archive.checksumValue, root, entries: entries.length },
+      'extracted',
+    );
+    context.log(`  ${archive.file.path}  unpacked into ${context.extracted}`);
+    outcomes.push({
+      path: archive.file.path,
+      state: 'unpacked',
+      root,
+      entries: entries.length,
+    });
+  }
+  return outcomes;
 };
 
 const licencePreamble = (manifest: DatasetManifest, cacheRoot: string): readonly string[] => {
@@ -694,6 +834,10 @@ export const fetchDataset = async (
   const obtained: ObtainedFile[] = [];
   const failures: FetchFailure[] = [];
   for (const file of manifest.files) {
+    if (options.signal?.aborted === true) {
+      failures.push({ path: file.path, reason: 'the run was cancelled before this file' });
+      continue;
+    }
     try {
       obtained.push(await obtainFile(context, file, paths.download(file.path)));
     } catch (error) {
@@ -748,41 +892,36 @@ export const fetchDataset = async (
     }
   }
 
-  const archives = manifest.files.filter((file) => file.archive !== null);
-  if (archives.length > 0) log('Unpacking:');
-  const extractions: ExtractionOutcome[] = [];
-  const extractionContext: ExtractionContext = {
-    log,
-    extracted: paths.extracted,
-    staging,
-    manifest,
-  };
+  const archives: ArchiveToUnpack[] = [];
   for (const [index, file] of manifest.files.entries()) {
-    if (file.archive === null) continue;
     const entry = obtained[index];
-    if (entry === undefined) continue;
+    if (file.archive === null || entry === undefined) continue;
+    archives.push({
+      file,
+      targetPath: paths.download(file.path),
+      checksumValue: entry.outcome.checksum.value,
+    });
+  }
+
+  let extractions: readonly ExtractionOutcome[] = [];
+  if (archives.length > 0) {
+    log('Unpacking:');
     try {
-      extractions.push(
-        await unpack(
-          extractionContext,
-          file,
-          paths.download(file.path),
-          entry.outcome.checksum.value,
-        ),
+      extractions = await unpackAll(
+        { log, extracted: paths.extracted, staging, manifest },
+        archives,
       );
     } catch (error) {
-      failures.push({
-        path: file.path,
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      const failure =
+        error instanceof UnpackError
+          ? { path: error.filePath, reason: error.message }
+          : { path: manifest.dataset.id, reason: (error as Error).message };
+      throw new DatasetFetchError(
+        manifest.dataset.name,
+        [failure],
+        `${paths.extracted} is unchanged: the archives are unpacked into ${staging} and moved into place in one step, once the tree is whole.`,
+      );
     }
-  }
-  if (failures.length > 0) {
-    throw new DatasetFetchError(
-      manifest.dataset.name,
-      failures,
-      `${paths.extracted} is unchanged: an archive is unpacked into ${staging} and moved into place only once it is whole.`,
-    );
   }
 
   const downloaded = obtained.filter(({ outcome }) => outcome.state === 'downloaded');

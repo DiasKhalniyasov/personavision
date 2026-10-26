@@ -29,6 +29,13 @@ export interface ZipEntryInput {
 export interface MakeZipOptions {
   /** Emit the zip64 end-of-directory record and 64-bit per-entry fields. */
   readonly zip64?: boolean;
+  /**
+   * Write all three 64-bit values into each entry's extra field but mark only the header
+   * position as needing them — the shape a writer produces for a member past the
+   * four-gigabyte mark whose own sizes are small. A reader that assumes the field holds
+   * exactly what is marked reads one value out of step. Implies `zip64`.
+   */
+  readonly zip64OffsetOnly?: boolean;
 }
 
 const CRC_TABLE = ((): Uint32Array => {
@@ -74,8 +81,11 @@ const zip64Extra = (values: readonly number[]): Buffer => {
 
 export const makeZip = (
   entries: readonly ZipEntryInput[],
-  { zip64 = false }: MakeZipOptions = {},
+  { zip64 = false, zip64OffsetOnly = false }: MakeZipOptions = {},
 ): Buffer => {
+  const wide = zip64 || zip64OffsetOnly;
+  /** Whether a field's 32-bit slot is left at its marker rather than carrying the value. */
+  const marked = { size: zip64 && !zip64OffsetOnly, offset: wide };
   const parts: Buffer[] = [];
   const placed: Placed[] = [];
   let offset = 0;
@@ -86,16 +96,17 @@ export const makeZip = (
     const stored = input.deflate === true ? deflateRawSync(data) : data;
     const method = input.deflate === true ? 8 : 0;
     const name = Buffer.from(directory ? `${input.path}/` : input.path, 'utf8');
-    const extra = zip64 && !directory ? zip64Extra([data.length, stored.length]) : Buffer.alloc(0);
+    const extra =
+      marked.size && !directory ? zip64Extra([data.length, stored.length]) : Buffer.alloc(0);
 
     const header = Buffer.alloc(30);
     header.writeUInt32LE(0x04034b50, 0);
-    header.writeUInt16LE(zip64 ? 45 : 20, 4);
+    header.writeUInt16LE(wide ? 45 : 20, 4);
     header.writeUInt16LE(UTF8_NAME_FLAG, 6);
     header.writeUInt16LE(method, 8);
     header.writeUInt32LE(crc32(data), 14);
-    header.writeUInt32LE(zip64 && !directory ? NEEDS_ZIP64 : stored.length, 18);
-    header.writeUInt32LE(zip64 && !directory ? NEEDS_ZIP64 : data.length, 22);
+    header.writeUInt32LE(marked.size && !directory ? NEEDS_ZIP64 : stored.length, 18);
+    header.writeUInt32LE(marked.size && !directory ? NEEDS_ZIP64 : data.length, 22);
     header.writeUInt16LE(name.length, 26);
     header.writeUInt16LE(extra.length, 28);
 
@@ -115,28 +126,30 @@ export const makeZip = (
   const directoryStart = offset;
   for (const entry of placed) {
     const name = Buffer.from(entry.name, 'utf8');
-    const extra = zip64
+    // All three values whenever the archive is zip64 at all, which is what a writer that
+    // always pairs the sizes produces; `zip64OffsetOnly` then marks the offset alone.
+    const extra = wide
       ? zip64Extra([entry.size, entry.stored.length, entry.offset])
       : Buffer.alloc(0);
     const header = Buffer.alloc(46);
     header.writeUInt32LE(0x02014b50, 0);
     header.writeUInt16LE(entry.input.versionMadeBy ?? (3 << 8) | 20, 4);
-    header.writeUInt16LE(zip64 ? 45 : 20, 6);
+    header.writeUInt16LE(wide ? 45 : 20, 6);
     header.writeUInt16LE(UTF8_NAME_FLAG, 8);
     header.writeUInt16LE(entry.method, 10);
     header.writeUInt32LE(entry.crc, 16);
-    header.writeUInt32LE(zip64 ? NEEDS_ZIP64 : entry.stored.length, 20);
-    header.writeUInt32LE(zip64 ? NEEDS_ZIP64 : entry.size, 24);
+    header.writeUInt32LE(marked.size ? NEEDS_ZIP64 : entry.stored.length, 20);
+    header.writeUInt32LE(marked.size ? NEEDS_ZIP64 : entry.size, 24);
     header.writeUInt16LE(name.length, 28);
     header.writeUInt16LE(extra.length, 30);
     header.writeUInt32LE(entry.input.externalAttributes ?? 0, 38);
-    header.writeUInt32LE(zip64 ? NEEDS_ZIP64 : entry.offset, 42);
+    header.writeUInt32LE(marked.offset ? NEEDS_ZIP64 : entry.offset, 42);
     parts.push(header, name, extra);
     offset += header.length + name.length + extra.length;
   }
   const directorySize = offset - directoryStart;
 
-  if (zip64) {
+  if (wide) {
     const record = Buffer.alloc(56);
     record.writeUInt32LE(0x06064b50, 0);
     record.writeBigUInt64LE(BigInt(44), 4);
@@ -156,10 +169,10 @@ export const makeZip = (
 
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(zip64 ? 0xffff : placed.length, 8);
-  end.writeUInt16LE(zip64 ? 0xffff : placed.length, 10);
-  end.writeUInt32LE(zip64 ? NEEDS_ZIP64 : directorySize, 12);
-  end.writeUInt32LE(zip64 ? NEEDS_ZIP64 : directoryStart, 16);
+  end.writeUInt16LE(wide ? 0xffff : placed.length, 8);
+  end.writeUInt16LE(wide ? 0xffff : placed.length, 10);
+  end.writeUInt32LE(wide ? NEEDS_ZIP64 : directorySize, 12);
+  end.writeUInt32LE(wide ? NEEDS_ZIP64 : directoryStart, 16);
   parts.push(end);
 
   return Buffer.concat(parts);

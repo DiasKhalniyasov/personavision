@@ -39,6 +39,8 @@ export interface StubOriginOptions {
   readonly ignoreRanges?: boolean;
   /** Answer every request with this status and no body. */
   readonly refuseWith?: number;
+  /** Answer a request for one path with a redirect to this location. */
+  readonly redirects?: Readonly<Record<string, string>>;
 }
 
 export interface StubOrigin {
@@ -80,6 +82,13 @@ export const startStubOrigin = async (options: StubOriginOptions): Promise<StubO
 
     if (options.refuseWith !== undefined) {
       response.writeHead(options.refuseWith);
+      response.end();
+      return;
+    }
+
+    const redirect = options.redirects?.[path];
+    if (redirect !== undefined) {
+      response.writeHead(302, { location: redirect });
       response.end();
       return;
     }

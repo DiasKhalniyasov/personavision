@@ -21,7 +21,7 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ArchiveEntry } from './archive.js';
 import type {
@@ -108,33 +108,63 @@ export interface VerificationReceipt {
   readonly verifiedOn: string;
 }
 
-const RECEIPT_SUFFIX = '.verified.json';
+/**
+ * What a receipt records. Both sit beside the file in `downloads/`, never in the unpacked
+ * tree, and both are cache state: deleting one costs the work again, never the data.
+ */
+export type ReceiptKind =
+  /** The file's bytes were hashed and matched. */
+  | 'verified'
+  /** The archive was unpacked, and from which bytes. */
+  | 'extracted';
 
-/** Where a file's receipt sits: beside it, in the downloads directory, never in the tree. */
-export const receiptPath = (filePath: string): string => `${filePath}${RECEIPT_SUFFIX}`;
+export const RECEIPT_KINDS: readonly ReceiptKind[] = ['verified', 'extracted'];
 
-/** Writes the receipt for a file that has just verified. */
+/** Where a file's receipt sits: beside it, in the downloads directory. */
+export const receiptPath = (filePath: string, kind: ReceiptKind = 'verified'): string =>
+  `${filePath}.${kind}.json`;
+
+/** Writes a receipt beside the file it is about. */
 export const writeReceipt = async (
   filePath: string,
-  receipt: VerificationReceipt,
+  receipt: unknown,
+  kind: ReceiptKind = 'verified',
 ): Promise<void> => {
-  await writeFile(receiptPath(filePath), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+  await writeFile(receiptPath(filePath, kind), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
 };
 
 /**
- * The receipt beside a file, or `null` when there is none, it is unreadable, or the file has
- * changed since it was written.
+ * A receipt's contents, or `null` when there is no readable one.
  *
- * Deliberately forgiving about *why* it cannot be used: every reason leads to the same
- * place, which is hashing the file again.
+ * Deliberately forgiving about *why* it cannot be read — absent, truncated by a process
+ * killed mid-write, not JSON at all — because every reason leads to the same place, which
+ * is doing the work again. A receipt that throws would make a half-written file a
+ * permanent failure of a command whose whole job is to be re-runnable.
  */
-export const readReceipt = async (filePath: string): Promise<VerificationReceipt | null> => {
-  let parsed: unknown;
+export const readReceiptFile = async (
+  filePath: string,
+  kind: ReceiptKind = 'verified',
+): Promise<unknown> => {
   try {
-    parsed = JSON.parse(await readFile(receiptPath(filePath), 'utf8'));
+    return JSON.parse(await readFile(receiptPath(filePath, kind), 'utf8')) as unknown;
   } catch {
     return null;
   }
+};
+
+/** Every receipt beside a file, gone — for a file that is being moved out of the way. */
+export const removeReceipts = async (filePath: string): Promise<void> => {
+  for (const kind of RECEIPT_KINDS) {
+    await rm(receiptPath(filePath, kind), { force: true });
+  }
+};
+
+/**
+ * The verification receipt beside a file, or `null` when there is none, it cannot be read,
+ * or the file has changed since it was written.
+ */
+export const readReceipt = async (filePath: string): Promise<VerificationReceipt | null> => {
+  const parsed = await readReceiptFile(filePath);
   if (typeof parsed !== 'object' || parsed === null) return null;
   const receipt = parsed as Partial<VerificationReceipt>;
   if (
@@ -157,11 +187,12 @@ export const readReceipt = async (filePath: string): Promise<VerificationReceipt
 };
 
 /**
- * Moves a file that failed its checksum out of the way.
+ * Moves a file that failed its checksum out of the way, and its receipts with it.
  *
  * Kept rather than deleted — a corrupt 12.9 GB download is evidence, and a person may want
  * to look at it — but moved, so that the next run downloads afresh instead of finding
- * something that merely has the right name. The returned path is named in the failure.
+ * something that merely has the right name. The receipts go because they describe bytes
+ * that are no longer there: a receipt outliving its file is a claim about nothing.
  */
 export const quarantineFile = async (
   filePath: string,
@@ -173,6 +204,7 @@ export const quarantineFile = async (
   const stamp = when.toISOString().replace(/[:.]/g, '-');
   const destination = join(quarantineDirectory, `${fileName.replaceAll('/', '-')}.${stamp}`);
   await rename(filePath, destination);
+  await removeReceipts(filePath);
   return destination;
 };
 
@@ -225,8 +257,9 @@ export const compareArchiveLayout = (
 ): LayoutComparison => {
   const root = resolveRoot(entries);
   const prefix = root.state === 'directory' ? `${root.path}/` : '';
+  // The root entry itself does not start with `<root>/`, so it is already out.
   const inside = entries
-    .filter((entry) => entry.path.startsWith(prefix) && entry.path !== prefix.slice(0, -1))
+    .filter((entry) => entry.path.startsWith(prefix))
     .map((entry) => ({ ...entry, path: entry.path.slice(prefix.length) }));
 
   const differences: string[] = [];
@@ -436,7 +469,7 @@ export const recordChecksum = async ({
       after: checksum,
       diff,
       written: false,
-      notWrittenBecause: `${manifestPath} is not in this repository's formatting, and rewriting it would bury this change in a reformatted file — run \`pnpm format\` and try again, or apply the change below by hand`,
+      notWrittenBecause: `${manifestPath} is not formatted the way this tool prints it, and rewriting it would bury this change in a reformatted file — apply the change below by hand (\`pnpm format\` first may reconcile the two)`,
     };
   }
 
