@@ -9,12 +9,13 @@
  * name comes from `@personavision/contract`, which is this package's only dependency.
  *
  * The whole agreed surface is declared here, including the functions that are not built
- * yet (`verdict`, `evaluateAgainstPlantedDefects`), whose bodies throw and name the ticket
- * that fills them. That is deliberate scaffolding, not an oversight: #27 and #29 each
- * replace one body and neither has to edit this file. `findings` was one of them until
- * #28 built it, and `findingRuleIdOf` is that ticket's one addition to this surface —
- * `findings.json` carries no field for the rule behind a finding, and #29 matches planted
- * defects by rule, so the rule is read back off the finding's id through that function.
+ * yet (`verdict`), whose bodies throw and name the ticket that fills them. That is
+ * deliberate scaffolding, not an oversight: #27 replaces one body and does not have to
+ * edit this file. `findings` was one of them until #28 built it, and
+ * `evaluateAgainstPlantedDefects` until #29. `findingRuleIdOf` is #28's one addition to
+ * this surface — `findings.json` carries no field for the rule behind a finding, and the
+ * planted-defect evaluation matches by rule, so the rule is read back off the finding's
+ * id through that function.
  */
 
 export { FINDING_RULE_IDS, scoringConfig } from './config.js';

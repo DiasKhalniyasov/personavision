@@ -1,7 +1,6 @@
 import { runSchema, sessionSchema, type Session } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import {
-  evaluateAgainstPlantedDefects,
   FINDING_RULE_IDS,
   score,
   scoringConfig,
@@ -663,14 +662,11 @@ describe("section 5's acceptance table, over the committed fixtures", () => {
 });
 
 describe('the functions this package has agreed to export but has not built', () => {
-  // The findings generator was one of these until #28 built it; `test/findings.test.ts`
-  // now holds it to the contract instead of to an error message.
+  // The findings generator was one of these until #28 built it, and the planted-defect
+  // evaluation until #29; `test/findings.test.ts` and `test/evaluate.test.ts` now hold
+  // those two to the contract instead of to an error message.
 
   it('names the ticket that fills the verdict', () => {
     expect(() => verdict([], [], {} as never)).toThrow(/#27/);
-  });
-
-  it('names the ticket that fills the planted-defect evaluation', () => {
-    expect(() => evaluateAgainstPlantedDefects([], [])).toThrow(/#29/);
   });
 });
