@@ -117,13 +117,16 @@ interface StepPage {
   readonly decoy: Landmark;
 }
 
+/** The cart page, named on its own because the cases about matching itself are run on it. */
+const CART: StepPage = {
+  path: '/cart.html',
+  step: 'cart',
+  primary: { id: 'cart-checkout', bbox: { x: 16, y: 784, width: 358, height: 44 } },
+  decoy: { id: 'cart-promo-apply', bbox: { x: 16, y: 862, width: 358, height: 28 } },
+};
+
 const STEP_PAGES: readonly StepPage[] = [
-  {
-    path: '/cart.html',
-    step: 'cart',
-    primary: { id: 'cart-checkout', bbox: { x: 16, y: 784, width: 358, height: 44 } },
-    decoy: { id: 'cart-promo-apply', bbox: { x: 16, y: 862, width: 358, height: 28 } },
-  },
+  CART,
   {
     path: '/payment.html',
     step: 'payment',
@@ -146,8 +149,6 @@ const STEP_PAGES: readonly StepPage[] = [
     decoy: { id: 'confirmation-order-number', bbox: { x: 28, y: 300, width: 334, height: 24 } },
   },
 ];
-
-const CART = STEP_PAGES[0] as StepPage;
 
 /** A candidate element: what an extractor hands resolution, with the box under test. */
 const candidate = (

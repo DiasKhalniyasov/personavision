@@ -25,10 +25,11 @@
  *
  * Two mechanics, stated once:
  *
- * - A step's selectors are **CSS**, resolved with `document.querySelector` inside the page.
- *   The box comes back from `getBoundingClientRect` plus the scroll offsets, which is the
- *   page space every box in a `Capture` is expressed in, so a scrolled page resolves the same
- *   control as an unscrolled one.
+ * - A step's selectors are **CSS**, resolved with `document.querySelector` in the page's main
+ *   frame — the frame a task declares its steps against, and the one Playwright's own
+ *   locators search by default. The box comes back from `getBoundingClientRect` plus the
+ *   scroll offsets, which is the page space every box in a `Capture` is expressed in, so a
+ *   scrolled page resolves the same control as an unscrolled one.
  * - A candidate matches when all four edges of its box are within a pixel of the resolved
  *   node's, and the closest such candidate is the one marked. The tolerance is there because
  *   an extractor may round what the page reported; the ties that remain are two candidates
