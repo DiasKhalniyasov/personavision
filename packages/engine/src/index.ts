@@ -35,6 +35,7 @@ export type {
   EngineConfig,
   EngineConfigOverrides,
   GoalVerbRoleWeights,
+  PredictionConfig,
   ResolvedEngineConfig,
   RolePriors,
   SegmentationConfig,
@@ -49,6 +50,19 @@ export {
   rolePriorFor,
 } from './persona.js';
 export type { PersonaSamplingParams, PersonaTraits } from './persona.js';
+
+export { predict } from './predict.js';
+export type {
+  Display,
+  ImageSize,
+  PredictedFixation,
+  PredictedScanpath,
+  Prediction,
+  PredictOptions,
+  PredictorImage,
+  SaliencyMap,
+  SaliencyNormalisation,
+} from './predict.js';
 
 export { relevanceByArea } from './relevance.js';
 export type { RelevanceArea, RelevanceHints, RelevanceInput } from './relevance.js';

@@ -43,6 +43,7 @@ unannounced.
 | `inhibitionOfReturn`   | The penalty, its decay, the immediate-repeat allowance, and the deliberate-return condition            |
 | `fixationsPerScreen`   | How many fixations a screen gets, and the bounds                                                       |
 | `persona`              | The persona-trait table's numbers (see below)                                                          |
+| `prediction`           | What `predict` assumes about a bare screenshot, and the map's resolution, kernel and normalisation     |
 
 `defaultEngineConfig` holds the **uncalibrated** starting values: plausible, taken from
 published ranges where one exists, and not claimed to be fitted.
@@ -260,6 +261,93 @@ nothing decides anything by iterating a map's keys, and the areas are sorted by 
 any of it, so the order a caller hands them over in cannot change a scanpath. `tests/sample-fixations.test.ts` holds the same
 input to the same bytes in this process and in a second one, each weight to its documented
 direction, the sequence properties above, and the empty screen and the one-area screen.
+
+## Predicting from a bare screenshot
+
+`src/predict.ts` is the path the calibration step scores the engine through. UEyes gives
+images and human gaze, not web pages — no DOM, no accessibility tree, no goal and no
+persona — so this path takes pixels alone and still answers a saliency map and a scanpath.
+
+```ts
+predict(image, seed, options?) -> { saliencyMap, scanpath, display }
+```
+
+It is not a second engine. The offline segmenter partitions the image with nothing
+explained by elements, because there are no elements; the salience terms score those
+regions from the pixels; the sampler draws a scanpath over them with the goal empty, so
+relevance is flat at its floor and the result rests on salience, the position priors inside
+it and the sequence dynamics; and the fixations are spread into a continuous map.
+
+- `image` is `{ bytes, size, display? }` — the screenshot's bytes as the caller read them,
+  its pixel size, and the display it was shown at when that is known. A **bare** image is
+  one with no display: the viewport is defaulted from the image's own dimensions at a scale
+  of 1, and the answer's `display` reports what was assumed, so a prediction is never
+  quietly made at a resolution the humans did not see. A given display is echoed unchanged;
+  a number that is not usable — zero, negative, `NaN` — is defaulted rather than carried.
+- `seed` makes a reported score reproducible: the same image and seed answer the same map
+  and the same scanpath, and a different seed answers a different scanpath, which is what
+  lets the fit repeat a run exactly.
+- `options.weights` layers over the engine defaults, so the fit varies the configuration
+  without a code change, and `options.segmenter` replaces the offline heuristic one, which
+  is the default. A replacement is handed a synthetic capture that names no screenshot file
+  — `predict` holds the pixels — so an implementation that wants the image brings its own
+  copy of it.
+
+**What a reviewer of a reported figure has to know.** `CC, NSS, KLD and AUC-Judd` are each
+sensitive to some of the following, so all four are stated rather than assumed, and every
+number is in `config.prediction` where calibration can fit it.
+
+| Convention      | What `predict` answers                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolution      | `round(imageWidth / cellPx)` × `round(imageHeight / cellPx)` cells, at least one of each: the image downscaled by `prediction.map.cellPx`, 20 on the defaults |
+| Coordinates     | Row-major image space: cell `(x, y)` is `values[y * width + x]`, cell `(0, 0)` is the image's top-left corner, `x` right and `y` down                         |
+| Kernel          | An isotropic 2-D Gaussian per fixation, standard deviation `kernelSigmaShare` of the map's longer side, truncated at `kernelRadiusSigmas`                     |
+| Fixation weight | The dwell raised to `dwellWeightExponent` — 1 is dwell-weighted, 0 counts fixations                                                                           |
+| Normalisation   | `sum-to-one`: the values sum to 1, finite and non-negative, so the map is a distribution over the image's cells                                               |
+
+The two sides of the resolution are rounded independently, so the map's aspect ratio agrees
+with the image's to within one cell, and the map carries the `imageSize` it describes —
+taken from the bytes as they decoded, not from a declared size that disagrees with them.
+Mass that the truncation or the image's edge drops is absorbed by the normalisation.
+`sum-to-one` is the rule the calibration package's own maps use, so a metric compares like
+with like and KLD — the one metric that is not invariant to a rescaling — converts on
+neither side.
+
+**An image with nothing in it is still an answer.** The segmenter honestly finds nothing on
+a flat field, which is the point of its background estimate. `predict` then partitions the
+image into a grid of `prediction.priorGridCellsAcross` cells across, with the rows following
+from the aspect ratio, and scores those with the same salience terms: their contrast is nil
+and their areas are equal, so the centre bias and the top bias decide, and the result is a
+valid map and a non-empty scanpath led by the position priors. `tests/predict.test.ts`
+states that as the expected behaviour and holds the direction of both priors, rather than
+treating an empty image as degenerate.
+
+A bare image has no persona, so every trait takes `prediction.neutralTrait` — the middle of
+each row of the trait table, not a claim about a population — and no goal, so
+`relevanceByArea` leaves every area at `relevance.floor`. Free viewing has no task to be
+relevant to, and inventing one would predict a scanpath nobody performed.
+
+**The seam with the calibration package.** `predict` satisfies that package's `Predictor`,
+`(image, seed) => Prediction`, and `src/predict.ts` declares `PredictorImage`,
+`Prediction`, `SaliencyMap`, `PredictedScanpath`, `PredictedFixation`, `Display`,
+`ImageSize` and `SaliencyNormalisation` **field for field** as it publishes them, exactly as
+`src/types.ts` declares the browser step's `Capture`. Neither package may import the other:
+this one depends on `@personavision/contract` and `sharp` only, `tests/config.test.ts`
+asserts that list, and the calibration package's own `test/dependency-direction.test.ts`
+asserts that no file here imports it. The fixation's fields are not restated at all — they
+come from `@personavision/contract`, which both packages already read. The assignment that
+holds the two sides together is in `tests/predict.test.ts`, checked by
+`tsc -p tsconfig.tests.json`, so a field renamed on either side fails the build there
+rather than at the point of wiring.
+
+**Purity and determinism.** The engine still reads no file and opens no socket: the bytes
+arrive from the caller, the one decode hands them to `sharp`, and the default segmenter is
+given the pixels that decode produced, so it opens nothing either. The scanpath is
+byte-identical on any machine, as the sampler's is. The map's cells are accumulated with
+`Math.exp`, which IEEE-754 does not pin the way it pins addition and square root, so a
+_different JavaScript engine_ could differ in a cell's last bits; within the Node range this
+repository supports they do not, and no metric of the calibration step is sensitive at that
+scale.
 
 ## The published input types
 
