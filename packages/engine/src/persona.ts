@@ -116,8 +116,8 @@ export const fixationDurationMedianMsFor = (
  * trait combination can ask for a screen with no fixations on it at all.
  *
  * `fixationCountScale` only: `screenPersistenceScale` is how long the agent keeps looking
- * at one screen *before moving on*, which the run loop spends on the decision to leave,
- * not on the count drawn here.
+ * at one screen *before moving on*, which the sampler spends — `screenFixationCount` in
+ * `src/sampling/sample-fixations.ts` composes the two rows — and not this row's to apply.
  */
 export const fixationCountFor = (
   traits: PersonaTraits,

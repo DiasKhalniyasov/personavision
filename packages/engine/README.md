@@ -104,8 +104,8 @@ its own raises it. Each row interpolates linearly between the configured value a
   `patience` twice and could cancel the row above it.
 - `fixationCountFor(traits, config)` — the fixations a screen gets, clamped to
   `fixationsPerScreen.min`/`max`, so no trait combination asks for an empty screen. It
-  applies `fixationCountScale` only; `screenPersistenceScale` is spent on the decision to
-  leave a screen, not on the count drawn here.
+  applies `fixationCountScale` only; `screenPersistenceScale` is the sampler's, which
+  composes the two rows in `screenFixationCount` — see the scanpath section below.
 - `rolePriorFor(role, traits, config)` — the role prior with familiarity applied. Only a
   conventional control (`CONVENTIONAL_CONTROL_ROLES`: which roles those are is structure,
   so it is code rather than configuration) is scaled; a paragraph's prior is the same for
@@ -187,6 +187,76 @@ clipped away (one that fills the screenshot) report no contrast rather than an i
 number, and stay inside the range. `tests/salience.test.ts` holds the range over every such
 area, reads one term at a time with the other weights zeroed, and fails on any numeric
 literal in the module that is not a definition.
+
+## The scanpath
+
+`src/sampling/sample-fixations.ts` is where the terms above become a sequence. It is the
+engine's centre, and the only module that recomputes a term as it goes.
+
+```ts
+sampleFixations({ aois, goal, persona, history, seed, weights }) -> { fixations, saccades }
+```
+
+A fixation's area is drawn from `P(area) ∝ exp(alpha·salience + beta·relevance +
+gamma·history)`, with the three weights read from the resolved configuration — a run's
+`engine.weights` over the defaults — so calibration changes behaviour without changing this
+module. The answer's `fixations` and `saccades` are the contract's own session shapes, typed
+from them: `index`, `screenIndex`, `tMs`, `durationMs`, `x`, `y`, `pageX`, `pageY` and
+`aoiId`, and `fromFixation`, `toFixation`, `amplitudePx` and `durationMs`. No field is this
+module's to invent, and an area the sampler never selected simply does not appear.
+
+- `aois` are the areas on this screen, as `buildAois` built them: an id, a box in page
+  space, and whatever words relevance reads. A `CaptureElement` satisfies the same type, so
+  the benchmark can sample a screen it never built areas for.
+- `salience` is the 0..1 value per area id that `salienceByArea` produced. It is an input
+  because the engine is pure and this module takes no image: an area the salience module did
+  not score contributes nothing through `alpha`, and omitting the map is how a screen whose
+  screenshot was never read is sampled honestly.
+- `history` is the fixations the agent has already made this session — `session.fixations`
+  as it stands, no adapter — and it is both what inhibition of return reads and where this
+  screen's `index` and clock continue from, so `index` is continuous across a session and
+  `tMs` strictly rises through it. Omit it for the first screen of a session.
+- `screenIndex` and `scrollY` are the screen's own: `scrollY` turns a page point into the
+  viewport point the session records beside it.
+- `relevanceHints` is model mode's optional per-area hint (#33); offline is the default.
+
+**How long a screen lasts.** `screenFixationCount(traits, config)` composes two rows of the
+persona-trait table: the count row through `fixationCountFor`, then `screenPersistenceScale`
+— how long the agent keeps looking before it is done with the screen, which on a screen with
+no clock of its own is measured in fixations — re-clamped to `fixationsPerScreen.min`/`max`.
+The run loop does not spend the persistence row again on its own decision to leave. Each
+duration is `drawFixationDurationMs`, and `dwellScale` scales a look at an area that already
+has a fixation behind it this session, which is where an area's dwell accumulates; the first
+look at an area is the duration draw unscaled, so the duration row and the dwell row are
+never counted on the same number.
+
+**Inhibition of return** is `src/sampling/history.ts`, beside the sampler because it is a
+property of the sequence rather than a static term. Two mechanisms, both parameterised under
+`inhibitionOfReturn`:
+
+- the **run cap**, `immediateRepeatAllowance`: an area that has just held that many
+  consecutive fixations is not a candidate for the next one while the screen offers another.
+  A cap rather than a steep penalty because "no area twice in a row beyond the allowance" is
+  a property of the output, and a penalty only makes a long run unlikely. Only the most
+  recent area is ever held, so a screen with two areas always has somewhere to look.
+- the **decaying penalty**, `penalty` and `decayPerFixation`: subtracted from the history
+  term of an area with a fixation behind it and worth half as much again with every further
+  fixation on the defaults, so the suppression wears off and a later return is possible.
+
+A **deliberate return** is the same magnitude with its sign turned around: it happens when
+the goal still points at the area (`deliberateReturnRelevance` against the relevance term)
+_and_ enough fixations have passed (`deliberateReturnAfterFixations`). In the output it is
+told from an immediate re-fixation by the distance between the two looks, which is why
+neither needs a field of its own. `gamma` scales the whole term, so raising it pushes a
+revisit further out; it does not change which areas the cap holds.
+
+**Determinism.** One `createSeededRandom`, threaded through every draw and consumed in a
+fixed order: per fixation the area (1 value), its duration (2), its landing point (4), then
+the gap to the next fixation (2). Nothing reaches for the platform's unseeded generator,
+nothing decides anything by iterating a map's keys, and nothing depends on the order the
+areas arrive in beyond the ids themselves. `tests/sample-fixations.test.ts` holds the same
+input to the same bytes in this process and in a second one, each weight to its documented
+direction, the sequence properties above, and the empty screen and the one-area screen.
 
 ## The published input types
 
