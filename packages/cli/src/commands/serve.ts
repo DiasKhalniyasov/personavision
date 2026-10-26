@@ -111,7 +111,15 @@ export const serveCommand = async ({
 
   let server: PlatformServer;
   try {
-    server = await startPlatformServer({ routes: platform.routes, runData, viewer, port });
+    server = await startPlatformServer({
+      // The guard is the platform's, in front of the routes, the run data and the app:
+      // signed out means `/signin` for a page and 401 for a data request (#101).
+      guard: platform.guard,
+      routes: platform.routes,
+      runData,
+      viewer,
+      port,
+    });
   } catch (error) {
     // The workspace was seeded before the port was bound, and it will not be seeded
     // again — so a start that cannot listen still has to hand over the password.

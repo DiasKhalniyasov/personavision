@@ -196,27 +196,46 @@ describe('personavision serve', () => {
     });
   });
 
-  describe('the routes the next tickets fill in', () => {
-    it('answers sign-in, sign-out and the session with 501 naming #101', async () => {
-      for (const [method, path] of [
-        ['POST', '/auth/signin'],
-        ['POST', '/auth/signout'],
-        ['GET', '/auth/session'],
-      ] as const) {
-        const response = await fetch(new URL(path, base), { method });
-        expect(response.status).toBe(501);
-        expect(await response.text()).toContain('#101');
-      }
+  describe('signing in to the seeded workspace', () => {
+    it('reads its run data with the cookie the printed credentials earn', async () => {
+      const signedIn = await fetch(new URL('/auth/signin', base), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: served.platform.seeded?.email,
+          password: served.platform.seeded?.password,
+        }),
+      });
+      expect(signedIn.status).toBe(200);
+      const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+      const response = await get(`/runs/${workspace.runId}/run.json`, cookie);
+      expect(response.status).toBe(200);
     });
 
+    it('sends a signed-out page request to /signin carrying where it was going', async () => {
+      const response = await fetch(new URL('/audiences', base), {
+        headers: { accept: 'text/html,application/xhtml+xml', 'sec-fetch-dest': 'document' },
+        redirect: 'manual',
+      });
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe(
+        `/signin?next=${encodeURIComponent('/audiences')}`,
+      );
+    });
+  });
+
+  describe('the routes the next tickets fill in', () => {
     it('answers the audience routes with 501 naming #102', async () => {
-      const saved = await fetch(new URL('/audiences', base), { method: 'POST' });
+      const saved = await fetch(new URL('/audiences', base), {
+        method: 'POST',
+        headers: { cookie: myCookie },
+      });
       expect(saved.status).toBe(501);
       expect(await saved.text()).toContain('#102');
 
       const read = await fetch(new URL('/audiences/outdoor-gear-shoppers', base), {
         method: 'GET',
-        headers: { accept: 'application/json' },
+        headers: { accept: 'application/json', cookie: myCookie },
       });
       expect(read.status).toBe(501);
       expect(await read.text()).toContain('#102');
@@ -224,7 +243,11 @@ describe('personavision serve', () => {
 
     it('leaves /audiences to the app when a browser navigates to it', async () => {
       const response = await fetch(new URL('/audiences', base), {
-        headers: { accept: 'text/html,application/xhtml+xml', 'sec-fetch-dest': 'document' },
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          'sec-fetch-dest': 'document',
+          cookie: myCookie,
+        },
       });
       expect(response.status).toBe(200);
       expect(await response.text()).toContain('<html');

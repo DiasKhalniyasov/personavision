@@ -15,7 +15,7 @@ const pathnameOf = (request: IncomingMessage): string =>
  * signals are sent by every browser this product runs in; a programmatic `fetch` sends
  * neither, which is exactly the request a `jsonOnly` route is for.
  */
-const isNavigation = (request: IncomingMessage): boolean =>
+export const isNavigation = (request: IncomingMessage): boolean =>
   request.headers['sec-fetch-dest'] === 'document' ||
   (request.headers.accept ?? '').includes('text/html');
 
