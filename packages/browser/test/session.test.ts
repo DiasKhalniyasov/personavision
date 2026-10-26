@@ -22,7 +22,6 @@ import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SessionBudget,
-  act,
   capture,
   captureCacheKey,
   closeSession,
@@ -254,20 +253,6 @@ describeWithChromium('a browser session', () => {
       ).resolves.toBeNull();
     });
 
-    it('cannot act yet', async () => {
-      await expect(
-        act(
-          handle,
-          { type: 'click', selector: '#cart-checkout' },
-          {
-            variant: 'v',
-            device: DESKTOP,
-            task: TASK,
-            runDir: 'runs/x',
-          },
-        ),
-      ).rejects.toThrow('act: not implemented');
-    });
   });
 });
 

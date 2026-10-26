@@ -91,11 +91,10 @@ A seam that has not landed yet **exists, is exported and is typed**, and returns
 pass-through result instead of pretending to work — so a partly filled module still builds,
 tests and captures.
 
-| Seam                                     | Until its ticket lands        |
-| ---------------------------------------- | ----------------------------- |
-| `act`                                    | throws `act: not implemented` |
-| `withCache`                              | always a miss                 |
-| `createFixtureSource` `createLiveSource` | throw                         |
+| Seam                                     | Until its ticket lands |
+| ---------------------------------------- | ---------------------- |
+| `withCache`                              | always a miss          |
+| `createFixtureSource` `createLiveSource` | throw                  |
 
 A capture with only these in place is real geometry, a real content hash, a real step label,
 a written screenshot and the page's elements, one of them marked as the step's primary
@@ -139,6 +138,9 @@ serves it from disk, with no dependency of its own):
   one extracted element or fails as ours.
 - `test/screenshot.test.ts` — the written PNG, read back from the run directory: its path,
   that it covers the whole document at the device's pixels, and that one screen is one file.
+- `test/act.test.ts` — what a click, a scroll, a text entry and a back navigation leave
+  behind, read back out of the page: the URL it reports, where it is scrolled to, what the
+  field holds, and which failures come back typed rather than thrown.
 - `test/failures.test.ts` — the four automation failures, each driven out of a real browser:
   a selector the site has not, the never-answering `/slow` route, `/boom` and a vacated port,
   and `broken-frame.html`'s frame that never arrives. Each has to be produced **inside the cap

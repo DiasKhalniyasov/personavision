@@ -34,7 +34,7 @@ export { detectStep, resolvePrimaryAction, taskStep } from './steps.js';
 export type { DetectStep, ResolvePrimaryAction } from './steps.js';
 
 export { act } from './act.js';
-export type { Act } from './act.js';
+export type { Act, ActOptions } from './act.js';
 
 export { DEFAULT_SESSION_BUDGET, SessionBudget } from './budget.js';
 export type { BudgetIntegrity, SessionBudgetLimits, SessionIntegrity } from './budget.js';
