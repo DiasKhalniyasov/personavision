@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The shop ships as source: the pages are static files and `serve.ts` is run through
+    // tsx or Vitest, never from a `dist/`. So `build` here is a type-check, and the import
+    // of `../serve.ts` in the test is written with its real extension.
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["serve.ts", "test"]
+}
