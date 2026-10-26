@@ -329,6 +329,9 @@ describe('the screen as a whole', () => {
     const { container } = mountApp(replay('S-15'));
     await ready();
 
-    expect(container.querySelector('[data-shell="simulated-disclaimer"]')).not.toBeNull();
+    // The sentence itself is the shell's, written once for every results screen (#14).
+    const disclaimer = container.querySelector('[data-shell="simulated-disclaimer"]');
+    expect(disclaimer?.textContent).toContain('simulated');
+    expect(disclaimer?.textContent).toContain('Outdoor-gear shoppers');
   });
 });
