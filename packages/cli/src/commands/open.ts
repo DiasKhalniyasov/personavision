@@ -1,12 +1,10 @@
-import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
-import { join } from 'node:path';
 import { listRunDirs } from '@personavision/contract';
 import launch from 'open';
 import { CliError } from '../cli-error.js';
 import { readRunIndex } from '../run-data.js';
 import { startRunServer } from '../server.js';
 import type { RunServer } from '../server.js';
+import { ensureViewerBuilt } from '../viewer-build.js';
 
 /**
  * `personavision open` — the internal way to look at a run directory: the built viewer and
@@ -16,8 +14,6 @@ import type { RunServer } from '../server.js';
  * Because the demo's first beat is this single command, it builds the viewer itself when
  * `apps/viewer/dist` is missing, saying so rather than hanging silently.
  */
-
-const VIEWER_PACKAGE = '@personavision/viewer';
 
 export interface OpenCommandOptions {
   /** The directory the run directories sit in — `./runs` relative to where it was run. */
@@ -37,39 +33,6 @@ export interface OpenCommandOptions {
   launchBrowser?: (url: string) => Promise<void>;
 }
 
-const exists = async (file: string): Promise<boolean> => {
-  try {
-    await access(file);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const pnpmBuild = (repoRoot: string): Promise<void> =>
-  new Promise<void>((built, failed) => {
-    const build = spawn('pnpm', ['--filter', VIEWER_PACKAGE, 'build'], {
-      cwd: repoRoot,
-      stdio: ['ignore', 'inherit', 'inherit'],
-    });
-    build.on('error', (error) =>
-      failed(
-        new CliError(
-          `The viewer could not be built: ${error.message}. Run \`pnpm build\` yourself, then run this again with --no-build.`,
-        ),
-      ),
-    );
-    build.on('exit', (code) =>
-      code === 0
-        ? built()
-        : failed(
-            new CliError(
-              `The viewer could not be built: \`pnpm --filter ${VIEWER_PACKAGE} build\` exited ${String(code)}. The output above says why.`,
-            ),
-          ),
-    );
-  });
-
 export const openCommand = async ({
   runsRoot,
   viewerDist,
@@ -78,24 +41,10 @@ export const openCommand = async ({
   build,
   openBrowser,
   log = (line) => process.stdout.write(`${line}\n`),
-  buildViewer = () => pnpmBuild(repoRoot),
+  buildViewer,
   launchBrowser = async (url) => void (await launch(url)),
 }: OpenCommandOptions): Promise<RunServer> => {
-  const viewerHtml = join(viewerDist, 'index.html');
-  if (!(await exists(viewerHtml))) {
-    if (!build) {
-      throw new CliError(
-        `The viewer is not built: there is no ${viewerHtml}. Run \`pnpm build\`, or run this again without --no-build to have it built now.`,
-      );
-    }
-    log(`The viewer is not built yet. Building it: pnpm --filter ${VIEWER_PACKAGE} build`);
-    await buildViewer();
-    if (!(await exists(viewerHtml))) {
-      throw new CliError(
-        `The viewer build left no ${viewerHtml}. Run \`pnpm --filter ${VIEWER_PACKAGE} build\` and read its output.`,
-      );
-    }
-  }
+  await ensureViewerBuilt({ viewerDist, repoRoot, build, log, buildViewer });
 
   // The newest run is read from the listing the viewer itself reads, which orders by each
   // run's own timestamp — not from the order of the directory names, which can disagree.

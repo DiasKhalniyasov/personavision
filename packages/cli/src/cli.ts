@@ -2,18 +2,21 @@
 
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_PORT as DEFAULT_SERVE_PORT } from '@personavision/platform';
 import { Command } from 'commander';
 import { CliError } from './cli-error.js';
 import { openCommand } from './commands/open.js';
 import { runCommand } from './commands/run.js';
+import { serveCommand } from './commands/serve.js';
 import { validateCommand } from './commands/validate.js';
 import { DEFAULT_PORT } from './server.js';
 
 /**
- * The `personavision` executable: `validate`, `run` and `open`.
+ * The `personavision` executable.
  *
- * All three are **internal tools** — how the team regenerates fixtures, runs the pipeline
- * in CI and debugs an artifact. The product's entry point is `personavision serve`.
+ * `serve` starts the product: the platform server, a signed-in workspace and the run data
+ * scoped to it. `validate`, `run` and `open` are **internal tools** — how the team
+ * regenerates fixtures, runs the pipeline in CI and debugs an artifact.
  */
 
 /** `packages/cli/`, whether this file is running from `src/` or from `dist/`. */
@@ -22,6 +25,8 @@ const repoRoot = resolve(packageDir, '..', '..');
 const defaultViewerDist = join(repoRoot, 'apps', 'viewer', 'dist');
 /** `./runs`, read from wherever the command was run, as the help says. */
 const runsRoot = (): string => resolve(process.cwd(), 'runs');
+/** Accounts, workspaces, audiences and sessions. Never committed: see `.gitignore`. */
+const DEFAULT_DATA_DIR = './.personavision';
 
 const collect = (value: string, previous: string[]): string[] => [...previous, value];
 
@@ -39,11 +44,50 @@ program
   .name('personavision')
   .description(
     [
-      'Internal tools over a run directory: validate it, parse a test request, and look at it in a browser.',
-      'The product itself starts with `personavision serve`.',
+      '`serve` starts PersonaVision: sign in, and read the tests your workspace owns.',
+      'validate, run and open are internal tools over a run directory.',
     ].join('\n'),
   )
   .showHelpAfterError();
+
+program
+  .command('serve')
+  .description(
+    'Start PersonaVision: the platform server, the app and the run data of the signed-in workspace. A data directory that does not exist yet is seeded with a demo workspace whose password is printed once.',
+  )
+  .option(
+    '--port <port>',
+    `the port to listen on; 0 asks for any free port (${DEFAULT_SERVE_PORT} by default)`,
+    port,
+    DEFAULT_SERVE_PORT,
+  )
+  .option('--no-open', 'start the server and print the URL without launching a browser')
+  .option('--no-build', 'fail instead of building the viewer when apps/viewer/dist is missing')
+  .option('--viewer <dir>', 'the built viewer to serve', defaultViewerDist)
+  .option(
+    '--data-dir <dir>',
+    'where accounts, workspaces, audiences and sessions are kept',
+    DEFAULT_DATA_DIR,
+  )
+  .action(
+    async (options: {
+      port: number;
+      open: boolean;
+      build: boolean;
+      viewer: string;
+      dataDir: string;
+    }) => {
+      await serveCommand({
+        dataDir: resolve(options.dataDir),
+        runsRoot: runsRoot(),
+        viewerDist: resolve(options.viewer),
+        repoRoot,
+        port: options.port,
+        build: options.build,
+        openBrowser: options.open,
+      });
+    },
+  );
 
 program
   .command('validate')
