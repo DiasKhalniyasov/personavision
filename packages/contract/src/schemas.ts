@@ -239,9 +239,7 @@ export const runSchema = z
      * The sentence the Attention screen reads out under one variant's step. It is written
      * by the pipeline, not by the screen; a run that records none still parses.
      */
-    stepCaptions: z
-      .array(z.strictObject({ variant: name, step: name, caption: name }))
-      .default([]),
+    stepCaptions: z.array(z.strictObject({ variant: name, step: name, caption: name })).default([]),
     /** Copied by value when the run started: see `audienceSchema`. */
     audience: audienceSchema,
     personas: z.array(personaSchema),

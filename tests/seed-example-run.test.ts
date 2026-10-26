@@ -185,7 +185,7 @@ describe('the required reading of docs/FLOW.md section 5', () => {
   });
 
   it('states the verdict the Comparison screen reads out', () => {
-    expect(run.verdict).toEqual({
+    expect(run.verdict).toMatchObject({
       harderVariant: 'B',
       gapPoints: 45,
       bandsDisjoint: true,
@@ -193,6 +193,48 @@ describe('the required reading of docs/FLOW.md section 5', () => {
       sentence:
         'Variant B is harder. The gap held in all 3 seed groups (A 19–25, B 63–71 — the bands do not overlap).',
     });
+  });
+
+  it('leads with the verdict in the audience’s words, and the evidence behind it', () => {
+    expect(run.verdict.preferredVariant).toBe('A');
+    expect(run.verdict.audienceSentence).toBe(
+      'Your audience completes the purchase on the current checkout, not on the redesign.',
+    );
+    expect(run.verdict.reasons).toHaveLength(2);
+    expect(run.verdict.heroEvidence).toEqual({ variant: 'B', step: 'review', aoiId: null });
+    // The headline findings are the top three ranks, not a hand-picked three.
+    const topThree = [...findings.findings]
+      .sort((left, right) => left.rank - right.rank)
+      .slice(0, 3)
+      .map((finding) => finding.id);
+    expect(run.verdict.headlineFindingIds).toEqual(topThree);
+  });
+
+  it('completes on 9 of 11 scored sessions against 2 of 11', () => {
+    for (const score of run.scores) {
+      expect(score.completionRate).toBeCloseTo(
+        score.outcomeCounts.success / score.scoredSessionCount,
+        6,
+      );
+    }
+    expect(scoreOf('A').completionRate).toBeCloseTo(9 / 11, 6);
+    expect(scoreOf('B').completionRate).toBeCloseTo(2 / 11, 6);
+  });
+
+  it('carries the audience the four personas were generated from', () => {
+    expect(run.audience.id).toBe('outdoor-gear-shoppers');
+    // `size` is how many people the audience generates, which the contract checks against
+    // the personas: the 24 sessions are those four across two variants and three seeds.
+    expect(run.audience.size).toBe(4);
+    expect(run.personas).toHaveLength(4);
+    expect(run.audience.devices.reduce((total, device) => total + device.share, 0)).toBeCloseTo(
+      1,
+      6,
+    );
+    for (const persona of run.personas) {
+      expect(persona.audienceId).toBe(run.audience.id);
+      expect(persona.segment).toMatch(/^(mobile|desktop) · \S/);
+    }
   });
 });
 

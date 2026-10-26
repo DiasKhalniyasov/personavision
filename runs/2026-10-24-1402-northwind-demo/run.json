@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runId": "2026-10-24-1402-northwind-demo",
   "createdAt": "2026-10-24T14:02:00.000Z",
   "task": {
@@ -78,10 +78,61 @@
       "caption": "Variant B, confirmation. Only 2 of 11 agents reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to."
     }
   ],
+  "audience": {
+    "id": "outdoor-gear-shoppers",
+    "name": "Outdoor-gear shoppers",
+    "ageRange": {
+      "min": 25,
+      "max": 45
+    },
+    "roles": [
+      "First-time buyer",
+      "Returning customer"
+    ],
+    "regions": [
+      "United Kingdom",
+      "Ireland"
+    ],
+    "goals": [
+      "Buy one item quickly",
+      "Compare prices first"
+    ],
+    "devices": [
+      {
+        "name": "iPhone 15",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "touch": true,
+        "share": 0.6
+      },
+      {
+        "name": "MacBook Air 13",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "touch": false,
+        "share": 0.4
+      }
+    ],
+    "techSavviness": 0.55,
+    "priceSensitivity": 0.75,
+    "size": 4,
+    "generatedFrom": {
+      "seed": 20261024,
+      "generatorVersion": "persona-gen-1"
+    }
+  },
   "personas": [
     {
       "id": "rushed",
       "name": "Rushed buyer",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "mobile · in a hurry",
       "traits": {
         "persistence": 0.25,
         "scanningVsReading": 0.9,
@@ -103,6 +154,8 @@
     {
       "id": "careful",
       "name": "Careful comparer",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "desktop · compares carefully",
       "traits": {
         "persistence": 0.85,
         "scanningVsReading": 0.2,
@@ -124,6 +177,8 @@
     {
       "id": "firsttime",
       "name": "First-time visitor",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "desktop · first visit",
       "traits": {
         "persistence": 0.5,
         "scanningVsReading": 0.45,
@@ -145,6 +200,8 @@
     {
       "id": "price",
       "name": "Price-sensitive scanner",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "mobile · price-sensitive",
       "traits": {
         "persistence": 0.6,
         "scanningVsReading": 0.8,
@@ -1738,6 +1795,7 @@
         "median": 22,
         "sd": 3
       },
+      "completionRate": 0.818182,
       "components": {
         "taskFailureRate": 0,
         "abandonment": 0.181818,
@@ -1777,6 +1835,7 @@
         "median": 67,
         "sd": 4
       },
+      "completionRate": 0.181818,
       "components": {
         "taskFailureRate": 0.272727,
         "abandonment": 0.545455,
@@ -1815,7 +1874,23 @@
     "gapPoints": 45,
     "bandsDisjoint": true,
     "seedGroupsAgreeing": 3,
-    "sentence": "Variant B is harder. The gap held in all 3 seed groups (A 19–25, B 63–71 — the bands do not overlap)."
+    "sentence": "Variant B is harder. The gap held in all 3 seed groups (A 19–25, B 63–71 — the bands do not overlap).",
+    "preferredVariant": "A",
+    "audienceSentence": "Your audience completes the purchase on the current checkout, not on the redesign.",
+    "reasons": [
+      "The button that completes the order was never seen on the redesign.",
+      "A $9.95 service fee appears only after the card is entered, and people leave when they see it."
+    ],
+    "headlineFindingIds": [
+      "F-1",
+      "F-2",
+      "F-3"
+    ],
+    "heroEvidence": {
+      "variant": "B",
+      "step": "review",
+      "aoiId": null
+    }
   },
   "calibration": {
     "benchmark": "UEyes",

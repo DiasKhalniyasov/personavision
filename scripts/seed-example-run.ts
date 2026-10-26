@@ -42,7 +42,13 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { createSeededRandom, runDirName, runPaths, writeRun } from '@personavision/contract';
+import {
+  createSeededRandom,
+  runDirName,
+  runPaths,
+  SCHEMA_VERSION,
+  writeRun,
+} from '@personavision/contract';
 import { aggregate } from '@personavision/engine';
 import type { Findings, Run, Session } from '@personavision/contract';
 
@@ -125,9 +131,37 @@ const DESKTOP = {
   touch: false,
 };
 
+/**
+ * The audience, from the prototype's `AUDIENCE` constant. `size` is how many simulated
+ * people it generates — four — not how many sessions a test runs, which is the reading
+ * `docs/FLOW.md` section 1 states and the contract enforces against `personas`. The 24
+ * sessions are those four people across two variants and three seeds.
+ *
+ * The device mix carries the prototype's shares against the devices the personas actually
+ * ran on, so the audience and the people generated from it cannot disagree.
+ */
+const AUDIENCE: Run['audience'] = {
+  id: 'outdoor-gear-shoppers',
+  name: 'Outdoor-gear shoppers',
+  ageRange: { min: 25, max: 45 },
+  roles: ['First-time buyer', 'Returning customer'],
+  regions: ['United Kingdom', 'Ireland'],
+  goals: ['Buy one item quickly', 'Compare prices first'],
+  devices: [
+    { ...MOBILE, share: 0.6 },
+    { ...DESKTOP, share: 0.4 },
+  ],
+  techSavviness: 0.55,
+  priceSensitivity: 0.75,
+  size: 4,
+  generatedFrom: { seed: 20261024, generatorVersion: 'persona-gen-1' },
+};
+
 const PERSONAS: Array<Run['personas'][number] & { id: PersonaId }> = [
   {
     id: 'rushed',
+    audienceId: AUDIENCE.id,
+    segment: 'mobile · in a hurry',
     name: 'Rushed buyer',
     traits: {
       persistence: 0.25,
@@ -141,6 +175,8 @@ const PERSONAS: Array<Run['personas'][number] & { id: PersonaId }> = [
   },
   {
     id: 'careful',
+    audienceId: AUDIENCE.id,
+    segment: 'desktop · compares carefully',
     name: 'Careful comparer',
     traits: {
       persistence: 0.85,
@@ -154,6 +190,8 @@ const PERSONAS: Array<Run['personas'][number] & { id: PersonaId }> = [
   },
   {
     id: 'firsttime',
+    audienceId: AUDIENCE.id,
+    segment: 'desktop · first visit',
     name: 'First-time visitor',
     traits: {
       persistence: 0.5,
@@ -167,6 +205,8 @@ const PERSONAS: Array<Run['personas'][number] & { id: PersonaId }> = [
   },
   {
     id: 'price',
+    audienceId: AUDIENCE.id,
+    segment: 'mobile · price-sensitive',
     name: 'Price-sensitive scanner',
     traits: {
       persistence: 0.6,
@@ -792,6 +832,22 @@ const SCORE_READING: Record<
   },
 };
 
+/**
+ * What the Verdict screen leads with, from the prototype's `VERDICT`: the headline in the
+ * audience's words and the two reasons behind it, drawn from the top findings. #106
+ * re-transcribes these against the rewritten design contract once PR #98 lands.
+ */
+const AUDIENCE_SENTENCE =
+  'Your audience completes the purchase on the current checkout, not on the redesign.';
+
+const VERDICT_REASONS = [
+  'The button that completes the order was never seen on the redesign.',
+  'A $9.95 service fee appears only after the card is entered, and people leave when they see it.',
+];
+
+/** The three top-ranked findings; a test asserts these are the three `findings.json` ranks. */
+const HEADLINE_FINDING_IDS = ['F-1', 'F-2', 'F-3'];
+
 const VERDICT_SENTENCE =
   'Variant B is harder. The gap held in all 3 seed groups (A 19–25, B 63–71 — the bands do not overlap).';
 
@@ -896,6 +952,10 @@ const buildScore = (variant: VariantId, rows: SessionRow[]): Run['scores'][numbe
     variant,
     taskId: TASK.id,
     frictionScore: { median: reading.median, sd: reading.sd },
+    // The share of scored sessions that completed the purchase: 9 of 11 against 2 of 11,
+    // the prototype's `COMPLETION`. Stored so that no screen computes it, and measured off
+    // the outcome counts below rather than restated, so the two cannot disagree.
+    completionRate: round6(counted('success') / scored.length),
     components,
     outcomeCounts: {
       success: counted('success'),
@@ -1236,7 +1296,7 @@ const buildSession = (row: SessionRow, index: number): Session => {
   actions.sort((left, right) => left.tMs - right.tMs);
 
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     sessionId,
     runId: RUN_ID,
     variant: row.variant,
@@ -1404,7 +1464,7 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
       evidence_link: { screen: 'sessions', params: { outcome: 'automation_failure' } },
     },
   ];
-  return { schemaVersion: 1, runId: RUN_ID, findings };
+  return { schemaVersion: SCHEMA_VERSION, runId: RUN_ID, findings };
 };
 
 const buildRun = (sessions: ReadonlyArray<Session>): Run => {
@@ -1433,7 +1493,7 @@ const buildRun = (sessions: ReadonlyArray<Session>): Run => {
   const agreeing = SEED_GROUPS.filter(disjoint).length;
 
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     runId: RUN_ID,
     createdAt: CREATED_AT.toISOString(),
     task: TASK,
@@ -1465,6 +1525,7 @@ const buildRun = (sessions: ReadonlyArray<Session>): Run => {
         };
       }),
     ),
+    audience: AUDIENCE,
     aois,
     // Computed, never transcribed: the engine is the one place per-area numbers are made,
     // so the committed fixture is exactly what it produces from the sessions beside it.
@@ -1476,6 +1537,13 @@ const buildRun = (sessions: ReadonlyArray<Session>): Run => {
       bandsDisjoint: agreeing === SEED_GROUPS.length,
       seedGroupsAgreeing: agreeing,
       sentence: VERDICT_SENTENCE,
+      /** The variant the audience completes, which is the easier of the two. */
+      preferredVariant: easier.variant,
+      audienceSentence: AUDIENCE_SENTENCE,
+      reasons: VERDICT_REASONS,
+      headlineFindingIds: HEADLINE_FINDING_IDS,
+      /** The one heatmap the verdict embeds: the harder variant's review step, whole. */
+      heroEvidence: { variant: harder.variant, step: 'review', aoiId: null },
     },
     calibration: { benchmark: 'UEyes', cc: 0.68, nss: 1.9, scanMatch: 0.54 },
   };
