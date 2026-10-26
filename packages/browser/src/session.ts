@@ -10,11 +10,10 @@
  */
 
 /// <reference lib="dom" />
-// The callbacks below run inside the page, not in Node, so this module needs the DOM
-// types. The reference travels with the file: a program that pulls `src/` in — the
-// package's build, its test project, a consumer — gets them without restating a `lib`.
+// The callbacks below run inside the page, not in Node: this module needs the DOM
+// types, and the reference travels with the file (see `geometry.ts`).
 import { chromium } from 'playwright';
-import type { Device, PageHandle } from './types.js';
+import type { Device, PageHandle, Variant, Viewport } from './types.js';
 
 export interface OpenSessionOptions {
   /** `false` opens a visible window. Defaults to `true`. */
@@ -33,7 +32,7 @@ const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 /** What a page says about the device it is being shown on, read out of the page itself. */
 export interface SessionState {
   readonly url: string;
-  readonly viewport: { readonly width: number; readonly height: number };
+  readonly viewport: Viewport;
   readonly deviceScaleFactor: number;
   readonly touch: boolean;
   readonly scrollY: number;
@@ -49,7 +48,7 @@ export interface SessionState {
  * the viewport therefore matches the device rather than a default and then a resize.
  */
 export const openSession = async (
-  variant: { id: string; url: string },
+  variant: Variant,
   device: Device,
   options: OpenSessionOptions = {},
 ): Promise<PageHandle> => {
@@ -62,7 +61,6 @@ export const openSession = async (
       viewport: { width: device.viewport.width, height: device.viewport.height },
       deviceScaleFactor: device.deviceScaleFactor,
       hasTouch: device.touch,
-      isMobile: device.touch,
     });
   } catch (error) {
     await browser.close();

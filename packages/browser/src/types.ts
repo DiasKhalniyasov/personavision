@@ -2,19 +2,36 @@
  * The browser module's published shapes.
  *
  * Nine tickets of the browser-driving step are written against the names below, so this
- * file is the step's contract: a seam fills a body, never a signature. The artifact types
- * these feed — `run.json`'s `screenshots` and `aois` — stay declared in
+ * file is the step's contract: a seam fills a body, never a signature. The shapes are the
+ * ones #41 publishes, spelt as it spells them — **mutable**, so that a ticket filling a
+ * seam can build a `Capture` up, push to its `elements` and hand the array to anything
+ * expecting a `CaptureElement[]`. Only the inputs this module declares itself are
+ * `readonly`.
+ *
+ * The artifact types these feed — `run.json`'s `screenshots` and `aois` — stay declared in
  * `@personavision/contract`; nothing here restates an artifact field name.
  */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 
+/** A variant under test: its id in the run artifact, and the URL a session opens. */
+export interface Variant {
+  id: string;
+  url: string;
+}
+
+/** A viewport in CSS pixels. */
+export interface Viewport {
+  width: number;
+  height: number;
+}
+
 /** A device to emulate: `docs/FLOW.md` section 1's mobile/desktop split, made concrete. */
 export interface Device {
-  readonly name: string;
-  readonly viewport: { readonly width: number; readonly height: number };
-  readonly deviceScaleFactor: number;
-  readonly touch: boolean;
+  name: string;
+  viewport: Viewport;
+  deviceScaleFactor: number;
+  touch: boolean;
 }
 
 /**
@@ -23,17 +40,17 @@ export interface Device {
  * (`docs/FLOW.md` section 8) — and an element is below the fold when `y >= foldY`.
  */
 export interface Geometry {
-  readonly viewport: { readonly width: number; readonly height: number };
-  readonly pageHeight: number;
-  readonly foldY: number;
+  viewport: Viewport;
+  pageHeight: number;
+  foldY: number;
 }
 
 /** A page-space box: the origin is the document's, not the viewport's. */
 export interface Box {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /**
@@ -41,15 +58,15 @@ export interface Box {
  * variant and step (`stableElementId`), so area-of-interest metrics aggregate across seeds.
  */
 export interface CaptureElement {
-  readonly id: string;
-  readonly source: 'dom' | 'a11y';
-  readonly role: string | null;
-  readonly name: string | null;
-  readonly text: string | null;
-  readonly bbox: Box;
-  readonly isPrimaryAction: boolean;
-  readonly belowFold: boolean;
-  readonly selector: string;
+  id: string;
+  source: 'dom' | 'a11y';
+  role: string | null;
+  name: string | null;
+  text: string | null;
+  bbox: Box;
+  isPrimaryAction: boolean;
+  belowFold: boolean;
+  selector: string;
 }
 
 /**
@@ -58,14 +75,14 @@ export interface CaptureElement {
  * none was written; `step` is `null` when the page matches no step of the task.
  */
 export interface Capture {
-  readonly variant: string;
-  readonly step: string | null;
-  readonly screenshot: string | null;
-  readonly viewport: { readonly width: number; readonly height: number };
-  readonly pageHeight: number;
-  readonly foldY: number;
-  readonly elements: readonly CaptureElement[];
-  readonly contentHash: string;
+  variant: string;
+  step: string | null;
+  screenshot: string | null;
+  viewport: Viewport;
+  pageHeight: number;
+  foldY: number;
+  elements: CaptureElement[];
+  contentHash: string;
 }
 
 /**
@@ -74,29 +91,39 @@ export interface Capture {
  * whichever is given.
  */
 export interface Action {
-  readonly type: 'click' | 'scroll' | 'type' | 'back';
-  readonly elementId?: string;
-  readonly selector?: string;
-  readonly value?: string;
-  readonly deltaY?: number;
+  type: 'click' | 'scroll' | 'type' | 'back';
+  elementId?: string;
+  selector?: string;
+  value?: string;
+  deltaY?: number;
 }
 
 /**
  * Every way our own browsing can break. A failure of ours is never attributed to the
  * product: it surfaces as `outcome.status: "automation_failure"` with
- * `attribution: "automation"` and `excludedFromScores: true` (`docs/FLOW.md` section 8).
+ * `attribution: "automation"` and `excludedFromScores: true`, the three fields
+ * `@personavision/contract`'s session schema declares. `docs/FLOW.md` section 8 is why
+ * they are separate: *abandoned*, *failed* and *automation failure* are never merged.
  */
 export type AutomationFailureReason =
   'selector_not_found' | 'timeout' | 'navigation_error' | 'frame_error';
 
 /** What an action did, and what the page became. */
 export interface ActResult {
-  readonly ok: boolean;
-  readonly action: Action;
-  readonly url: string;
-  readonly scrollY: number;
-  readonly step: string | null;
-  readonly failure?: AutomationFailureReason;
+  ok: boolean;
+  action: Action;
+  url: string;
+  scrollY: number;
+  step: string | null;
+  failure?: AutomationFailureReason;
+}
+
+/** One step of a task: how it is recognised, and the control that advances it. */
+export interface TaskStep {
+  id: string;
+  label: string;
+  match: { urlPattern: string; requiredSelector: string };
+  primaryAction: { selector: string };
 }
 
 /**
@@ -105,36 +132,31 @@ export interface ActResult {
  * it.
  */
 export interface TaskDefinition {
-  readonly id: string;
-  readonly prompt: string;
-  readonly steps: readonly {
-    readonly id: string;
-    readonly label: string;
-    readonly match: { readonly urlPattern: string; readonly requiredSelector: string };
-    readonly primaryAction: { readonly selector: string };
-  }[];
+  id: string;
+  prompt: string;
+  steps: TaskStep[];
 }
 
 /** Everything a capture needs to know that the page cannot tell it. */
 export interface CaptureContext {
-  readonly variant: string;
-  readonly device: Device;
-  readonly task: TaskDefinition;
-  readonly runDir: string;
+  variant: string;
+  device: Device;
+  task: TaskDefinition;
+  runDir: string;
 }
 
 /**
  * An open session: the Chromium objects it owns, plus the variant and device it was opened
  * with, so that what a page reports can be checked against what was asked for.
  *
- * The Playwright objects are on the handle rather than behind an adapter because six of
- * this step's seams — extraction, screenshots, step detection, actions — are page
- * operations and each needs the real page. A source that replays captures from disk
+ * The Playwright objects are on the handle rather than behind an adapter because this
+ * step's page-operating seams — extraction, screenshots, step detection, actions — each
+ * need the real page. A source that replays captures from disk
  * (`createFixtureSource`) satisfies the shape over a blank page; see
  * `docs/adr/0002-capture-source-and-the-segmentation-hand-off.md`.
  */
 export interface PageHandle {
-  readonly variant: { readonly id: string; readonly url: string };
+  readonly variant: Variant;
   readonly device: Device;
   /** What `openSession` was asked for, which a page cannot be asked after the fact. */
   readonly headless: boolean;
@@ -149,7 +171,7 @@ export interface PageHandle {
  * this interface and not against either implementation.
  */
 export interface CaptureSource {
-  openSession(variant: { id: string; url: string }, device: Device): Promise<PageHandle>;
+  openSession(variant: Variant, device: Device): Promise<PageHandle>;
   capture(page: PageHandle, ctx: CaptureContext): Promise<Capture>;
   act(page: PageHandle, action: Action, ctx: CaptureContext): Promise<ActResult>;
   close(page: PageHandle): Promise<void>;

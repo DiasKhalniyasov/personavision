@@ -10,11 +10,11 @@
  * this file and no other.
  */
 
-import { notImplemented } from './errors.js';
+import { NotImplementedError } from './errors.js';
 import type { CaptureSource } from './types.js';
 
 export type CreateFixtureSource = (dir: string) => CaptureSource;
 
 export const createFixtureSource: CreateFixtureSource = () => {
-  throw notImplemented('fixture source');
+  throw new NotImplementedError('fixture source');
 };

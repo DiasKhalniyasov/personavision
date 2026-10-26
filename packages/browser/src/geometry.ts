@@ -12,8 +12,8 @@
 
 /// <reference lib="dom" />
 // The callbacks below run inside the page, not in Node, so this module needs the DOM
-// types. The reference travels with the file: a program that pulls `src/` in — the
-// package's build, its test project, a consumer — gets them without restating a `lib`.
+// types. The reference travels with the file, so no program that pulls `src/` in — the
+// build, the test project, a consumer — has to restate a `lib`.
 import type { Geometry, PageHandle } from './types.js';
 
 /**

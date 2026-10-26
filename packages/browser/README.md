@@ -23,9 +23,10 @@ A fresh clone runs that once. CI runs it too, with `~/.cache/ms-playwright` cach
 installed Playwright version, so a green pipeline downloads a browser only when that version
 moves.
 
-Without it, this package's two browser suites **skip** rather than fail — a developer working
-on another package is not made to download 150 MB to run `pnpm test`. In CI they do not skip:
-there a missing browser is a broken workflow and has to be loud.
+Without it, the assertions that need a browser **skip** rather than fail — a developer working
+on another package is not made to download 150 MB to run `pnpm test`. The ones that need none —
+the cache key, the budget, the projections, the failure mapping, the stable ids — still run. In
+CI nothing skips: there a missing browser is a broken workflow and has to be loud.
 
 ## The fold, and the space everything is in
 

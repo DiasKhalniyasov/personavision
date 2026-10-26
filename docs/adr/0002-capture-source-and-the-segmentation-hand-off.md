@@ -26,7 +26,7 @@ interface CaptureSource {
 
 `createLiveSource()` drives Chromium; `createFixtureSource(dir)` replays committed captures from a directory. Fixture mode is the default in tests and in the engine's offline mode; the live source is used only when a run is launched against a URL. No consumer branches on which one it holds.
 
-**`PageHandle` carries the Chromium objects.** `browser`, `context` and `page` are on the handle, not behind an adapter, because six of this step's seams — element extraction, screenshots, step detection, actions — are page operations and each needs the real page. A replaying source satisfies the shape over a blank page: one launch, no navigation, no network, nothing read from the page it holds.
+**`PageHandle` carries the Chromium objects.** `browser`, `context` and `page` are on the handle, not behind an adapter, because this step's page-operating seams — element extraction, screenshots, step detection, actions — each need the real page. A replaying source satisfies the shape over a blank page: one launch, no navigation, no network, nothing read from the page it holds.
 
 **Segmentation is a hand-off over a finished capture, not a stage inside this module.** A segmenter is a function from a `Capture` to further areas of interest:
 
@@ -42,7 +42,7 @@ interface CaptureSource {
 
 **A fixture mode selected by an environment variable inside one implementation.** Rejected: the branch would be inside every function that touches a page, which is exactly where it cannot be tested. Two implementations of one interface means the live path has no `if` in it at all.
 
-**Hiding Playwright behind an adapter interface on `PageHandle`.** Rejected for now: it would be an interface with one implementation, and six parallel tickets would each have to extend it before they could do their own work — the adapter would be written by committee and would still end up shaped like `Page`. The cost of this decision is that a replaying source launches a browser it does not use; that is one process, once per session, against six tickets of friction avoided.
+**Hiding Playwright behind an adapter interface on `PageHandle`.** Rejected for now: it would be an interface with one implementation, and the parallel tickets would each have to extend it before they could do their own work — the adapter would be written by committee and would still end up shaped like `Page`. The cost of this decision is that a replaying source launches a browser it does not use; that is one process, once per session, against friction in every ticket that drives a page.
 
 **Segmentation as a stage inside `capture()`.** Rejected: it would put a model call on the path of every capture, which contradicts the engine's and this module's separation — the browser module reaches no model and holds no key — and it would make the capture cache depend on a model's output. As a hand-off, a run can be segmented after the fact, or not at all, and the cache stays a function of the page.
 

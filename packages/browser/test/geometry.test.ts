@@ -6,8 +6,10 @@
  * suite can assert equality rather than a range: every page, at both devices, through the
  * package's public entry point and nothing else.
  *
- * Nothing here touches Playwright directly. A session is opened with `openSession` and
+ * No assertion here reaches into Playwright: a session is opened with `openSession` and
  * measured with `readGeometry`, which is all the rest of the step is allowed to assume.
+ * Playwright is imported for one thing only — asking where the browser would be, so
+ * that a machine without one is skipped rather than failed.
  */
 
 import { existsSync } from 'node:fs';

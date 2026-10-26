@@ -30,8 +30,6 @@ export interface StableElementIdParts {
   readonly ordinal?: number;
 }
 
-const round = (value: number): number => Math.round(value);
-
 /** `e-<12 hex>`, stable for one element of one screen. */
 export const stableElementId = (parts: StableElementIdParts): string => {
   const { bbox } = parts;
@@ -39,7 +37,7 @@ export const stableElementId = (parts: StableElementIdParts): string => {
     parts.source,
     parts.role ?? '',
     (parts.name ?? '').trim().replace(/\s+/g, ' ').toLowerCase(),
-    `${round(bbox.x)},${round(bbox.y)},${round(bbox.width)},${round(bbox.height)}`,
+    `${Math.round(bbox.x)},${Math.round(bbox.y)},${Math.round(bbox.width)},${Math.round(bbox.height)}`,
     String(parts.ordinal ?? 0),
   ].join('\u0000');
 

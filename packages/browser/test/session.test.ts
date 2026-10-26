@@ -279,108 +279,108 @@ describeWithChromium('a browser session', () => {
       ).rejects.toThrow('act: not implemented');
     });
   });
+});
 
-  describe('the seams that need no browser', () => {
-    it('projects no run entries yet', () => {
-      expect(toScreenshotEntries([])).toEqual([]);
-      expect(toAoiEntries([])).toEqual([]);
-    });
+describe('the seams that need no browser', () => {
+  it('projects no run entries yet', () => {
+    expect(toScreenshotEntries([])).toEqual([]);
+    expect(toAoiEntries([])).toEqual([]);
+  });
 
-    it('never recognises an error as one of ours yet, so the caller rethrows', () => {
-      expect(mapToAutomationFailure(new Error('Timeout 30000ms exceeded'))).toBeNull();
-      expect(mapToAutomationFailure('not even an error')).toBeNull();
-    });
+  it('never recognises an error as one of ours yet, so the caller rethrows', () => {
+    expect(mapToAutomationFailure(new Error('Timeout 30000ms exceeded'))).toBeNull();
+    expect(mapToAutomationFailure('not even an error')).toBeNull();
+  });
 
-    it('misses every cache lookup and runs the work', async () => {
-      let runs = 0;
-      const work = async (): Promise<number> => {
+  it('misses every cache lookup and runs the work', async () => {
+    let runs = 0;
+    const work = async (): Promise<number> => {
+      runs += 1;
+      return runs;
+    };
+
+    await expect(withCache('k', work)).resolves.toBe(1);
+    await expect(withCache('k', work)).resolves.toBe(2);
+    expect(runs).toBe(2);
+  });
+
+  it('builds a cache key from the variant URL, the step, the device and the content hash', () => {
+    const parts = {
+      variantUrl: 'http://127.0.0.1:1/cart.html',
+      step: 'cart',
+      device: DESKTOP,
+      contentHash: 'abcdef0123456789',
+    };
+
+    expect(captureCacheKey(parts)).toBe(captureCacheKey(parts));
+    expect(captureCacheKey({ ...parts, device: MOBILE })).not.toBe(captureCacheKey(parts));
+    expect(captureCacheKey({ ...parts, step: 'payment' })).not.toBe(captureCacheKey(parts));
+    expect(captureCacheKey({ ...parts, contentHash: '0000000000000000' })).not.toBe(
+      captureCacheKey(parts),
+    );
+  });
+
+  it('runs what the budget is given once, and counts nothing yet', async () => {
+    const budget = new SessionBudget({ maxRetries: 2, wallClockMs: 1000 });
+    let runs = 0;
+
+    await expect(
+      budget.attempt(async () => {
         runs += 1;
-        return runs;
-      };
+        return 'done';
+      }),
+    ).resolves.toBe('done');
 
-      await expect(withCache('k', work)).resolves.toBe(1);
-      await expect(withCache('k', work)).resolves.toBe(2);
-      expect(runs).toBe(2);
-    });
-
-    it('builds a cache key from the variant URL, the step, the device and the content hash', () => {
-      const parts = {
-        variantUrl: 'http://127.0.0.1:1/cart.html',
-        step: 'cart',
-        device: DESKTOP,
-        contentHash: 'abcdef0123456789',
-      };
-
-      expect(captureCacheKey(parts)).toBe(captureCacheKey(parts));
-      expect(captureCacheKey({ ...parts, device: MOBILE })).not.toBe(captureCacheKey(parts));
-      expect(captureCacheKey({ ...parts, step: 'payment' })).not.toBe(captureCacheKey(parts));
-      expect(captureCacheKey({ ...parts, contentHash: '0000000000000000' })).not.toBe(
-        captureCacheKey(parts),
-      );
-    });
-
-    it('runs what the budget is given once, and counts nothing yet', async () => {
-      const budget = new SessionBudget({ maxRetries: 2, wallClockMs: 1000 });
-      let runs = 0;
-
-      await expect(
-        budget.attempt(async () => {
-          runs += 1;
-          return 'done';
-        }),
-      ).resolves.toBe('done');
-
-      expect(runs).toBe(1);
-      expect(budget.integrity()).toEqual({
-        attempts: 0,
-        retries: 0,
-        elapsedMs: 0,
-        exhausted: false,
-      });
-    });
-
-    it('has no fixture source and no live source yet', () => {
-      expect(() => createFixtureSource('runs/x')).toThrow('fixture source: not implemented');
-      expect(() => createLiveSource()).toThrow('live source: not implemented');
-    });
-
-    it('cannot walk a task yet', async () => {
-      await expect(
-        walkTask({} as never, {
-          variant: { id: 'v', url: 'http://127.0.0.1:1/cart.html' },
-          device: DESKTOP,
-          task: TASK,
-          runDir: 'runs/x',
-        }),
-      ).rejects.toThrow('live source: not implemented');
+    expect(runs).toBe(1);
+    expect(budget.integrity()).toEqual({
+      attempts: 0,
+      retries: 0,
+      elapsedMs: 0,
+      exhausted: false,
     });
   });
 
-  describe('stable element ids', () => {
-    const parts = {
-      source: 'dom' as const,
-      role: 'button',
-      name: 'Checkout',
-      bbox: { x: 16, y: 1200, width: 358, height: 48 },
-    };
+  it('has no fixture source and no live source yet', () => {
+    expect(() => createFixtureSource('runs/x')).toThrow('fixture source: not implemented');
+    expect(() => createLiveSource()).toThrow('live source: not implemented');
+  });
 
-    it('is the same id for the same element of the same screen', () => {
-      expect(stableElementId(parts)).toBe(stableElementId(parts));
-      expect(stableElementId(parts)).toMatch(/^e-[0-9a-f]{12}$/);
-    });
+  it('cannot walk a task yet', async () => {
+    await expect(
+      walkTask({} as never, {
+        variant: { id: 'v', url: 'http://127.0.0.1:1/cart.html' },
+        device: DESKTOP,
+        task: TASK,
+        runDir: 'runs/x',
+      }),
+    ).rejects.toThrow('live source: not implemented');
+  });
+});
 
-    it('ignores the casing and the spacing of an accessible name', () => {
-      expect(stableElementId({ ...parts, name: '  CHECK OUT ' })).toBe(
-        stableElementId({ ...parts, name: 'check   out' }),
-      );
-    });
+describe('stable element ids', () => {
+  const parts = {
+    source: 'dom' as const,
+    role: 'button',
+    name: 'Checkout',
+    bbox: { x: 16, y: 1200, width: 358, height: 48 },
+  };
 
-    it('is a different id for a different box, role, source or ordinal', () => {
-      const baseline = stableElementId(parts);
-      expect(stableElementId({ ...parts, bbox: { ...parts.bbox, y: 1201 } })).not.toBe(baseline);
-      expect(stableElementId({ ...parts, role: 'link' })).not.toBe(baseline);
-      expect(stableElementId({ ...parts, source: 'a11y' })).not.toBe(baseline);
-      expect(stableElementId({ ...parts, ordinal: 1 })).not.toBe(baseline);
-    });
+  it('is the same id for the same element of the same screen', () => {
+    expect(stableElementId(parts)).toBe(stableElementId(parts));
+    expect(stableElementId(parts)).toMatch(/^e-[0-9a-f]{12}$/);
+  });
+
+  it('ignores the casing and the spacing of an accessible name', () => {
+    expect(stableElementId({ ...parts, name: '  CHECK OUT ' })).toBe(
+      stableElementId({ ...parts, name: 'check   out' }),
+    );
+  });
+
+  it('is a different id for a different box, role, source or ordinal', () => {
+    const baseline = stableElementId(parts);
+    expect(stableElementId({ ...parts, bbox: { ...parts.bbox, y: 1201 } })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, role: 'link' })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, source: 'a11y' })).not.toBe(baseline);
+    expect(stableElementId({ ...parts, ordinal: 1 })).not.toBe(baseline);
   });
 });

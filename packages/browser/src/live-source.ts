@@ -10,12 +10,12 @@
  * step fills this file and no other.
  */
 
-import { notImplemented } from './errors.js';
-import type { Capture, CaptureSource, Device, TaskDefinition } from './types.js';
+import { NotImplementedError } from './errors.js';
+import type { Capture, CaptureSource, Device, TaskDefinition, Variant } from './types.js';
 
 /** One variant, under one device, against one task, writing into one run directory. */
 export interface TaskWalk {
-  readonly variant: { readonly id: string; readonly url: string };
+  readonly variant: Variant;
   readonly device: Device;
   readonly task: TaskDefinition;
   readonly runDir: string;
@@ -24,9 +24,9 @@ export interface TaskWalk {
 export type WalkTask = (source: CaptureSource, walk: TaskWalk) => Promise<Capture[]>;
 
 export const createLiveSource = (): CaptureSource => {
-  throw notImplemented('live source');
+  throw new NotImplementedError('live source');
 };
 
 export const walkTask: WalkTask = async () => {
-  throw notImplemented('live source');
+  throw new NotImplementedError('live source');
 };

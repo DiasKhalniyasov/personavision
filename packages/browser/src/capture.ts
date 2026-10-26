@@ -15,9 +15,8 @@
  */
 
 /// <reference lib="dom" />
-// The callbacks below run inside the page, not in Node, so this module needs the DOM
-// types. The reference travels with the file: a program that pulls `src/` in — the
-// package's build, its test project, a consumer — gets them without restating a `lib`.
+// The callbacks below run inside the page, not in Node: this module needs the DOM
+// types, and the reference travels with the file (see `geometry.ts`).
 import { createHash } from 'node:crypto';
 import { SessionBudget } from './budget.js';
 import { withCache } from './cache.js';

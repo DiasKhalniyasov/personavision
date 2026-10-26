@@ -6,8 +6,9 @@
  * executes the actions an agent decides — reporting every failure of its own as a typed
  * automation failure rather than as a failure of the product.
  *
- * This file is the package's whole public surface. Nine tickets of the browser-driving step
- * fill one function each behind it; none of them changes a name here.
+ * This file is the package's whole public surface, each seam's signature included as a
+ * named type. Nine tickets of the browser-driving step fill one function each behind it;
+ * none of them changes a name here.
  */
 
 export { openSession, closeSession, readSessionState } from './session.js';
@@ -19,31 +20,37 @@ export { capture, captureCacheKey, readContentHash } from './capture.js';
 export type { CaptureCacheKeyParts } from './capture.js';
 
 export { extractElements } from './extract/elements.js';
+export type { ExtractElements } from './extract/elements.js';
 export { stableElementId } from './extract/stable-id.js';
 export type { StableElementIdParts } from './extract/stable-id.js';
 
 export { writeScreenshot } from './screenshot.js';
-export type { ScreenshotTarget } from './screenshot.js';
+export type { ScreenshotTarget, WriteScreenshot } from './screenshot.js';
 
 export { toAoiEntries, toScreenshotEntries } from './run-projection.js';
+export type { ToAoiEntries, ToScreenshotEntries } from './run-projection.js';
 
 export { detectStep, resolvePrimaryAction } from './steps.js';
+export type { DetectStep, ResolvePrimaryAction } from './steps.js';
 
 export { act } from './act.js';
+export type { Act } from './act.js';
 
 export { SessionBudget } from './budget.js';
 export type { BudgetIntegrity, SessionBudgetLimits } from './budget.js';
 
 export { mapToAutomationFailure } from './failure-mapping.js';
+export type { MapToAutomationFailure } from './failure-mapping.js';
 
 export { withCache } from './cache.js';
 
 export { createFixtureSource } from './fixture-source.js';
+export type { CreateFixtureSource } from './fixture-source.js';
 
 export { createLiveSource, walkTask } from './live-source.js';
-export type { TaskWalk } from './live-source.js';
+export type { TaskWalk, WalkTask } from './live-source.js';
 
-export { AutomationFailure, NotImplementedError, notImplemented } from './errors.js';
+export { AutomationFailure, NotImplementedError } from './errors.js';
 
 export type {
   ActResult,
@@ -58,4 +65,7 @@ export type {
   Geometry,
   PageHandle,
   TaskDefinition,
+  TaskStep,
+  Variant,
+  Viewport,
 } from './types.js';

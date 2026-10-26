@@ -11,11 +11,11 @@
  * step fills this file and no other.
  */
 
-import { notImplemented } from './errors.js';
+import { NotImplementedError } from './errors.js';
 import type { ActResult, Action, CaptureContext, PageHandle } from './types.js';
 
 export type Act = (page: PageHandle, action: Action, ctx: CaptureContext) => Promise<ActResult>;
 
 export const act: Act = async () => {
-  throw notImplemented('act');
+  throw new NotImplementedError('act');
 };
