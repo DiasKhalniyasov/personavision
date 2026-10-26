@@ -10,8 +10,8 @@
  * The whole of it runs under the session's budget, so a page that will not answer cannot
  * hold a swarm up.
  *
- * With only the neutral seams in place a capture is real geometry and a real content hash,
- * a `null` screenshot, a `null` step and no elements — and it does not throw.
+ * With only the remaining neutral seams in place a capture is real geometry, a real content
+ * hash and a real step label, a `null` screenshot and no elements — and it does not throw.
  */
 
 /// <reference lib="dom" />
@@ -23,7 +23,7 @@ import { withCache } from './cache.js';
 import { extractElements } from './extract/elements.js';
 import { readGeometry } from './geometry.js';
 import { writeScreenshot } from './screenshot.js';
-import { detectStep, resolvePrimaryAction } from './steps.js';
+import { detectStep, resolvePrimaryAction, taskStep } from './steps.js';
 import type { Capture, CaptureContext, Device, PageHandle } from './types.js';
 
 /** How much of the content digest a hash carries: 16 hex characters, 64 bits. */
@@ -90,7 +90,9 @@ export const capture = async (
         step,
       });
       const extracted = await extractElements(page, geometry, step);
-      const elements = await resolvePrimaryAction(page, extracted, step);
+      // The detected step as the task declares it: resolution needs the selector of the
+      // control the step names, which the id alone does not carry.
+      const elements = await resolvePrimaryAction(page, extracted, taskStep(ctx.task, step));
 
       return {
         variant: ctx.variant,

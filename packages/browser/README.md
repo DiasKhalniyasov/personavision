@@ -93,16 +93,17 @@ tests and captures.
 
 | Seam                                     | Until its ticket lands        |
 | ---------------------------------------- | ----------------------------- |
-| `detectStep`                             | `null`                        |
-| `resolvePrimaryAction`                   | the elements, unchanged       |
 | `act`                                    | throws `act: not implemented` |
 | `withCache`                              | always a miss                 |
 | `createFixtureSource` `createLiveSource` | throw                         |
 
-A capture with only these in place is real geometry, a real content hash and the page's
-elements, a `null` screenshot and a `null` step — and it does not throw. The screenshot is
-`null` there because the step is: `writeScreenshot` has landed, and an unrecognised screen
-has no name to write an image under.
+A capture with only these in place is real geometry, a real content hash, a real step label,
+a written screenshot and the page's elements, one of them marked as the step's primary
+action. A screen the task does not declare still has a `null` step and a `null` screenshot,
+because an unrecognised screen has no name to write an image under. It raises one thing: a
+page on one of the task's steps whose declared primary action cannot be resolved is an
+`AutomationFailure` with reason `selector_not_found`, because a session with no primary
+action to measure is excluded rather than scored as a zero.
 
 ## `capture()` is composed once
 
@@ -133,6 +134,9 @@ serves it from disk, with no dependency of its own):
 - `test/session.test.ts` — that device emulation is real, read back out of the page; that a
   capture carries its variant, geometry and content hash; and that every neutral seam
   behaves as the table above says.
+- `test/steps.test.ts` — that a page is labelled by the task's URL pattern and required
+  element and never by its words, and that the control a step declares resolves to exactly
+  one extracted element or fails as ours.
 - `test/screenshot.test.ts` — the written PNG, read back from the run directory: its path,
   that it covers the whole document at the device's pixels, and that one screen is one file.
 - `test/failures.test.ts` — the four automation failures, each driven out of a real browser:
