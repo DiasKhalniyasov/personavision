@@ -58,6 +58,16 @@ export const paths = {
     `/runs/${segment(runId)}/sessions/${segment(sessionId)}`,
 } as const;
 
+/**
+ * `/runs/<id>/sessions?outcome=…`: the Sessions list, narrowed to one outcome.
+ *
+ * The filter is URL state (`docs/FLOW.md` section 3) and `outcome` is one of the parameters
+ * the contract lets an evidence link carry, so a screen that links to a filtered list goes
+ * through here rather than writing the query itself.
+ */
+export const sessionsWithOutcome = (runId: string, outcome: string): string =>
+  `${paths.sessions(runId)}?${new URLSearchParams({ outcome }).toString()}`;
+
 /** `/signin?next=…`: where sign-in sends a visitor back to once they are in. */
 export const signInWithNext = (intended: string): string =>
   `${paths.signIn}?${new URLSearchParams({ [NEXT_PARAM]: intended }).toString()}`;

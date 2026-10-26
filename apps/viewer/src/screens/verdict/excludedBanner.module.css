@@ -1,0 +1,15 @@
+/*
+ * The banner's own area while the run's sessions are being read.
+ *
+ * Every value is a token of `docs/design/tokens.css`, which `src/main.tsx` imports: the
+ * height is the two lines of `.notice` copy plus the padding and border that notice
+ * carries, so that the headline below does not move when the count arrives.
+ */
+
+.reserved {
+  height: calc(
+    2 * var(--text-sm) * var(--leading-normal) + 2 * var(--space-4) + 2 * var(--border-width)
+  );
+  margin-bottom: var(--space-6);
+  border-radius: var(--radius-md);
+}

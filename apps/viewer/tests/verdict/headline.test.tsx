@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { screen, waitFor } from '@testing-library/react';
+import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { forgetRuns, mountApp, serveRunData } from '../app';
@@ -147,6 +148,31 @@ describe('the reasons', () => {
   });
 });
 
+describe('the answer without sight of it', () => {
+  it('is clean under axe, from the audience line to the reasons', async () => {
+    await serveRunData();
+    const { container } = mountApp(paths.run(SEED_RUN_ID));
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-section="reasons"]')).not.toBeNull();
+    });
+
+    const lead = container.querySelector('.strip-sm') as HTMLElement;
+    const results = await axe.run(lead, { resultTypes: ['violations'] });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  });
+
+  it('puts the answer in the document outline as the screen’s one heading of its rank', async () => {
+    const run = seedRun();
+    await serveRunData();
+    mountApp(paths.run(SEED_RUN_ID));
+
+    const headings = await screen.findAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect((headings[0] as HTMLElement).textContent).toBe(run.verdict.audienceSentence);
+  });
+});
+
 describe('what this screen does not show', () => {
   it('carries no friction score, no components and no spread: that is #107’s screen', async () => {
     const run = seedRun();
@@ -158,7 +184,16 @@ describe('what this screen does not show', () => {
     });
 
     const text = container.textContent ?? '';
-    expect(text).not.toMatch(/friction/i);
+
+    // The lead — the audience line, the answer, the figures, the reasons — does not say
+    // the word at all. Further down the screen two sections do, in the prototype's own
+    // wording: #16's door offers "the friction score, its four parts and the run-to-run
+    // spread" one click deeper, and #14's disclaimer says the screen "locates friction".
+    // Naming what lies behind a door is not putting it on this screen, so the word alone
+    // is not the test; what follows is.
+    const lead = container.querySelector('.strip-sm') as HTMLElement;
+    expect(lead.textContent).not.toMatch(/friction/i);
+
     // The score's own verdict line, its gap and its spread are all absent.
     expect(text).not.toContain(run.verdict.sentence);
     expect(text).not.toContain(`${run.verdict.gapPoints} points`);
