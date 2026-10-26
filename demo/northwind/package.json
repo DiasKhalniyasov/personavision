@@ -5,10 +5,14 @@
   "type": "module",
   "description": "The northwind demo shop: static checkout variants served from disk, and the server that serves them",
   "exports": {
-    "./serve.ts": "./serve.ts"
+    "./serve.ts": "./serve.ts",
+    "./defects.ts": "./defects.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@personavision/scoring": "workspace:*"
   }
 }

@@ -10,5 +10,5 @@
     "sourceMap": false,
     "allowImportingTsExtensions": true
   },
-  "include": ["serve.ts", "test"]
+  "include": ["serve.ts", "defects.ts", "test"]
 }
