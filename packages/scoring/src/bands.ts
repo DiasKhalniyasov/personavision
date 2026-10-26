@@ -20,13 +20,24 @@ export interface Band {
   readonly high: number;
 }
 
+/** A friction score is points out of 100, which is the range a band of them can occupy. */
+const SCALE = { min: 0, max: 100 } as const;
+const onScale = (points: number): number => Math.min(Math.max(points, SCALE.min), SCALE.max);
+
 /**
  * A variant's band. `sd` is zero for a single seed group, which makes the band a point —
  * one group has a score but no spread, and a point band is the honest shape of that.
+ *
+ * **The bounds are held on the 0–100 scale**, because a band of friction scores is a range
+ * of friction scores and `-12` is not one. Seed groups scoring 0, 0 and 20 have a median of
+ * 0 and a deviation near 12, which would otherwise print as `A -12–12`: half of it outside
+ * the scale, and its minus sign against the range dash. Clamping can only pull a bound
+ * towards the middle, and a median is itself on the scale, so it never turns two bands that
+ * overlapped into two that do not.
  */
 export const bandOf = (score: VariantScore): Band => ({
-  low: score.frictionScore.median - score.frictionScore.sd,
-  high: score.frictionScore.median + score.frictionScore.sd,
+  low: onScale(score.frictionScore.median - score.frictionScore.sd),
+  high: onScale(score.frictionScore.median + score.frictionScore.sd),
 });
 
 /**

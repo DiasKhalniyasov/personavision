@@ -161,6 +161,19 @@ describe('the sentence, in the voice of the prototype’s verdict line', () => {
       write([PROTOTYPE_CLEAN, PROTOTYPE_DEFECTIVE]).sentence,
     );
   });
+
+  it('prints every band inside the 0–100 scale a friction score lives on', () => {
+    // Groups of 0, 0 and 20 put the deviation near 12 around a median of 0, so the band
+    // runs below the bottom of the scale. `-12–12` is half a range of scores and half a
+    // minus sign against a range dash.
+    const floor = scoreOf({ variant: 'A', median: 0, sd: 11.547, groups: [0, 0, 20] });
+    const ceiling = scoreOf({ variant: 'B', median: 100, sd: 11.547, groups: [80, 100, 100] });
+    const { sentence } = write([floor, ceiling]);
+
+    expect(sentence).toContain('A 0–12');
+    expect(sentence).toContain('B 88–100');
+    expect(sentence).not.toContain('-');
+  });
 });
 
 describe('a pair whose ± 1σ bands overlap', () => {
@@ -174,7 +187,7 @@ describe('a pair whose ± 1σ bands overlap', () => {
 
   it('says the gap did not hold', () => {
     expect(write([closeClean, closeDefective]).sentence).toBe(
-      'Variant B is harder by 4 points, but the gap did not hold: the gap held in 2 of 3 seed groups and the bands overlap (A 24–36, B 28–40).',
+      'Variant B is harder by 4 points, but the gap did not hold: the bands overlap (A 24–36, B 28–40) and 2 of 3 seed groups put B higher.',
     );
   });
 
@@ -182,6 +195,20 @@ describe('a pair whose ± 1σ bands overlap', () => {
     const { sentence } = write([closeClean, closeDefective]);
     expect(sentence).toContain('did not hold');
     expect(sentence).not.toContain('do not overlap');
+  });
+
+  it('never says the gap both held and did not hold', () => {
+    // Every seed group can put one variant higher while the bands still overlap, and that
+    // is a real reading — but "the gap did not hold: the gap held in all 3 seed groups" is
+    // not a sentence, so the overlap case says what the groups did instead.
+    const a = scoreOf({ variant: 'A', median: 45, sd: 10, groups: [35, 45, 55] });
+    const b = scoreOf({ variant: 'B', median: 50, sd: 10, groups: [40, 50, 60] });
+    const { sentence } = write([a, b]);
+
+    expect(sentence).toBe(
+      'Variant B is harder by 5 points, but the gap did not hold: the bands overlap (A 35–55, B 40–60) and all 3 seed groups put B higher.',
+    );
+    expect(sentence).not.toContain('gap held');
   });
 
   it('counts bands that meet at one point as overlapping', () => {
@@ -274,7 +301,7 @@ describe('two variants that scored the same', () => {
 
   it('says neither variant is harder, rather than naming one', () => {
     expect(write([a, b]).sentence).toBe(
-      'Neither variant is harder: A and B both scored 22 points. The gap held in 1 of 3 seed groups and the bands overlap (A 19–25, B 19–25), so the gap did not hold.',
+      'Neither variant is harder: A and B both scored 22 points. The bands overlap (A 19–25, B 19–25) and 1 of 3 seed groups put B higher, so the gap did not hold.',
     );
   });
 

@@ -210,6 +210,38 @@ describe('audienceSentence: the headline, in the user’s words', () => {
     expect(written.audienceSentence).not.toContain('not on B');
   });
 
+  it('says "about as often" on equal completion, however wide the friction gap', () => {
+    // The headline is about completion, so a friction gap wide enough to separate the bands
+    // must not write "on A, not on B" over two versions the same share of the audience
+    // finished on. Five of ten on each, 20 ± 1 against 80 ± 1.
+    const sameCompletion = {
+      easy: scoreOf({
+        variant: 'A',
+        median: 20,
+        sd: 1,
+        groups: [19, 20, 21],
+        success: 5,
+        scored: 10,
+      }),
+      hard: scoreOf({
+        variant: 'B',
+        median: 80,
+        sd: 1,
+        groups: [79, 80, 81],
+        success: 5,
+        scored: 10,
+      }),
+    };
+    const written = write([sameCompletion.easy, sameCompletion.hard]);
+
+    expect(written.bandsDisjoint).toBe(true);
+    expect(written.preferredVariant).toBe('A');
+    expect(written.audienceSentence).toBe(
+      'Outdoor-gear shoppers buy a tent about as often on A as on B, but A is the easier of the two to get through.',
+    );
+    expect(written.audienceSentence).not.toContain('not on B');
+  });
+
   it('says so plainly when the two versions are completed about as often', () => {
     const tied = scoreOf({
       variant: 'B',
@@ -236,6 +268,48 @@ describe('audienceSentence: the headline, in the user’s words', () => {
       'VAT receipts for a purchase',
     );
     expect(goalPhrase(audienceWith({ goals: ['Buy a tent.'] }))).toBe('buy a tent');
+    // One capital letter is a heading's first letter, not an acronym: "A refund on A" is
+    // not a sentence.
+    expect(goalPhrase(audienceWith({ goals: ['A refund'] }))).toBe('a refund');
+  });
+
+  it('measures its own pair, not the widest pair in a run of three versions', () => {
+    // A is shipped on completion, C is the hardest and B the easiest. `bandsDisjoint` is
+    // the verdict line's claim about C against B; the headline names A against C and has to
+    // ask about that pair, or it asserts a separation nobody measured.
+    const shipped = scoreOf({
+      variant: 'A',
+      median: 50,
+      sd: 12,
+      groups: [38, 50, 62],
+      success: 9,
+      scored: 10,
+    });
+    const easiest = scoreOf({
+      variant: 'B',
+      median: 10,
+      sd: 2,
+      groups: [8, 10, 12],
+      success: 1,
+      scored: 10,
+    });
+    const hardest = scoreOf({
+      variant: 'C',
+      median: 55,
+      sd: 12,
+      groups: [43, 55, 67],
+      success: 2,
+      scored: 10,
+    });
+    const written = write([shipped, easiest, hardest]);
+
+    expect(written.harderVariant).toBe('C');
+    expect(written.preferredVariant).toBe('A');
+    // C's band (43–67) overlaps A's (38–62), so the headline does not claim a clean win.
+    expect(written.bandsDisjoint).toBe(true);
+    expect(written.audienceSentence).toBe(
+      'Outdoor-gear shoppers buy a tent on A more often than on C, but this test did not separate the two versions.',
+    );
   });
 
   it('falls back to the task for an audience that declares no goal', () => {

@@ -236,12 +236,13 @@ interface SentenceInput {
 }
 
 /**
- * How many seed groups agreed, as a clause that opens a sentence.
+ * How many seed groups agreed, for a result whose bands did come apart: the gap held, and
+ * this is how widely.
  *
  * "all 1 seed group" is not English, and a run with no seed groups to pair has not
  * disagreed about anything, so both are written out instead of being counted.
  */
-const agreementClause = ({ comparable, agreeing }: SeedGroupAgreement): string => {
+const gapHeldClause = ({ comparable, agreeing }: SeedGroupAgreement): string => {
   if (comparable === 0) return 'This run has no seed groups to agree';
   if (agreeing === comparable) {
     return comparable === 1
@@ -249,6 +250,30 @@ const agreementClause = ({ comparable, agreeing }: SeedGroupAgreement): string =
       : `The gap held in all ${comparable} seed groups`;
   }
   return `The gap held in ${agreeing} of ${comparable} seed group${comparable === 1 ? '' : 's'}`;
+};
+
+/**
+ * The same count for a result whose bands **overlap**, where it has to be said without the
+ * word "held".
+ *
+ * A sentence that says "the gap did not hold: the gap held in all 3 seed groups" is
+ * unreadable, and the two uses of the word mean different things — whether the run
+ * separated the variants at all, and whether one group put one of them higher. So this
+ * clause says what the groups did instead: every group can put a variant higher while the
+ * bands still overlap, and that is a real reading, not a contradiction.
+ */
+const groupsPutHigherClause = (
+  { comparable, agreeing }: SeedGroupAgreement,
+  harderVariant: string,
+): string => {
+  if (comparable === 0) return 'this run has no seed groups to compare';
+  if (agreeing === 0) return `no seed group put ${harderVariant} higher`;
+  if (agreeing === comparable) {
+    return comparable === 1
+      ? `the run's single seed group put ${harderVariant} higher`
+      : `all ${comparable} seed groups put ${harderVariant} higher`;
+  }
+  return `${agreeing} of ${comparable} seed groups put ${harderVariant} higher`;
 };
 
 /**
@@ -266,17 +291,17 @@ const sentenceOf = ({ harder, easiest, gapPoints, disjoint, agreement }: Sentenc
     return `Only variant ${harder.variant} was scored, so there was no gap to measure: it scored ${points(harder.frictionScore.median)} points and has no second band to be compared with.`;
   }
 
-  const held = agreementClause(agreement);
   const bands = `${bandText(easiest.variant, bandOf(easiest))}, ${bandText(harder.variant, bandOf(harder))}`;
 
   if (gapPoints === 0) {
-    return `Neither variant is harder: ${easiest.variant} and ${harder.variant} both scored ${points(harder.frictionScore.median)} points. ${held} and the bands overlap (${bands}), so the gap did not hold.`;
+    const groups = groupsPutHigherClause(agreement, harder.variant);
+    return `Neither variant is harder: ${easiest.variant} and ${harder.variant} both scored ${points(harder.frictionScore.median)} points. The bands overlap (${bands}) and ${groups}, so the gap did not hold.`;
   }
   if (!disjoint) {
-    const lowered = held.charAt(0).toLowerCase() + held.slice(1);
-    return `Variant ${harder.variant} is harder by ${points(gapPoints)} points, but the gap did not hold: ${lowered} and the bands overlap (${bands}).`;
+    const groups = groupsPutHigherClause(agreement, harder.variant);
+    return `Variant ${harder.variant} is harder by ${points(gapPoints)} points, but the gap did not hold: the bands overlap (${bands}) and ${groups}.`;
   }
-  return `Variant ${harder.variant} is harder by ${points(gapPoints)} points. ${held} (${bands} — the bands do not overlap).`;
+  return `Variant ${harder.variant} is harder by ${points(gapPoints)} points. ${gapHeldClause(agreement)} (${bands} — the bands do not overlap).`;
 };
 
 /**
@@ -308,6 +333,14 @@ export const verdict: VerdictWriter = (scores, findings, audience) => {
   const agreement =
     easiest === null ? { comparable: 0, agreeing: 0 } : seedGroupAgreement(harder, easiest);
 
+  // The headline names the preferred variant against `other`, which with the two variants a
+  // comparison run has is the same pair the verdict line compares — but need not be with
+  // three, where the hardest and the easiest can both be variants the headline never names.
+  // So the headline asks about its own pair rather than borrowing `bandsDisjoint`, which is
+  // the verdict line's claim about the widest pair in the run.
+  const headlineSeparated =
+    other === null ? false : bandsDisjoint(bandOf(preferred), bandOf(other));
+
   const headline = headlineOf(findings);
 
   return {
@@ -317,7 +350,12 @@ export const verdict: VerdictWriter = (scores, findings, audience) => {
     seedGroupsAgreeing: agreement.agreeing,
     sentence: sentenceOf({ harder, easiest, gapPoints, disjoint, agreement }),
     preferredVariant: preferred.variant,
-    audienceSentence: audienceSentenceFor({ audience, preferred, other, separated: disjoint }),
+    audienceSentence: audienceSentenceFor({
+      audience,
+      preferred,
+      other,
+      separated: headlineSeparated,
+    }),
     reasons: reasonsOf(headline, preferred, other),
     headlineFindingIds: headline.map((finding) => finding.id),
     heroEvidence: heroEvidenceOf(findings, harder),

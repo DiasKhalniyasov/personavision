@@ -24,13 +24,15 @@ const UNNAMED_GOAL = 'complete the task';
  *
  * An audience's goals are written down as headings — "Buy a tent" — and the headline puts
  * one mid-sentence, so its first letter is lowered. An acronym keeps its capitals, because
- * there the capitals are the word and not a heading's styling.
+ * there the capitals are the word and not a heading's styling. A single capital letter is
+ * not an acronym: "A refund" is a heading, and "A refund on A" is not a sentence.
  */
 export const goalPhrase = (audience: Audience): string => {
   const goal = audience.goals[0]?.trim().replace(/[.!?]+$/, '') ?? '';
   if (goal.length === 0) return UNNAMED_GOAL;
   const [firstWord] = goal.split(' ');
-  const isAcronym = firstWord === firstWord.toUpperCase() && /[A-Z]/.test(firstWord);
+  const isAcronym =
+    firstWord.length > 1 && firstWord === firstWord.toUpperCase() && /[A-Z]/.test(firstWord);
   return isAcronym ? goal : goal[0].toLowerCase() + goal.slice(1);
 };
 
@@ -69,11 +71,17 @@ export const audienceSentenceFor = ({
   if (other === null) {
     return `${audience.name} ${goal} on ${preferred.variant}; there was no second version to compare it with.`;
   }
+  // The headline is a statement about **completion**, so two versions the same share of the
+  // audience finished on are "about as often" whatever their friction bands did. Asking
+  // `separated` first would let a wide friction gap write "on A, not on B" over two versions
+  // the audience completed exactly as often — the one sentence that is quoted everywhere.
+  if (preferred.completionRate === other.completionRate) {
+    return separated
+      ? `${audience.name} ${goal} about as often on ${preferred.variant} as on ${other.variant}, but ${preferred.variant} is the easier of the two to get through.`
+      : `${audience.name} ${goal} about as often on ${preferred.variant} as on ${other.variant}: this test did not separate the two versions.`;
+  }
   if (separated) {
     return `${audience.name} ${goal} on ${preferred.variant}, not on ${other.variant}.`;
-  }
-  if (preferred.completionRate === other.completionRate) {
-    return `${audience.name} ${goal} about as often on ${preferred.variant} as on ${other.variant}: this test did not separate the two versions.`;
   }
   return `${audience.name} ${goal} on ${preferred.variant} more often than on ${other.variant}, but this test did not separate the two versions.`;
 };
