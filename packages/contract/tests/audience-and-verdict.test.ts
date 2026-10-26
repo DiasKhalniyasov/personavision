@@ -582,3 +582,17 @@ describe('a round trip through the writer and the reader', () => {
     }
   });
 });
+
+describe('a schemaVersion that is not a version at all', () => {
+  const runDir = describeRunDir();
+
+  it('says what it found rather than calling it missing', async () => {
+    const run: Record<string, unknown> = { ...validRun(), schemaVersion: '2' };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/schemaVersion`);
+    expect(violations[0].message).toBe('"2" is not a schema version: expected the number 2');
+  });
+});

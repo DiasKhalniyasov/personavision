@@ -25,10 +25,15 @@ export const SCHEMA_VERSION = 2;
  * rather than guessed at, so an old run on disk is identified and never silently misread.
  */
 const schemaVersion = z.literal(SCHEMA_VERSION, {
-  error: (issue) =>
-    typeof issue.input === 'number'
-      ? `written for schema version ${issue.input}, but this build reads schema version ${SCHEMA_VERSION}: regenerate the run directory`
-      : `missing: every artifact file states the schema version it was written for (${SCHEMA_VERSION})`,
+  error: (issue) => {
+    if (issue.input === undefined) {
+      return `missing: every artifact file states the schema version it was written for (${SCHEMA_VERSION})`;
+    }
+    if (typeof issue.input === 'number') {
+      return `written for schema version ${issue.input}, but this build reads schema version ${SCHEMA_VERSION}: regenerate the run directory`;
+    }
+    return `${JSON.stringify(issue.input)} is not a schema version: expected the number ${SCHEMA_VERSION}`;
+  },
 });
 
 const name = z.string().min(1);
