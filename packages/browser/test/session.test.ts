@@ -292,8 +292,11 @@ describe('the seams that need no browser', () => {
     expect(toAoiEntries([])).toEqual([]);
   });
 
-  it('never recognises an error as one of ours yet, so the caller rethrows', () => {
-    expect(mapToAutomationFailure(new Error('Timeout 30000ms exceeded'))).toBeNull();
+  // Filled by #50 and asserted in `failures.test.ts`: a driver timeout is one of ours, and
+  // an error this module cannot place still reaches the caller.
+  it('reads an error of ours, and places nothing it cannot place', () => {
+    expect(mapToAutomationFailure(new Error('Timeout 30000ms exceeded'))).toBe('timeout');
+    expect(mapToAutomationFailure(new Error('the shop declined the card'))).toBeNull();
     expect(mapToAutomationFailure('not even an error')).toBeNull();
   });
 
@@ -325,7 +328,9 @@ describe('the seams that need no browser', () => {
     );
   });
 
-  it('runs what the budget is given once, and counts nothing yet', async () => {
+  // Filled by #50 and asserted in `budget.test.ts`: an operation that works runs once, and
+  // the counters a session artifact records are the attempt's, not nothing.
+  it('runs what the budget is given once, and counts the attempt', async () => {
     const budget = new SessionBudget({ maxRetries: 2, wallClockMs: 1000 });
     let runs = 0;
 
@@ -337,12 +342,13 @@ describe('the seams that need no browser', () => {
     ).resolves.toBe('done');
 
     expect(runs).toBe(1);
-    expect(budget.integrity()).toEqual({
-      attempts: 0,
+    expect(budget.integrity()).toMatchObject({
+      attempts: 1,
       retries: 0,
-      elapsedMs: 0,
+      selectorFailures: 0,
       exhausted: false,
     });
+    expect(budget.sessionIntegrity()).toEqual({ selectorFailures: 0, retries: 0 });
   });
 
   it('has no fixture source and no live source yet', () => {

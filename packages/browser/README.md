@@ -59,6 +59,10 @@ function each behind it without changing a name.
 | `act`                                | Click, scroll, type, back — and what the page became                 |
 | `SessionBudget`                      | The per-session cap on retries and wall-clock time                   |
 | `mapToAutomationFailure`             | A thrown error, read as one of our four reasons                      |
+| `toAutomationFailure`                | That reason, worded with what was being attempted                    |
+| `navigationFailure` `frameFailure`   | The two failures of ours that nothing throws                         |
+| `watchFrameFailures`                 | A page's frame failures, as they arrive                              |
+| `toAutomationFailureOutcome`         | The session outcome a failure of ours produces                       |
 | `withCache`                          | Capture caching, keyed on content                                    |
 | `createLiveSource` `walkTask`        | The `CaptureSource` over Chromium, and the walk above it             |
 | `createFixtureSource`                | The `CaptureSource` that replays captures from disk                  |
@@ -75,8 +79,6 @@ tests and captures.
 | `detectStep`                             | `null`                        |
 | `resolvePrimaryAction`                   | the elements, unchanged       |
 | `act`                                    | throws `act: not implemented` |
-| `SessionBudget`                          | runs the work once, no caps   |
-| `mapToAutomationFailure`                 | `null`; the caller rethrows   |
 | `withCache`                              | always a miss                 |
 | `createFixtureSource` `createLiveSource` | throw                         |
 
