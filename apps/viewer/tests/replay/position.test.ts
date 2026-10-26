@@ -3,7 +3,6 @@ import type { Run, Session } from '@personavision/contract';
 import { EXAMPLE_RUN_BASE, exampleRunFetch } from '../../src/session/fixtures.js';
 import { openRun, sessionTimeline } from '../../src/session/index.js';
 import {
-  captureFor,
   clockLabel,
   fixationFromParam,
   fixationLabel,
@@ -11,6 +10,7 @@ import {
   gazeTrail,
   timeLabel,
 } from '../../src/screens/replay/position';
+import { captureFor } from '../../src/screens/replay/runWords';
 
 /**
  * The replay's arithmetic, over the committed example run.

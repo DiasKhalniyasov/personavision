@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import type { Run, Session } from '@personavision/contract';
 import { Skeleton } from '@/components/ui/skeleton';
 import { sessionTimeline } from '@/session/index.js';
+import { paths } from '@/shell/paths';
 import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
@@ -11,15 +12,9 @@ import { ReplayHeader } from './ReplayHeader';
 import { Scrubber } from './Scrubber';
 import { SessionNotFound } from './SessionNotFound';
 import { useReplaySession } from './useReplaySession';
-import {
-  captureFor,
-  clockLabel,
-  fixationFromParam,
-  fixationLabel,
-  FIX_PARAM,
-  timeLabel,
-} from './position';
-import './replay.css';
+import { clockLabel, fixationFromParam, fixationLabel, FIX_PARAM, timeLabel } from './position';
+import styles from './replay.module.css';
+import { captureFor, stepLabel, variantName } from './runWords';
 
 /**
  * `/runs/:runId/sessions/:sessionId?fix=` — the half a designer watches: the page as this
@@ -52,32 +47,40 @@ export function ReplayPage() {
     );
   }
   if (run.status === 'loading' || session.status === 'loading') {
-    return <ReplayLoading sessionId={sessionId} />;
+    return <ReplayLoading runId={runId} sessionId={sessionId} />;
   }
 
   return <Replay run={run.run} session={session.session} screenshotUrl={session.screenshotUrl} />;
 }
 
 /**
- * While the session file is read. The heading is what the manifest already knows — which
- * person this is — and the frame is held at its own size in the shell's loading convention,
- * so the screen does not jump when the gaze arrives.
+ * While the session file is read.
+ *
+ * The header is what the run's manifest already knows, which is the breadcrumb and which
+ * person this is: `run.json` lists the session ids and the personas, but nothing in it says
+ * which persona, version or seed a given session was — those are the session file's own,
+ * and are filled in when it arrives. The frame is held at its own size in the shell's
+ * loading convention, so the screen does not jump underneath the reader.
  */
-function ReplayLoading({ sessionId }: { sessionId: string }) {
+function ReplayLoading({ runId, sessionId }: { runId: string; sessionId: string }) {
   return (
     <div className="strip">
       <div className="wrap">
+        <p className="breadcrumb">
+          <Link to={paths.run(runId)}>Verdict</Link> /{' '}
+          <Link to={paths.sessions(runId)}>People</Link> / {sessionId}
+        </p>
         <div className="pagehead">
           <h1>{sessionId}</h1>
         </div>
         <p className="lede">Reading this person&rsquo;s session.</p>
-        <div className="replay">
+        <div className={styles.replay}>
           <div>
-            <div className="frame is-mobile" id="rp-frame">
+            <div className={`${styles.frame} ${styles.mobile}`} id="rp-frame">
               <Skeleton className="size-full rounded-none" />
             </div>
           </div>
-          <div className="timeline" id="rp-timeline" />
+          <div className={styles.timeline} id="rp-timeline" />
         </div>
       </div>
     </div>
@@ -118,12 +121,10 @@ function Replay({
 
   const current = moment.screen;
   const capture = current === null ? null : captureFor(run, session.variant, current.step);
-  const stepLabel =
-    run.steps.find((candidate) => candidate.id === current?.step)?.label ??
-    current?.step ??
-    'first';
-  const variantName =
-    run.variants.find((variant) => variant.id === session.variant)?.name ?? session.variant;
+  // A session with no screens at all has no step to name; the frame then says it holds no
+  // screenshot, and the words around it still read.
+  const screenName = current === null ? 'first' : stepLabel(run, current.step);
+  const version = variantName(run, session.variant);
 
   /**
    * The whole position in words, which the slider announces: a reader who cannot see the
@@ -132,14 +133,14 @@ function Replay({
   const position =
     timeline.fixationCount === 0
       ? 'no fixations were recorded'
-      : `${fixationLabel(fixationNumber, timeline.fixationCount)}, ${timeLabel(moment.tMs)} of ${timeLabel(timeline.durationMs)}, on the ${stepLabel} screen`;
+      : `${fixationLabel(fixationNumber, timeline.fixationCount)}, ${timeLabel(moment.tMs)} of ${timeLabel(timeline.durationMs)}, on the ${screenName} screen`;
 
   return (
     <div className="strip">
       <div className="wrap">
         <ReplayHeader run={run} session={session} />
 
-        <div className="replay">
+        <div className={styles.replay}>
           <div>
             <ReplayFrame
               session={session}
@@ -148,8 +149,8 @@ function Replay({
               screenshotUrl={
                 current === null ? null : screenshotUrl(session.variant, current.step).toString()
               }
-              screenLabel={stepLabel}
-              variantName={variantName}
+              screenLabel={screenName}
+              variantName={version}
             />
             <Scrubber
               fixationNumber={fixationNumber}
@@ -162,7 +163,7 @@ function Replay({
           </div>
 
           {/* #24 fills this with the screen intent and the event log, #25 with the outcome card. */}
-          <div className="timeline" id="rp-timeline" />
+          <div className={styles.timeline} id="rp-timeline" />
         </div>
 
         <SimulatedDisclaimer />

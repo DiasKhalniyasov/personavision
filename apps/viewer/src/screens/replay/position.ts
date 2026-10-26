@@ -1,5 +1,6 @@
-import type { Run, Session } from '@personavision/contract';
+import type { Session } from '@personavision/contract';
 import type { TimelineMoment } from '@/session/index.js';
+import type { Capture } from './runWords';
 
 /**
  * The arithmetic behind the replay: where the scrubber is, what the clock reads, where the
@@ -9,7 +10,8 @@ import type { TimelineMoment } from '@/session/index.js';
  * answers themselves. The session's own clock — which screen covers a time, which fixation
  * is current, how a step moves — is `src/session/timeline.ts` (#20) and is not re-derived
  * here; what this module adds is the **geometry**, which is the screen's own business: a
- * fixation is recorded in page pixels and has to be drawn in a frame of a different size.
+ * fixation is recorded in the device pixels of its own screen's viewport, and has to be
+ * drawn in a frame of a different size.
  *
  * Every number below comes out of the run artifact. None of them is a visual value, so
  * none of them belongs in `docs/design/tokens.css`: a fixation's position is data.
@@ -50,18 +52,6 @@ export function fixationLabel(fixationNumber: number, fixationCount: number): st
   return `fixation ${fixationNumber} of ${fixationCount}`;
 }
 
-/** One captured page, as `run.json`'s `screenshots[]` records it. */
-export type Capture = Run['screenshots'][number];
-
-/**
- * The capture a session's screen was taken from: the one for this session's variant and
- * that screen's step. `null` when the run records no such capture, which leaves the frame
- * saying so rather than drawing a page at a guessed size.
- */
-export function captureFor(run: Run, variant: string, step: string): Capture | null {
-  return run.screenshots.find((shot) => shot.variant === variant && shot.step === step) ?? null;
-}
-
 export interface FrameGeometry {
   /** The frame holds one viewport, so a portrait capture is drawn in the phone frame. */
   readonly portrait: boolean;
@@ -81,6 +71,14 @@ export interface FrameGeometry {
  * behind it: that is what makes "scrolled to that screen's `scrollY`" a position rather
  * than a picture of a whole page. Everything is expressed as a percentage of the frame, so
  * the image, the fold and the gaze layer stay in register at any rendered size.
+ *
+ * The fold is the one measurement here that the tokens also carry a figure for
+ * (`--frame-fold-mobile: 46%`). That figure places the fold over the prototype's *drawn*
+ * page, which is a sketch at no particular scale; over a real screenshot the fold is where
+ * the capture says the first viewport ended, which is why it is computed. On a screen
+ * nobody scrolled that lands on the frame's bottom edge — which is the truth: everything
+ * in view is above the fold — and as the session scrolls, the marker rises through the
+ * frame.
  */
 export function frameGeometry(capture: Capture, scrollY: number): FrameGeometry {
   const { width, height } = capture.viewport;

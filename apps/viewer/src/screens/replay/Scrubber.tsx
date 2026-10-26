@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { fixationLabel } from './position';
+import styles from './replay.module.css';
 
 /**
  * `.scrub`: one control over one clock.
@@ -35,8 +36,8 @@ export function Scrubber({
   const empty = fixationCount === 0;
 
   return (
-    <div className="scrub">
-      <div className="row">
+    <div className={styles.scrub}>
+      <div className={styles.row}>
         <Button
           id="rp-prev"
           variant="outline"
@@ -57,12 +58,12 @@ export function Scrubber({
         >
           Fixation &rarr;
         </Button>
-        <span className="clock num" id="rp-clock">
+        <span className={`${styles.clock} num`} id="rp-clock">
           {clock}
         </span>
       </div>
 
-      <div className="row">
+      <div className={styles.row}>
         <Slider
           id="rp-range"
           min={1}

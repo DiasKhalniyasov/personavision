@@ -1,4 +1,5 @@
 import type { GazeTrail } from './position';
+import styles from './replay.module.css';
 
 /**
  * `#rp-vec`: the gaze drawn over the frame — the fixations up to the scrubber's position,
@@ -32,12 +33,12 @@ const NUMBER_SIZE = 3;
 
 export function GazeOverlay({ trail }: { trail: GazeTrail }) {
   return (
-    <div className="layer" id="rp-vec">
+    <div className={styles.layer} id="rp-vec">
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
         {trail.hops.map((hop) => (
           <line
             key={`${hop.fromNumber}-${hop.toNumber}`}
-            className="saccade"
+            className={styles.saccade}
             x1={hop.fromXPct}
             y1={hop.fromYPct}
             x2={hop.toXPct}
@@ -48,7 +49,7 @@ export function GazeOverlay({ trail }: { trail: GazeTrail }) {
         {trail.marks.map((mark) => (
           <g key={mark.number}>
             <ellipse
-              className="fixation"
+              className={styles.fixation}
               data-fixation={mark.number}
               data-current={mark.current ? '' : undefined}
               cx={mark.xPct}

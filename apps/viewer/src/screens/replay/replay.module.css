@@ -7,8 +7,10 @@
    the fold falls and where a fixation lands are read out of the run artifact and
    set inline by the components, because they are data and not design.
 
-   Scoped under `.replay` so that the prototype's generic names — `.frame`,
-   `.page`, `.layer` — belong to this screen and cannot reach another.
+   A CSS module, as the other screens' stylesheets are: the prototype's generic
+   names — `.frame`, `.page`, `.layer` — then belong to this screen and cannot
+   reach another. The one global it reaches for is `.footnote`, which
+   `src/styles/base.css` owns and which this screen only re-spaces.
    ========================================================================== */
 
 .replay {
@@ -23,7 +25,7 @@
 
 /* ---- The device frame -------------------------------------------------- */
 
-.replay .frame {
+.frame {
   position: relative;
   overflow: hidden;
   aspect-ratio: var(--frame-ratio-desktop);
@@ -33,27 +35,27 @@
   box-shadow: var(--shadow-md);
 }
 
-.replay .frame.is-mobile {
+.frame.mobile {
   aspect-ratio: var(--frame-ratio-mobile);
   max-width: var(--frame-width-mobile);
   margin-inline: auto;
 }
 
 /* The screenshot, dimmed so the gaze marks read on top of it. */
-.replay .page {
+.page {
   position: absolute;
   inset: 0;
   overflow: hidden;
 }
 
-.replay .page img {
+.page img {
   position: absolute;
   left: 0;
   display: block;
   width: 100%;
 }
 
-.replay .frame.dim .page::after {
+.frame.dim .page::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -62,7 +64,7 @@
 }
 
 /* A screenshot that will not load leaves the frame in place and says so. */
-.replay .page .missing {
+.missing {
   position: absolute;
   inset: 0;
   z-index: 3;
@@ -76,7 +78,7 @@
 
 /* ---- The fold ---------------------------------------------------------- */
 
-.replay .fold {
+.fold {
   position: absolute;
   right: 0;
   left: 0;
@@ -87,7 +89,7 @@
 
 /* The label sits above the line: at an unscrolled screen the fold is the frame's
    own bottom edge, where the prototype's placement below the line is clipped. */
-.replay .fold span {
+.fold span {
   position: absolute;
   right: var(--space-2);
   bottom: var(--space-1);
@@ -99,14 +101,14 @@
 
 /* ---- The gaze layer ---------------------------------------------------- */
 
-.replay .layer {
+.layer {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
 }
 
-.replay .layer svg {
+.layer svg {
   display: block;
   overflow: visible;
   width: 100%;
@@ -116,22 +118,22 @@
 /* The gaze tokens, and nothing else: a fixation's size is its dwell, which is
    data, and the current one is told apart by its own colour rather than by a
    second treatment. */
-.replay .layer .saccade {
+.saccade {
   stroke: var(--gaze-saccade);
   stroke-width: var(--gaze-saccade-width);
 }
 
-.replay .layer .fixation {
+.fixation {
   fill: var(--gaze-fixation);
 }
 
-.replay .layer .fixation[data-current] {
+.fixation[data-current] {
   fill: var(--gaze-fixation-current);
 }
 
 /* The label's size is a `viewBox` length and is set on the element itself; what the
    stylesheet gives it is the family, the weight and the gaze tokens' own label colour. */
-.replay .layer text {
+.layer text {
   fill: var(--gaze-fixation-label);
   font-family: var(--font-sans);
   font-weight: var(--weight-bold);
@@ -139,34 +141,34 @@
 
 /* ---- The scrubber ------------------------------------------------------ */
 
-.replay .scrub {
+.scrub {
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-5);
 }
 
-.replay .scrub .row {
+.row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
-.replay .scrub [data-slot='slider'] {
+.scrub [data-slot='slider'] {
   flex: 1;
 }
 
-.replay .scrub .clock {
+.clock {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 
-.replay .scrub .footnote {
+.scrub :global(.footnote) {
   margin-top: 0;
 }
 
 /* The column #24 and #25 fill. */
-.replay .timeline {
+.timeline {
   display: grid;
   gap: var(--space-4);
 }

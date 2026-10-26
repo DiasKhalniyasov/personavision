@@ -2,7 +2,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { forget, mountApp, readSeedSession, SEED_RUN, serveRunData, sessionPath } from './harness';
 
@@ -74,6 +74,25 @@ describe('the header', () => {
     expect(screen.getByRole('link', { name: 'People' }).getAttribute('href')).toBe(
       `/runs/${SEED_RUN}/sessions`,
     );
+  });
+
+  it('names the person while their session is being read, and holds the frame', async () => {
+    await serveRunData();
+    const served = globalThis.fetch;
+    // The one file this screen waits for never arrives, so the loading state stays up.
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+      const { pathname } = new URL(String(input instanceof Request ? input.url : input));
+      if (pathname === sessionPath('S-15')) return new Promise<Response>(() => {});
+      return served(input);
+    });
+
+    const { container } = mountApp(replay('S-15'));
+
+    expect(await screen.findByRole('link', { name: 'People' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('S-15');
+    expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    // Nothing that needs the session itself is on screen yet.
+    expect(container.querySelector('#rp-clock')).toBeNull();
   });
 
   it('states a not-found rather than throwing on a person this test does not hold', async () => {

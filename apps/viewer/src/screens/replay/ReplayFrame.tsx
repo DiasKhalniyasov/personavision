@@ -3,7 +3,8 @@ import type { Session } from '@personavision/contract';
 import type { TimelineMoment } from '@/session/index.js';
 import { GazeOverlay } from './GazeOverlay';
 import { frameGeometry, gazeTrail } from './position';
-import type { Capture } from './position';
+import styles from './replay.module.css';
+import type { Capture } from './runWords';
 
 /**
  * `#rp-frame`: the page as this person saw it at the scrubber's moment.
@@ -34,13 +35,16 @@ export function ReplayFrame({
   // A screenshot that will not load is stated in words rather than left blank: the seed
   // run's screenshots are rendered placeholders, and an empty frame would read as "the
   // agent saw nothing", which is the one thing this screen must never say.
-  const [broken, setBroken] = useState(false);
+  //
+  // What is remembered is **which** screenshot failed, not that one did: scrubbing on to
+  // the next screen asks for a different file, and that one deserves its own chance.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
 
   if (capture === null || screenshotUrl === null) {
     return (
-      <div className="frame dim" id="rp-frame">
-        <div className="page" id="rp-page">
-          <p className="missing">
+      <div className={`${styles.frame} ${styles.dim}`} id="rp-frame">
+        <div className={styles.page} id="rp-page">
+          <p className={styles.missing}>
             This test holds no screenshot of the {screenLabel} screen on {variantName}, so there is
             nothing to show the gaze over.
           </p>
@@ -49,15 +53,19 @@ export function ReplayFrame({
     );
   }
 
+  const broken = brokenUrl === screenshotUrl;
   const scrollY = moment.scrollY ?? 0;
   const geometry = frameGeometry(capture, scrollY);
   const trail = gazeTrail(session, moment, capture);
 
   return (
-    <div className={geometry.portrait ? 'frame is-mobile dim' : 'frame dim'} id="rp-frame">
-      <div className="page" id="rp-page">
+    <div
+      className={[styles.frame, geometry.portrait ? styles.mobile : '', styles.dim].join(' ')}
+      id="rp-frame"
+    >
+      <div className={styles.page} id="rp-page">
         {broken ? (
-          <p className="missing">
+          <p className={styles.missing}>
             The screenshot of the {screenLabel} screen could not be loaded. The gaze below is this
             person&rsquo;s own, at {scrollY} pixels down that page.
           </p>
@@ -66,13 +74,13 @@ export function ReplayFrame({
             src={screenshotUrl}
             alt={`The ${screenLabel} screen of ${variantName} as this person saw it`}
             style={{ top: `${geometry.pageTopPct}%`, height: `${geometry.pageHeightPct}%` }}
-            onError={() => setBroken(true)}
+            onError={() => setBrokenUrl(screenshotUrl)}
           />
         )}
       </div>
       <GazeOverlay trail={trail} />
       {geometry.foldTopPct === null ? null : (
-        <div className="fold" style={{ top: `${geometry.foldTopPct}%` }} data-fold>
+        <div className={styles.fold} style={{ top: `${geometry.foldTopPct}%` }} data-fold>
           <span>fold</span>
         </div>
       )}

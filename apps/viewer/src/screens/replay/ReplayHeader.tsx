@@ -4,6 +4,7 @@ import { attributionWords, outcomeWords } from '@/session/index.js';
 import type { Attribution, OutcomeStatus } from '@/session/index.js';
 import { paths } from '@/shell/paths';
 import { timeLabel } from './position';
+import { stepLabel, variantName } from './runWords';
 
 /**
  * Who this was, before anything moves: the breadcrumb, the heading and the tag line of
@@ -55,10 +56,8 @@ const atFault = (label: string): string =>
 export function ReplayHeader({ run, session }: { run: Run; session: Session }) {
   const persona = run.personas.find((candidate) => candidate.id === session.persona?.id) ?? null;
   const personaName = persona?.name ?? session.persona?.id ?? 'Imported participant';
-  const variantName =
-    run.variants.find((variant) => variant.id === session.variant)?.name ?? session.variant;
-  const stepLabel =
-    run.steps.find((step) => step.id === session.outcome.step)?.label ?? session.outcome.step;
+  const version = variantName(run, session.variant);
+  const endedOn = stepLabel(run, session.outcome.step);
   const outcome = outcomeWords(session.outcome.status);
   const attribution = attributionWords(session.outcome.attribution);
   const device = session.persona?.device ?? null;
@@ -67,7 +66,7 @@ export function ReplayHeader({ run, session }: { run: Run; session: Session }) {
   const heading = [
     session.sessionId,
     personaName,
-    variantName,
+    version,
     session.seed === null ? null : `seed ${session.seed}`,
   ].filter((part) => part !== null);
 
@@ -84,7 +83,7 @@ export function ReplayHeader({ run, session }: { run: Run; session: Session }) {
 
       <p className="lede">
         <span className={`tag tag-${session.variant.toLowerCase()}`}>
-          {session.variant} {variantName}
+          {session.variant} {version}
         </span>{' '}
         <span className={`tag ${OUTCOME_TAG[session.outcome.status]}`}>
           {outcome.label} at {timeLabel(session.durationMs)}
@@ -97,9 +96,9 @@ export function ReplayHeader({ run, session }: { run: Run; session: Session }) {
             ? null
             : `${device.name} · ${device.viewport.width} × ${device.viewport.height} · `}
           {session.fixations.length} fixations · {session.screens.length} screens · ended on the{' '}
-          {stepLabel} screen · generated from the {run.audience.name} audience, reproducible from
-          that audience, {session.seed === null ? 'its seed' : `seed ${session.seed}`} and the{' '}
-          {variantName} pages
+          {endedOn} screen · generated from the {run.audience.name} audience, reproducible from that
+          audience, {session.seed === null ? 'its seed' : `seed ${session.seed}`} and the {version}{' '}
+          pages
         </span>
       </p>
 
