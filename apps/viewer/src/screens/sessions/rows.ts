@@ -20,9 +20,18 @@ export function tagClass(token: string): string {
   return `tag-${token.replace(/^--(?:outcome|attr|variant)-/, '')}`;
 }
 
-/** Version A and version B keep one identity everywhere the two appear. */
+/**
+ * Version A and version B keep one identity everywhere the two appear.
+ *
+ * Those two are the only versions the tokens carry a colour for, and a version id is any
+ * name in the contract, so a third reads as information rather than as a chip with no
+ * colour at all — the same fallback the Verdict's findings use.
+ */
+const COLOURED_VARIANTS = ['a', 'b'];
+
 export function variantTagClass(variant: string): string {
-  return tagClass(`--variant-${variant.toLowerCase()}`);
+  const word = variant.toLowerCase();
+  return COLOURED_VARIANTS.includes(word) ? tagClass(`--variant-${word}`) : 'tag-info';
 }
 
 /** Seconds to one decimal, as every duration in the product reads. */
@@ -41,5 +50,9 @@ export function durationSeconds(durationMs: number): string {
  */
 export function whereItEnded(endedOn: SessionRow['endedOn'], reason: string): string {
   const step = endedOn.label ?? endedOn.step;
-  return reason.startsWith(step) ? reason : `${step} — ${reason}`;
+  // The step's own name, not merely its letters: "Reviewed the fees and left" opens with
+  // "Review" without naming the Review step, and dropping the step there would leave the
+  // one column headed "Where it ended" not saying where.
+  const names = reason === step || reason.startsWith(`${step} `);
+  return names ? reason : `${step} — ${reason}`;
 }

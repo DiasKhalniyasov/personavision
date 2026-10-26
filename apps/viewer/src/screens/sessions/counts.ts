@@ -21,6 +21,11 @@ export interface SessionCounts {
   readonly automationFailures: number;
 }
 
+/** Whether the scoring step has written this run's figures at all. */
+export function isScored(run: Run): boolean {
+  return run.scores.length > 0;
+}
+
 export function sessionCounts(run: Run): SessionCounts {
   return {
     people: run.sessionIds.length,
@@ -34,8 +39,16 @@ export function sessionCounts(run: Run): SessionCounts {
 
 const people = (count: number): string => `${count} ${count === 1 ? 'person' : 'people'}`;
 
-/** The line as the prototype's `microlabel` prints it. */
-export function countsLine(counts: SessionCounts): string {
+/**
+ * The line as the prototype's `microlabel` prints it.
+ *
+ * A run whose scoring step has not written `scores` yet — one still open, or one that
+ * failed — holds no figure to state, and "0 scored · 0 excluded" would be a flat denial
+ * that anybody was scored or excluded rather than a report that nobody has been scored
+ * yet. The people are still listed; the line says only what the run knows.
+ */
+export function countsLine(counts: SessionCounts, scored: boolean = true): string {
+  if (!scored) return `${people(counts.people)} · not scored yet`;
   return [
     people(counts.people),
     `${counts.scored} scored`,

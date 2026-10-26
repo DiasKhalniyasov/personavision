@@ -15,6 +15,7 @@ import {
 import type { SessionRow } from '@/session';
 import { paths } from '@/shell/paths';
 import { durationSeconds, tagClass, variantTagClass, whereItEnded } from './rows';
+import styles from './sessionsTable.module.css';
 import type { SessionRowState } from './useSessionRows';
 
 /**
@@ -24,8 +25,8 @@ import type { SessionRowState } from './useSessionRows';
  * The drill-down is a **link** in the Session column, so the row is reachable and
  * activatable with a keyboard and nothing non-semantic carries a tab stop; the row itself
  * is clickable as well, because that is how the prototype behaves and where a pointer
- * expects to click. The two never fire together — a click that landed on the link is the
- * link's.
+ * expects to click. The two never fire together — a click the link already handled, or one
+ * carrying a modifier that asks for a new tab, is left to the anchor.
  *
  * Nothing here decides anything about a session. Every value is the projection the session
  * module hands over, and `excludedFromScores` is printed as stored.
@@ -44,30 +45,20 @@ const COLUMNS = [
   'Where it ended',
 ] as const;
 
-/** The two figures a reader compares down the column, so they are right-aligned. */
+/** The two figures a reader compares down the column. */
 const FIGURES = new Set<string>(['Time', 'Fixations']);
-
-/**
- * A cell wraps. The registry's own cell does not, and nine columns of unbreakable text
- * push the table past the page: the reason a session ended — the column a designer came
- * for — is then the one scrolled out of sight. The prototype's `td` wraps and only its
- * `th` does not, which is what this restores.
- */
-const CELL = 'p-4 whitespace-normal';
-/** A figure never wraps: `22.4 s` is one reading, not two lines. */
-const FIGURE_CELL = `${CELL} num text-right whitespace-nowrap`;
-
-/**
- * A column heading, as the prototype's own `th` sets one: the overline treatment, in the
- * body family rather than the mono one `.microlabel` carries. The two rules are otherwise
- * the same, and a table head sat in mono above twenty-four rows of prose reads as data
- * rather than as a label.
- */
-const HEAD = 'faint h-auto px-4 py-3 text-2xs font-semibold tracking-wide uppercase';
 
 export function SessionsTable({ run, rows }: { run: Run; rows: readonly SessionRowState[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+    // The one scroll region of this screen, and a reader with no pointer has to be able to
+    // reach it: nine columns do not fit a phone, and the column that goes off the edge is
+    // the reason a session ended.
+    <div
+      className={styles.tablewrap}
+      tabIndex={0}
+      role="region"
+      aria-label="The people in this test"
+    >
       <Table>
         <TableCaption className="sr-only">
           The people in this test: one row each, in the order the test ran them.
@@ -75,10 +66,7 @@ export function SessionsTable({ run, rows }: { run: Run; rows: readonly SessionR
         <TableHeader>
           <TableRow>
             {COLUMNS.map((column) => (
-              <TableHead
-                key={column}
-                className={`${HEAD}${FIGURES.has(column) ? ' text-right' : ''}`}
-              >
+              <TableHead key={column} className={FIGURES.has(column) ? styles.figure : undefined}>
                 {column}
               </TableHead>
             ))}
@@ -98,20 +86,24 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
   const navigate = useNavigate();
   const to = paths.session(runId, state.sessionId);
 
-  // The whole row is a pointer target, and the link inside it is the keyboard's. A click
-  // that the link already handled must not navigate twice.
+  // The whole row is a pointer target, and the link inside it is the keyboard's. What the
+  // row must not do is take over a click the anchor would have served better: one that
+  // landed on the link, or one asking for a new tab, a new window or a background open.
   const open = (event: MouseEvent<HTMLTableRowElement>): void => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
     if (event.target instanceof Element && event.target.closest('a') !== null) return;
     void navigate(to);
   };
 
   return (
     <TableRow
-      className="cursor-pointer hover:bg-secondary"
+      className={styles.row}
       onClick={open}
       aria-busy={state.status === 'pending' ? true : undefined}
     >
-      <TableCell className={`${CELL} whitespace-nowrap`}>
+      <TableCell className={styles.tight}>
         <Link className="mono" to={to}>
           {state.sessionId}
         </Link>
@@ -119,13 +111,13 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
       {state.status === 'ready' ? (
         <ReadCells row={state.row} />
       ) : state.status === 'failed' ? (
-        <TableCell className={CELL} colSpan={COLUMNS.length - 1}>
+        <TableCell colSpan={COLUMNS.length - 1}>
           This person's session could not be read, so the test's own figures are the only record of
           them: {state.problem}
         </TableCell>
       ) : (
         COLUMNS.slice(1).map((column) => (
-          <TableCell key={column} className={CELL}>
+          <TableCell key={column}>
             <Skeleton className="h-4 w-full" />
           </TableCell>
         ))
@@ -137,38 +129,36 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
 function ReadCells({ row }: { row: SessionRow }) {
   return (
     <>
-      <TableCell className={CELL}>
+      <TableCell>
         {row.personaName ?? row.participantId ?? 'Unnamed'}{' '}
         {row.seed === null ? null : <span className="faint">seed {row.seed}</span>}
       </TableCell>
-      <TableCell className={`${CELL} whitespace-nowrap`}>
-        <Badge variant="ghost" className={variantTagClass(row.variant)}>
+      <TableCell className={styles.tight}>
+        <Badge variant="ghost" className={`tag ${variantTagClass(row.variant)}`}>
           {row.variant}
         </Badge>
       </TableCell>
-      <TableCell className={`faint ${CELL}`}>{row.deviceName ?? '—'}</TableCell>
-      <TableCell className={CELL}>
-        <Badge variant="ghost" className={tagClass(row.outcome.token)}>
+      <TableCell className="faint">{row.deviceName ?? '—'}</TableCell>
+      <TableCell>
+        <Badge variant="ghost" className={`tag ${tagClass(row.outcome.token)}`}>
           {row.outcome.label}
         </Badge>{' '}
         {row.excludedFromScores ? <span className="microlabel">excluded</span> : null}
       </TableCell>
-      <TableCell className={FIGURE_CELL}>{durationSeconds(row.durationMs)}</TableCell>
-      <TableCell className={FIGURE_CELL}>{row.fixationCount}</TableCell>
-      <TableCell className={CELL}>
+      <TableCell className={styles.figure}>{durationSeconds(row.durationMs)}</TableCell>
+      <TableCell className={styles.figure}>{row.fixationCount}</TableCell>
+      <TableCell>
         {row.outcome.status === 'success' ? (
           // Nothing is at fault when the task was done, so the column stays empty rather
           // than printing the attribution a successful session still carries.
           <span className="faint">—</span>
         ) : (
-          <Badge variant="ghost" className={tagClass(row.attribution.token)}>
+          <Badge variant="ghost" className={`tag ${tagClass(row.attribution.token)}`}>
             {row.attribution.label}
           </Badge>
         )}
       </TableCell>
-      <TableCell className={`${CELL} text-muted-foreground`}>
-        {whereItEnded(row.endedOn, row.reason)}
-      </TableCell>
+      <TableCell className={styles.where}>{whereItEnded(row.endedOn, row.reason)}</TableCell>
     </>
   );
 }

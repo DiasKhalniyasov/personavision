@@ -1,10 +1,10 @@
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import type { Run } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
-import { countsLine, sessionCounts } from './counts';
+import { countsLine, isScored, sessionCounts } from './counts';
 import { SessionsTable } from './SessionsTable';
 import { useSessionRows } from './useSessionRows';
 
@@ -43,6 +43,8 @@ export function SessionsScreen({ run }: { run: Run }) {
   const rows = useSessionRows(run);
   const counts = sessionCounts(run);
   const empty = rows.length === 0;
+  const [query] = useSearchParams();
+  const asked = FILTERS.filter((filter) => (query.get(filter) ?? '') !== '');
 
   return (
     <div className="strip">
@@ -57,14 +59,14 @@ export function SessionsScreen({ run }: { run: Run }) {
           One row per generated person × version × seed. Open one to watch it back.
         </p>
 
+        {/* The left of this row is where #23's two version and outcome groups and its area
+            chip go; until they exist it is empty and the counts sit on the right of it. */}
         <div className="my-5 flex flex-wrap items-center gap-2">
-          {/* #23 fills this with the two version and outcome groups and the area chip.
-              `contents` keeps its controls as items of this row rather than a box of
-              their own, so filling it does not lay the row out again. */}
-          <div className="contents" data-slot="session-filters" />
           <span className="grow" />
-          {empty ? null : <span className="microlabel">{countsLine(counts)}</span>}
+          {empty ? null : <span className="microlabel">{countsLine(counts, isScored(run))}</span>}
         </div>
+
+        {asked.length === 0 ? null : <FilterNotRead asked={asked} />}
 
         {empty ? <NoSessions /> : <SessionsTable run={run} rows={rows} />}
 
@@ -77,6 +79,27 @@ export function SessionsScreen({ run }: { run: Run }) {
         <SimulatedDisclaimer />
       </div>
     </div>
+  );
+}
+
+/** The three filters `docs/FLOW.md` section 3 puts in this screen's URL, all #23's. */
+const FILTERS = ['variant', 'outcome', 'aoi'] as const;
+
+/**
+ * A link that asked for a filtered list, on a screen that cannot filter yet.
+ *
+ * The Verdict's excluded banner and every outcome finding already link here with
+ * `?variant=`, `?outcome=` or `?aoi=` set, and #23 builds the controls that read them.
+ * Until it lands, a reader who clicked "See those 2" would be shown all twenty-four people
+ * with nothing to say they are not the two — and would conclude the test excluded everybody.
+ * Saying so is the smallest honest thing; #23 deletes this with the slot above.
+ */
+function FilterNotRead({ asked }: { asked: readonly string[] }) {
+  return (
+    <p className="notice info">
+      This link asked for a narrower list ({asked.join(', ')}). Narrowing is not built yet, so every
+      person in the test is listed below.
+    </p>
   );
 }
 

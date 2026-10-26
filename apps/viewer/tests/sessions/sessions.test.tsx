@@ -242,6 +242,38 @@ describe('a run the screen cannot list', () => {
   });
 });
 
+describe('a link that asked for a narrower list', () => {
+  it('says the narrowing is not built yet, rather than passing every person off as the few', async () => {
+    await serveRunData();
+    mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
+
+    expect(await screen.findByText(/This link asked for a narrower list \(outcome\)/)).toBeTruthy();
+    // Every person is still listed, and the notice is what says so.
+    expect(await dataRows()).toHaveLength(sessionIds().length);
+  });
+
+  it('says nothing of the sort when no filter was asked for', async () => {
+    await serveRunData();
+    mountApp(paths.sessions(SEED));
+
+    await screen.findByRole('table');
+    expect(screen.queryByText(/asked for a narrower list/)).toBeNull();
+  });
+});
+
+describe('a test whose figures have not been written yet', () => {
+  it('says so, rather than stating that nobody was scored or excluded', async () => {
+    // A run still open carries its people and no `scores`: the scoring step writes those.
+    const run = { ...readRunFile(SEED), scores: [], status: 'open' };
+    await serveRunData({ files: { [`/runs/${SEED}/run.json`]: JSON.stringify(run) } });
+    mountApp(paths.sessions(SEED));
+
+    expect(await screen.findByText('24 people · not scored yet')).toBeTruthy();
+    expect(screen.queryByText(/0 scored/)).toBeNull();
+    expect(screen.queryByText(/0 excluded/)).toBeNull();
+  });
+});
+
 describe('the screen as a screen reader and a keyboard reach it', () => {
   it('passes axe', async () => {
     await serveRunData();
@@ -251,6 +283,12 @@ describe('the screen as a screen reader and a keyboard reach it', () => {
     await waitFor(() => {
       expect(cells(row).length).toBe(9);
     });
+
+    // The table is the screen's one scroll region, and a reader with no pointer has to be
+    // able to reach it: nine columns do not fit a phone.
+    const region = screen.getByRole('region', { name: 'The people in this test' });
+    expect(region.tabIndex).toBe(0);
+    expect(region.querySelector('table')).not.toBeNull();
 
     const main = document.querySelector('main');
     expect(main).not.toBeNull();

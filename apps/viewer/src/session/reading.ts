@@ -71,7 +71,17 @@ async function read<Parsed>(
   url: URL,
   parse: (value: unknown) => Parsed,
 ): Promise<Parsed> {
-  const response = await from(url);
+  let response: Response;
+  try {
+    response = await from(url);
+  } catch (cause) {
+    // A rejected fetch — the server gone, the tab offline, the request abandoned mid
+    // navigation — says only "Failed to fetch", which names no file. A screen printing
+    // that against two dozen rows would tell the reader nothing about what went wrong.
+    throw new Error(`${url.pathname} could not be fetched: ${(cause as Error).message}`, {
+      cause,
+    });
+  }
   if (!response.ok) {
     throw new Error(`${url.pathname} could not be read: HTTP ${response.status}`);
   }

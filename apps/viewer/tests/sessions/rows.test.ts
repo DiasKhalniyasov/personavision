@@ -62,6 +62,12 @@ describe('the chip carrying an outcome or an attribution', () => {
     expect(declarations(variantTagClass('A'))).toContain('var(--variant-a)');
     expect(declarations(variantTagClass('B'))).toContain('var(--variant-b)');
   });
+
+  it('reads a third version as information rather than as a chip with no colour', () => {
+    // A version id is any name in the contract, and the tokens colour only two of them.
+    expect(variantTagClass('control')).toBe('tag-info');
+    expect(declarations('tag-info')).toContain('var(--sev-info)');
+  });
 });
 
 describe('where a session ended', () => {
@@ -78,6 +84,14 @@ describe('where a session ended', () => {
         'Payment — selector timeout on the card iframe',
       ),
     ).toBe('Payment — selector timeout on the card iframe');
+  });
+
+  it('still names the step when the reason merely opens with its letters', () => {
+    // "Review" is a prefix of "Reviewed", and dropping the step there would leave the one
+    // column headed "Where it ended" not saying where.
+    expect(whereItEnded({ step: 'review', label: 'Review' }, 'Reviewed the fees and left')).toBe(
+      'Review — Reviewed the fees and left',
+    );
   });
 
   it('falls back to the step’s id when the run never planned that step', () => {
