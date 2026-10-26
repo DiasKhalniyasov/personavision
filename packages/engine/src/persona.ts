@@ -96,27 +96,36 @@ export const personaSamplingParams = (
 /**
  * The median fixation duration for this persona, in milliseconds, clamped to the
  * configured bounds — so no trait combination can ask for a duration of zero or less.
+ *
+ * `fixationDurationScale` only: `dwellScale` is how long the gaze stays *in an area*, and
+ * the sampler (#67) applies it where dwell accumulates. Multiplying it in here too would
+ * count `detailOrientation` and `patience` twice and could cancel the documented row that
+ * a scanner's fixations are shorter.
  */
 export const fixationDurationMedianMsFor = (
   traits: PersonaTraits,
   config: EngineConfig = defaultEngineConfig,
 ): number => {
-  const { fixationDurationScale, dwellScale } = personaSamplingParams(traits, config);
+  const { fixationDurationScale } = personaSamplingParams(traits, config);
   const { medianMs, minMs, maxMs } = config.fixationDuration;
-  return clamp(medianMs * fixationDurationScale * dwellScale, minMs, maxMs);
+  return clamp(medianMs * fixationDurationScale, minMs, maxMs);
 };
 
 /**
  * How many fixations this persona's screen gets, clamped to the configured bounds — so no
  * trait combination can ask for a screen with no fixations on it at all.
+ *
+ * `fixationCountScale` only: `screenPersistenceScale` is how long the agent keeps looking
+ * at one screen *before moving on*, which the run loop spends on the decision to leave,
+ * not on the count drawn here.
  */
 export const fixationCountFor = (
   traits: PersonaTraits,
   config: EngineConfig = defaultEngineConfig,
 ): number => {
-  const { fixationCountScale, screenPersistenceScale } = personaSamplingParams(traits, config);
+  const { fixationCountScale } = personaSamplingParams(traits, config);
   const { mean, min, max } = config.fixationsPerScreen;
-  return Math.round(clamp(mean * fixationCountScale * screenPersistenceScale, min, max));
+  return Math.round(clamp(mean * fixationCountScale, min, max));
 };
 
 /**
@@ -133,7 +142,15 @@ export const rolePriorFor = (
   config: EngineConfig = defaultEngineConfig,
 ): number => {
   const priors = config.salience.rolePriors;
-  const prior = (role === null ? undefined : priors[role]) ?? priors.other;
-  if (role === null || !CONVENTIONAL_CONTROL_ROLES.has(role)) return prior;
+  const isControl = role !== null && CONVENTIONAL_CONTROL_ROLES.has(role);
+  /**
+   * `Object.hasOwn`, because a role is whatever a page's markup says: a `role="toString"`
+   * would otherwise resolve to `Object.prototype.toString` and put a `NaN` into the
+   * salience sum. A control role the table does not name falls back to `control`, not to
+   * `other` — the table's lowest value — so a search box never scores below a paragraph.
+   */
+  const named = role !== null && Object.hasOwn(priors, role) ? priors[role] : undefined;
+  const prior = named ?? (isControl ? priors.control : priors.other);
+  if (!isControl) return prior;
   return prior * personaSamplingParams(traits, config).rolePriorScale;
 };

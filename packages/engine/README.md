@@ -46,15 +46,21 @@ unannounced.
 `defaultEngineConfig` holds the **uncalibrated** starting values: plausible, taken from
 published ranges where one exists, and not claimed to be fitted.
 
-`resolveEngineConfig(overrides)` layers the calibrated values and then the run's
-`engine.weights` over the defaults — later layers win key by key, to any depth — and
-answers `{ config, calibrated }`. It is pure: the same overrides always produce a deeply
-equal result and neither the overrides nor the defaults are mutated, so a caller may hand
-in `run.engine.weights` directly.
+`resolveEngineConfig(overrides)` layers the calibrated values and then the overrides over
+the defaults — later layers win key by key, to any depth — and answers
+`{ config, calibrated }`. It is pure: the same overrides always produce a deeply equal
+result, neither the overrides nor the defaults are mutated, and no sub-object of the answer
+is the module-level default itself, so a caller may hand in `run.engine.weights` directly.
 
 ```ts
 const { config, calibrated } = resolveEngineConfig(run.engine.weights);
 ```
+
+A **run artifact carries `alpha`, `beta` and `gamma` only**: `runSchema.engine.weights` in
+`@personavision/contract` is those three and zod strips the rest. The deeper layers of
+`EngineConfigOverrides` are reachable from `config/calibrated.json` and from an in-process
+caller — a test, the benchmark — so a run that should carry more than the softmax weights
+is a change to the contract's schema, to be asked for on #7.
 
 ### The calibrated configuration
 
@@ -92,13 +98,20 @@ its own raises it. Each row interpolates linearly between the configured value a
 - `personaSamplingParams(traits, config)` — the six scales.
 - `fixationDurationMedianMsFor(traits, config)` — the median fixation duration, clamped to
   `fixationDuration.minMs`/`maxMs`, so no trait combination asks for a duration of zero.
+  It applies `fixationDurationScale` and nothing else: `dwellScale` belongs where dwell
+  accumulates, in the sampler, and applying it twice would count `detailOrientation` and
+  `patience` twice and could cancel the row above it.
 - `fixationCountFor(traits, config)` — the fixations a screen gets, clamped to
-  `fixationsPerScreen.min`/`max`, so no trait combination asks for an empty screen.
+  `fixationsPerScreen.min`/`max`, so no trait combination asks for an empty screen. It
+  applies `fixationCountScale` only; `screenPersistenceScale` is spent on the decision to
+  leave a screen, not on the count drawn here.
 - `rolePriorFor(role, traits, config)` — the role prior with familiarity applied. Only a
   conventional control (`CONVENTIONAL_CONTROL_ROLES`: which roles those are is structure,
   so it is code rather than configuration) is scaled; a paragraph's prior is the same for
-  every persona. It is a relative weight, not a 0..1 share: the salience term normalises it
-  together with the others.
+  every persona. A control the table does not name falls back to `rolePriors.control`
+  rather than to `other`, so a search box never scores below body text, and the lookup is
+  an own-property one — a page is free to use `role="toString"`. It is a relative weight,
+  not a 0..1 share: the salience term normalises it together with the others.
 
 ## The published input types
 

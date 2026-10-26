@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultEngineConfig, resolveEngineConfig } from '../src/config.js';
 import {
+  CONVENTIONAL_CONTROL_ROLES,
   fixationCountFor,
   fixationDurationMedianMsFor,
   personaSamplingParams,
@@ -151,6 +152,23 @@ describe('rolePriorFor', () => {
 
     expect(rolePriorFor('figcaption', MIDDLING)).toBe(other);
     expect(rolePriorFor(null, MIDDLING)).toBe(other);
+  });
+
+  it('keeps every conventional control above prose, named in the table or not', () => {
+    const { text } = defaultEngineConfig.salience.rolePriors;
+    const unfamiliar = withTrait('interfaceFamiliarity', 0);
+
+    for (const role of CONVENTIONAL_CONTROL_ROLES) {
+      expect(rolePriorFor(role, unfamiliar)).toBeGreaterThan(rolePriorFor('text', unfamiliar));
+      expect(rolePriorFor(role, unfamiliar)).toBeGreaterThan(text * 0.8);
+    }
+  });
+
+  it('reads no inherited property for a role a page happens to call toString', () => {
+    const { other } = defaultEngineConfig.salience.rolePriors;
+
+    expect(rolePriorFor('toString', MIDDLING)).toBe(other);
+    expect(rolePriorFor('hasOwnProperty', MIDDLING)).toBe(other);
   });
 
   it('reads its numbers from the configuration object, with no code change', () => {

@@ -77,11 +77,18 @@ const EXPECTED_LEAF_KEYS = [
   'salience.rolePriors.button',
   'salience.rolePriors.checkbox',
   'salience.rolePriors.combobox',
+  'salience.rolePriors.control',
   'salience.rolePriors.heading',
   'salience.rolePriors.img',
   'salience.rolePriors.link',
+  'salience.rolePriors.menuitem',
+  'salience.rolePriors.option',
   'salience.rolePriors.other',
   'salience.rolePriors.radio',
+  'salience.rolePriors.searchbox',
+  'salience.rolePriors.slider',
+  'salience.rolePriors.switch',
+  'salience.rolePriors.tab',
   'salience.rolePriors.text',
   'salience.rolePriors.textbox',
   'salience.weights.centreBias',
@@ -138,6 +145,25 @@ describe('resolveEngineConfig', () => {
     expect(config.salience.weights.centreBias).toBe(0.42);
     expect(config.salience.weights.topBias).toBe(defaultEngineConfig.salience.weights.topBias);
     expect(config.salience.rolePriors).toEqual(defaultEngineConfig.salience.rolePriors);
+  });
+
+  it('shares no sub-object with the defaults, so a later mutation cannot reach them', () => {
+    const { config } = resolveEngineConfig();
+
+    expect(config.salience.rolePriors).not.toBe(defaultEngineConfig.salience.rolePriors);
+    expect(config.persona).not.toBe(defaultEngineConfig.persona);
+    expect(config.salience.rolePriors).toEqual(defaultEngineConfig.salience.rolePriors);
+  });
+
+  it('ignores a prototype key in the overrides rather than writing through it', () => {
+    const overrides = JSON.parse(
+      '{"__proto__": {"alpha": 99}, "beta": 4}',
+    ) as EngineConfigOverrides;
+    const { config } = resolveEngineConfig(overrides);
+
+    expect(config.alpha).toBe(defaultEngineConfig.alpha);
+    expect(config.beta).toBe(4);
+    expect(Object.getPrototypeOf(config)).toBe(Object.prototype);
   });
 
   it('answers the defaults, uncalibrated, when no overrides are given', () => {

@@ -11,6 +11,12 @@
  * layers the calibrated values (when #11 has committed them) and then a run's
  * `engine.weights` over them, and reports whether what came back was calibrated.
  *
+ * A run artifact can only carry `alpha`, `beta` and `gamma`: `runSchema.engine.weights` in
+ * `packages/contract` is those three and zod strips the rest. The deeper layers of
+ * `EngineConfigOverrides` are reachable from the calibrated file and from an in-process
+ * caller — a test, the benchmark — and widening what a run may carry is a change to the
+ * contract's schema, to be asked for on #7.
+ *
  * Purity is a hard requirement of this step: nothing here reads a file or opens a socket.
  * The calibrated values arrive as a build-time import, never as a runtime read.
  */
@@ -31,6 +37,9 @@ export interface TraitResponse {
  * signature lets a later ticket name more roles as data rather than as code.
  */
 export interface RolePriors {
+  /** The fallback for a conventional control the table does not name. */
+  readonly control: number;
+  /** The fallback for everything else, and for an element with no role at all. */
   readonly other: number;
   readonly [role: string]: number;
 }
@@ -186,12 +195,19 @@ export const defaultEngineConfig: EngineConfig = {
       button: 1,
       link: 0.85,
       textbox: 0.7,
+      searchbox: 0.7,
       combobox: 0.7,
+      menuitem: 0.7,
+      tab: 0.7,
       checkbox: 0.6,
       radio: 0.6,
+      switch: 0.6,
+      slider: 0.6,
+      option: 0.55,
       heading: 0.55,
       img: 0.4,
       text: 0.3,
+      control: 0.6,
       other: 0.25,
     },
   },
@@ -262,6 +278,9 @@ const calibratedOverrides: EngineConfigOverrides | null = null;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** A key that would write through a prototype rather than into the configuration. */
+const UNSAFE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
 /** Copies on the way down: neither argument is touched. */
 const mergeRecords = (
   base: Record<string, unknown>,
@@ -269,7 +288,7 @@ const mergeRecords = (
 ): Record<string, unknown> => {
   const merged: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined) continue;
+    if (value === undefined || UNSAFE_KEYS.has(key)) continue;
     const current = merged[key];
     merged[key] = isRecord(value) && isRecord(current) ? mergeRecords(current, value) : value;
   }
@@ -285,9 +304,14 @@ export const resolveEngineConfig = (overrides?: EngineConfigOverrides): Resolved
   const layers = [calibratedOverrides, overrides].filter(
     (layer): layer is EngineConfigOverrides => layer !== null && layer !== undefined,
   );
+  /**
+   * The defaults are cloned first, so no sub-object of the answer is the module-level
+   * default itself: `readonly` is a type, and one mutation through a cast or from a
+   * JavaScript caller would otherwise change the defaults for every later call.
+   */
   const config = layers.reduce(
     (merged, layer) => mergeRecords(merged, layer as Record<string, unknown>),
-    defaultEngineConfig as unknown as Record<string, unknown>,
+    structuredClone(defaultEngineConfig) as unknown as Record<string, unknown>,
   ) as unknown as EngineConfig;
 
   return { config, calibrated: calibratedOverrides !== null };
