@@ -94,11 +94,12 @@ export const readRunIndex = async (
   const summaries = await Promise.all(runIds.map((runId) => readRunSummary(runsRoot, runId)));
   return summaries
     .filter((summary): summary is RunSummary => summary !== null)
-    .sort((left, right) =>
-      left.createdAt === right.createdAt
-        ? right.runId.localeCompare(left.runId)
-        : right.createdAt.localeCompare(left.createdAt),
-    );
+    .sort((left, right) => {
+      // By instant, not by string: a timestamp may carry its own offset, and two runs an
+      // hour apart in different offsets do not sort as their text does.
+      const gap = Date.parse(right.createdAt) - Date.parse(left.createdAt);
+      return gap === 0 ? right.runId.localeCompare(left.runId) : gap;
+    });
 };
 
 /**
