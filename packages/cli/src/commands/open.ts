@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { listRunDirs } from '@personavision/contract';
 import launch from 'open';
 import { CliError } from '../cli-error.js';
+import { readRunIndex } from '../run-data.js';
 import { startRunServer } from '../server.js';
 import type { RunServer } from '../server.js';
 
@@ -96,14 +97,22 @@ export const openCommand = async ({
     }
   }
 
+  // The newest run is read from the listing the viewer itself reads, which orders by each
+  // run's own timestamp — not from the order of the directory names, which can disagree.
   const runIds = await listRunDirs(runsRoot);
+  const runs = await readRunIndex(runsRoot, runIds);
   if (runIds.length === 0) {
     log(
       `No test under ${runsRoot} yet. Generate the committed example with \`pnpm seed:example-run\`, or start a test from the app — the server below serves whatever appears.`,
     );
+  } else if (runs.length === 0) {
+    log(
+      `${runIds.length} run director${runIds.length === 1 ? 'y' : 'ies'} under ${runsRoot}, and none of them reads as this build's schema version — so the app will list none. Run \`personavision validate <runDir>\` on one to see why.`,
+    );
   } else {
-    log(`${runIds.length} test${runIds.length === 1 ? '' : 's'} under ${runsRoot}, newest first:`);
-    log(`  ${runIds[0] as string}`);
+    log(`${runs.length} test${runs.length === 1 ? '' : 's'} under ${runsRoot}, newest first:`);
+    const newest = runs[0] as (typeof runs)[number];
+    log(`  ${newest.runId} — ${newest.name}`);
   }
 
   let server: RunServer;

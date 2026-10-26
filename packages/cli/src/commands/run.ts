@@ -76,10 +76,10 @@ const FINISHING_ACTS = [
   'upload',
 ];
 
-const saysWhatFinishingMeans = (task: string): boolean => {
-  const words = task.toLowerCase();
-  return FINISHING_ACTS.some((act) => new RegExp(`\\b${act}\\b`).test(words));
-};
+/** One alternation, built once: the list is literals, so there is nothing to escape. */
+const FINISHING_ACT = new RegExp(`\\b(?:${FINISHING_ACTS.join('|')})\\b`);
+
+const saysWhatFinishingMeans = (task: string): boolean => FINISHING_ACT.test(task.toLowerCase());
 
 export interface RunCommandArguments {
   /** `--url`, repeatable: the first is variant A, the second variant B. */

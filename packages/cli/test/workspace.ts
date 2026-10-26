@@ -2,7 +2,7 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPaths, writeRun } from '@personavision/contract';
+import { runDirName, runPaths, writeRun } from '@personavision/contract';
 import { RUN_ID, validArtifact } from '../../contract/tests/fixtures.js';
 
 /**
@@ -65,4 +65,21 @@ export const temporaryWorkspace = async ({ withRun = true } = {}): Promise<TestW
     viewerDist,
     cleanup: () => rm(dir, { recursive: true, force: true }),
   };
+};
+
+/**
+ * One more run, written under a directory of its own. `stamp` is what the directory is
+ * named for and `createdAt` what the run records: a suite that wants the two in opposite
+ * orders passes them apart, and one that does not passes the same instant twice.
+ */
+export const writeRunAt = async (
+  runsRoot: string,
+  { stamp, createdAt, name }: { stamp: string; createdAt: string; name: string },
+): Promise<string> => {
+  const runId = runDirName(new Date(stamp), name);
+  const artifact = validArtifact();
+  artifact.run = { ...artifact.run, runId, createdAt };
+  artifact.findings = { ...artifact.findings, runId };
+  await writeRun(join(runsRoot, runId), artifact);
+  return runId;
 };

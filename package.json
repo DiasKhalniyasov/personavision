@@ -19,7 +19,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel --if-present dev",
     "seed:example-run": "tsx --conditions=development scripts/seed-example-run.ts",
-    "open": "tsx packages/cli/src/cli.ts open"
+    "open": "tsx --conditions=development packages/cli/src/cli.ts open"
   },
   "devDependencies": {
     "@personavision/contract": "workspace:*",

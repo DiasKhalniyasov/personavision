@@ -26,11 +26,11 @@ const runsRoot = (): string => resolve(process.cwd(), 'runs');
 const collect = (value: string, previous: string[]): string[] => [...previous, value];
 
 const port = (value: string): number => {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65_535) {
+  // Digits only: `Number` would take `1e3` and `0x10` and bind a port nobody typed.
+  if (!/^\d+$/.test(value) || Number(value) > 65_535) {
     throw new CliError(`--port ${value} is not a port: pass 0..65535, or 0 for any free port.`);
   }
-  return parsed;
+  return Number(value);
 };
 
 const program = new Command();
@@ -101,7 +101,7 @@ program
 program
   .command('open')
   .description(
-    'Serve the built viewer and ./runs over HTTP, and open the most recent test in a browser.',
+    'Serve the built viewer and ./runs over HTTP, and open it in a browser at / — which the app resolves to the most recent test.',
   )
   .option(
     '--port <port>',

@@ -162,6 +162,25 @@ describe('personavision open, with nothing in ./runs', () => {
   });
 });
 
+describe('personavision open, with a port that is not one', () => {
+  it('refuses it rather than binding a port nobody typed', async () => {
+    const workspace = await temporaryWorkspace({ withRun: false });
+    try {
+      for (const value of ['1e3', '0x10', '70000', 'eighty']) {
+        const { code, stderr } = await personavision(
+          ['open', '--no-build', '--port', value, '--viewer', workspace.viewerDist],
+          workspace.dir,
+        );
+
+        expect(code, value).not.toBe(0);
+        expect(stderr, value).toContain(`--port ${value} is not a port`);
+      }
+    } finally {
+      await workspace.cleanup();
+    }
+  }, 30_000);
+});
+
 describe('personavision open, with the viewer not built', () => {
   it('with --no-build, says to build it and stops', async () => {
     const workspace = await temporaryWorkspace({ withRun: false });

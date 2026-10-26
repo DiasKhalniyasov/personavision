@@ -15,6 +15,9 @@ import { runDataMount } from './run-data.js';
 /** Out of the way of Vite's dev server (5173) and the demo shop's preview (4173). */
 export const DEFAULT_PORT = 5175;
 
+/** Loopback only: these are internal tools, and nothing here belongs on a network. */
+const HOST = '127.0.0.1';
+
 export interface RunServerOptions {
   /** The directory the run directories sit in. */
   runsRoot: string;
@@ -22,7 +25,6 @@ export interface RunServerOptions {
   viewerDist: string;
   /** `0` asks the operating system for a free port, which is what tests pass. */
   port?: number;
-  host?: string;
 }
 
 export interface RunServer {
@@ -36,7 +38,6 @@ export const startRunServer = async ({
   runsRoot,
   viewerDist,
   port = DEFAULT_PORT,
-  host = '127.0.0.1',
 }: RunServerOptions): Promise<RunServer> => {
   const runData = runDataMount({ runsRoot });
   // `dev` because the viewer may be rebuilt while the server is up; `single` so an unknown
@@ -53,7 +54,7 @@ export const startRunServer = async ({
 
   await new Promise<void>((listening, failed) => {
     server.once('error', failed);
-    server.listen(port, host, () => {
+    server.listen(port, HOST, () => {
       server.off('error', failed);
       listening();
     });
@@ -61,7 +62,7 @@ export const startRunServer = async ({
 
   const address = server.address() as AddressInfo;
   return {
-    url: `http://${host}:${address.port}/`,
+    url: `http://${HOST}:${address.port}/`,
     port: address.port,
     close: () =>
       new Promise<void>((closed, failed) => {

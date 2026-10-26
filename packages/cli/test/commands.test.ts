@@ -1,6 +1,6 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { runPaths } from '@personavision/contract';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { personavision } from './cli-process.js';
 import { temporaryWorkspace } from './workspace.js';
 import type { TestWorkspace } from './workspace.js';
@@ -10,13 +10,18 @@ import type { TestWorkspace } from './workspace.js';
  * what a developer and CI see, so nothing here calls an internal function instead.
  */
 
+/**
+ * `--help` and `run` read no run directory — `run` only has to leave none behind — so they
+ * share one empty workspace. The `validate` tests get a written artifact each, because one
+ * of them breaks it on purpose.
+ */
 let workspace: TestWorkspace;
 
-beforeEach(async () => {
-  workspace = await temporaryWorkspace();
+beforeAll(async () => {
+  workspace = await temporaryWorkspace({ withRun: false });
 });
 
-afterEach(async () => {
+afterAll(async () => {
   await workspace.cleanup();
 });
 
@@ -61,15 +66,25 @@ describe('personavision --help', () => {
 });
 
 describe('personavision validate', () => {
+  let written: TestWorkspace;
+
+  beforeEach(async () => {
+    written = await temporaryWorkspace();
+  });
+
+  afterEach(async () => {
+    await written.cleanup();
+  });
+
   it('exits 0 on a valid run directory and says so', async () => {
-    const { code, stdout } = await personavision(['validate', workspace.runDir], workspace.dir);
+    const { code, stdout } = await personavision(['validate', written.runDir], written.dir);
 
     expect(code).toBe(0);
     expect(stdout).toContain('is a valid run directory');
   });
 
   it('exits non-zero and prints every violation with its JSON path', async () => {
-    const file = runPaths(workspace.runDir).run;
+    const file = runPaths(written.runDir).run;
     const run = JSON.parse(await readFile(file, 'utf8')) as {
       createdAt: string;
       scores: { completionRate: number }[];
@@ -78,7 +93,7 @@ describe('personavision validate', () => {
     run.scores[0]!.completionRate = 7;
     await writeFile(file, JSON.stringify(run, null, 2));
 
-    const { code, stderr } = await personavision(['validate', workspace.runDir], workspace.dir);
+    const { code, stderr } = await personavision(['validate', written.runDir], written.dir);
 
     expect(code).not.toBe(0);
     expect(stderr).toContain('is not a valid run directory');
@@ -88,9 +103,9 @@ describe('personavision validate', () => {
   });
 
   it('fails with a message about the path, not a stack trace', async () => {
-    const missing = `${workspace.runDir}-nope`;
+    const missing = `${written.runDir}-nope`;
 
-    const { code, stderr } = await personavision(['validate', missing], workspace.dir);
+    const { code, stderr } = await personavision(['validate', missing], written.dir);
 
     expect(code).not.toBe(0);
     expect(stderr).toContain(missing);

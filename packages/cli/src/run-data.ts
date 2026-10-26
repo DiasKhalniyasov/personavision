@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extname, join, relative, resolve, sep } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
 
 /**
@@ -23,11 +23,16 @@ import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
 const RUNS_PREFIX = '/runs';
 const INDEX_PATH = `${RUNS_PREFIX}/index.json`;
 
-/** Only the two file kinds the layout holds. Anything else is served as bytes. */
+/** The layout, addressed relatively, so the file kinds below are the contract's own. */
+const LAYOUT = runPaths('');
+
+/** The two file kinds the layout holds. A path naming anything else is not run data. */
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
+  [extname(LAYOUT.run)]: 'application/json; charset=utf-8',
+  [extname(LAYOUT.screenshot('variant', 'step'))]: 'image/png',
 };
+
+const JSON_CONTENT_TYPE = CONTENT_TYPES[extname(LAYOUT.run)] as string;
 
 /** One entry of `GET /runs/index.json`. */
 export interface RunSummary {
@@ -123,14 +128,21 @@ const runDataPath = (request: IncomingMessage): string | null => {
   return path;
 };
 
-const sendFile = async (response: ServerResponse, file: string, head: boolean): Promise<void> => {
+const sendFile = async (
+  response: ServerResponse,
+  file: string,
+  requested: string,
+  head: boolean,
+): Promise<void> => {
   let size: number;
   try {
     const stats = await stat(file);
     if (!stats.isFile()) throw new Error('not a file');
     size = stats.size;
   } catch {
-    plain(response, 404, `${file} is not in this run directory.`);
+    // The path that was asked for, never the path on disk: under `personavision serve`
+    // this mount answers whoever is on the other end, and a 404 is not a directory map.
+    plain(response, 404, `There is no ${requested} in this run.`);
     return;
   }
   response.writeHead(200, {
@@ -151,10 +163,16 @@ const sendFile = async (response: ServerResponse, file: string, head: boolean): 
   });
 };
 
-/** `true` when `target` is `root` itself or inside it, resolved paths both. */
+/**
+ * `true` when `target` is `root` itself or inside it, resolved paths both.
+ *
+ * The step out of the root is what decides it: `..`, a path beginning `../`, or an absolute
+ * path — which is what `relative` returns across Windows drives — all leave it. A child
+ * whose own name begins with dots, `..keep.json`, does not, so this cannot be a prefix test.
+ */
 const isInside = (root: string, target: string): boolean => {
   const step = relative(root, target);
-  return step !== '' && !step.startsWith('..') && !step.startsWith(`${sep}`);
+  return !isAbsolute(step) && step !== '..' && !step.startsWith(`..${sep}`);
 };
 
 export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
@@ -167,6 +185,7 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
     path: string,
   ): Promise<void> => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.setHeader('allow', 'GET, HEAD');
       plain(response, 405, 'Run data is read-only: only GET and HEAD are served.');
       return;
     }
@@ -178,7 +197,7 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
         `${JSON.stringify(await readRunIndex(runsRoot, runIds), null, 2)}\n`,
       );
       response.writeHead(200, {
-        'content-type': CONTENT_TYPES['.json'] as string,
+        'content-type': JSON_CONTENT_TYPE,
         'content-length': body.byteLength,
         'cache-control': 'no-store',
       });
@@ -193,17 +212,28 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
       plain(response, 404, `There is no run "${runId ?? ''}" here.`);
       return;
     }
-    if (rest.length === 0 || rest.at(-1) === '') {
-      plain(response, 404, 'A run directory is not listed: name one of its files.');
-      return;
-    }
     const runDir = join(runsRoot, runId);
     const file = resolve(runDir, ...rest);
-    if (path.includes('\0') || !isInside(runDir, file)) {
+    const refuse = (): void => {
       plain(response, 403, 'Only the files of a run directory are served.');
+    };
+    if (path.includes('\0') || !isInside(runDir, file)) {
+      refuse();
       return;
     }
-    await sendFile(response, file, head);
+    // Lexically inside is not enough: a symbolic link in a run directory points wherever it
+    // likes and `stat` would follow it. Both sides are resolved, because a runs root is
+    // often reached through a link itself — `/tmp` on macOS is one.
+    const real = await Promise.all([realpath(runDir), realpath(file)]).catch(() => null);
+    if (real === null) {
+      plain(response, 404, `There is no ${path} in this run.`);
+      return;
+    }
+    if (!isInside(real[0], real[1])) {
+      refuse();
+      return;
+    }
+    await sendFile(response, real[1], path, head);
   };
 
   return (request, response, next) => {
@@ -214,9 +244,10 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
     }
     answer(request, response, path).catch((error: unknown) => {
       // The mount reads files and nothing else, so a throw here is the server's fault and
-      // is reported as one rather than being passed to the app as a missing page.
-      if (!response.headersSent)
-        plain(response, 500, `Run data could not be read: ${String(error)}`);
+      // is reported as one rather than being passed to the app as a missing page. Why it
+      // failed goes to whoever is running the server, not to whoever asked.
+      process.stderr.write(`personavision: ${path} could not be read: ${String(error)}\n`);
+      if (!response.headersSent) plain(response, 500, 'Run data could not be read.');
       else response.destroy();
     });
   };

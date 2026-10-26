@@ -1,33 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listRunDirs, runDirName, writeRun } from '@personavision/contract';
+import { listRunDirs } from '@personavision/contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { validArtifact } from '../../contract/tests/fixtures.js';
 import { startRunServer } from '../src/server.js';
 import type { RunServer, RunSummary } from '../src/index.js';
+import { writeRunAt } from './workspace.js';
 
 /**
  * The listing is the one generated resource, and the one thing to keep in step with the
  * directory. Two runs are enough to assert the order it promises.
  */
-
-/**
- * A run written under its own directory. `stamp` is what the directory is named for and
- * `createdAt` what the run records: the two are deliberately in opposite orders below, so
- * that the order the listing comes back in can only be the one it promises.
- */
-const writeRunAt = async (
-  runsRoot: string,
-  { stamp, createdAt, name }: { stamp: string; createdAt: string; name: string },
-): Promise<string> => {
-  const runId = runDirName(new Date(stamp), name);
-  const artifact = validArtifact();
-  artifact.run = { ...artifact.run, runId, createdAt };
-  artifact.findings = { ...artifact.findings, runId };
-  await writeRun(join(runsRoot, runId), artifact);
-  return runId;
-};
 
 describe('GET /runs/index.json', () => {
   let root: string;
