@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PersonaVision</title>
+  </head>
+  <body>
+    <!--
+      The boot fallback. The app replaces it the moment it mounts, so whatever is left on
+      screen is a boot failure: a missing bundle, a missing stylesheet, or a throw before
+      the first render. It says so in words rather than leaving the page blank.
+    -->
+    <div id="root">
+      <main class="boot">
+        <h1 class="boot-name">PersonaVision</h1>
+        <p class="boot-line">
+          The app did not start. If this message stays on screen, its script or its styles failed to
+          load.
+        </p>
+      </main>
+    </div>
+    <noscript>PersonaVision is a local web app and needs JavaScript to run.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

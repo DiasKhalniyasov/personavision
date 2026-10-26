@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Vite bundles this app, so imports resolve the way a bundler resolves them and
+    // nothing is emitted by tsc. The base configuration's nodenext pair is for the
+    // library packages, which do emit.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // `vite/client` is what declares a `.css` import, including the tokens import.
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}
