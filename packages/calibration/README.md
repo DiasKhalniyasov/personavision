@@ -113,12 +113,12 @@ they were given.
 
 Within one dataset's directory (`<cache root>/ueyes`):
 
-| Directory     | Holds                                                                                   |
-| ------------- | --------------------------------------------------------------------------------------- |
-| `downloads/`  | archives as fetched, each with its `.part` while in flight and its verification receipt |
-| `dataset/`    | the unpacked tree, in the layout the manifest describes                                 |
-| `quarantine/` | a file that failed its checksum, kept out of the way rather than silently reused        |
-| `.staging/`   | an archive part-way out of its zip; moved onto `dataset/` only once it is whole         |
+| Directory     | Holds                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `downloads/`  | archives as fetched, each with its `.part` while in flight and its verification receipt     |
+| `dataset/`    | the unpacked tree, in the layout the manifest describes                                     |
+| `quarantine/` | a file that failed its checksum, moved aside with its receipts rather than silently reused  |
+| `.staging/`   | the archives part-way out of their zips; it becomes `dataset/` in one move once it is whole |
 
 [`src/dataset/cache.ts`](src/dataset/cache.ts) is the only place these paths are decided. The helpers are pure path
 arithmetic: they create no directory, read no file and open no socket, and they refuse a path that would climb out of
@@ -157,17 +157,20 @@ every error name the origin and the path and nothing else.
 
 **What the command does, and what it refuses to do.**
 
-|                                   |                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Resumes**                       | An interrupted transfer continues from the bytes already on disk with an HTTP range request, rather than starting over; progress is reported per file in bytes and percent. An origin that ignores the range makes it start again rather than append to the middle of a file.                                                                  |
-| **Verifies**                      | Every file is hashed and compared with the manifest's checksum. A mismatch is a named failure: the file is moved to `quarantine/`, nothing is marked verified, and a second run fetches it again.                                                                                                                                              |
-| **Refuses what it cannot verify** | A file the manifest records as `unverified` is refused before anything is fetched. `--record-checksums` hashes a fresh copy and writes the result into `manifest.json` as a change you review and commit — it prints the change, and it will not write over a recorded checksum that the bytes contradict. Verification never silently passes. |
-| **Checks the layout first**       | The archive's own directory is read before a byte is unpacked and compared with `layout` in the manifest. A tree that contradicts it fails naming the difference; an `unknown` root is not a difference, and the directory the entries really sit under is reported and stripped.                                                              |
-| **Does nothing twice**            | A verified file leaves a receipt beside it, so a second run over a complete cache downloads nothing, unpacks nothing and says so. A file touched since is hashed again rather than trusted on its name.                                                                                                                                        |
-| **Leaves no half-extracted tree** | Every file is fetched and verified before anything is unpacked, and an archive is unpacked into `.staging/` and moved onto `dataset/` only once it is whole. A failed run exits non-zero naming the files it could not fetch, and keeps the part-downloads so the next run resumes.                                                            |
+|                                   |                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resumes**                       | An interrupted transfer continues from the bytes already on disk with an HTTP range request, rather than starting over; progress is reported per file in bytes and percent. An origin that ignores the range makes it start again rather than append to the middle of a file.                                                                                                                |
+| **Verifies**                      | Every file is hashed and compared with the manifest's checksum. A mismatch is a named failure: the file is moved to `quarantine/` with its receipts, nothing is left marked verified, and a second run fetches it again.                                                                                                                                                                     |
+| **Refuses what it cannot verify** | A file the manifest records as `unverified` is refused before anything is fetched. `--record-checksums` hashes a fresh copy and writes the result into `manifest.json` as a change you review and commit — it prints the change, and it will not write over a recorded checksum that the bytes contradict. Verification never silently passes.                                               |
+| **Checks the layout first**       | The archive's own directory is read before a byte is unpacked and compared with `layout` in the manifest. A tree that contradicts it fails naming the difference; an `unknown` root is not a difference, and the directory the entries really sit under is reported and stripped.                                                                                                            |
+| **Does nothing twice**            | A verified file leaves a receipt beside it, so a second run over a complete cache downloads nothing, unpacks nothing and says so. A file touched since is hashed again rather than trusted on its name.                                                                                                                                                                                      |
+| **Leaves no half-extracted tree** | Every file is fetched and verified before anything is unpacked, and the archives are unpacked into `.staging/`, which then _replaces_ `dataset/` in one move — the tree is never half one unpacking and half another, and a move that fails puts back what was there. A failed run exits non-zero naming the files it could not fetch, and keeps the part-downloads so the next run resumes. |
 
 A hostile archive cannot write outside the cache: every member path goes through the containment rule in
 `cache.ts`, and an absolute, `..`, drive-relative or symbolic-link member is refused by name rather than followed.
+Every member's CRC-32 is checked as it lands. The transfer stays on HTTPS the whole way: redirects are followed by
+hand and each hop is held to the same rule as the manifest's own URL, so a publisher's HTTPS link cannot land the
+download on a plain-HTTP host.
 
 ## The vocabulary
 
