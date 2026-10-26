@@ -136,10 +136,16 @@ describe('the committed run directory', () => {
     expect(run.calibration).toEqual({ benchmark: 'UEyes', cc: 0.68, nss: 1.9, scanMatch: 0.54 });
   });
 
-  it('names nobody: no account, no workspace and no address anywhere in it', () => {
+  it('names nobody: no address and no account field in any of its JSON', () => {
     // The fixture is committed to a public repository and shipped as the example run, so it
-    // carries the test and nothing about whoever ran it. `Email field` is a form label on the
-    // payment step, which is why this looks for an address and for the id fields by name.
+    // carries the test and nothing about whoever ran it. The schemas are strict objects, so
+    // an undeclared `accountId` cannot parse at all — but an address can ride inside a
+    // declared string, which is what the first assertion is for. The second is a cheap guard
+    // on the fields by name, for a schema that later gains one. `Email field` is a form label
+    // on the payment step, which is why neither looks for the word.
+    //
+    // The eight PNGs are out of scope: they are drawn by this generator from the labels
+    // asserted above, and carry no text of their own.
     const IDENTITY_KEYS = [
       'accountId',
       'workspaceId',
@@ -698,8 +704,14 @@ describe('the findings', () => {
   });
 
   it('words every claim for a business reader, with none of the product’s own jargon', () => {
-    // `docs/FLOW.md` section 6: no jargon in a claim sentence. The evidence sentence under it
-    // may carry a number and a unit, and the Attention screen's captions may say `fixation`.
+    // `docs/FLOW.md` section 6 as PR #98 rewrites it: no jargon in a claim sentence. The
+    // evidence sentence under it may carry a number and a unit, and the Attention screen's
+    // captions may say `fixation`.
+    //
+    // The table above pins today's six claims, so this cannot fail on its own. It guards the
+    // next edit: whoever rewords a claim in the generator updates that table to match, and
+    // this is what then refuses a claim that reads like the product's internals. The six
+    // words are the ones #106 names.
     const JARGON = ['fixation', 'fixated', 'dwell', 'saccade', 'aoi', 'area of interest'];
     for (const finding of findings.findings) {
       const claim = finding.claim.toLowerCase();

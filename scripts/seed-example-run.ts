@@ -133,12 +133,17 @@ const DESKTOP = {
 
 /**
  * The device mix the audience was authored with, from the prototype's `AUDIENCE`: a class
- * of device, the nominal viewport of that class, and the share of the audience on it. The
- * Audiences screen draws these two as `Mobile 60% · 390 × 844` and `Desktop 40% · 1280 ×
- * 800`, so they are the audience's own numbers rather than the devices below. A generated
- * person carries the concrete device it ran on — `PERSONAS[].device`, a model with a
- * viewport of its own — which is what a session records and what the gaze is projected
- * from.
+ * of device, the nominal viewport of that class, and the share of the audience on it.
+ *
+ * Both the constant and the Audiences screen that draws it arrive with PR #98 — neither is
+ * in `docs/design/prototype.html` in this tree yet. That screen draws these two entries as
+ * `Mobile 60% · 390 × 844` and `Desktop 40% · 1280 × 800`, and the hint beside them reads
+ * "The device mix a test reports is drawn from these shares", so an entry is a class and a
+ * share rather than one of the devices below. A generated person carries the concrete
+ * device it ran on — `PERSONAS[].device`, a model with a viewport of its own — which is
+ * what a session records and what the gaze is projected from, so the desktop class's 1280
+ * × 800 is nobody's screen and is not meant to be. Recorded as decision 3 (area Audiences,
+ * kind data); #39 read it the other way and the comment on #106 says why this one stands.
  */
 const AUDIENCE_DEVICES: Run['audience']['devices'] = [
   {
@@ -857,10 +862,9 @@ const SCORE_READING: Record<
 };
 
 /**
- * What the Verdict screen leads with, from the prototype's `VERDICT`: the headline in the
- * audience's words and the two reasons behind it, drawn from the top findings. The
- * prototype writes `preferredVariant: 'a'`; it is stored upper-case because the contract
- * cross-checks it against this run's declared variant ids.
+ * What the Verdict screen leads with, from the prototype's `VERDICT` as PR #98 writes it:
+ * the headline in the audience's words and the two reasons behind it, drawn from the top
+ * findings.
  */
 const AUDIENCE_SENTENCE =
   'Your audience completes the purchase on the current checkout, not on the redesign.';
@@ -1383,9 +1387,15 @@ const buildFindings = (sessions: ReadonlyArray<Session>): Findings => {
   const automationFailures = idsWhere((session) => session.outcome.excludedFromScores);
 
   // Every claim and evidence sentence is the prototype's `FINDINGS` transcribed character
-  // for character. A claim is one sentence the owner of the shop could repeat out loud, so
-  // it carries no fixation, dwell, saccade or area of interest: `docs/FLOW.md` section 6
-  // states that rule and a test holds the six claims to it.
+  // for character — from PR #98, which rewrites that constant for a business reader. Until
+  // it merges, `docs/design/prototype.html` and `docs/FLOW.md` in this tree still carry the
+  // wording this replaced, so transcribe from the PR and not from the checked-in file.
+  //
+  // A claim is one sentence the owner of the shop could repeat out loud, so it carries no
+  // fixation, dwell, saccade or area of interest. That rule is the last paragraph of
+  // `docs/FLOW.md` section 6 ("A run states its findings in words") as PR #98 rewrites it,
+  // and a test holds all six claims to it. It binds a claim only: an evidence sentence and
+  // an Attention screen caption may use the product's own language, and several do.
   const findings: Findings['findings'] = [
     {
       id: 'F-1',
@@ -1568,7 +1578,11 @@ const buildRun = (sessions: ReadonlyArray<Session>): Run => {
       bandsDisjoint: agreeing === SEED_GROUPS.length,
       seedGroupsAgreeing: agreeing,
       sentence: VERDICT_SENTENCE,
-      /** The variant the audience completes, which is the easier of the two. */
+      /**
+       * The variant the audience completes, which is the easier of the two. The prototype
+       * writes `'a'`; this reads `'A'`, because `io.ts` cross-checks the field against the
+       * variant ids this run declares.
+       */
       preferredVariant: easier.variant,
       audienceSentence: AUDIENCE_SENTENCE,
       reasons: VERDICT_REASONS,
