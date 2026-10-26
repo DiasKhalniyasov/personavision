@@ -1,10 +1,61 @@
 /**
  * `@personavision/browser` — browser driving.
  *
- * Opens a variant, walks the steps, captures page screenshots with the fold drawn, and
- * extracts the areas of interest a session can look at.
+ * Opens a variant under an emulated device, walks the task's steps, captures each screen
+ * with its geometry and the fold, extracts the areas of interest a session can look at, and
+ * executes the actions an agent decides — reporting every failure of its own as a typed
+ * automation failure rather than as a failure of the product.
  *
- * Placeholder: filled by the browser-driving step, which also adds Playwright. Playwright
- * is deliberately absent from this step so that no one downloads browser binaries to run
- * these tests.
+ * This file is the package's whole public surface. Nine tickets of the browser-driving step
+ * fill one function each behind it; none of them changes a name here.
  */
+
+export { openSession, closeSession, readSessionState } from './session.js';
+export type { OpenSessionOptions, SessionState } from './session.js';
+
+export { readGeometry, isBelowFold } from './geometry.js';
+
+export { capture, captureCacheKey, readContentHash } from './capture.js';
+export type { CaptureCacheKeyParts } from './capture.js';
+
+export { extractElements } from './extract/elements.js';
+export { stableElementId } from './extract/stable-id.js';
+export type { StableElementIdParts } from './extract/stable-id.js';
+
+export { writeScreenshot } from './screenshot.js';
+export type { ScreenshotTarget } from './screenshot.js';
+
+export { toAoiEntries, toScreenshotEntries } from './run-projection.js';
+
+export { detectStep, resolvePrimaryAction } from './steps.js';
+
+export { act } from './act.js';
+
+export { SessionBudget } from './budget.js';
+export type { BudgetIntegrity, SessionBudgetLimits } from './budget.js';
+
+export { mapToAutomationFailure } from './failure-mapping.js';
+
+export { withCache } from './cache.js';
+
+export { createFixtureSource } from './fixture-source.js';
+
+export { createLiveSource, walkTask } from './live-source.js';
+export type { TaskWalk } from './live-source.js';
+
+export { AutomationFailure, NotImplementedError, notImplemented } from './errors.js';
+
+export type {
+  ActResult,
+  Action,
+  AutomationFailureReason,
+  Box,
+  Capture,
+  CaptureContext,
+  CaptureElement,
+  CaptureSource,
+  Device,
+  Geometry,
+  PageHandle,
+  TaskDefinition,
+} from './types.js';
