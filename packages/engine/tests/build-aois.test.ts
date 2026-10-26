@@ -473,7 +473,12 @@ it('is pure: nothing under src/aois reaches for a file, a socket or an unseeded 
     .map((entry) => ({ entry, text: readFileSync(new URL(entry, aoisDir), 'utf8') }));
 
   expect(sources.map(({ entry }) => entry).sort()).toEqual([
+    'aoi-id.ts',
     'build-aois.ts',
+    // #66's offline segmenter lives here too, and `sharp` opens the screenshot for it.
+    // That is the seam's own exception and not a hole in this scan: the forbidden names
+    // below are what *this package* may not ask for, and the heuristic asks for none.
+    'heuristic-segmenter.ts',
     'index.ts',
     'segmenter.ts',
   ]);

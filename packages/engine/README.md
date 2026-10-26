@@ -159,6 +159,46 @@ A field renamed on either side stops satisfying these types with no compile erro
 package, so the names are binding on both: `tests/types.test.ts` asserts the browser step's
 shape against them at compile time.
 
+## The areas of interest, and the regions the DOM does not explain
+
+`buildAois` merges the capture's DOM and accessibility reports of one control into one
+area, derives a stable id from the variant, step, role, name and box, and returns the
+screen's areas in reading order. The regions the elements leave over come from an injected
+`Segmenter`, which is additive by contract: one that returns nothing, returns something
+malformed or throws leaves the element-derived areas exactly as they were.
+
+The **default** segmenter is the offline heuristic one, so a cold clone with no credential
+and no network builds the areas CI and the demo build. It averages the screenshot onto a
+grid of small cells in page space, strikes out every cell that touches an area the elements
+already explain, estimates the page background as the most common colour on the grid, and
+coalesces the cells that sit far enough from that background into regions of one colour.
+Four filters then throw candidates away — under `minAreaShare` or `minSidePx`, under
+`minAspectRatio`, or a shape whose rectangle is mostly not the shape — and the largest
+`maxRegions` survivors are returned, labelled by where they are and how big they are:
+"Bottom left card", not "region-7".
+
+The background estimate is what keeps it honest. A page of plain prose has no ink the
+elements did not already explain, so the answer is nothing rather than one area per
+paragraph of paper — `tests/heuristic-segmenter.test.ts` asserts that on
+`plain-text-control`, and asserts the six cards on `card-grid-unexplained`. It is
+deterministic by construction: no draw, no clock, a row-major walk, and a region defined as
+the connected set of cells similar to the one it started at, which no traversal order can
+change.
+
+`capture.screenshot` is run-directory-relative, so a caller that holds the run directory
+builds its own rather than leaning on the default:
+
+```ts
+const segmenter = heuristicSegmenter({ runDir });
+const aois = await buildAois({ capture, variant, segmenter });
+```
+
+`heuristicSegmenter` also takes `config` (layered over the engine defaults, so one
+threshold can be moved and no other) and `readImage`, which replaces `sharp` for a caller
+that already holds the pixels. Opening the screenshot is the one thing on the segmenter's
+side of the purity line: the engine itself still reads no file, and `buildAois` passes the
+path along without looking at it. `noSegmenter` asks for element-derived areas only.
+
 ## The fixture captures
 
 The step's shared test material: five synthetic captures in `tests/fixtures/`, each a

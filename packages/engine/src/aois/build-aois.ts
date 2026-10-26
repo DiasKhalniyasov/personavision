@@ -1,5 +1,6 @@
 import type { Aoi } from '../aggregate.js';
 import type { BoundingBox, Capture, CaptureElement, ElementSource } from '../types.js';
+import { aoiId } from './aoi-id.js';
 import { defaultSegmenter } from './segmenter.js';
 import type { SegmentedArea, Segmenter } from './segmenter.js';
 
@@ -47,15 +48,6 @@ export interface BuildAoisInput {
   readonly segmenter?: Segmenter;
 }
 
-/** What an id is derived from. `aoiId` is the only place that composition is written. */
-export interface AoiIdentity {
-  readonly variant: string;
-  readonly step: string;
-  readonly role: string | null;
-  readonly label: string;
-  readonly bbox: BoundingBox;
-}
-
 /**
  * What every area of one screen shares. These four are this module's to set and no
  * segmenter's: a segmenter cannot disagree with the capture about the fold, and cannot put
@@ -86,48 +78,6 @@ interface AreaParts {
  * every control reads "DOM" and only a region reads "SAM 3.1 segment".
  */
 const SOURCE_PRECEDENCE: readonly ElementSource[] = ['dom', 'a11y', 'sam'];
-
-const SLUG_LIMIT = 40;
-
-/** Lower case, alphanumeric and single dashes, so an id reads like `a-cart-button-checkout`. */
-const slug = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .slice(0, SLUG_LIMIT)
-    .replace(/^-+|-+$/g, '');
-
-const token = (value: string, fallback: string): string => slug(value) || fallback;
-
-/**
- * A coordinate in an id. Negative becomes `n12` rather than `-12`: an element off the left
- * or top edge has a negative origin, and a minus sign inside a dash-joined id reads as an
- * empty segment.
- */
-const coordinateToken = (value: number): string => {
-  const rounded = Math.round(value);
-  return rounded < 0 ? `n${Math.abs(rounded)}` : String(rounded);
-};
-
-/**
- * The id of an area of interest, derived from role, accessible name and position as #6
- * derives its element ids, with the variant and the step in front because `run.json` holds
- * every variant's areas in one array and `aoiMetrics` joins on the id alone.
- *
- * Exported so that a segmenter (#66, #69) names its regions in the same family instead of
- * inventing a second id scheme. Two areas with the same role and name at different
- * positions get different ids; two areas with the same box are the same area.
- */
-export const aoiId = (identity: AoiIdentity): string =>
-  [
-    token(identity.variant, 'variant'),
-    token(identity.step, 'step'),
-    token(identity.role ?? '', 'region'),
-    token(identity.label, 'unnamed'),
-    coordinateToken(identity.bbox.x),
-    coordinateToken(identity.bbox.y),
-    `${coordinateToken(identity.bbox.width)}x${coordinateToken(identity.bbox.height)}`,
-  ].join('-');
 
 /**
  * The one place an area of interest is constructed.
@@ -316,6 +266,7 @@ export const buildAois = async (input: BuildAoisInput): Promise<Aoi[]> => {
   try {
     const returned = await (input.segmenter ?? defaultSegmenter).segment({
       capture,
+      variant,
       explained: elementAreas,
     });
     segmented = segmentedAreas(returned, screen, taken);
