@@ -152,7 +152,7 @@ describe('CI gates every root check', () => {
   }
 });
 
-describe('nothing in the repository reads a credential', () => {
+describe('only the one sanctioned place reads a credential', () => {
   // Every pattern is assembled from fragments, and the comments below describe each shape
   // rather than spelling one out, so that this test cannot match itself and quietly pass
   // while a real credential read sits a line away.
@@ -166,6 +166,9 @@ describe('nothing in the repository reads a credential', () => {
     new RegExp(`process\\.env\\[\\s*['"\`]${NAME}`),
     // The same name destructured straight out of the environment.
     new RegExp(`\\{[^}]*\\b${NAME}\\b[^}]*\\}\\s*=\\s*process\\.env`),
+    // An environment read through a bracket holding a constant whose own name mentions one
+    // of those words, which is the shape a variable name hides a credential read behind.
+    new RegExp(`env\\[\\s*[A-Za-z0-9_]*(?:${SECRETISH.join('|')})[A-Za-z0-9_]*\\s*\\]`),
     // a registry auth line in an .npmrc
     new RegExp(['_auth', '(?:Token)?\\s*='].join('')),
     // a CI secret reference in a workflow
@@ -188,8 +191,19 @@ describe('nothing in the repository reads a credential', () => {
   // credential tends to land: an .npmrc auth token above all.
   const SCANNED_NAMES = new Set(['.npmrc', '.yarnrc', '.env.example', 'Dockerfile', 'Makefile']);
 
+  /**
+   * The one read the project sanctions, and the step that mandates it: `#33`'s provider
+   * selection reads the model credential from the environment at call time and hands it
+   * straight to the model provider's factory. It is never written to a file, a run
+   * artifact, a log line or an error — `packages/provider`'s own tests assert it appears
+   * in no result, no reason and no thrown message. Anywhere else, a credential read fails
+   * this test; a new provider that needs one adds its read here, deliberately.
+   */
+  const SANCTIONED = ['packages/provider/src/select.ts'];
+
   it('reads no API key from the environment and holds no CI secret', () => {
     const offenders = sourceFiles()
+      .filter((path) => !SANCTIONED.includes(path))
       .filter((path) => SCANNED_EXTENSIONS.has(extname(path)) || SCANNED_NAMES.has(basename(path)))
       // `git ls-files --cached` still lists a file deleted from the working tree without
       // `git rm`, and reading it would throw.
@@ -200,5 +214,13 @@ describe('nothing in the repository reads a credential', () => {
       });
 
     expect(offenders).toEqual([]);
+  });
+
+  it('still has the one sanctioned read, so the exception cannot rot', () => {
+    // If provider selection stops reading the credential, this entry goes, and the scan
+    // covers the whole tree again.
+    for (const path of SANCTIONED) {
+      expect(PATTERNS.some((pattern) => pattern.test(read(path)))).toBe(true);
+    }
   });
 });
