@@ -113,6 +113,39 @@ its own raises it. Each row interpolates linearly between the configured value a
   an own-property one — a page is free to use `role="toString"`. It is a relative weight,
   not a 0..1 share: the salience term normalises it together with the others.
 
+## The human-like draws
+
+`src/sampling/distributions.ts` holds the seeded draws that make a sequence of chosen areas
+look like a human looking: how long a fixation lasts, how far and how long the jump between
+two of them is, when the next one starts, and where inside an area the gaze lands. Choosing
+_which_ area is fixated is the sampler's job. Every parameter is in `config`, so calibration
+fits these as data, and `tests/distributions.test.ts` holds the distributional properties.
+
+- `drawFixationDurationMs(persona, rng, config)` — log-normal around
+  `fixationDuration.medianMs`, scaled by the persona's `fixationDurationScale` and clamped
+  to the configured bounds. Positive, right-skewed, and shorter for a scanning persona than
+  for a reading one by the ratio the table above states. Consumes 2 values from `rng`.
+- `drawSaccadeAmplitudePx(rng, config)` — log-normal around `saccade.amplitude.medianPx`,
+  for the paths with no geometry to measure: `predict()` on a bare screenshot, and
+  calibration fitting the amplitude distribution itself. Consumes 2.
+- `saccadeDurationMsFor(amplitudePx, config)` — the main sequence, a longer jump takes
+  longer: `baseMs + msPerPixel · amplitude`, clamped. No `rng`, because the relationship is
+  not a draw. The sampler calls this with the distance between two landing points.
+- `nextFixationStart(previous, saccadeDurationMs, rng, config)` → `{ tMs, gapMs }`. The gap
+  is drawn around `interFixation.gapMs` and floored at the saccade plus `minGapMs`, so the
+  saccade accounts for part of every gap and `tMs` strictly rises along a session. On the
+  defaults that floor binds for about two gaps in five: the realized gaps are a truncated
+  normal, which is what calibration fits. Consumes 2.
+- `drawLandingPoint(box, rng, config)` → `{ x, y }` — an independent normal per axis with a
+  standard deviation of `landing.spreadShare` of the box's half-extent, so the heatmap has a
+  believable shape at any box size. Always strictly inside the box, from a 1×1 box to a
+  page-sized one, and never a negative coordinate: the drawable interval is the box's inset
+  interval intersected with the page. Consumes 4 — two per axis, `x` first.
+
+Each draw is a pure function of its inputs, the persona's sampling parameters and the
+generator it is handed, consumes a fixed number of values from it, and caches nothing
+between calls, so two runs on one seed produce byte-identical sequences.
+
 ## The published input types
 
 `Capture`, `CaptureElement`, `BoundingBox`, `Viewport`, `ElementSource` and `Goal` are the

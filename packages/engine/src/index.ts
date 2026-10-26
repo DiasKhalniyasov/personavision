@@ -31,6 +31,15 @@ export {
 } from './persona.js';
 export type { PersonaSamplingParams, PersonaTraits } from './persona.js';
 
+export {
+  drawFixationDurationMs,
+  drawLandingPoint,
+  drawSaccadeAmplitudePx,
+  nextFixationStart,
+  saccadeDurationMsFor,
+} from './sampling/distributions.js';
+export type { FixationClock, LandingPoint, NextFixationStart } from './sampling/distributions.js';
+
 export type {
   BoundingBox,
   Capture,
