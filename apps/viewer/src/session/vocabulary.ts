@@ -82,6 +82,15 @@ export function outcomeWords(status: OutcomeStatus): OutcomeWords {
   return OUTCOMES[status];
 }
 
+/**
+ * Whether a value is one of the four outcomes — what a screen asks of a `?outcome=` before
+ * it filters or words anything by it, so that an unknown value is a filter the URL does not
+ * carry rather than a row with no word on it.
+ */
+export function isOutcomeStatus(value: unknown): value is OutcomeStatus {
+  return typeof value === 'string' && Object.hasOwn(OUTCOMES, value);
+}
+
 /** How an outcome's attribution is worded and coloured. */
 export function attributionWords(attribution: Attribution): AttributionWords {
   return ATTRIBUTIONS[attribution];

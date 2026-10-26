@@ -54,7 +54,14 @@ export interface SessionTimeline {
   at(tMs: number): TimelineMoment;
   /** The time of fixation `fixationNumber` (1-based), clamped to the fixations there are. */
   timeAtFixation(fixationNumber: number): number;
-  /** The time of the next or previous fixation, clamped at both ends of the session. */
+  /**
+   * The time of the next or previous fixation, clamped at both ends of the session.
+   *
+   * It steps the **number**, not the time: from a moment whose current fixation is 20, a
+   * step back is fixation 19 and a step forward is 21, whether or not the time asked about
+   * sat exactly on fixation 20. So a key press always moves the number the screen is
+   * showing by one, from wherever a dragged scrubber left it.
+   */
   stepFixation(tMs: number, direction: 1 | -1): number;
 }
 
@@ -125,12 +132,16 @@ function mergedTrack(session: Session): TrackEntry[] {
 export function sessionTimeline(session: Session): SessionTimeline {
   const starts = screenStarts(session);
   const fixations = session.fixations;
-  const clamp = (tMs: number): number => Math.min(Math.max(tMs, 0), session.durationMs);
+  // A time arrives from a URL or a dragged scrubber, so a value that is not a number at
+  // all is the start of the session rather than a `NaN` carried through every answer.
+  const clamp = (tMs: number): number =>
+    Number.isFinite(tMs) ? Math.min(Math.max(tMs, 0), session.durationMs) : 0;
 
   const timeAtFixation = (fixationNumber: number): number => {
     if (fixations.length === 0) return 0;
-    const index = Math.min(Math.max(Math.trunc(fixationNumber), 1), fixations.length) - 1;
-    return fixations[index].tMs;
+    const asked = Number.isFinite(fixationNumber) ? Math.trunc(fixationNumber) : 1;
+    const index = Math.min(Math.max(asked, 1), fixations.length) - 1;
+    return clamp(fixations[index].tMs);
   };
 
   return {
@@ -144,7 +155,11 @@ export function sessionTimeline(session: Session): SessionTimeline {
       // had come up by then.
       let screenIndex: number | null = null;
       for (let index = 0; index < starts.length; index += 1) {
-        if (starts[index] <= at) screenIndex = index;
+        // Ties keep the earlier screen: a screen nobody looked at shares the start of the
+        // one before it, and has to cover no time rather than swallow its span.
+        if (starts[index] <= at && (screenIndex === null || starts[index] > starts[screenIndex])) {
+          screenIndex = index;
+        }
       }
       const screen = screenIndex === null ? null : session.screens[screenIndex];
       const fixationIndex = latestAtOrBefore(fixations, at);

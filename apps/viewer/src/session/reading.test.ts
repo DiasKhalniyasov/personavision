@@ -75,6 +75,46 @@ describe('opening a run', () => {
     ).rejects.toThrow('/runs/no-such-run/run.json could not be read: HTTP 404');
   });
 
+  it('forgets a failed read, so the row that broke can be asked for again', async () => {
+    const { fetch: fromDisk, requested } = exampleRunFetch();
+    let failures = 1;
+    const flaky: typeof globalThis.fetch = async (input, init) => {
+      if (failures > 0 && String(input).endsWith('S-01.json')) {
+        failures -= 1;
+        requested.push(new URL(String(input)).pathname);
+        return new Response('upstream is having a moment\n', { status: 503 });
+      }
+      return fromDisk(input, init);
+    };
+    const run = await openRun({ baseUrl: EXAMPLE_RUN_BASE, fetch: flaky });
+
+    await expect(run.session('S-01')).rejects.toThrow('HTTP 503');
+    const second = await run.session('S-01');
+
+    expect(second.sessionId).toBe('S-01');
+    expect(requested.filter((path) => path.endsWith('S-01.json'))).toHaveLength(2);
+  });
+
+  it('names the file when it is not what the contract declares', async () => {
+    const notARun: typeof globalThis.fetch = async () =>
+      new Response('{"schemaVersion": 2}', { status: 200 });
+
+    await expect(openRun({ baseUrl: EXAMPLE_RUN_BASE, fetch: notARun })).rejects.toThrow(
+      `${EXAMPLE_RUN_BASE.pathname}run.json is not a valid artifact file`,
+    );
+  });
+
+  it('addresses a captured page and the run’s own stored paths through the run’s URL', async () => {
+    const { fetch } = exampleRunFetch();
+    const run = await openRun({ baseUrl: EXAMPLE_RUN_BASE, fetch });
+
+    const screenshot = run.screenshotUrl('B', 'review');
+    const stored = new URL(run.run.screenshots[0].path, run.baseUrl);
+
+    expect(screenshot.pathname).toBe(`${EXAMPLE_RUN_BASE.pathname}screenshots/B/review.png`);
+    expect(stored.pathname).toBe(`${EXAMPLE_RUN_BASE.pathname}${run.run.screenshots[0].path}`);
+  });
+
   it('addresses a run given without its trailing slash from inside the run, not beside it', async () => {
     const { fetch, requested } = exampleRunFetch();
 

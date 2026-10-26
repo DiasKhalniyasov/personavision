@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attributionWords, outcomeWords } from './index.js';
+import { attributionWords, isOutcomeStatus, outcomeWords } from './index.js';
 import type { Attribution, OutcomeStatus } from './index.js';
 
 /**
@@ -49,6 +49,15 @@ describe('the outcome vocabulary', () => {
       [abandoned, failed, automation].map((words) => words.label),
       'and none of them is a success',
     ).not.toContain(outcomeWords('success').label);
+  });
+});
+
+describe('an outcome off the URL', () => {
+  it('recognises the four outcomes and nothing else', () => {
+    expect(STATUSES.every((status) => isOutcomeStatus(status))).toBe(true);
+    for (const value of ['Abandoned', 'automation failure', '', 'toString', null, 3]) {
+      expect(isOutcomeStatus(value), `${String(value)} is not an outcome`).toBe(false);
+    }
   });
 });
 

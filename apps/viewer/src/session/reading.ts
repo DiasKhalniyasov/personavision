@@ -6,8 +6,13 @@ import type { Findings, Run, Session } from '@personavision/contract';
  *
  * `run.json` carries `sessionIds`, so the list of people in a test is known as soon as the
  * run is open and a session's own file is fetched only when something asks for that
- * session: the Sessions screen renders its rows before every session has been read, and the
- * replay reads one file. Nothing here is eager, and nothing is read twice.
+ * session: the Sessions screen can put its rows up from the manifest and fill each one as
+ * its session arrives, and the replay reads one file. Nothing here is eager, and nothing is
+ * read twice.
+ *
+ * A row's own values — outcome, duration, fixation count — live in the session file and
+ * nowhere else, so a list is complete only once every session has arrived. What the manifest
+ * buys is that the screen is up, and in the run's order, before that happens.
  *
  * Every path comes from `runPaths` and every file is parsed by the schema that declares it,
  * both from `@personavision/contract`. This module restates no field name and no path, and
@@ -19,7 +24,11 @@ import type { Findings, Run, Session } from '@personavision/contract';
 const LAYOUT = runPaths('');
 
 export interface RunSource {
-  /** The run's directory as a URL — `/runs/<runId>/`, as the run-data mount serves it. */
+  /**
+   * The run's directory as a URL — `/runs/<runId>/`, as the run-data mount serves it. A path
+   * on its own resolves against the page's own URL, so outside a browser it has to be
+   * absolute.
+   */
   readonly baseUrl: string | URL;
   /** The fetch to read through. Defaults to the global one; a test passes its own. */
   readonly fetch?: typeof globalThis.fetch;
@@ -27,12 +36,19 @@ export interface RunSource {
 
 export interface RunSessions {
   readonly run: Run;
+  /** The run's directory, resolved: what a path stored in the artifact resolves against. */
+  readonly baseUrl: URL;
   /** `run.json`'s `sessionIds`, in its order: the list, before any session is read. */
   readonly sessionIds: readonly string[];
   /** One session, fetched the first time it is asked for and remembered after. */
   session(sessionId: string): Promise<Session>;
   /** `findings.json`, fetched the first time it is asked for. */
   findings(): Promise<Findings>;
+  /**
+   * Where one captured page sits. A screen asks for it rather than spelling the screenshot
+   * path, which is the contract's to spell.
+   */
+  screenshotUrl(variant: string, step: string): URL;
 }
 
 /**
@@ -79,6 +95,7 @@ export async function openRun(source: RunSource): Promise<RunSessions> {
 
   return {
     run,
+    baseUrl: base,
     sessionIds: run.sessionIds,
 
     session(sessionId) {
@@ -109,6 +126,10 @@ export async function openRun(source: RunSource): Promise<RunSessions> {
         throw error;
       });
       return findings;
+    },
+
+    screenshotUrl(variant, step) {
+      return new URL(LAYOUT.screenshot(variant, step), base);
     },
   };
 }

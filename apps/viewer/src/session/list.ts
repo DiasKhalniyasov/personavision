@@ -40,7 +40,13 @@ export interface SessionRow {
   readonly reason: string;
 }
 
-/** One session as the Sessions screen shows it. */
+/**
+ * One session as the Sessions screen shows it.
+ *
+ * ponytail: looks the persona and the step up by scanning the run's own lists, which is a
+ * handful of comparisons for an audience of 24; index them once per render if an audience
+ * ever runs to hundreds.
+ */
 export function sessionRow(run: Run, session: Session): SessionRow {
   const persona = run.personas.find((candidate) => candidate.id === session.persona?.id);
   const step = run.steps.find((candidate) => candidate.id === session.outcome.step);
@@ -66,8 +72,9 @@ export function sessionRow(run: Run, session: Session): SessionRow {
 }
 
 /**
- * The three filters of the Sessions screen, each of them URL state. An unset filter — left
- * out, or `null` because the URL carries no value for it — constrains nothing.
+ * The three filters of the Sessions screen, each of them URL state. An unset filter
+ * constrains nothing: left out, `null`, or the empty string a cleared control leaves behind
+ * in a URL (`?variant=`), which is no value rather than a variant named `''`.
  */
 export interface SessionFilter {
   readonly variant?: string | null;
@@ -76,7 +83,8 @@ export interface SessionFilter {
   readonly aoiId?: string | null;
 }
 
-const unset = (value: string | null | undefined): boolean => value === null || value === undefined;
+const unset = (value: string | null | undefined): boolean =>
+  value === null || value === undefined || value === '';
 
 /** Whether one session belongs in a filtered list. Combined filters narrow further. */
 export function matchesSessionFilter(session: Session, filter: SessionFilter): boolean {

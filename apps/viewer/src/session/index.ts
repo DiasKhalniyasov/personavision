@@ -20,7 +20,7 @@ export type { RunSessions, RunSource } from './reading.js';
 export { sessionTimeline } from './timeline.js';
 export type { SessionTimeline, TimelineMoment, TrackEntry, TrackEntryKind } from './timeline.js';
 
-export { attributionWords, outcomeWords } from './vocabulary.js';
+export { attributionWords, isOutcomeStatus, outcomeWords } from './vocabulary.js';
 export type { Attribution, AttributionWords, OutcomeStatus, OutcomeWords } from './vocabulary.js';
 
 export { findingsForSession, matchesSessionFilter, sessionRow } from './list.js';

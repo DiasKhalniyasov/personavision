@@ -138,6 +138,10 @@ describe('the three filters', () => {
 
     expect(await narrowedTo(run, {})).toHaveLength(24);
     expect(await narrowedTo(run, { variant: null, outcome: null, aoiId: null })).toHaveLength(24);
+    expect(
+      await narrowedTo(run, { variant: '', aoiId: '' }),
+      'a cleared control leaves ?variant= behind, which is no filter at all',
+    ).toHaveLength(24);
   });
 });
 

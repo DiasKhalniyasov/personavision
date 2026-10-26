@@ -87,6 +87,36 @@ describe('a session at a time', () => {
   });
 });
 
+describe('a session whose data is not what a replay expects', () => {
+  it('leaves a screen nobody looked at covering no time, rather than its neighbour’s', async () => {
+    const replayed = await session('S-16');
+    // S-16's fourth screen is a scroll back up with one fixation on it. Without it, that
+    // screen was never looked at, and the screens around it keep their own spans.
+    const unlooked = {
+      ...replayed,
+      fixations: replayed.fixations
+        .filter((fixation) => fixation.screenIndex !== 3)
+        .map((fixation, index) => ({ ...fixation, index })),
+    };
+
+    const timeline = sessionTimeline(unlooked);
+
+    expect(timeline.at(40_000).screenIndex, 'still the third screen').toBe(2);
+    expect(timeline.at(40_000).scrollY).toBe(696);
+    expect(timeline.at(43_407).screenIndex, 'the fifth screen keeps its own start').toBe(4);
+  });
+
+  it('answers from the start of the session for a time that is not a number', async () => {
+    const timeline = sessionTimeline(await session('S-15'));
+
+    const moment = timeline.at(Number('not a time'));
+
+    expect(moment.tMs).toBe(0);
+    expect(moment.screenIndex).toBe(0);
+    expect(moment.fixationNumber).toBeNull();
+  });
+});
+
 describe('stepping by fixation', () => {
   it('moves to the next and the previous fixation’s time', async () => {
     const timeline = sessionTimeline(await session('S-15'));
@@ -111,6 +141,17 @@ describe('stepping by fixation', () => {
     );
   });
 
+  it('steps the number the screen is showing, from a time between two fixations', async () => {
+    const timeline = sessionTimeline(await session('S-15'));
+    expect(timeline.at(30_000).fixationNumber, 'the scrubber was dragged past 20').toBe(20);
+
+    const back = timeline.stepFixation(30_000, -1);
+    const forward = timeline.stepFixation(30_000, 1);
+
+    expect(timeline.at(back).fixationNumber).toBe(19);
+    expect(timeline.at(forward).fixationNumber).toBe(21);
+  });
+
   it('deep-links a fixation number to its time, clamped to the fixations there are', async () => {
     const timeline = sessionTimeline(await session('S-15'));
 
@@ -118,5 +159,6 @@ describe('stepping by fixation', () => {
     expect(timeline.timeAtFixation(20)).toBe(29_042);
     expect(timeline.timeAtFixation(0), 'before the first is the first').toBe(1_034);
     expect(timeline.timeAtFixation(999), 'past the last is the last').toBe(35_412);
+    expect(timeline.timeAtFixation(Number('abc')), 'a ?fix= that is not a number').toBe(1_034);
   });
 });

@@ -26,8 +26,16 @@ const SCREENSHOT_EXTENSION = '.png';
  */
 const SEPARATOR = '/';
 
+/**
+ * Only the run directory comes from a caller, so only it can arrive with a separator
+ * already on the end; the rest are the names above. Trimming it keeps one spelling of one
+ * file, because these strings are compared and reported as well as opened.
+ */
 const join = (...segments: string[]): string =>
-  segments.filter((segment) => segment !== '').join(SEPARATOR);
+  segments
+    .filter((segment) => segment !== '')
+    .map((segment, index) => (index === 0 ? segment.replace(/\/+$/, '') : segment))
+    .join(SEPARATOR);
 
 export interface RunPaths {
   /** The run directory itself, exactly as it was passed in. */
