@@ -299,7 +299,7 @@ number is in `config.prediction` where calibration can fit it.
 
 | Convention      | What `predict` answers                                                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolution      | `round(imageWidth / cellPx)` × `round(imageHeight / cellPx)` cells, at least one of each: the image downscaled by `prediction.map.cellPx`, 20 on the defaults |
+| Resolution      | `round(imageWidth / cellPx)` × `round(imageHeight / cellPx)` cells, at least one of each: the image downscaled by `prediction.map.cellPx`, 10 on the defaults |
 | Coordinates     | Row-major image space: cell `(x, y)` is `values[y * width + x]`, cell `(0, 0)` is the image's top-left corner, `x` right and `y` down                         |
 | Kernel          | An isotropic 2-D Gaussian per fixation, standard deviation `kernelSigmaShare` of the map's longer side, truncated at `kernelRadiusSigmas`                     |
 | Fixation weight | The dwell raised to `dwellWeightExponent` — 1 is dwell-weighted, 0 counts fixations                                                                           |
@@ -312,6 +312,18 @@ Mass that the truncation or the image's edge drops is absorbed by the normalisat
 `sum-to-one` is the rule the calibration package's own maps use, so a metric compares like
 with like and KLD — the one metric that is not invariant to a rescaling — converts on
 neither side.
+
+**Why the cell is ten pixels and not twenty.** The calibration package's saliency metrics
+compare the two grids' _shapes_ and refuse a pair whose aspect ratios are more than one per
+cent apart, and the shape of an integer grid is only as faithful as its own coarseness. A
+twenty-pixel cell is outside that bound on a 390 × 844, an 828 × 1792 and a 1170 × 2532
+image — ordinary phone screenshots — which would cost those records their score rather than
+give them a poor one. A ten-pixel cell is inside it on every size tried, and
+`tests/predict.test.ts` holds that over the sizes the engine is scored on. Halving the cell
+costs nothing else: the kernel is a share of the grid's longer side, so it stays the same
+width in image pixels and is only stated on a finer grid, and the prediction is then
+resampled onto the ground truth's grid, which is the documented path and an exact
+area-weighted mean whenever the two are integer multiples — as 32 × 24 onto 16 × 12 is.
 
 **An image with nothing in it is still an answer.** The segmenter honestly finds nothing on
 a flat field, which is the point of its background estimate. `predict` then partitions the

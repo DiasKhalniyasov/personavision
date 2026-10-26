@@ -371,10 +371,17 @@ export const defaultEngineConfig: EngineConfig = {
 
   prediction: {
     map: {
-      // Twenty image pixels a cell: a 320x240 image becomes a 16x12 map, which is the
-      // resolution the committed calibration corpus states its own ground truth at, so the
-      // common case needs no resampling on either side of a metric.
-      cellPx: 20,
+      // Ten image pixels a cell. The size is set by #83's aspect rule rather than by
+      // taste: it compares the two grids' shapes and *refuses* a pair more than one per
+      // cent apart, and the shape of an integer grid is only as faithful as its own
+      // coarseness. A twenty-pixel cell is over that bound on a 390x844, an 828x1792 and a
+      // 1170x2532 image — ordinary phone screenshots, a third of the mobile category — and
+      // a ten-pixel cell is inside it on every size tried. The blur is a share of the
+      // grid's longer side, so halving the cell leaves the kernel the same width in image
+      // pixels and only states it on a finer grid; the prediction is then resampled onto
+      // the ground truth's grid, which is #83's documented path and an exact area-weighted
+      // mean when the two are integer multiples, as 32x24 onto 16x12 is.
+      cellPx: 10,
       // Three per cent of the longer side is the blur the saliency-benchmark literature
       // compares maps at, so a figure here is comparable with a published one.
       kernelSigmaShare: 0.03,

@@ -153,8 +153,8 @@ describe('predict on a bare screenshot', () => {
     expect({ width: saliencyMap.width, height: saliencyMap.height }).toEqual(
       expectedResolution(IMAGE),
     );
-    // The documented resolution for the canonical image, written out: a 20-pixel cell.
-    expect([saliencyMap.width, saliencyMap.height]).toEqual([16, 12]);
+    // The documented resolution for the canonical image, written out: a 10-pixel cell.
+    expect([saliencyMap.width, saliencyMap.height]).toEqual([32, 24]);
     expect(saliencyMap.values).toHaveLength(saliencyMap.width * saliencyMap.height);
     expect(saliencyMap.imageSize).toEqual(IMAGE);
     expect(scanpath.fixations.length).toBeGreaterThan(0);
@@ -242,7 +242,7 @@ describe('the saliency map', () => {
   });
 
   it('is the image downscaled by cellPx, for a very small image and a very large one', async () => {
-    const tiny: ImageSize = { width: 24, height: 16 };
+    const tiny: ImageSize = { width: 8, height: 6 };
     const huge: ImageSize = { width: 1600, height: 1200 };
 
     const small = await predict(bare(await flatField(tiny), tiny), SEED);
@@ -497,6 +497,27 @@ describe('a failure is not reported as a flat image', () => {
     await expect(predict(bare(bytes), SEED, { segmenter: broken })).rejects.toThrow(
       'the segmenter broke',
     );
+  });
+
+  it('keeps the map’s grid within the aspect tolerance the metrics refuse outside of', async () => {
+    // #83 compares the two grids' shapes and refuses a pair more than one per cent apart,
+    // so a grid whose rounding misstates the image's shape costs a whole record its score.
+    // These are the sizes the engine is scored on: screens, posters and phones.
+    const sizes: readonly ImageSize[] = [
+      { width: 320, height: 240 },
+      { width: 1280, height: 1024 },
+      { width: 1920, height: 1080 },
+      { width: 390, height: 844 },
+      { width: 828, height: 1792 },
+      { width: 1170, height: 2532 },
+      { width: 1440, height: 2560 },
+    ];
+
+    for (const size of sizes) {
+      const grid = expectedResolution(size);
+      const error = Math.abs(grid.width / grid.height / (size.width / size.height) - 1);
+      expect({ size, withinOnePerCent: error < 0.01 }).toEqual({ size, withinOnePerCent: true });
+    }
   });
 
   it('still answers a valid prediction when a configured leaf is not a number', async () => {
