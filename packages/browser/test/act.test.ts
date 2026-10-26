@@ -265,6 +265,30 @@ describeWithChromium('acting on a page', () => {
   );
 
   it(
+    'clears the field when the action carries no value',
+    async () =>
+      withSession(DESKTOP, '/payment.html', async (handle) => {
+        await act(
+          handle,
+          { type: 'type', selector: '#payment-card-number', value: '4242' },
+          contextFor(DESKTOP),
+        );
+
+        // Typing nothing into a field is what an action with no value asks for. It is
+        // stated here so that it is a decision and not an accident of `value ?? ''`.
+        const result = await act(
+          handle,
+          { type: 'type', selector: '#payment-card-number' },
+          contextFor(DESKTOP),
+        );
+
+        expect(result.ok).toBe(true);
+        expect(await fieldValue(handle, '#payment-card-number')).toBe('');
+      }),
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'returns from the review page to the page before it',
     async () =>
       withSession(DESKTOP, '/payment.html', async (handle) => {
