@@ -37,10 +37,13 @@ const missing = (path: string): Response =>
   new Response(`There is no ${path} here.\n`, { status: 404 });
 
 /** The run directory and file a URL names, if it names one. */
-const RUN_FILE = /^\/runs\/([^/]+)\/([^/]+)$/;
-/** The mount serves a run's two files and no more, under the contract's own names. */
+const RUN_FILE = /^\/runs\/([^/]+)\/(.+)$/;
+/** The files of a run, under the contract's own names, and nothing else. */
 const layout = runPaths('');
-const served: string[] = [layout.run, layout.findings];
+/** `sessions/<id>.json`: one file per person, as `runPaths` spells it. */
+const SESSION_FILE = new RegExp(`^${layout.sessionsDir}/[^/]+\\.json$`);
+const serves = (file: string): boolean =>
+  file === layout.run || file === layout.findings || SESSION_FILE.test(file);
 
 export interface ServedRunData {
   /** The run directories the listing holds, newest first. */
@@ -78,11 +81,7 @@ export async function serveRunData(
     if (pathname === '/runs/index.json') return Promise.resolve(json(index));
 
     const file = RUN_FILE.exec(pathname);
-    if (
-      file === null ||
-      !runIds.includes(file[1] as string) ||
-      !served.includes(file[2] as string)
-    ) {
+    if (file === null || !runIds.includes(file[1] as string) || !serves(file[2] as string)) {
       return Promise.resolve(missing(pathname));
     }
     try {
@@ -96,12 +95,12 @@ export async function serveRunData(
   return { runIds, requests };
 }
 
-/** One run directory of the repository, parsed. The committed example run is the first. */
-export function readRunFile(runId: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(runsRoot, runId, layout.run), 'utf8')) as Record<
-    string,
-    unknown
-  >;
+/**
+ * One file of a run directory of the repository, parsed. The run's own `run.json` by
+ * default; a test that overrides a session passes `runPaths('').session(id)`.
+ */
+export function readRunFile(runId: string, file: string = layout.run): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(runsRoot, runId, file), 'utf8')) as Record<string, unknown>;
 }
 
 export interface MountOptions {

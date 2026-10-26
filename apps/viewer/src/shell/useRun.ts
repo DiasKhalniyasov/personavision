@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMatch } from 'react-router';
-import { findingsSchema, runPaths, runSchema } from '@personavision/contract';
-import type { Findings, Run } from '@personavision/contract';
+import { findingsSchema, runPaths, runSchema, sessionSchema } from '@personavision/contract';
+import type { Findings, Run, Session } from '@personavision/contract';
 // Type-only, and therefore erased: the listing's shape is `readRunIndex`'s own, so the
 // viewer does not restate the three field names it answers with. `@personavision/cli`
 // reads files and never reaches the browser bundle.
@@ -25,7 +25,9 @@ import { matches, patterns } from './paths';
  * - `GET /runs/<runId>/findings.json` → that run's ranked findings
  *
  * The session files of a run are read by `src/session/` (#20), through this same interface
- * and the same contract.
+ * and the same contract. What is read here instead is the one figure no run-level field
+ * carries — who the run excluded from its scores — because this module is the one that asks
+ * the server, and the Verdict screen's banner states that figure above its headline.
  */
 
 const RUNS = '/runs';
@@ -36,6 +38,8 @@ const runFile = (runId: string, file: string): string =>
   `${RUNS}/${encodeURIComponent(runId)}/${file}`;
 const runUrl = (runId: string): string => runFile(runId, layout.run);
 const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
+const sessionUrl = (runId: string, sessionId: string): string =>
+  runFile(runId, layout.session(sessionId));
 
 /** Run data is served from the site root; `fetch` wants an absolute URL in a test. */
 const absolute = (path: string): string => new URL(path, window.location.href).toString();
@@ -121,6 +125,57 @@ const readFindings = async (runId: string): Promise<FindingsState> => {
     : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
 };
 
+/**
+ * One person a run excluded from its figures.
+ *
+ * `excludedFromScores` and `attribution` are stored on each session and were decided once,
+ * by the pipeline. Nothing here re-derives exclusion from an outcome status, and the three
+ * outcome statuses stay three.
+ */
+const isExcluded = (session: Session): boolean =>
+  session.outcome.excludedFromScores && session.outcome.attribution === 'automation';
+
+type SessionRead =
+  | { readonly ok: true; readonly session: Session }
+  | { readonly ok: false; readonly url: string; readonly problem: string };
+
+const readSession = async (runId: string, sessionId: string): Promise<SessionRead> => {
+  const url = sessionUrl(runId, sessionId);
+  const answer = await readJson(url);
+  if (!answer.ok) return { ok: false, url, problem: answer.problem };
+  const parsed = sessionSchema.safeParse(answer.body);
+  return parsed.success
+    ? { ok: true, session: parsed.data }
+    : { ok: false, url, problem: firstViolation(parsed.error) };
+};
+
+/**
+ * Who this run excluded, from the sessions themselves.
+ *
+ * No run-level field counts them — `run.json` carries the manifest and the scores, and the
+ * two fields that decide exclusion sit on each session — so every session the manifest
+ * names is read. One session that cannot be read makes the whole count unreadable rather
+ * than short.
+ */
+const readExcluded = async (run: Run): Promise<ExcludedState> => {
+  const read = await Promise.all(
+    run.sessionIds.map((sessionId) => readSession(run.runId, sessionId)),
+  );
+  for (const entry of read) {
+    if (!entry.ok) {
+      return { status: 'unreadable', runId: run.runId, url: entry.url, problem: entry.problem };
+    }
+  }
+  return {
+    status: 'ready',
+    people: read.flatMap((entry) =>
+      entry.ok && isExcluded(entry.session)
+        ? [{ sessionId: entry.session.sessionId, reason: entry.session.outcome.reason }]
+        : [],
+    ),
+  };
+};
+
 const readLatestRunId = async (): Promise<LatestRunState> => {
   const answer = await readJson(indexUrl);
   if (!answer.ok) return { status: 'unreadable', url: indexUrl, problem: answer.problem };
@@ -150,6 +205,7 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
  */
 const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
+const excludedCache = new Map<string, Promise<ExcludedState>>();
 let latestRun: Promise<LatestRunState> | null = null;
 
 const keep = <State extends { status: string }>(
@@ -171,6 +227,9 @@ const loadRun = (runId: string): Promise<RunState> =>
 const loadFindings = (runId: string): Promise<FindingsState> =>
   findingsCache.get(runId) ?? keep(runId, findingsCache, readFindings(runId));
 
+const loadExcluded = (run: Run): Promise<ExcludedState> =>
+  excludedCache.get(run.runId) ?? keep(run.runId, excludedCache, readExcluded(run));
+
 const loadLatestRunId = (): Promise<LatestRunState> => {
   latestRun ??= readLatestRunId().then((state) => {
     if (state.status === 'unreadable') latestRun = null;
@@ -183,6 +242,7 @@ const loadLatestRunId = (): Promise<LatestRunState> => {
 export const refreshRun = (runId: string): void => {
   cache.delete(runId);
   findingsCache.delete(runId);
+  excludedCache.delete(runId);
   latestRun = null;
 };
 
@@ -190,6 +250,7 @@ export const refreshRun = (runId: string): void => {
 export const clearRunCache = (): void => {
   cache.clear();
   findingsCache.clear();
+  excludedCache.clear();
   latestRun = null;
 };
 
@@ -202,6 +263,47 @@ export type FindingsState =
       readonly url: string;
       readonly problem: string;
     };
+
+/** One person a run excluded from its figures, and why their session ended. */
+export interface ExcludedPerson {
+  readonly sessionId: string;
+  /** In the pipeline's words, as the session stores it. */
+  readonly reason: string;
+}
+
+export type ExcludedState =
+  | { readonly status: 'loading' }
+  /** Empty for a run that excluded nobody, which is a result and not a gap. */
+  | { readonly status: 'ready'; readonly people: readonly ExcludedPerson[] }
+  | {
+      readonly status: 'unreadable';
+      readonly runId: string;
+      readonly url: string;
+      readonly problem: string;
+    };
+
+/**
+ * Who one run excluded from its figures: read once per run while the app is open.
+ *
+ * The Verdict screen's banner names how many of how many, so the figure is read from the
+ * stored fields on the run's sessions and never worked out from their outcome statuses.
+ */
+export function useExcluded(run: Run): ExcludedState {
+  const [state, setState] = useState<ExcludedState>({ status: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    setState({ status: 'loading' });
+    void loadExcluded(run).then((next) => {
+      if (live) setState(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [run]);
+
+  return state;
+}
 
 /** One run, by its id. The id is a test's directory name and so its id in the contract. */
 export function useRun(runId: string): RunState {
