@@ -1812,8 +1812,11 @@ function renderVerdict() {
   const pts = resolve(FIX[key] || [], boxes);
   $('#vd-heat').innerHTML = heatHTML(pts);
   /* No scanpath and no numbers on this screen: the heatmap alone, plus the
-     outline of the thing nobody looked at. */
-  $('#vd-vec').innerHTML = vectorHTML(pts, { scan: false, aoi: true, boxes: { complete: boxes.complete }, active: 'complete', activeEmpty: true });
+     outline of the thing nobody looked at. On a step that has no such area,
+     draw no outline rather than an undefined box. */
+  const heroBox = VERDICT.heroEvidence.aoiId || 'complete';
+  const outline = boxes[heroBox] ? { [heroBox]: boxes[heroBox] } : {};
+  $('#vd-vec').innerHTML = vectorHTML(pts, { scan: false, aoi: true, boxes: outline, active: heroBox, activeEmpty: true });
 
   renderHeadlineFindings();
 }
