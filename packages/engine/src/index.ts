@@ -12,6 +12,15 @@
 export { aggregate } from './aggregate.js';
 export type { Aoi, AoiMetric } from './aggregate.js';
 
+export { aoiId, buildAois, defaultSegmenter } from './aois/index.js';
+export type {
+  AoiIdentity,
+  BuildAoisInput,
+  SegmentedArea,
+  Segmenter,
+  SegmenterInput,
+} from './aois/index.js';
+
 export { defaultEngineConfig, resolveEngineConfig } from './config.js';
 export type {
   EngineConfig,
