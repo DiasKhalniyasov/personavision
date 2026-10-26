@@ -47,6 +47,24 @@ const COLUMNS = [
 /** The two figures a reader compares down the column, so they are right-aligned. */
 const FIGURES = new Set<string>(['Time', 'Fixations']);
 
+/**
+ * A cell wraps. The registry's own cell does not, and nine columns of unbreakable text
+ * push the table past the page: the reason a session ended — the column a designer came
+ * for — is then the one scrolled out of sight. The prototype's `td` wraps and only its
+ * `th` does not, which is what this restores.
+ */
+const CELL = 'p-4 whitespace-normal';
+/** A figure never wraps: `22.4 s` is one reading, not two lines. */
+const FIGURE_CELL = `${CELL} num text-right whitespace-nowrap`;
+
+/**
+ * A column heading, as the prototype's own `th` sets one: the overline treatment, in the
+ * body family rather than the mono one `.microlabel` carries. The two rules are otherwise
+ * the same, and a table head sat in mono above twenty-four rows of prose reads as data
+ * rather than as a label.
+ */
+const HEAD = 'faint h-auto px-4 py-3 text-2xs font-semibold tracking-wide uppercase';
+
 export function SessionsTable({ run, rows }: { run: Run; rows: readonly SessionRowState[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
@@ -59,7 +77,7 @@ export function SessionsTable({ run, rows }: { run: Run; rows: readonly SessionR
             {COLUMNS.map((column) => (
               <TableHead
                 key={column}
-                className={`microlabel px-4 py-3${FIGURES.has(column) ? ' text-right' : ''}`}
+                className={`${HEAD}${FIGURES.has(column) ? ' text-right' : ''}`}
               >
                 {column}
               </TableHead>
@@ -93,7 +111,7 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
       onClick={open}
       aria-busy={state.status === 'pending' ? true : undefined}
     >
-      <TableCell className="p-4">
+      <TableCell className={`${CELL} whitespace-nowrap`}>
         <Link className="mono" to={to}>
           {state.sessionId}
         </Link>
@@ -101,13 +119,13 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
       {state.status === 'ready' ? (
         <ReadCells row={state.row} />
       ) : state.status === 'failed' ? (
-        <TableCell className="p-4 whitespace-normal" colSpan={COLUMNS.length - 1}>
+        <TableCell className={CELL} colSpan={COLUMNS.length - 1}>
           This person's session could not be read, so the test's own figures are the only record of
           them: {state.problem}
         </TableCell>
       ) : (
         COLUMNS.slice(1).map((column) => (
-          <TableCell key={column} className="p-4">
+          <TableCell key={column} className={CELL}>
             <Skeleton className="h-4 w-full" />
           </TableCell>
         ))
@@ -119,25 +137,25 @@ function SessionTableRow({ runId, state }: { runId: string; state: SessionRowSta
 function ReadCells({ row }: { row: SessionRow }) {
   return (
     <>
-      <TableCell className="p-4">
+      <TableCell className={CELL}>
         {row.personaName ?? row.participantId ?? 'Unnamed'}{' '}
         {row.seed === null ? null : <span className="faint">seed {row.seed}</span>}
       </TableCell>
-      <TableCell className="p-4">
+      <TableCell className={`${CELL} whitespace-nowrap`}>
         <Badge variant="ghost" className={variantTagClass(row.variant)}>
           {row.variant}
         </Badge>
       </TableCell>
-      <TableCell className="faint p-4">{row.deviceName ?? '—'}</TableCell>
-      <TableCell className="p-4">
+      <TableCell className={`faint ${CELL}`}>{row.deviceName ?? '—'}</TableCell>
+      <TableCell className={CELL}>
         <Badge variant="ghost" className={tagClass(row.outcome.token)}>
           {row.outcome.label}
         </Badge>{' '}
         {row.excludedFromScores ? <span className="microlabel">excluded</span> : null}
       </TableCell>
-      <TableCell className="num p-4 text-right">{durationSeconds(row.durationMs)}</TableCell>
-      <TableCell className="num p-4 text-right">{row.fixationCount}</TableCell>
-      <TableCell className="p-4">
+      <TableCell className={FIGURE_CELL}>{durationSeconds(row.durationMs)}</TableCell>
+      <TableCell className={FIGURE_CELL}>{row.fixationCount}</TableCell>
+      <TableCell className={CELL}>
         {row.outcome.status === 'success' ? (
           // Nothing is at fault when the task was done, so the column stays empty rather
           // than printing the attribution a successful session still carries.
@@ -148,7 +166,7 @@ function ReadCells({ row }: { row: SessionRow }) {
           </Badge>
         )}
       </TableCell>
-      <TableCell className="p-4 whitespace-normal text-muted-foreground">
+      <TableCell className={`${CELL} text-muted-foreground`}>
         {whereItEnded(row.endedOn, row.reason)}
       </TableCell>
     </>
