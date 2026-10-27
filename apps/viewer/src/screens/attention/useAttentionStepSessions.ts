@@ -104,9 +104,18 @@ const EMPTY: AttentionStepSessions = {
   scoredSessionCount: 0,
 };
 
-export function useAttentionStepSessions(variant: string, step: string): AttentionStepSessions {
+export function useAttentionStepSessions(
+  variant: string,
+  step: string,
+  given?: Run | null,
+): AttentionStepSessions {
+  // The run the route is about — and, on the two public pages, whose route names no test,
+  // the run the page was handed. `/` and `/demo` both read the committed example run and
+  // mount this screen's heatmap over it (#123, #124), so an aggregate asked for there has
+  // to be told which test it is of; `shell/SimulatedDisclaimer` takes a run for the same
+  // reason. Every signed-in screen passes nothing and the route answers for it, as before.
   const state = useOptionalRun(useCurrentRunId());
-  const run = state?.status === 'ready' ? state.run : null;
+  const run = given ?? (state?.status === 'ready' ? state.run : null);
 
   // One reader per run, so that moving between steps and versions re-projects what has
   // already been read instead of asking the server again.
