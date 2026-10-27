@@ -96,6 +96,22 @@ const said = (container: HTMLElement): string => captionIn(container).textConten
 const attention = (variant: string, step: string, query = '') =>
   mountApp(`${paths.attention(RUN_ID, variant, step)}${query}`);
 
+/** The committed run with something changed in it, served in its place. */
+const serveChangedRun = async (change: (run: Run) => Run) => {
+  await serveRunData({
+    files: { [`/runs/${RUN_ID}/run.json`]: JSON.stringify(change(seedRun())) },
+  });
+};
+
+/** The outlines, which are off until a reader asks for them. */
+const showOutlines = async (container: HTMLElement) => {
+  decoded(container);
+  await userEvent.click(screen.getByRole('button', { name: /Areas of interest/ }));
+};
+
+const boxFor = (container: HTMLElement, aoiId: string): SVGRectElement =>
+  container.querySelector(`[data-aoi="${aoiId}"]`) as SVGRectElement;
+
 /** The screen, once the run and its people have been read. */
 const settled = async () => {
   await screen.findByRole('heading', { level: 1, name: HEADING });
@@ -204,6 +220,27 @@ describe('what the caption will not say', () => {
     expect(said(container)).toBe('');
   });
 
+  it('says nothing on a step nobody reached, which is a different finding', () => {
+    const run = seedRun();
+    const { container } = caption({
+      run,
+      isolated: areaOf(run, NEVER_FIXATED),
+      sessions: {
+        status: 'ready',
+        error: null,
+        sessions: [],
+        fixations: [],
+        saccades: [],
+        reachedCount: 0,
+        scoredSessionCount: 9,
+      },
+    });
+
+    // The stage above says "nobody in your audience reached this step". "0 of 0 people who
+    // reached this step looked at it" under it would report that as a never-seen area.
+    expect(said(container)).toBe('');
+  });
+
   it('is announced when it changes, so isolating is not a result only sight reports', () => {
     const { container } = caption({ run: seedRun(), isolated: null });
 
@@ -262,8 +299,7 @@ describe('arriving with an area already isolated', () => {
     await serveRunData();
     const { container } = attention('B', 'review', `?aoi=${NEVER_FIXATED}`);
     await settled();
-    decoded(container);
-    await userEvent.click(screen.getByRole('button', { name: /Areas of interest/ }));
+    await showOutlines(container);
 
     const marked = [...container.querySelectorAll('[data-aoi]')]
       .filter((box) => box.hasAttribute('data-never-fixated'))
@@ -276,13 +312,45 @@ describe('arriving with an area already isolated', () => {
     await serveRunData();
     const { container } = attention('B', 'review', `?aoi=${FIXATED}`);
     await settled();
-    decoded(container);
-    await userEvent.click(screen.getByRole('button', { name: /Areas of interest/ }));
+    await showOutlines(container);
 
-    const box = container.querySelector(`[data-aoi="${FIXATED}"]`) as SVGRectElement;
+    const box = boxFor(container, FIXATED);
 
     expect(box.hasAttribute('data-isolated')).toBe(true);
     expect(box.hasAttribute('data-never-fixated')).toBe(false);
+  });
+});
+
+describe('an area the run itself is wrong about', () => {
+  it('states the fault instead of a figure, and is not outlined as never seen', async () => {
+    // A `null` time to first fixation beside a share above zero: the contradiction the
+    // table refuses to print a figure for. The box must not print it either.
+    await serveChangedRun((run) => ({
+      ...run,
+      aoiMetrics: run.aoiMetrics.map((metric) =>
+        metric.aoiId === NEVER_FIXATED ? { ...metric, lookedAtShare: 0.5 } : metric,
+      ),
+    }));
+    const { container } = attention('B', 'review', `?aoi=${NEVER_FIXATED}`);
+    await settled();
+    await showOutlines(container);
+
+    expect(said(container)).toContain(`These figures disagree about ${NEVER_FIXATED}`);
+    expect(boxFor(container, NEVER_FIXATED).hasAttribute('data-isolated')).toBe(true);
+    expect(boxFor(container, NEVER_FIXATED).hasAttribute('data-never-fixated')).toBe(false);
+  });
+
+  it('is not outlined as looked at either, when the run recorded no figures for it', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      aoiMetrics: run.aoiMetrics.filter((metric) => metric.aoiId !== NEVER_FIXATED),
+    }));
+    const { container } = attention('B', 'review', `?aoi=${NEVER_FIXATED}`);
+    await settled();
+    await showOutlines(container);
+
+    expect(said(container)).toContain(`This test recorded no figures for ${NEVER_FIXATED}`);
+    expect(boxFor(container, NEVER_FIXATED).hasAttribute('data-never-fixated')).toBe(false);
   });
 });
 

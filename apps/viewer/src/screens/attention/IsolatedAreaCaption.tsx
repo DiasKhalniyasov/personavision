@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { sessionsWithArea } from '@/shell/paths';
+import { stageIsShown } from './stage/AttentionStage';
 import {
   isNeverFixated,
   neverFixatedProblem,
@@ -28,7 +29,11 @@ import styles from './isolatedArea.module.css';
  *   disagree about the same area.
  * - **A half sentence is not printed.** The count of people who reached this step comes
  *   from the session files, so while those are still arriving the caption is withheld
- *   rather than rendered with a number that is about to change.
+ *   rather than rendered with a number that is about to change. It is withheld on a step
+ *   nobody reached too: the stage is then the words *nobody got this far*, and "0 of 0
+ *   people who reached this step looked at it" under them would report a step the audience
+ *   never saw as an area they never looked at — two different findings, and only one of
+ *   them true.
  * - **The region is always mounted, empty or not.** A live region that appears with its
  *   text is a region a screen reader never announces, and isolating an area would then be
  *   a result only a pointer and a pair of eyes could have.
@@ -67,7 +72,7 @@ export function IsolatedAreaCaption({
 }: IsolatedAreaCaptionProps) {
   return (
     <p className="footnote" id="att-caption" role="status" data-section="isolated-area">
-      {isolated === null || sessions.status !== 'ready' ? null : (
+      {isolated === null || sessions.status !== 'ready' || !stageIsShown(sessions) ? null : (
         <Said runId={runId} variant={variant} isolated={isolated} sessions={sessions} />
       )}
     </p>

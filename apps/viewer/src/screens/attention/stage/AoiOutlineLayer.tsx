@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { isNeverFixated } from '../attentionWording';
+import { isNeverFixated, neverFixatedProblem } from '../attentionWording';
 import type { OverlayLayer, OverlayLayerProps } from './overlayLayers';
 import { OVERLAY_SPAN, boxToOverlay, overlaySpanY, pxPerOverlayUnit } from './overlayTransform';
 import styles from './attentionStage.module.css';
@@ -23,7 +23,13 @@ import styles from './attentionStage.module.css';
  * box is then the only mark on the page about it, because there is nothing inside it to
  * draw, and an outline that looked like every other one would make the finding invisible.
  * Which of the two it is is the pipeline's own `timeToFirstFixationMs`, read through
- * `attentionWording`, so the box and the caption under the stage agree by construction.
+ * `attentionWording`, so the box and the caption under the stage agree by construction —
+ * including when they have to agree on saying nothing. The teal says only *this is the box
+ * you asked about*; the critical one is the only one that makes a claim about what the
+ * audience did. So an area the run recorded no figures for, and one whose figures
+ * contradict each other about "never", stay teal while the caption states the fault in
+ * words: a critical box over an area the run is wrong about would be a claim this test
+ * never made.
  */
 
 /** The sentence the panel prints in place of a switch, when there is nothing to outline. */
@@ -48,8 +54,14 @@ export function AoiOutlineLayer({ areas, isolatedAoiId, transform }: OverlayLaye
           const box = boxToOverlay(aoi.bbox, transform);
           const isolated = aoi.id === isolatedAoiId;
           // Only of the isolated area: every other box stays the dashed outline of
-          // something measured, whether or not anybody looked inside it.
-          const neverFixated = isolated && metric !== null && isNeverFixated(metric);
+          // something measured, whether or not anybody looked inside it. And only where the
+          // run's own figures say so plainly — the two faults the table states in words are
+          // not findings this box is entitled to draw.
+          const neverFixated =
+            isolated &&
+            metric !== null &&
+            neverFixatedProblem(metric) === null &&
+            isNeverFixated(metric);
           return (
             <g key={aoi.id}>
               <rect
