@@ -12,8 +12,10 @@
  * #83 adds the four saliency metrics a predicted map is compared with a human one by, and
  * #84 the two scanpath metrics that read the order attention was paid in rather than only
  * where it landed. #85 brings the real benchmark onto the machine: one resumable,
- * checksum-verified download into the cache outside this repository. The conversion, the
- * baselines, the scoring and the fit arrive as later tickets and export from here.
+ * checksum-verified download into the cache outside this repository. #86 converts a record
+ * of it into the project's own session shape, as `kind: "real"` with a participant, so a
+ * human's free viewing and a simulated session are two files of one shape. The baselines,
+ * the scoring and the fit arrive as later tickets and export from here.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and may later
  * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -153,3 +155,18 @@ export type {
   FetchFailure,
   FileOutcome,
 } from './dataset/fetch.js';
+
+// The conversion (#86): a UEyes record becomes sessions with `kind: "real"`, which the
+// contract's session schema accepts beside a simulated one.
+export { ConversionError, convertRecord, convertRecords } from './convert/index.js';
+export type {
+  ConversionRejection,
+  ConversionReport,
+  ConvertOptions,
+  ConvertedSession,
+  RawDisplay,
+  RawFixation,
+  RawImage,
+  RawRecord,
+  RawScanpath,
+} from './convert/index.js';
