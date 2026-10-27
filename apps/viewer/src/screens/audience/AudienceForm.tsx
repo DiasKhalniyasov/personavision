@@ -113,6 +113,7 @@ export function AudienceForm({
       {issues.length === 0 ? null : (
         <p className="notice" role="alert" id={errorId}>
           {refusalSummary(issues)}
+          {field('form') === undefined ? null : ` ${field('form') as string}`}
         </p>
       )}
 

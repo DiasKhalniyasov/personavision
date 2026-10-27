@@ -446,3 +446,22 @@ describe('the form without a pointer or a screen', () => {
     expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 });
+
+describe('a refusal at a path no field on this form owns', () => {
+  it('is said above the form rather than only counted', async () => {
+    await serveStore({
+      answer: () =>
+        refusal([
+          { path: 'generatedFrom.generatorVersion', message: 'this build is "persona-gen-1"' },
+        ]),
+    });
+    await openForm(paths.audience(DEMO_RECORD_ID));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save audience' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe(
+      'That audience could not be saved: one thing needs changing. generatedFrom.generatorVersion: this build is "persona-gen-1"',
+    );
+  });
+});

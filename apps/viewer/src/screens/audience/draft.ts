@@ -1,4 +1,4 @@
-import type { Audience } from '@personavision/contract';
+import type { Audience, AudienceDevice } from '@personavision/contract';
 import type { AudienceIssue } from './store';
 
 /**
@@ -155,6 +155,20 @@ export const emptyDraft = (day: Date): AudienceDraft => ({
   seed: seedForDay(day),
 });
 
+/** A share of the audience, as the form takes it: whole percentage points. */
+const asPercent = (share: number): string => String(Math.round(share * 100));
+
+/**
+ * The device class, without the share. The draft carries the share **once**, as the
+ * `percent` the reader typed; a stored `share` riding along beside it would be a second
+ * copy that an edit to the field could leave standing.
+ */
+const withoutShare = (device: AudienceDevice): DeviceClass => {
+  const { share, ...rest } = device;
+  void share;
+  return { ...rest, label: device.name };
+};
+
 /** The form, filled in from an audience that already exists. */
 export const draftOf = (audience: Audience): AudienceDraft => ({
   audienceId: audience.id,
@@ -170,20 +184,22 @@ export const draftOf = (audience: Audience): AudienceDraft => ({
   devices: [
     ...DEVICE_CLASSES.map((offered) => {
       const declared = audience.devices.find((device) => device.name === offered.name);
-      return {
-        ...offered,
-        ...(declared === undefined ? {} : { ...declared, label: offered.label }),
-        chosen: declared !== undefined,
-        percent: declared === undefined ? '0' : String(Math.round(declared.share * 100)),
-      };
+      return declared === undefined
+        ? { ...offered, chosen: false, percent: '0' }
+        : {
+            ...withoutShare(declared),
+            label: offered.label,
+            chosen: true,
+            percent: asPercent(declared.share),
+          };
     }),
     ...audience.devices
       .filter((device) => !DEVICE_CLASSES.some((offered) => offered.name === device.name))
       .map((device) => ({
-        ...device,
+        ...withoutShare(device),
         label: device.name,
         chosen: true,
-        percent: String(Math.round(device.share * 100)),
+        percent: asPercent(device.share),
       })),
   ],
   techSavviness: audience.techSavviness,
