@@ -1,0 +1,68 @@
+/* =============================================================================
+   `#screen-error`: the error card, its captured detail, its checklist and its
+   three actions.
+
+   The prototype is the acceptance — same layout, same hierarchy — and every
+   value below is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. The card wears the critical severity colours the
+   tokens declare, so it reads correctly in light and dark without a second
+   palette here.
+
+   `.card`, `.notice` and `.faint` are `src/styles/base.css`'s and are not
+   restated; what is here is what makes that card an error card.
+   ========================================================================== */
+
+.errorcard {
+  margin-top: var(--space-8);
+  border-color: var(--sev-critical-border);
+  background: var(--sev-critical-bg);
+}
+
+.errorcard h2 {
+  margin-bottom: var(--space-2);
+  color: var(--sev-critical);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+/* What the attempt captured, as it was captured: a stderr line keeps its own
+   line breaks, because the breaks are part of what was said. */
+.errorcard .detail {
+  margin: var(--space-4) var(--space-0);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+}
+
+/* An attempt that captured nothing says so in prose, in the detail's place. */
+.errorcard > .faint {
+  margin: var(--space-4) var(--space-0);
+  font-size: var(--text-sm);
+}
+
+/* The things to check are a list and read as one: the markers are restored here,
+   because the Tailwind reset under the app takes them off every list. */
+.errorcard ul {
+  margin: var(--space-0) var(--space-0) var(--space-5);
+  padding-inline-start: var(--space-5);
+  font-size: var(--text-sm);
+  list-style: disc;
+}
+
+.erroractions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* The notice sits under the card rather than above the next screen, so it takes
+   its spacing from the card above it. */
+.enginenotice {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-0);
+}

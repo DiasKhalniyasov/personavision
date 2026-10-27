@@ -1,0 +1,131 @@
+/* =============================================================================
+   `#screen-running`: the progress card, its `.segments` and its `.log`.
+
+   The prototype is the acceptance — same layout, same hierarchy — and every
+   value below is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. No colour, size, spacing step or duration is
+   restated here, and there is no second palette: light and dark both come from
+   that file's own dark-mode block.
+
+   The shared primitives this screen sits in — `.strip`, `.wrap`, `.pagehead`,
+   `.lede`, `.card`, `.notice`, `.tag`, `.num`, `.faint` — are
+   `src/styles/base.css`'s and are not restated. What is here is the progress
+   card and nothing else.
+   ========================================================================== */
+
+/* ---- The card ---------------------------------------------------------- */
+
+.runcard {
+  margin-top: var(--space-8);
+}
+
+/* ---- Progress ---------------------------------------------------------- */
+
+.progress {
+  block-size: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+/* The overall bar is the card's own first child; a version's bar sits inside its
+   row and carries no margin of its own. */
+.runcard > .progress {
+  margin-bottom: var(--space-5);
+}
+
+/* A live state pulses softly, and nothing else on this screen moves. The
+   keyframes are the tokens' `pv-pulse`, which that file flattens under
+   `prefers-reduced-motion`. */
+.progress > span {
+  display: block;
+  block-size: 100%;
+  background: var(--color-accent);
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
+
+.segments {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.segbar {
+  display: grid;
+  /* The prototype's fixed label column, as a share of the row instead: no token
+     owns that width, and a fraction keeps the bar the long column at every
+     width the card is drawn at. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* ---- The log ----------------------------------------------------------- */
+
+.log {
+  /* The prototype's fixed height, in lines of the log's own type, so the window
+     follows the font size rather than a number typed out here. */
+  max-block-size: 12lh;
+  margin-top: var(--space-5);
+  overflow: auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.log ul {
+  display: grid;
+  margin: var(--space-0);
+  padding: var(--space-0);
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.log b {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- The card's footer ------------------------------------------------- */
+
+/* The prototype's `.formfoot`, under this screen's own name: the shared
+   primitives live in `src/styles/base.css`, and a screen ticket does not add to
+   them. */
+.runfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  padding-top: var(--space-6);
+  gap: var(--space-4);
+}
+
+/* ---- What there is so far --------------------------------------------- */
+
+/* The notice belongs to the verdict under it, so it gives up its own bottom
+   padding rather than opening a gap this product has nowhere else. */
+.partialhead {
+  padding-bottom: var(--space-0);
+}
+
+/* The notice above the partial verdict carries its own way back, so the sentence
+   and the button share a row and wrap rather than squashing each other. */
+.partialnotice {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.partialnotice > span {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* ---- Narrow windows ---------------------------------------------------
+   The prototype's own breakpoint: the version rows stack rather than squash. */
+
+@media (max-width: 640px) {
+  .segbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
