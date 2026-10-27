@@ -108,7 +108,7 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers and the download, and nothing else', () => {
+  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers, the download and the conversion, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
@@ -116,6 +116,7 @@ describe('the public entry point', () => {
       'COMMITTED_MANIFEST_PATH',
       'CORPUS_RECORD_NAMES',
       'CachePathError',
+      'ConversionError',
       'CorpusError',
       'DEFAULT_CHECKSUM_ALGORITHM',
       'DatasetFetchError',
@@ -137,6 +138,8 @@ describe('the public entry point', () => {
       'aucJudd',
       'cacheRoot',
       'cc',
+      'convertRecord',
+      'convertRecords',
       'datasetCachePaths',
       'describeChecksum',
       'fetchDataset',
