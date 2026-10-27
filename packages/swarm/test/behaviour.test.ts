@@ -211,11 +211,28 @@ describe('a product defect reads as the product’s', () => {
         excludedFromScores: false,
       });
       expect(walkedSession.outcome.reason).toContain('with the task not done');
-      // It never got off the page: the control that would have advanced it says something
-      // else, and the loud one that says what the agent came to do does nothing.
+      // Nothing it clicked got it anywhere, which is the page's defect and not a cut-off
+      // session: the loud control says every word of the task and does nothing, and what
+      // would have advanced the step says "Gift options" and is not marked as a control at
+      // all. The session ends on the suite's screen cap — `MISLABELLED_SCREEN_CAP` says why
+      // — with the agent still on the step it started on.
+      expect(
+        walkedSession.actions
+          .filter((action) => action.type === 'click')
+          .every((click) => !click.ok),
+        `seed ${seed}: a click got the agent somewhere on a page nothing can finish`,
+      ).toBe(true);
       expect(walkedSession.screens.map((screen) => screen.step)).not.toContain('done');
       expect(walkedSession.integrity.selectorFailures).toBe(0);
     }
+
+    // And it is a page the agent tries rather than one it only reads: seven of the eight
+    // sessions click at least once, all of them for nothing. One seed spends its ten
+    // screens reading, which is also what this person does.
+    const tried = SEED_BAND.filter((seed) =>
+      session('mislabelled', DOGGED, seed).actions.some((action) => action.type === 'click'),
+    );
+    expect(tried.length).toBeGreaterThanOrEqual(6);
   });
 
   it('is still the product’s when the rushed person leaves instead', () => {

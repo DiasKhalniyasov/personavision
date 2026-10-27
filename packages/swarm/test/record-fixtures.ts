@@ -28,9 +28,10 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { act, capture as takeCapture, closeSession, openSession } from '@personavision/browser';
 import { runPaths } from '@personavision/contract';
 import {
@@ -39,7 +40,9 @@ import {
   BEHAVIOUR_SITE,
   BEHAVIOUR_TASK,
   PRIMARY_ACTION_SELECTOR,
+  RECORDED_FROM,
   SCENARIOS,
+  siteDigest,
 } from './fixtures.js';
 import type { Capture, CaptureContext } from '@personavision/browser';
 import type { Server } from 'node:http';
@@ -131,9 +134,10 @@ const encodeCapture = (capture: Capture): string =>
     2,
   )}\n`;
 
-const writeText = async (path: string, text: string): Promise<void> => {
+const writeText = async (path: string, text: string): Promise<string> => {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, text, 'utf8');
+  return path;
 };
 
 /** One recorded step: the step it is, and the page path it was recorded at. */
@@ -155,8 +159,9 @@ const record = async (
   runDir: string,
   scenario: Scenario,
   origin: string,
-): Promise<readonly RecordedStep[]> => {
+): Promise<{ readonly steps: readonly RecordedStep[]; readonly files: readonly string[] }> => {
   const recorded: RecordedStep[] = [];
+  const files: string[] = [];
   const handle = await openSession(
     { id: scenario.variant, url: `${origin}${scenario.entry}` },
     BEHAVIOUR_DEVICE,
@@ -176,9 +181,11 @@ const record = async (
           `the ${scenario.variant} walk expected the ${step} step and the page is on ${captured.step ?? 'no step'}`,
         );
       }
-      await writeText(
-        join(dir, 'captures', scenario.variant, `${step}.json`),
-        encodeCapture(captured),
+      files.push(
+        await writeText(
+          join(dir, 'captures', scenario.variant, `${step}.json`),
+          encodeCapture(captured),
+        ),
       );
       recorded.push({ step, path: declaredPath(scenario, index) });
 
@@ -186,6 +193,7 @@ const record = async (
         const to = runPaths(dir).screenshot(scenario.variant, step);
         await mkdir(dirname(to), { recursive: true });
         await copyFile(runPaths(runDir).screenshot(scenario.variant, step), to);
+        files.push(to);
       }
 
       if (index === scenario.steps.length - 1) break;
@@ -200,7 +208,7 @@ const record = async (
     await closeSession(handle);
   }
 
-  return recorded;
+  return { steps: recorded, files };
 };
 
 /**
@@ -214,57 +222,113 @@ const record = async (
 const declaredPath = (scenario: Scenario, index: number): string =>
   index === 0 ? scenario.entry : '/done.html';
 
-const main = async (): Promise<void> => {
-  const dir =
-    process.argv.at(2) === undefined ? BEHAVIOUR_CAPTURES : resolve(process.argv[2] as string);
+/**
+ * Anything in the set that this run did not write, taken out.
+ *
+ * A scenario that loses a step, or a variant that is renamed, would otherwise leave a
+ * capture and its image behind: unreferenced by the index it was rewritten beside, and
+ * invisible to the byte-identity the rest of this script promises, because only the files
+ * that *are* rewritten are ever compared.
+ */
+const sweepOrphans = async (dir: string, written: readonly string[]): Promise<string[]> => {
+  const keep = new Set(written.map((path) => resolve(path)));
+  const found = await readdir(dir, { recursive: true, withFileTypes: true });
+  const removed: string[] = [];
+  for (const entry of found) {
+    if (!entry.isFile()) continue;
+    const path = resolve(join(entry.parentPath, entry.name));
+    if (keep.has(path)) continue;
+    await rm(path);
+    removed.push(path);
+  }
+  return removed;
+};
+
+export interface RecordedFixtures {
+  readonly dir: string;
+  /** Every file the set now holds, captures, images and index alike. */
+  readonly files: readonly string[];
+  /** Files that were in the directory and are not part of this recording. */
+  readonly removed: readonly string[];
+}
+
+/** Records the whole set into `dir`, and leaves nothing in it that it did not write. */
+export const recordFixtures = async (
+  dir: string = BEHAVIOUR_CAPTURES,
+): Promise<RecordedFixtures> => {
   const runDir = await mkdtemp(join(tmpdir(), 'personavision-behaviour-'));
   const variants: {
     id: string;
     device: typeof BEHAVIOUR_DEVICE;
     steps: readonly RecordedStep[];
   }[] = [];
+  const files: string[] = [];
 
   let site: Site | undefined;
   try {
     site = await serve(BEHAVIOUR_SITE);
     for (const scenario of SCENARIOS) {
-      const steps = await record(dir, runDir, scenario, site.origin);
-      variants.push({ id: scenario.variant, device: BEHAVIOUR_DEVICE, steps });
+      const recorded = await record(dir, runDir, scenario, site.origin);
+      files.push(...recorded.files);
+      variants.push({ id: scenario.variant, device: BEHAVIOUR_DEVICE, steps: recorded.steps });
     }
   } finally {
     await site?.close();
     await rm(runDir, { recursive: true, force: true });
   }
 
-  await writeText(
-    join(dir, 'capture-set.json'),
-    `${JSON.stringify(
-      {
-        formatVersion: CAPTURE_SET_FORMAT_VERSION,
-        variants: variants.map((variant) => ({
-          id: variant.id,
-          device: {
-            name: variant.device.name,
-            viewport: {
-              width: variant.device.viewport.width,
-              height: variant.device.viewport.height,
+  files.push(
+    await writeText(
+      join(dir, 'capture-set.json'),
+      `${JSON.stringify(
+        {
+          formatVersion: CAPTURE_SET_FORMAT_VERSION,
+          variants: variants.map((variant) => ({
+            id: variant.id,
+            device: {
+              name: variant.device.name,
+              viewport: {
+                width: variant.device.viewport.width,
+                height: variant.device.viewport.height,
+              },
+              deviceScaleFactor: variant.device.deviceScaleFactor,
+              touch: variant.device.touch,
             },
-            deviceScaleFactor: variant.device.deviceScaleFactor,
-            touch: variant.device.touch,
-          },
-          steps: variant.steps.map((step) => ({ step: step.step, path: step.path })),
-        })),
-      },
-      null,
-      2,
-    )}\n`,
+            steps: variant.steps.map((step) => ({ step: step.step, path: step.path })),
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+    ),
   );
 
-  for (const variant of variants) {
-    process.stdout.write(
-      `${variant.id}: ${variant.steps.map((step) => step.step).join(' -> ')} in ${dir}\n`,
-    );
-  }
+  // Which pages this set came from, so that a page edited without a re-recording is a
+  // failing test rather than a suite quietly measuring a screen that has moved.
+  files.push(
+    await writeText(
+      dir === BEHAVIOUR_CAPTURES ? RECORDED_FROM : join(dir, 'recorded-from.json'),
+      `${JSON.stringify(await siteDigest(), null, 2)}\n`,
+    ),
+  );
+
+  return { dir, files, removed: await sweepOrphans(dir, files) };
 };
 
-await main();
+const main = async (): Promise<void> => {
+  const asked = process.argv.at(2);
+  const recorded = await recordFixtures(asked === undefined ? undefined : resolve(asked));
+  process.stdout.write(
+    `${recorded.files.length} files in ${recorded.dir}${
+      recorded.removed.length === 0 ? '' : `, ${recorded.removed.length} orphan(s) removed`
+    }\n`,
+  );
+};
+
+/**
+ * Run as a script. An import — the test that holds the committed set to these pages — writes
+ * nothing.
+ */
+if (process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  await main();
+}

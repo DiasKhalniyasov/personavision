@@ -76,12 +76,11 @@
       What finishes this is the quiet grey link below, which says something else entirely. A person
       reading every word on the page is not told which one it is.
     </p>
-    <a
+    <span
       id="order-submit"
       class="control-quiet"
-      href="done.html"
       style="left: 128px; top: 1248px; width: 140px; height: 28px"
-      >Gift options</a
+      >Gift options</span
     >
     <p id="mislabelled-footnote" style="left: 16px; top: 1340px; width: 358px; height: 40px">
       Fixture site. Nothing below this line is reachable from one page scroll.
@@ -89,5 +88,14 @@
     <p id="mislabelled-tail" style="left: 16px; top: 1560px; width: 358px; height: 40px">
       The tail of the page, which is what makes it a long one.
     </p>
+    <script>
+      // The other half of the defect: what advances this page is not marked as a control at
+      // all — no role, no link, nothing a screen reader would announce as actionable — and
+      // what it says is not what the task is. A click still navigates, so the recorder can
+      // walk through it; an agent has no reason to touch it.
+      document.getElementById('order-submit').addEventListener('click', () => {
+        location.href = 'done.html';
+      });
+    </script>
   </body>
 </html>

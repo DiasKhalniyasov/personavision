@@ -250,9 +250,9 @@
       "selector": "#mislabelled-faq-two"
     },
     {
-      "id": "e-13bc0b4f4f74",
+      "id": "e-73e211b5c147",
       "source": "dom",
-      "role": "link",
+      "role": "generic",
       "name": "Gift options",
       "text": "Gift options",
       "bbox": {
@@ -474,10 +474,10 @@
       "selector": "#mislabelled-faq-two"
     },
     {
-      "id": "e-c8740a12f236",
+      "id": "e-a28a7597638d",
       "source": "a11y",
-      "role": "link",
-      "name": "Gift options",
+      "role": "generic",
+      "name": null,
       "text": "Gift options",
       "bbox": {
         "x": 128,
@@ -586,5 +586,5 @@
       "selector": "#mislabelled-remove-two"
     }
   ],
-  "contentHash": "1ee5df763688e7e4"
+  "contentHash": "6cb2a0618ec4fbf1"
 }

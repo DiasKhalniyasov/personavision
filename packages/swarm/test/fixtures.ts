@@ -16,8 +16,9 @@
  * | `vanishing`   | a control that leaves the document under the pointer      | breakage that is ours   |
  */
 
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFixtureSource } from '@personavision/browser';
@@ -90,6 +91,41 @@ export const BEHAVIOUR_TASK: TaskDefinition = {
 
 /** The selector the fixture pages give the control that finishes the task. */
 export const PRIMARY_ACTION_SELECTOR = '#order-submit';
+
+/**
+ * The digest of the pages the committed capture set was recorded from, as
+ * `record-fixtures.ts` writes it beside the set.
+ *
+ * A page and the captures recorded from it are one thing, and nothing about a capture says
+ * which page it came from: this is what holds the two together, so a page edited without a
+ * re-recording fails `recorded-fixtures.test.ts` rather than leaving the suite measuring a
+ * screen that is no longer there. It needs no browser, which is why it is a digest rather
+ * than a second recording.
+ */
+export const RECORDED_FROM = join(BEHAVIOUR_CAPTURES, 'recorded-from.json');
+
+export interface RecordedFrom {
+  readonly formatVersion: number;
+  /** One SHA-256 per file of `fixtures/site/`, keyed on its name, in sorted order. */
+  readonly site: Readonly<Record<string, string>>;
+}
+
+export const RECORDED_FROM_FORMAT_VERSION = 1;
+
+/** The pages as they are on disk now, hashed the way the recorder hashes them. */
+export const siteDigest = async (): Promise<RecordedFrom> => {
+  const names = (await readdir(BEHAVIOUR_SITE, { withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+  const site: Record<string, string> = {};
+  for (const name of names) {
+    site[name] = createHash('sha256')
+      .update(await readFile(join(BEHAVIOUR_SITE, name)))
+      .digest('hex');
+  }
+  return { formatVersion: RECORDED_FROM_FORMAT_VERSION, site };
+};
 
 /** One recorded scenario: the variant it is recorded under, where it starts, and its walk. */
 export interface Scenario {
@@ -176,11 +212,15 @@ export const PAIRED_SEED = 23;
 /**
  * How many screens a session on the mislabelled page may capture.
  *
- * Ten, where the default is eight per step of the task, because that page cannot be
- * finished and a session has to end somewhere: at ten screens the dogged person still has
- * patience and persistence left, so the outcome is read off a task that was not done rather
- * than off a budget that ran out. Left at the default, the same session ends `abandoned`
- * some thirty screens later, which is a true answer to a different question.
+ * That page cannot be finished — no session of the band ever gets off it, at any cap — so a
+ * session on it ends either because it ran out of screens or because the person ran out of
+ * patience, and which of the two is what the cap decides. Ten screens is inside the window
+ * where the screens run out first: the dogged person still has patience and persistence
+ * left, so `decideOutcome` reads the ending off a task that was not done — `failed`, the
+ * product's — rather than off a budget. The window is eight to thirteen screens on this band;
+ * at fourteen and above, patience goes first and the same session ends `abandoned`, which is
+ * a true answer to a different question. The default for this two-step task would be sixteen
+ * (`SCREENS_PER_STEP` is eight).
  */
 export const MISLABELLED_SCREEN_CAP = 10;
 

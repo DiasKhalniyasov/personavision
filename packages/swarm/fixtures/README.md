@@ -15,7 +15,11 @@ captures/screenshots/<v>/<s>.png   the image beside it, which is what salience i
 Chromium through the module's own seams — `openSession`, `capture`, `act` — so a recorded
 capture is a live capture and not a hand-written approximation of one. Re-running it over
 unchanged pages rewrites identical files, so `.prettierignore` leaves the set alone: it is
-recorded data.
+recorded data. It also takes out anything in `captures/` that it did not write, so a dropped
+step leaves no orphan behind, and it records `captures/recorded-from.json` — one digest per
+page — which `../test/recorded-fixtures.test.ts` compares against `site/` as it stands. A page
+edited without a re-recording therefore fails a test instead of leaving the suite measuring a
+screen that has moved.
 
 **The suite itself starts no browser and opens no socket.** It replays these bytes with every
 way of launching a process and every way of opening a socket broken, which is the project's
@@ -71,10 +75,18 @@ on six and the dogged one finishes on six.
 ### `mislabelled.html` — the words are on the wrong element
 
 `#mislabelled-decoy` is a 358x48 blue button reading _"Place the order for the canvas tote
-bag"_ — every content word of the task — and it does nothing at all. `#order-submit`, which is
-the control that advances the step, is the quiet grey link reading _"Gift options"_. The agent
-reads the page, tries the loud control, tries it again, and the task is not done: `failed`,
-`attribution: "product"`, counted in the scores. Nothing of ours broke.
+bag"_ — every content word of the task — and it does nothing at all. What advances the step is
+`#order-submit`, which reads _"Gift options"_, is grey and 140x28, and is a `span` with a click
+handler: no role, no link, nothing a screen reader would announce as actionable. So it is worth
+reading and not worth acting on, and no session of the band ever clicks it at any screen cap —
+the agent reads the page, tries the loud control, tries it again, and the task is not done.
+
+A session on this page therefore ends either because its screens ran out or because the
+person's patience did, and the cap decides which. `MISLABELLED_SCREEN_CAP` is ten, inside the
+eight-to-thirteen window where the screens go first: `failed`, `attribution: "product"`,
+counted in the scores, with nothing of ours broken. At fourteen screens and above the same
+session ends `abandoned` — still the product's, which is what the rushed person's eight
+sessions show.
 
 ### `vanishing.html` — the control is gone by the time the click lands
 
@@ -107,10 +119,11 @@ string or reaches into a provider.
 | our own breakage is ours: `automation_failure`, excluded from every score        | `vanishing`, both people                        |
 | the run holding a broken session finishes, and writes the rest                   | a whole `runSwarm` over `vanishing` + `tedious` |
 | every session re-runs identical from its persona, seed and page                  | all forty-eight of them                         |
+| the committed captures are the pages beside them, scenario for scenario          | `recorded-fixtures.test.ts`, with no browser    |
 
 ## Changing a page
 
-A page and the capture set recorded from it are one thing: edit `site/` and re-record, or the
-suite replays the page as it was. The behaviour the suite measures comes out of the pixels and
+A page and the capture set recorded from it are one thing: edit `site/` and re-record, or
+`recorded-fixtures.test.ts` fails and the suite would otherwise replay the page as it was. The behaviour the suite measures comes out of the pixels and
 the words on these pages, so a change to either moves the counts — re-record, run the suite,
 and move a tolerance only once the behaviour it describes has actually changed.
