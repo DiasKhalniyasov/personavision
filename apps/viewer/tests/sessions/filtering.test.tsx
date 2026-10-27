@@ -99,6 +99,22 @@ describe('the filters a URL carries', () => {
     expect(screen.queryByRole('button', { name: /^Fixated:/ })).toBeNull();
   });
 
+  it('states the run’s own totals until every session the filter needs has been read', async () => {
+    await serveRunData();
+    mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
+
+    // While the rows are arriving the filter cannot judge them, so they are all on screen.
+    // The line says what is true at that moment — the test's own totals — rather than
+    // "24 of 24 sessions", which would pass every person off as the two asked for.
+    expect(
+      await screen.findByText('24 people · 22 scored · 2 excluded because our automation broke'),
+    ).toBeTruthy();
+    expect(screen.queryByText('24 of 24 sessions')).toBeNull();
+
+    await listed(2);
+    expect(screen.getByText('2 of 24 sessions')).toBeTruthy();
+  });
+
   it('states the run’s own totals when nothing is filtered', async () => {
     await serveRunData();
     mountApp(paths.sessions(SEED));
@@ -174,6 +190,42 @@ describe('the segmented controls', () => {
 
     expect(router.state.location.search).toBe('?variant=B');
     expect(await listed(12)).toHaveLength(12);
+  });
+
+  it('leave the history alone when the option already pressed is pressed again', async () => {
+    const user = userEvent.setup();
+    await serveRunData();
+    const { router } = mountApp(`${paths.sessions(SEED)}?variant=A`);
+
+    await listed(12);
+    const key = router.state.location.key;
+    await user.click(option('Filter by version', 'A'));
+    await user.click(option('Filter by version', 'A'));
+
+    // Pressing the active option is not a filter, so it is not a navigation either: a
+    // reader who taps it twice does not need three Backs to leave the screen.
+    expect(router.state.location.search).toBe('?variant=A');
+    expect(router.state.location.key).toBe(key);
+    expect(await listed(12)).toHaveLength(12);
+  });
+
+  it('drop the area chip when the other version is picked, rather than filtering on both', async () => {
+    const user = userEvent.setup();
+    await serveRunData();
+    const { router } = mountApp(`${paths.sessions(SEED)}?aoi=${CONFIRM_PURCHASE}`);
+
+    await screen.findByRole('button', { name: 'Fixated: Confirm purchase' });
+    await user.click(option('Filter by version', 'A'));
+
+    // `Confirm purchase` is an area of the redesign: no session of the current checkout can
+    // have fixated it, and the pair would read as a finding over the other version's
+    // figures. The version is what the reader just asked for, so the area is what goes.
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('?variant=A');
+    });
+    expect(screen.queryByRole('button', { name: /^Fixated:/ })).toBeNull();
+    expect(await listed(12)).toHaveLength(12);
+    expect(screen.queryByText('No session matches')).toBeNull();
   });
 
   it('are operable from the keyboard', async () => {

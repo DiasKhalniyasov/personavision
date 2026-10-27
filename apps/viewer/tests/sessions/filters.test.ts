@@ -65,6 +65,23 @@ describe('reading the filters out of the URL', () => {
     expect(read.unknown).toEqual(['variant', 'outcome', 'aoi']);
   });
 
+  it('drops an area of one version asked for beside a filter on the other', () => {
+    // No session can satisfy the pair, and the two together would be read as a finding
+    // about the version on screen over the other version's figures.
+    const read = readFilter(seedRun(), query('variant=A&aoi=B-review-complete'));
+
+    expect(read.filter).toEqual({ variant: 'A', outcome: null, aoiId: null });
+    expect(read.aoi).toBeNull();
+    expect(read.unknown).toEqual(['aoi']);
+  });
+
+  it('keeps an area asked for beside a filter on its own version', () => {
+    const read = readFilter(seedRun(), query('variant=B&aoi=B-review-complete'));
+
+    expect(read.filter.aoiId).toBe('B-review-complete');
+    expect(read.unknown).toEqual([]);
+  });
+
   it('keeps the good half of a half-bad URL', () => {
     const read = readFilter(seedRun(), query('variant=A&outcome=nonsense'));
 

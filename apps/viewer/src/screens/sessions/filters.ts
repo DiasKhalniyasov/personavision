@@ -55,8 +55,18 @@ export function readFilter(run: Run, query: URLSearchParams): ActiveFilter {
   if (outcome !== '' && !isOutcomeStatus(outcome)) unknown.push(OUTCOME_PARAM);
 
   const area = asked(AOI_PARAM);
-  const aoi = run.aois.find((candidate) => candidate.id === area) ?? null;
-  if (area !== '' && aoi === null) unknown.push(AOI_PARAM);
+  const found = run.aois.find((candidate) => candidate.id === area) ?? null;
+  if (area !== '' && found === null) unknown.push(AOI_PARAM);
+
+  // An area of interest belongs to one version, so an area of the redesign and a filter on
+  // the current checkout is a combination no session can satisfy — and the pair would be
+  // read as a finding ("on the current checkout, nobody looked at Confirm purchase") over
+  // the other version's figures. It happens the moment a reader who arrived from an area
+  // picks the other version, so the area is the half that goes: the version is what they
+  // just asked for, and the area was a filter they carried in.
+  const mismatched = found !== null && named && found.variant !== variant;
+  if (mismatched) unknown.push(AOI_PARAM);
+  const aoi = mismatched ? null : found;
 
   return {
     filter: {

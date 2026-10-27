@@ -53,13 +53,21 @@ export function SessionsScreen({ run }: { run: Run }) {
   const { filter, aoi, unknown } = readFilter(run, query);
 
   // A `?aoi=` naming no area of this run, or a version or outcome the run never had, is a
-  // bad link rather than a filter: it leaves the URL, and the reader gets the list.
+  // bad link rather than a filter: it leaves the URL, and the reader gets the list. The
+  // parameters are the effect's own dependency as one string, so a URL that cannot be
+  // cleaned any further is a settled screen rather than a render that navigates again.
+  const stale = unknown.join(',');
   useEffect(() => {
-    if (unknown.length > 0) setQuery(without(query, unknown), { replace: true });
-  });
+    if (stale !== '') setQuery(without(query, stale.split(',')), { replace: true });
+  }, [stale, query, setQuery]);
 
   const shown = rows.filter((state) => matches(state, filter));
   const empty = rows.length === 0;
+  // Every session the filter needs has been read, which is what lets the counts line state
+  // a filtered reading at all: until then the rows the filter cannot judge are on screen,
+  // and "24 of 24 sessions" over twenty-four still-loading rows would pass every person in
+  // the test off as the few the reader asked for.
+  const read = rows.every((state) => state.status !== 'pending');
 
   return (
     <div className="strip">
@@ -76,7 +84,12 @@ export function SessionsScreen({ run }: { run: Run }) {
 
         {empty ? null : (
           <div className="my-5 flex flex-wrap items-center gap-2">
-            <SessionsFilters run={run} filter={filter} aoi={aoi} shown={shown.length} />
+            <SessionsFilters
+              run={run}
+              filter={filter}
+              aoi={aoi}
+              shown={read ? shown.length : null}
+            />
           </div>
         )}
 

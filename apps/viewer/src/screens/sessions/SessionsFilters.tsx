@@ -45,8 +45,12 @@ export function SessionsFilters({
   run: Run;
   filter: SessionFilter;
   aoi: Aoi | null;
-  /** How many of the run's sessions the current filter shows. */
-  shown: number;
+  /**
+   * How many of the run's sessions the current filter shows, or `null` while sessions the
+   * filter has not been able to judge yet are still being read. Then the line states the
+   * run's own totals, which are true at every moment of the reading.
+   */
+  shown: number | null;
 }) {
   const [query, setQuery] = useSearchParams();
 
@@ -95,7 +99,7 @@ export function SessionsFilters({
       )}
       <span className="grow" />
       <span className="microlabel">
-        {isFiltered(filter)
+        {isFiltered(filter) && shown !== null
           ? shownOfLine(shown, run.sessionIds.length)
           : countsLine(sessionCounts(run), isScored(run))}
       </span>
@@ -127,9 +131,11 @@ function Segment({
       value={[active]}
       // One option of the group is on at a time, so the pick is whichever value the group
       // came back with that was not already the active one. Pressing the active option
-      // again is not a filter — it leaves the list exactly as the reader is seeing it.
+      // again comes back empty — it is not a filter and not a navigation either, so it
+      // leaves the list and the history exactly as the reader is seeing them.
       onValueChange={(next: string[]) => {
-        onPick(next.find((value) => value !== active) ?? active);
+        const picked = next.find((value) => value !== active);
+        if (picked !== undefined) onPick(picked);
       }}
     >
       {options.map((option) => (
