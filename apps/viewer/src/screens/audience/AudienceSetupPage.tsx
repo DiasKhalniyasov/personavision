@@ -48,7 +48,9 @@ export function AudienceSetupPage() {
     );
   }
 
-  const record = state.status === 'ready' ? state.record : null;
+  // `isNew` and the state agree, because the hook clears its answer when no audience is
+  // asked for; taking the record only when it is this route's is the belt to that brace.
+  const record = !isNew && state.status === 'ready' ? state.record : null;
 
   return (
     <Shell

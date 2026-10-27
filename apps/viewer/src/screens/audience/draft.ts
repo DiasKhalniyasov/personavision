@@ -113,6 +113,16 @@ export interface AudienceDraft {
   readonly priceSensitivity: number;
   /** Same audience, same seed, same people — so it is shown and never silently changed. */
   readonly seed: number;
+  /**
+   * The generator this audience's people are reproducible against, as stored.
+   *
+   * It is carried through an edit rather than restamped with this build's. An audience
+   * written by another generator version generates nobody here — its card says so — and
+   * the one thing a save of it must not do is relabel it as ours, which would hand it a
+   * different set of people under the same seed. Carried through, the store refuses the
+   * save with the generator's own message and the form prints it.
+   */
+  readonly generatorVersion: string;
 }
 
 /**
@@ -153,10 +163,23 @@ export const emptyDraft = (day: Date): AudienceDraft => ({
   techSavviness: 0.5,
   priceSensitivity: 0.5,
   seed: seedForDay(day),
+  generatorVersion: GENERATOR_VERSION,
 });
 
-/** A share of the audience, as the form takes it: whole percentage points. */
-const asPercent = (share: number): string => String(Math.round(share * 100));
+/**
+ * A share of the audience as the form takes it: percentage points, **not rounded**.
+ *
+ * `audienceDeviceSchema` allows any share that makes the mix sum to one, and the
+ * generator apportions whatever it is given — three devices at a third each are a legal
+ * mix. Rounding them to whole points on the way in would make that audience add up to 99%
+ * and refuse to save at all, and would quietly rewrite a mix like 60.49/39.51 into
+ * 60/40 on the way out. Six decimal places is the width of the contract's own tolerance;
+ * past it the arithmetic is float noise rather than something anybody typed.
+ */
+const asPercent = (share: number): string => String(Number((share * 100).toFixed(6)));
+
+/** The same figure as the form *says* it: trimmed, because a reader counts to 100. */
+export const showPercent = (points: number): string => String(Number(points.toFixed(2)));
 
 /**
  * The device class, without the share. The draft carries the share **once**, as the
@@ -205,6 +228,7 @@ export const draftOf = (audience: Audience): AudienceDraft => ({
   techSavviness: audience.techSavviness,
   priceSensitivity: audience.priceSensitivity,
   seed: audience.generatedFrom.seed,
+  generatorVersion: audience.generatedFrom.generatorVersion,
 });
 
 /** `Outdoor-gear shoppers` → `outdoor-gear-shoppers`: the id a new audience is saved under. */
@@ -215,13 +239,21 @@ export const slugOf = (name: string): string =>
     .replace(/^-+|-+$/g, '');
 
 const WHOLE_NUMBER = /^\d+$/;
+/** A number of percentage points: whole, or with a fraction of one. */
+const POINTS = /^\d+(?:\.\d+)?$/;
 
 const age = (typed: string): number | null =>
   WHOLE_NUMBER.test(typed.trim()) ? Number(typed.trim()) : null;
 
-/** Whole percentage points, which is what the share field takes. */
 const percent = (typed: string): number | null =>
-  WHOLE_NUMBER.test(typed.trim()) ? Number(typed.trim()) : null;
+  POINTS.test(typed.trim()) ? Number(typed.trim()) : null;
+
+/**
+ * How far off one the device shares may be. It is `audienceSchema`'s own tolerance: the
+ * form holds the mix to exactly what the contract holds it to, so a mix this accepts is
+ * never refused by the store for a reason the reader cannot see, and the other way round.
+ */
+const SHARE_TOLERANCE = 1e-6;
 
 export type DraftResult =
   | { readonly ok: true; readonly audience: Audience }
@@ -268,14 +300,14 @@ export const audienceOf = (draft: AudienceDraft): DraftResult => {
   } else if (chosen.some((device) => percent(device.percent) === null)) {
     issues.push({
       path: 'devices',
-      message: 'a device share is a whole number of percentage points',
+      message: 'a device share is a number of percentage points',
     });
   } else {
     const total = chosenPercentTotal(draft);
-    if (total !== 100) {
+    if (Math.abs(total / 100 - 1) > SHARE_TOLERANCE) {
       issues.push({
         path: 'devices',
-        message: `the device shares are a mix of one audience: they must add up to 100%, and these add up to ${String(total)}%`,
+        message: `the device shares are a mix of one audience: they must add up to 100%, and these add up to ${showPercent(total)}%`,
       });
     }
   }
@@ -301,7 +333,7 @@ export const audienceOf = (draft: AudienceDraft): DraftResult => {
       techSavviness: draft.techSavviness,
       priceSensitivity: draft.priceSensitivity,
       size: draft.size,
-      generatedFrom: { seed: draft.seed, generatorVersion: GENERATOR_VERSION },
+      generatedFrom: { seed: draft.seed, generatorVersion: draft.generatorVersion },
     },
   };
 };

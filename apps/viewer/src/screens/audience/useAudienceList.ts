@@ -22,6 +22,8 @@ export type AudienceListState =
 
 export type AudienceState =
   | { readonly status: 'loading' }
+  /** No audience was asked for: `/audiences/new` describes one that does not exist yet. */
+  | { readonly status: 'none' }
   | { readonly status: 'ready'; readonly record: AudienceRecord }
   | { readonly status: 'not-found'; readonly recordId: string }
   | { readonly status: 'unreadable'; readonly problem: string };
@@ -85,7 +87,14 @@ export function useAudience(recordId: string | null): AudienceState {
   const [state, setState] = useState<AudienceState>({ status: 'loading' });
 
   useEffect(() => {
-    if (recordId === null) return;
+    // `/audiences/new` and `/audiences/:audienceId` are the same component on the route
+    // table, so React keeps the instance when a reader goes from one to the other. The
+    // answer is cleared rather than left standing: the audience that was open would
+    // otherwise fill the new form and a save would edit it instead of creating one.
+    if (recordId === null) {
+      setState({ status: 'none' });
+      return;
+    }
     let live = true;
     setState({ status: 'loading' });
     void readAudience(recordId).then((answer) => {

@@ -177,3 +177,79 @@ describe('a chip group', () => {
     expect(released.offered).toContain('Gift buyer');
   });
 });
+
+describe('the generator an audience was described for', () => {
+  it('is carried through an edit rather than restamped with this build’s', () => {
+    const older = {
+      ...seedAudience(),
+      generatedFrom: { seed: 20_261_024, generatorVersion: 'persona-gen-0' },
+    };
+    const result = audienceOf({ ...draftOf(older), name: 'Renamed' });
+
+    // Relabelling it would hand it a different set of people under the same seed. Kept as
+    // it is, the store refuses the save with the generator's own message instead.
+    expect(result.ok && result.audience.generatedFrom.generatorVersion).toBe('persona-gen-0');
+  });
+
+  it('is this build’s on an audience nobody has described before', () => {
+    expect(emptyDraft(new Date(2026, 9, 27)).generatorVersion).toBe(GENERATOR_VERSION);
+  });
+});
+
+describe('a mix that is not whole percentage points', () => {
+  it('opens, and saves, rather than being refused at 99%', () => {
+    const third = 1 / 3;
+    const audience = seedAudience();
+    const thirds = {
+      ...audience,
+      devices: [
+        { ...(audience.devices[0] as (typeof audience.devices)[number]), share: third },
+        { ...(audience.devices[1] as (typeof audience.devices)[number]), share: third },
+        {
+          ...(audience.devices[1] as (typeof audience.devices)[number]),
+          name: 'tablet',
+          share: third,
+        },
+      ],
+    };
+    const draft = draftOf(thirds);
+
+    expect(draft.devices.map((device) => device.percent)).toContain('33.333333');
+
+    const result = audienceOf(draft);
+    expect(result.ok, result.ok ? '' : JSON.stringify(result.issues)).toBe(true);
+    expect(
+      result.ok && result.audience.devices.reduce((total, device) => total + device.share, 0),
+    ).toBeCloseTo(1, 6);
+  });
+
+  it('is not quietly rewritten into whole points on the way out', () => {
+    const audience = seedAudience();
+    const odd = {
+      ...audience,
+      devices: [
+        { ...(audience.devices[0] as (typeof audience.devices)[number]), share: 0.6049 },
+        { ...(audience.devices[1] as (typeof audience.devices)[number]), share: 0.3951 },
+      ],
+    };
+    const result = audienceOf(draftOf(odd));
+
+    expect(result.ok && result.audience.devices.map((device) => device.share)).toEqual([
+      0.6049, 0.3951,
+    ]);
+  });
+
+  it('still refuses a mix that genuinely does not add up, and says what it adds up to', () => {
+    const draft = filled();
+    const refused = audienceOf({
+      ...draft,
+      devices: draft.devices.map((device) =>
+        device.name === 'desktop' ? { ...device, percent: '39.5' } : device,
+      ),
+    });
+
+    expect(!refused.ok && refused.issues[0]?.message).toBe(
+      'the device shares are a mix of one audience: they must add up to 100%, and these add up to 99.5%',
+    );
+  });
+});

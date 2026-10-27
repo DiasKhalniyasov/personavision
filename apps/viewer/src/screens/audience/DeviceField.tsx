@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import styles from './audience.module.css';
-import { chosenPercentTotal } from './draft';
+import { chosenPercentTotal, showPercent } from './draft';
 import type { AudienceDraft, DraftDevice } from './draft';
 
 /**
@@ -88,8 +88,8 @@ export function DeviceField({
 
       <span className={styles.hint} id={hintId}>
         The device mix a test reports is drawn from these shares, so it is real rather than nominal.
-        They are shares of one audience and must add up to 100% — they add up to {total}% — and
-        nothing here is rounded for you.
+        They are shares of one audience and must add up to 100% — they add up to{' '}
+        {showPercent(total)}% — and nothing here is rounded for you.
       </span>
       {error === undefined ? null : (
         <span className={styles.err} id={errorId} role="alert">
@@ -121,6 +121,8 @@ function SharePercent({
         type="number"
         min={0}
         max={100}
+        // A third of an audience is 33.333333 points, and the mix it belongs to is legal.
+        step="any"
         className="w-24"
         value={device.percent}
         aria-invalid={invalid}

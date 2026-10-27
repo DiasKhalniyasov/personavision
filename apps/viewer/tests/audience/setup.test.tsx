@@ -465,3 +465,29 @@ describe('a refusal at a path no field on this form owns', () => {
     );
   });
 });
+
+describe('going from an audience to a new one', () => {
+  it('opens an empty form, and saving creates rather than edits', async () => {
+    const store = await serveStore();
+    const { router } = await openForm(paths.audience(DEMO_RECORD_ID));
+    expect(field('Audience name').value).toBe('Outdoor-gear shoppers');
+
+    // Both routes are the same component on the route table, so React keeps the instance.
+    await router.navigate(paths.newAudience);
+    await screen.findByRole('heading', { name: 'Describe your audience' });
+
+    expect(field('Audience name').value).toBe('');
+    expect(number('Age from').value).toBe('');
+
+    await userEvent.type(field('Audience name'), 'Weekend hikers');
+    await userEvent.type(number('Age from'), '30');
+    await userEvent.type(number('Age to'), '50');
+    await userEvent.click(screen.getByRole('button', { name: 'Save audience' }));
+
+    await waitFor(() => {
+      expect(store.writes).toHaveLength(1);
+    });
+    expect(store.writes[0]?.method).toBe('POST');
+    expect(store.writes[0]?.url).toBe('/audiences');
+  });
+});
