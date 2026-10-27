@@ -116,6 +116,30 @@ export const withFixation = (
     ),
   });
 
+/**
+ * A record whose second scanpath is not an object at all, as a reader that could not parse a
+ * participant's log would hand it over. The cast is the point: the type says it is a
+ * scanpath, and the conversion refuses it by name rather than throwing a `TypeError` out of a
+ * batch it promised to finish.
+ */
+const withUnreadableScanpath = (): RawRecord => {
+  const record = webpageRecord();
+  return {
+    ...record,
+    participants: record.participants.map((scanpath, index) =>
+      index === 1 ? (null as unknown as RawScanpath) : scanpath,
+    ),
+  };
+};
+
+/** The same, one level down: an unparsable row inside a readable participant's log. */
+const withUnreadableFixation = (): RawRecord =>
+  withScanpath(webpageRecord(), 0, {
+    fixations: webpageRecord().participants[0].fixations.map((fixation, index) =>
+      index === 1 ? (null as unknown as RawFixation) : fixation,
+    ),
+  });
+
 /** One malformed record, and the field a rejection has to name. */
 export interface MalformedRawRecord {
   /** What is wrong with it, in the words #86 uses. */
@@ -216,4 +240,14 @@ export const malformedRawRecords = (): readonly MalformedRawRecord[] => [
     record: withFixation(webpageRecord(), 0, 0, { durationMs: Number.NaN }),
   },
   { case: 'a record with no id', field: 'id', record: { ...webpageRecord(), id: '  ' } },
+  {
+    case: 'a scanpath a reader could not parse',
+    field: 'participants[1]',
+    record: withUnreadableScanpath(),
+  },
+  {
+    case: 'a fixation a reader could not parse',
+    field: 'participants[0].fixations[1]',
+    record: withUnreadableFixation(),
+  },
 ];

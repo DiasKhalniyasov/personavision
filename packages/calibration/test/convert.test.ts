@@ -272,6 +272,31 @@ describe('converting a batch', () => {
     ]);
   });
 
+  it('rejects a record a reader could not parse, and keeps converting the batch', () => {
+    // The type says a scanpath and a fixation are objects; a reader of an unparsable log row
+    // hands over whatever it has, and reading a field off that would abort the whole batch.
+    const unreadable = malformedRawRecords().filter((each) =>
+      each.case.includes('could not parse'),
+    );
+    expect(unreadable).toHaveLength(2);
+
+    const report = convertRecords([
+      webpageRecord(),
+      ...unreadable.map((each) => each.record),
+      posterRecord(),
+    ]);
+
+    expect(report.rejections.map((each) => each.field)).toEqual(
+      unreadable.map((each) => each.field),
+    );
+    expect(report.sessions.map((each) => each.session.sessionId)).toEqual([
+      'S-01',
+      'S-02',
+      'S-03',
+      'S-04',
+    ]);
+  });
+
   it('converts nothing and reports everything when every record is malformed', () => {
     const report = convertRecords(malformedRawRecords().map((each) => each.record));
 

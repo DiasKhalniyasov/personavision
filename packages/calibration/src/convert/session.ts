@@ -271,6 +271,17 @@ const isMeasurement = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
 /**
+ * Whether a raw record's list holds something a field can be read from.
+ *
+ * The type says a scanpath and a fixation are objects; a reader that could not parse a row of
+ * `eyetracker_logs/` hands over whatever it has. Reading a field off that would throw a
+ * `TypeError` out of `convertRecords` and abort a batch this package promises to finish, so
+ * an element that is not an object is a rejection like any other malformed field. It takes
+ * `unknown` so that no caller has to cast to ask.
+ */
+const isReadableElement = (value: unknown): boolean => typeof value === 'object' && value !== null;
+
+/**
  * The rejection of one record at one field, ready to throw.
  *
  * Every guard below throws it rather than calling a function that throws, so that the
@@ -384,7 +395,7 @@ const recordFacts = (raw: RawRecord): RecordFacts => {
     category: raw.category,
     viewingDurationSeconds: raw.viewingDurationSeconds,
     exposureMs: raw.viewingDurationSeconds * 1000,
-    imageFile: image.file,
+    imageFile: image.file.trim(),
     imageSize: { width: image.width, height: image.height },
     display: {
       viewport: { width: display.viewportWidth, height: display.viewportHeight },
@@ -396,10 +407,10 @@ const recordFacts = (raw: RawRecord): RecordFacts => {
 /**
  * One participant's fixations, checked and turned into the contract's.
  *
- * The checks are the ones a scanpath has to pass to be a scanpath: it exists, its timestamps
- * run forwards and do not overlap, and every point is on the image. Each failure names the
- * fixation it happened at, because "a fixation outside the image" is not a fact a reader can
- * act on and `participants[1].fixations[3].x` is.
+ * The checks are the ones a scanpath has to pass to be a scanpath: it exists, every fixation
+ * is readable, its onsets are strictly increasing and never overlap a dwell, and every point
+ * is on the image. Each failure names the fixation it happened at, because "a fixation outside
+ * the image" is not a fact a reader can act on and `participants[1].fixations[3].x` is.
  */
 const convertFixations = (
   facts: RecordFacts,
@@ -427,6 +438,15 @@ const convertFixations = (
   }
 
   return scanpath.fixations.map((fixation, index) => {
+    if (!isReadableElement(fixation)) {
+      throw rejection(
+        recordId,
+        `participants[${participantPosition}].fixations[${index}]`,
+        `is ${JSON.stringify(fixation ?? null)}, which is not a fixation: a reader that could ` +
+          'not parse a log row says so here rather than further down',
+      );
+    }
+
     for (const field of ['tMs', 'durationMs', 'x', 'y'] as const) {
       if (!isMeasurement(fixation[field])) {
         throw rejection(
@@ -627,6 +647,15 @@ export const convertRecord = (
 
   const seen = new Set<string>();
   return raw.participants.map((scanpath, position) => {
+    if (!isReadableElement(scanpath)) {
+      throw rejection(
+        facts.recordId,
+        `participants[${position}]`,
+        `is ${JSON.stringify(scanpath ?? null)}, which is not a scanpath: a reader that could ` +
+          "not parse a participant's log says so here rather than further down",
+      );
+    }
+
     const participantId =
       typeof scanpath.participantId === 'string' ? scanpath.participantId.trim() : '';
     if (participantId === '') {

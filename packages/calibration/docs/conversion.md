@@ -93,6 +93,12 @@ outside is refused. That is the same inclusive upper edge the scanpath metrics r
 ([`metrics-scanpath.md`](./metrics-scanpath.md)), and for the same reason: a reader that reports a boundary pixel is
 not wrong about where the human looked.
 
+**An onset is strictly after the one before it.** A fixation is an interval, so two fixations cannot begin at the same
+instant, and #86 asks for a session's `tMs` to be strictly increasing — a replay's scrubber reads them in order.
+Together with "a record converts whole or not at all" below, that means one duplicated onset in one participant's log
+costs that image's whole ground truth, for every participant. That is the deliberate trade: a record is the unit, and
+a figure measured against a scanpath whose order is unreadable is worse than a record that was refused by name.
+
 **A dwell may run past the viewing cut.** The dataset cuts a scanpath at 1, 3 or 7 seconds *by onset*, so a fixation
 that begins inside the exposure and ends after it is kept as it is. The session's `durationMs` is the exposure, not
 the last fixation's end. A fixation that *begins* after the exposure is a rejection.
@@ -173,6 +179,7 @@ Every case, with the field it is named at:
 | No participants at all | `participants` |
 | A participant with no id, or two scanpaths under one id | `participants[i].participantId` |
 | No fixations | `participants[i].fixations` |
+| A scanpath or a fixation a reader could not parse, so it is not an object | `participants[i]`, `participants[i].fixations[j]` |
 | An onset, dwell or coordinate that is not a finite, non-negative number | `participants[i].fixations[j].{tMs,durationMs,x,y}` |
 | Timestamps out of order: an onset that is not after the one before it, or that is before the one before it ends | `participants[i].fixations[j].tMs` |
 | A fixation beginning after the exposure | `participants[i].fixations[j].tMs` |
