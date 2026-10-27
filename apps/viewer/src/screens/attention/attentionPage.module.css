@@ -1,0 +1,122 @@
+/* =============================================================================
+   `#screen-attention` of `docs/design/prototype.html`, as this screen's own.
+
+   What is here is only what the scaffold owns: the control row above the page,
+   the segmented version switch, the two-column stage, the side column and its
+   panels, and the key/value list the "This step" panel is made of. The frame,
+   the overlay layers, the filmstrip and the areas table are the sibling
+   tickets' and carry their own stylesheets.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies.
+   ========================================================================== */
+
+/* ---- The row above the page -------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block: var(--space-5);
+  gap: var(--space-3);
+}
+
+/* ---- The version switch ------------------------------------------------
+   The prototype's `#variant-seg`: one rounded strip, hairlines between the
+   versions, the current one filled with the action colour. The buttons inside
+   it are the shadcn `toggle` primitive, whose registry file carries Tailwind
+   defaults this control does not use — its own radius, its own padding and a
+   `data-[state=on]` fill. Those are answered here, once, rather than in an
+   override string on each version. */
+
+.seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.seg button {
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-right: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: var(--weight-medium) var(--text-xs) / 1 var(--font-sans);
+  /* The primitive sizes itself with a height and a minimum width; this strip is
+     sized by its own padding, as the prototype draws it. */
+  height: auto;
+  min-width: 0;
+}
+
+.seg button:last-child {
+  border-right: 0;
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* ---- The stage and its side column -------------------------------------
+   The prototype's `.stage` is `minmax(0, 1fr) 280px`. 280px is not a token, so
+   the column is written on the spacing scale instead: --space-20 is 5rem, and
+   3.5 of them is exactly the prototype's width. */
+
+.stage {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) calc(var(--space-20) * 3.5);
+  gap: var(--space-6);
+}
+
+.sidepanel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.panel {
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* The prototype sets a panel's title in `h3`. On the built screen the panels are
+   the first headings under the page's `h1`, so the element is `h2` — a reader
+   moving by heading never drops a level that is not there — and the type role is
+   the prototype's. */
+.panel h2 {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- The "This step" readings ------------------------------------------ */
+
+.kv {
+  display: grid;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  gap: var(--space-2) var(--space-5);
+  grid-template-columns: auto 1fr;
+}
+
+.kv dt {
+  color: var(--color-text-muted);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+/* ---- Narrow windows ----------------------------------------------------
+   The prototype's own breakpoint: the side column goes under the page. */
+
+@media (max-width: 1000px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

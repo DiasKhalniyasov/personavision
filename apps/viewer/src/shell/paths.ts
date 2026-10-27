@@ -68,6 +68,16 @@ export const paths = {
 export const sessionsWithOutcome = (runId: string, outcome: string): string =>
   `${paths.sessions(runId)}?${new URLSearchParams({ outcome }).toString()}`;
 
+/**
+ * `/runs/<id>/sessions?variant=…`: the Sessions list, narrowed to one version.
+ *
+ * The Attention screen offers it where a step nobody reached would otherwise be an empty
+ * frame — "see where they ended" — so the link is built here with the rest of them rather
+ * than assembled on that screen.
+ */
+export const sessionsWithVariant = (runId: string, variant: string): string =>
+  `${paths.sessions(runId)}?${new URLSearchParams({ variant }).toString()}`;
+
 /** `/signin?next=…`: where sign-in sends a visitor back to once they are in. */
 export const signInWithNext = (intended: string): string =>
   `${paths.signIn}?${new URLSearchParams({ [NEXT_PARAM]: intended }).toString()}`;
