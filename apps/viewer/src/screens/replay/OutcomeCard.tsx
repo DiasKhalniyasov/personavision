@@ -48,7 +48,19 @@ export function OutcomeCard({ run, session }: { run: Run; session: Session }) {
       }}
     >
       <h2 id={headingId} style={{ color: `var(${outcome.token})` }}>
-        {outcome.label} at the {endedOn} step &middot; {fault(session, attribution.label)}
+        {outcome.label} at the {endedOn} step &middot;{' '}
+        {/* Whose fault it was wears the attribution's own token — but only where there was
+            a fault: `--attr-product` is the colour of something counting against the
+            version, and a successful session is not that. */}
+        <span
+          style={
+            session.outcome.status === 'success'
+              ? undefined
+              : { color: `var(${attribution.token})` }
+          }
+        >
+          {fault(session, attribution.label)}
+        </span>
       </h2>
 
       <p>{session.outcome.reason}</p>
@@ -56,7 +68,7 @@ export function OutcomeCard({ run, session }: { run: Run; session: Session }) {
       <dl className={styles.kv}>
         <dt>Supports findings</dt>
         <dd>
-          <SupportedFindings run={run} sessionId={session.sessionId} />
+          <SupportedFindings runId={run.runId} sessionId={session.sessionId} />
         </dd>
 
         <dt>Automation integrity</dt>
@@ -85,14 +97,11 @@ function fault(session: Session, attribution: string): string {
     : `the ${attribution} was at fault, not our simulation`;
 }
 
-const countOf = (count: number, one: string, many: string): string =>
-  `${count} ${count === 1 ? one : many}`;
-
 const failureWords = (count: number): string =>
-  count === 0 ? 'no selector failures' : countOf(count, 'selector failure', 'selector failures');
+  count === 0 ? 'no selector failures' : `${count} selector failure${count === 1 ? '' : 's'}`;
 
 const retryWords = (count: number): string =>
-  count === 0 ? 'no retries' : countOf(count, 'retry', 'retries');
+  count === 0 ? 'no retries' : count === 1 ? '1 retry' : `${count} retries`;
 
 /**
  * Whether our own harness held up, with the numbers next to the claim.
@@ -122,7 +131,7 @@ function integrityWords(session: Session): { tag: string; sentence: string } {
 
   return {
     tag: failureWords(selectorFailures),
-    sentence: `${counts}, and the session still ran to its end, so the outcome is the product’s.`,
+    sentence: `${counts}: the session reached its end, but our own browsing slipped on the way, so this outcome is not the clean claim about the product that no selector failures would make.`,
   };
 }
 
@@ -134,8 +143,8 @@ function integrityWords(session: Session): { tag: string; sentence: string } {
  * and a findings file that could not be read, or a finding whose evidence link names no
  * route, says the link could not be resolved rather than quietly dropping the row.
  */
-function SupportedFindings({ run, sessionId }: { run: Run; sessionId: string }) {
-  const state = useFindings(run.runId);
+function SupportedFindings({ runId, sessionId }: { runId: string; sessionId: string }) {
+  const state = useFindings(runId);
 
   if (state.status === 'loading') {
     return (
@@ -160,7 +169,7 @@ function SupportedFindings({ run, sessionId }: { run: Run; sessionId: string }) 
       {supported.map((finding, position) => (
         <span key={finding.id}>
           {position === 0 ? null : ' · '}
-          <SupportedFinding finding={finding} runId={run.runId} />
+          <SupportedFinding finding={finding} runId={runId} />
         </span>
       ))}
     </>

@@ -3,7 +3,8 @@ import { screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { axeViolations, describeViolations } from '../axe';
 import { loadDesignTokens } from '../setup';
-import { forget, mountApp, SEED_RUN, serveRunData } from './harness';
+import { readFindingsFile } from '../app';
+import { forget, mountApp, readSeedSession, SEED_RUN, serveRunData, sessionPath } from './harness';
 
 /**
  * The card that closes the Session replay: how this person's session ended, whose fault
@@ -19,7 +20,12 @@ import { forget, mountApp, SEED_RUN, serveRunData } from './harness';
 const replay = (sessionId: string): string => `/runs/${SEED_RUN}/sessions/${sessionId}`;
 
 beforeEach(loadDesignTokens);
-afterEach(forget);
+afterEach(() => {
+  // One test serves a file that never arrives by stubbing `fetch`; nothing else here may
+  // inherit it.
+  vi.unstubAllGlobals();
+  forget();
+});
 
 /** The card itself, once the session has been read. */
 const card = async (): Promise<HTMLElement> => {
@@ -119,6 +125,39 @@ describe('the findings this person supports', () => {
     );
   });
 
+  it('links an automation failure to the finding that counts the excluded people', async () => {
+    await serveRunData();
+    mountApp(replay('S-09'));
+    await card();
+
+    const link = await screen.findByRole('link', { name: /^#6 / });
+    expect(link.textContent).toBe(
+      '#6 2 of 24 people could not be simulated to the end, and are excluded from both figures.',
+    );
+    expect(link.getAttribute('href')).toBe(`/runs/${SEED_RUN}/sessions?outcome=automation_failure`);
+  });
+
+  it('names a finding whose evidence link leads nowhere, and says the link could not be resolved', async () => {
+    const findings = readFindingsFile(SEED_RUN) as {
+      findings: { evidence_link: { screen: string; params: Record<string, string> } }[];
+    };
+    // An Attention link with neither a version nor a step opens no heatmap, so it opens
+    // nothing: the finding is still this person's evidence and is still named.
+    findings.findings[0].evidence_link = { screen: 'attention', params: {} };
+    await serveRunData({
+      files: { [`/runs/${SEED_RUN}/findings.json`]: JSON.stringify(findings) },
+    });
+    mountApp(replay('S-15'));
+
+    const outcome = await card();
+    await waitFor(() => {
+      expect(row(outcome, 'Supports findings')).toContain(
+        'its evidence link could not be resolved',
+      );
+    });
+    expect(screen.queryByRole('link', { name: /^#1 / })).toBeNull();
+  });
+
   it('says so in a sentence when no finding cites this person', async () => {
     await serveRunData();
     mountApp(replay('S-01'));
@@ -174,6 +213,17 @@ describe('whether our own automation held up', () => {
 
     expect(row(await card(), 'Automation integrity')).toBe(
       'automation failure our own browsing broke on this session — 1 selector failure, 1 retry — so this person is excluded from the friction score and from every area-of-interest metric.',
+    );
+  });
+
+  it('withholds the product’s claim from a session our own browsing stumbled on', async () => {
+    const session = readSeedSession('S-15');
+    session.integrity = { selectorFailures: 1, retries: 2 };
+    await serveRunData({ files: { [sessionPath('S-15')]: JSON.stringify(session) } });
+    mountApp(replay('S-15'));
+
+    expect(row(await card(), 'Automation integrity')).toBe(
+      '1 selector failure 1 selector failure, 2 retries: the session reached its end, but our own browsing slipped on the way, so this outcome is not the clean claim about the product that no selector failures would make.',
     );
   });
 });
