@@ -1,0 +1,206 @@
+/* =============================================================================
+   `/` for a visitor with no session: PersonaVision's own page.
+
+   There is no prototype section for it — the prototype covers the signed-in
+   product — so what is reproduced here is the step's own language: a stack of
+   strips, one tinted band, one dark fir band, and whitespace rather than rules
+   between them. The shared primitives it sits inside (`.strip`, `.strip-tint`,
+   `.strip-dark`, `.wrap`, `.lede`, `.card`, `.microlabel`, `.footnote`,
+   `.appbar`, `.logo`, `.mat`) are the app's own, in `src/styles/base.css` and
+   `src/styles/chrome.css`, and the controls are the shadcn primitives of
+   `src/components/ui/`.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which
+   the app imports and never copies. No colour, size, spacing step, radius or
+   duration is restated here, and nothing on this page animates: the direction
+   gives this page's moments to #125's components, which are imported.
+   ========================================================================== */
+
+/* ---- The bar ------------------------------------------------------------
+   The signed-in chrome does not belong over a page for somebody with no
+   account, so this is `.appbar` carrying three things and nothing else. */
+
+.barActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---- The hero -----------------------------------------------------------
+   The one piece of layout invented on this page: what the product answers on
+   the left, the evidence that it answers it on the right. */
+
+.hero {
+  display: grid;
+  align-items: start;
+  gap: var(--space-16);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.heroText {
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* The headline of the page, set the way the Verdict screen's sentence is: the
+   biggest thing here by a wide margin. */
+.headline {
+  font-size: var(--text-display);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---- The evidence, and it is real --------------------------------------- */
+
+.evidence {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+/* The headline sentence of the example run, in the display voice but under the
+   page's own headline: it is the product's answer, not the page's claim. */
+.evidenceSentence {
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-snug);
+}
+
+/* The figures are the Verdict screen's own component, which sets its rhythm for
+   a full-width screen; in this panel the row closes up by one step. */
+.evidence :global(.figures) {
+  margin-top: var(--space-2);
+  gap: var(--space-8);
+}
+
+/* While the run is being read. Each block is the height of the line it stands
+   in for, so the panel is the same height before and after the read. */
+.waiting {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.waitingSentence {
+  block-size: var(--text-lg);
+}
+
+.waitingFigure {
+  block-size: var(--text-figure);
+}
+
+.waitingMat {
+  block-size: var(--text-figure);
+}
+
+/* The example run could not be read. One quiet line, and never a broken frame. */
+.unavailable {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- How it works -------------------------------------------------------
+   Three short steps as a plain list, not a diagram. Tailwind's reset strips the
+   markers, so the list states its own. */
+
+/* `--text-xl` is the section headline of `docs/FLOW.md` section 10; the document
+   shell sets the family and the colour of every heading. */
+.howHeading {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.steps {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-6);
+  padding-left: var(--space-5);
+  gap: var(--space-5);
+  list-style: decimal outside;
+}
+
+.steps > li::marker {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.stepName {
+  color: var(--color-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.stepBody {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- The closing band ---------------------------------------------------- */
+
+.closing {
+  display: grid;
+  gap: var(--space-6);
+  justify-items: start;
+}
+
+/* Headings carry `--color-heading`, which is the band's own background: on the
+   dark band the band's text colour is the readable one. */
+.closingHeadline {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-on-canvas-dark);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+}
+
+/* Focus is always visible, and on the dark band it is lime: `--color-focus` is
+   dark fir on light, which does not read against the band itself. */
+.closingBand :focus-visible {
+  outline-color: var(--color-accent);
+}
+
+/* ---- Narrow windows -----------------------------------------------------
+   The prototype's own two breakpoints. A breakpoint is not a token: a media
+   query cannot read a custom property, so the design contract states them in
+   `prototype.html` and they are repeated — as numbers of pixels, never as a
+   colour or a size — here. */
+
+@media (max-width: 1000px) {
+  /* The hero stacks rather than squashes, and the evidence keeps its place
+     under the actions. */
+  .hero {
+    gap: var(--space-12);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .headline {
+    font-size: var(--text-display-sm);
+  }
+}
+
+@media (max-width: 640px) {
+  .headline {
+    font-size: var(--text-xl);
+  }
+
+  /* Both actions are full-width rows at phone width rather than two half
+     buttons that wrap mid-word. */
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}
