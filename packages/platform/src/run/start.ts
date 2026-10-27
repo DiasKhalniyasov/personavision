@@ -1,6 +1,7 @@
 import { runRequestSchema } from '@personavision/contract';
 import type { ModelMode, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
+import type { ModelId } from '@personavision/provider';
 import type { WorkspaceStore } from '../store/types.js';
 
 /**
@@ -57,7 +58,7 @@ export class TestRefusedError extends Error {
   /** The mode that was asked for and could not be served. */
   readonly modelMode: ModelMode;
   /** The model that could not be used, named so the Test failed screen can state it. */
-  readonly modelId: string;
+  readonly modelId: ModelId;
 
   constructor(modelMode: ModelMode) {
     const modelId = MODEL_ID_BY_MODE[modelMode];
