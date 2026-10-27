@@ -13,7 +13,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFixtureSource } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeRun, ZERO_USAGE } from '@personavision/contract';
-import { createDecisionSession, createOfflineDeterministicProvider } from '@personavision/provider';
+import {
+  createDecisionSession,
+  createMetaModelApiProvider,
+  createOfflineDeterministicProvider,
+} from '@personavision/provider';
 import type { CaptureSource, Device, TaskDefinition } from '@personavision/browser';
 import type { Persona, Run } from '@personavision/contract';
 import type {
@@ -21,6 +25,8 @@ import type {
   DecisionContext,
   DecisionProvider,
   DecisionSession,
+  ModelMode,
+  ModelTransport,
 } from '@personavision/provider';
 import type { RunSessionInput } from '../src/index.js';
 
@@ -164,6 +170,68 @@ export const providerThat = (
   };
 };
 
+/**
+ * A key-shaped string that is not a key, so that the model provider will make its call and a
+ * hygiene assertion has something to hunt for.
+ */
+export const NOT_A_KEY = 'swarm-test-model-key-0123456789-not-real';
+
+/** The element ids one screen message lists, in the order it lists them. */
+const listedElementIds = (request: Parameters<ModelTransport>[0]): readonly string[] => {
+  const message = [...request.body.input].reverse().find((item) => item.role === 'user');
+  const part = message?.content.find((item) => item.type === 'input_text');
+  const text = part !== undefined && 'text' in part ? part.text : '';
+  return [...text.matchAll(/^- (\S+) · /gm)].map((match) => match[1] ?? '');
+};
+
+/**
+ * A model-mode provider whose transport is a cooperative fake rather than the API: it acts on
+ * the first element the screen lists, and scrolls when the agent has looked at nothing.
+ *
+ * It is the real Meta Model API provider, so a session run on it writes a real trajectory —
+ * which is the point of using it here rather than `providerThat` (#139). No socket is opened
+ * and the key is a fake.
+ */
+export const metaProviderOverFake = (mode: ModelMode = 'contributor'): DecisionProvider =>
+  createMetaModelApiProvider({
+    mode,
+    apiKey: NOT_A_KEY,
+    transport: (request) => {
+      const ids = listedElementIds(request);
+      const reply =
+        ids[0] === undefined
+          ? {
+              intent: 'Nothing here yet; I will look further down.',
+              action: { kind: 'scroll', targetElementId: null },
+            }
+          : {
+              intent: 'That looks like the way on.',
+              action: { kind: 'click', targetElementId: ids[0] },
+            };
+      return Promise.resolve({
+        status: 200,
+        body: {
+          id: 'resp-fixture',
+          status: 'completed',
+          output: [
+            { type: 'reasoning', summary: ['weighed the options'] },
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: JSON.stringify(reply) }],
+            },
+          ],
+          usage: {
+            input_tokens: 1000,
+            input_tokens_details: { cached_tokens: 400 },
+            output_tokens: 200,
+            output_tokens_details: { reasoning_tokens: 150 },
+          },
+        },
+      });
+    },
+  });
+
 /** Every context one provider was handed, in the order the session asked. */
 export const recording = (
   inner: DecisionProvider,
@@ -180,8 +248,11 @@ export const recording = (
     provider: {
       ...inner,
       decide: watch((context) => inner.decide(context)),
-      beginSession: (identity) => {
-        const session = inner.beginSession(identity);
+      // The scope is forwarded rather than dropped: the run lends the session its trajectory
+      // through it, and a watcher that swallowed it would make a recorded session write
+      // nothing (#139).
+      beginSession: (identity, scope) => {
+        const session = inner.beginSession(identity, scope);
         return { ...session, decide: watch((context) => session.decide(context)) };
       },
     },

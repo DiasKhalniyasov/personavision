@@ -4,7 +4,9 @@
  * The suite starts nothing: every screen comes from the capture set `packages/browser`
  * recorded once from its fixture site, and the decisions come from the offline
  * deterministic policy, so there is no browser, no socket and no credential anywhere in it
- * — and one test holds that by hand rather than by intention.
+ * — and one test holds that by hand rather than by intention. The trajectory block runs the
+ * model provider over an injected fake transport and a key-shaped string that is not a key,
+ * so it opens no socket either (#139).
  *
  * What it asserts is behaviour a person could check: the session parses and round-trips,
  * its fixations are numbered as one continuous sequence, one decision was asked for per
@@ -12,10 +14,19 @@
  * decided went to the driver, and the same persona and seed produce the same session twice.
  */
 
-import { readFile } from 'node:fs/promises';
-import { runPaths, sessionSchema } from '@personavision/contract';
-import { createFixtureSource } from '@personavision/browser';
-import { createOfflineDeterministicProvider, FREE_USAGE } from '@personavision/provider';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { appendFinishedSession, runPaths, sessionSchema, validate } from '@personavision/contract';
+import { createFixtureSource, toScreenshotEntries } from '@personavision/browser';
+import {
+  auditRunTrajectories,
+  auditTrajectory,
+  createOfflineDeterministicProvider,
+  FREE_USAGE,
+  MODEL_ID_BY_MODE,
+  totalUsage,
+  trajectoryPath,
+} from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { decideOutcome, runSession } from '../src/index.js';
 import type { ActResult, Capture, CaptureSource } from '@personavision/browser';
@@ -28,14 +39,17 @@ import {
   DESKTOP,
   MOBILE,
   TASK,
+  metaProviderOverFake,
   personaWho,
   providerThat,
   recording,
+  runVariant,
   sessionOver,
   sweep,
   temporaryRunDir,
   variantFor,
   watchingActs,
+  writeOpenRun,
 } from './harness.js';
 
 /** The action types the browser driver performs; the other two are the agent's own. */
@@ -612,6 +626,111 @@ describe('runSession', () => {
       );
 
       expect(desktop.fixations).not.toEqual(mobile.fixations);
+    });
+  });
+
+  describe('the trajectory it writes', () => {
+    it('writes trajectories/S-NN.jsonl for a model-mode session, interleaved and parseable', async () => {
+      const session = await runSession(
+        sessionOver(runDir, { providers: { decision: metaProviderOverFake() } }),
+      );
+
+      const path = trajectoryPath(runDir, session.sessionId);
+      const lines = (await readFile(path, 'utf8'))
+        .split('\n')
+        .filter((line) => line !== '')
+        .map((line) => JSON.parse(line) as { kind: string; turn: number; modelId: string });
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines.filter((line) => line.kind === 'request')).toHaveLength(session.screens.length);
+      expect(lines.map((line) => line.kind)).toEqual(
+        session.screens.flatMap(() => ['request', 'response']),
+      );
+      expect(new Set(lines.map((line) => line.modelId))).toEqual(
+        new Set([MODEL_ID_BY_MODE.contributor]),
+      );
+      // Written as they happened: the turns climb, and each turn's request precedes its answer.
+      expect(lines.map((line) => line.turn)).toEqual(
+        session.screens.flatMap((_screen, index) => [index + 1, index + 1]),
+      );
+    });
+
+    it('audits to the usage its decisions reported', async () => {
+      const screens: SessionScreen[] = [];
+      const session = await runSession(
+        sessionOver(runDir, {
+          providers: { decision: metaProviderOverFake() },
+          onScreen: (screen) => void screens.push(screen),
+        }),
+      );
+
+      const audit = await auditTrajectory({ runDir, sessionId: session.sessionId });
+
+      expect(audit.recorded).toBe(true);
+      expect(audit.turns).toHaveLength(session.screens.length);
+      expect(audit.totals).toEqual(
+        totalUsage(
+          screens
+            .map((screen) => screen.decision)
+            .filter((decision): decision is Decision => decision !== null)
+            .map((decision) => decision.usage),
+        ),
+      );
+    });
+
+    it('writes none at all for an offline session, and the audit says so', async () => {
+      const session = await runSession(sessionOver(runDir));
+
+      expect(await readdir(runDir)).not.toContain('trajectories');
+      expect(await auditRunTrajectories(runDir)).toEqual([]);
+      expect(await auditTrajectory({ runDir, sessionId: session.sessionId })).toMatchObject({
+        recorded: false,
+        turns: [],
+      });
+    });
+
+    it('leaves the run directory valid, and writes nothing but the run directory', async () => {
+      const screens: SessionScreen[] = [];
+      await writeOpenRun(runDir, {
+        personas: [personaWho('careful')],
+        variants: [runVariant('A')],
+        seedGroups: [11],
+        engine: {
+          mode: 'model',
+          provider: 'meta-model-api',
+          modelMode: 'contributor',
+          models: {
+            decision: MODEL_ID_BY_MODE.contributor,
+            segmentation: 'none',
+            planning: 'none',
+          },
+          weights: { alpha: 1, beta: 1, gamma: 1 },
+          version: 'test',
+        },
+      });
+      const session = await runSession(
+        sessionOver(runDir, {
+          providers: { decision: metaProviderOverFake() },
+          onScreen: (screen) => void screens.push(screen),
+        }),
+      );
+      // The run has to declare the areas its session's actions name, exactly as `runSwarm`
+      // declares them when it appends a finished session.
+      await appendFinishedSession(runDir, session, {
+        aois: screens.flatMap((screen) => screen.aois),
+        screenshots: toScreenshotEntries(screens.map((screen) => screen.capture)),
+      });
+
+      expect(await validate(runDir)).toEqual([]);
+      // Everything the session wrote, and nothing else: the trajectory is a directory of the
+      // run and not a cache somewhere else on the machine.
+      expect((await readdir(runDir)).sort()).toEqual([
+        'findings.json',
+        'run.json',
+        'screenshots',
+        'sessions',
+        'trajectories',
+      ]);
+      expect(await readdir(join(runDir, 'trajectories'))).toEqual([`${session.sessionId}.jsonl`]);
     });
   });
 });

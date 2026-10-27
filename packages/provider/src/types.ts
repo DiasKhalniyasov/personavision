@@ -229,6 +229,49 @@ export interface DecisionSessionIdentity {
 }
 
 /**
+ * One line of an agent session's LLM trajectory, as the provider that recorded it spells it.
+ *
+ * Only the fields every record carries whatever provider wrote it are named here — which
+ * turn of which session, from which model in which mode. The body of a request, the status
+ * of a response and the shape of a failure belong to the protocol the provider speaks
+ * (`meta-model.ts`'s `TrajectoryRecord`), and the sink writes the record verbatim rather
+ * than a projection of it: a trajectory holding only the fields this interface knows about
+ * would not be replayable (#139).
+ */
+export interface TrajectoryEntry {
+  /** `request`, `response` or `failure`, as the recording provider names them. */
+  readonly kind: string;
+  /** Counted from 1, in the order the session made its calls — failed calls included. */
+  readonly turn: number;
+  readonly mode: string;
+  readonly modelId: string;
+  readonly personaId: string;
+  readonly seed: number;
+}
+
+/**
+ * Where one session's trajectory goes: the file in the run directory, or a test's array.
+ *
+ * It is awaited, so a record that could not be written is the provider's failure rather than
+ * a line quietly missing from the evidence — a run is not replayable from a trajectory with
+ * a hole in it.
+ */
+export type TrajectorySink = (record: TrajectoryEntry) => void | Promise<void>;
+
+/**
+ * What the caller lends one session beyond its identity: today, where that session's
+ * trajectory is written (#139).
+ *
+ * It is separate from {@link DecisionSessionIdentity} because it is not who the session is.
+ * The file is named `trajectories/S-NN.jsonl` from the **session id**, which belongs to the
+ * run and not to the provider — so `runSession` opens the sink, hands it in here and closes
+ * it when the session ends, and a provider that calls no model ignores it.
+ */
+export interface DecisionSessionScope {
+  readonly trajectory?: TrajectorySink;
+}
+
+/**
  * One agent session's decider: the handle every decision of that session goes through.
  *
  * `decide` returns exactly what the stateless `decide` returns — the agent's intent, one
@@ -288,6 +331,10 @@ export interface DecisionProvider {
    *
    * A provider with nothing to remember returns a handle that forwards straight through,
    * which is what the offline deterministic policy does.
+   *
+   * `scope` is what the run lends the session — its trajectory sink (#139) — and is
+   * optional on both sides: a caller that records nothing omits it, and a provider that
+   * records nothing takes one argument and is still a `DecisionProvider`.
    */
-  beginSession(identity: DecisionSessionIdentity): DecisionSession;
+  beginSession(identity: DecisionSessionIdentity, scope?: DecisionSessionScope): DecisionSession;
 }
