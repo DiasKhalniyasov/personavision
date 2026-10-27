@@ -7,6 +7,9 @@ import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
 import { SideColumn, SidePanel } from './SidePanel';
 import { ThisStepPanel } from './ThisStepPanel';
+import { AttentionStage, stageIsShown, useAttentionStage } from './stage/AttentionStage';
+import type { AttentionStageView } from './stage/AttentionStage';
+import { OverlayTogglesPanel } from './stage/OverlayTogglesPanel';
 import { useAttentionAreas } from './useAttentionAreas';
 import { useAttentionSelection } from './useAttentionSelection';
 import type { AttentionSelection } from './useAttentionSelection';
@@ -32,6 +35,10 @@ import styles from './attentionPage.module.css';
  * readings and the footnotes. The filmstrip (#60), the stage and its overlays (#58), the
  * areas table (#59) and the isolate caption (#73) mount into it, each from its own file,
  * and read this screen's selection and its two data hooks rather than publishing their own.
+ *
+ * The stage is two mounts rather than one, because its frame and its Overlays panel are in
+ * two cells of the grid below: `useAttentionStage` holds the one piece of state they share
+ * — which layers are on — so that neither of them holds the other's.
  */
 export function AttentionPage() {
   const { runId = '' } = useParams();
@@ -59,6 +66,14 @@ export function AttentionScreen({ run }: { run: Run }) {
 
   const step = run.steps.find((candidate) => candidate.id === selection.step);
   const isolated = areas.find((area) => area.aoi.id === selection.aoi) ?? null;
+  const stage = useAttentionStage({
+    run,
+    variant: selection.variant,
+    step: selection.step,
+    aoi: selection.aoi,
+    sessions,
+    areas,
+  });
 
   return (
     <div className="strip" data-section="attention">
@@ -91,11 +106,18 @@ export function AttentionScreen({ run }: { run: Run }) {
 
         <div className={styles.stage}>
           <div>
-            <StagePlace run={run} selection={selection} sessions={sessions} />
+            <StagePlace run={run} selection={selection} sessions={sessions} stage={stage} />
             {/* #73 mounts the isolated-area caption here. */}
           </div>
           <SideColumn>
-            {/* #58 mounts the Overlays panel here. */}
+            {/* Beside the stage, and only beside the stage: when the screen is showing a
+                step nobody reached, or a session file it could not read, there is nothing
+                for a layer to be drawn over and so nothing for a switch to do. */}
+            {stageIsShown(sessions) ? (
+              <SidePanel title="Overlays">
+                <OverlayTogglesPanel layers={stage.layers} setShown={stage.setShown} />
+              </SidePanel>
+            ) : null}
             {step === undefined ? null : (
               <SidePanel title="This step">
                 <ThisStepPanel step={step} sessions={sessions} areas={areas} isolated={isolated} />
@@ -182,21 +204,24 @@ function AggregateLine({ run, variant }: { run: Run; variant: string }) {
 }
 
 /**
- * Where the page and its overlays go (#58).
+ * The page and its overlays (#58) — unless something truer than a page is the answer.
  *
- * Until that ticket lands the slot is empty, and it is empty on purpose: this screen states
- * the two things that are true *instead of* a page — a session file that could not be read,
- * and a step nobody in the audience ever reached — because both are answers, and a ticket
- * that has not been built yet is not.
+ * Two things are stated *instead of* the stage, because both are results rather than gaps:
+ * a session file that could not be read, and a step nobody in the audience ever reached.
+ * While the people are still being read the stage is shown anyway: the screenshot, the fold
+ * and the area outlines all come from the run, which has already arrived, so there is
+ * nothing to wait for and no reason to make the reader wait for it.
  */
 function StagePlace({
   run,
   selection,
   sessions,
+  stage,
 }: {
   run: Run;
   selection: AttentionSelection;
   sessions: AttentionStepSessions;
+  stage: AttentionStageView;
 }) {
   if (sessions.status === 'error') {
     return (
@@ -205,9 +230,11 @@ function StagePlace({
       </p>
     );
   }
-  if (sessions.status === 'loading' || sessions.reachedCount > 0) return null;
+  if (!stageIsShown(sessions)) {
+    return <NobodyReached runId={run.runId} variant={selection.variant} />;
+  }
 
-  return <NobodyReached runId={run.runId} variant={selection.variant} />;
+  return <AttentionStage stage={stage} />;
 }
 
 /**
