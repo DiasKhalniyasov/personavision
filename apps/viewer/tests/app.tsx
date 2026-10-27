@@ -116,8 +116,12 @@ export function readFindingsFile(runId: string): Record<string, unknown> {
 }
 
 export interface MountOptions {
-  /** Who is signed in. The default is the stub's signed-in demo workspace. */
-  session?: SessionState;
+  /**
+   * Who is signed in. The default is the demo workspace, signed in, so a screen test is
+   * about its own screen; `null` overrides nothing and lets the app read `GET /auth/session`
+   * for itself, which is what #103's sign-in tests are about.
+   */
+  session?: SessionState | null;
   /** What audiences the workspace has. The default is whatever the stub works out. */
   audiences?: AudiencesState | null;
 }
@@ -126,7 +130,7 @@ export interface MountOptions {
 export function mountApp(path: string, options: MountOptions = {}) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const tree: ReactElement = (
-    <SessionContext.Provider value={options.session ?? DEMO_SESSION}>
+    <SessionContext.Provider value={options.session === undefined ? DEMO_SESSION : options.session}>
       <AudiencesContext.Provider value={options.audiences ?? null}>
         <App router={router} />
       </AudiencesContext.Provider>

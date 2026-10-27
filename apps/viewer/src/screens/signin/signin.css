@@ -1,0 +1,130 @@
+/* =============================================================================
+   `#screen-signin` of `docs/design/prototype.html`: the one screen on the dark
+   fir band, the wordmark, and the single white card.
+
+   The prototype is the acceptance — same layout, same hierarchy, same wording —
+   and every value below is a custom property from `docs/design/tokens.css`,
+   which the app imports and never copies. No colour, size, spacing step or
+   duration is restated here, and the card's controls are the shadcn primitives
+   of `src/components/ui/`, which carry their own geometry.
+
+   The band itself is `.strip-dark` in `src/styles/base.css`, so there is one
+   dark band in the product and one declaration of it.
+   ========================================================================== */
+
+/* ---- The band and the card on it --------------------------------------- */
+
+/* No chrome stands above this screen, so the band is the whole page. */
+.signin-band {
+  min-block-size: 100dvh;
+}
+
+.signin {
+  display: grid;
+  min-block-size: 100%;
+  padding: var(--space-16) var(--layout-gutter);
+  place-items: center;
+}
+
+.signin-mark {
+  margin-bottom: var(--space-8);
+  color: var(--color-on-canvas-dark);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  text-align: center;
+}
+
+.signin-card {
+  display: grid;
+  /* The prototype's card is 420px, a width the tokens do not name: half the
+     narrow prose column plus one spacing step says the same thing without
+     restating it. */
+  width: 100%;
+  max-width: calc(var(--layout-max-narrow) / 2 + var(--space-10));
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  gap: var(--space-5);
+}
+
+.signin-card h1 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+/* The card is white and sits on the dark band, so the band's quieter-text rule
+   reaches into it and would set both of these to the band's own colour. Inside
+   the card they are the light surface's muted text, which is what the prototype
+   draws. */
+.signin-card .lede,
+.signin-card .footnote {
+  opacity: 1;
+}
+
+.signin-card .lede {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.signin-card .footnote {
+  margin-top: var(--space-0);
+  color: var(--color-text-faint);
+}
+
+/* ---- The fields -------------------------------------------------------- */
+
+.field-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The label's own place while the session is being resolved: the type of the
+   `Label` primitive, so the row is exactly as tall as it will be. */
+.field-label {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+}
+
+/* ---- A refused sign-in, above the fields ------------------------------- */
+
+.signin-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--sev-critical-border);
+  border-radius: var(--radius-md);
+  background: var(--sev-critical-bg);
+  color: var(--sev-critical);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  gap: var(--space-3);
+}
+
+/* ---- Where a fresh install's password was printed ---------------------- */
+
+.demo-creds {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Focus is always visible, and on the dark band it is lime: `--color-focus` is
+   dark fir on light, which does not read against the band itself. The card is a
+   light surface, so everything inside it keeps the token's own colour. */
+.signin-band :focus-visible {
+  outline-color: var(--color-accent);
+}
+
+.signin-card :focus-visible {
+  outline-color: var(--color-focus);
+}

@@ -3,21 +3,28 @@ import { screen, waitFor } from '@testing-library/dom';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from './setup';
-import { forgetRuns, serveRunData } from './app';
+import { forgetRuns } from './app';
 import { mount } from '../src/mount';
+import { forgetSession } from '../src/shell/useSession';
+import { servePlatform } from './signin/platform';
 
 describe('mounting the app', () => {
   let container: HTMLElement;
 
   beforeEach(async () => {
-    await serveRunData();
+    // `mount` is the real entry and overrides nothing, so the chrome it draws is the one a
+    // signed-in session asks for: since #103 the app reads that from the server.
+    await servePlatform({ signedIn: true });
     container = document.createElement('div');
     container.id = 'root';
     container.textContent = 'The app did not start.';
     document.body.append(container);
   });
 
-  afterEach(forgetRuns);
+  afterEach(() => {
+    forgetRuns();
+    forgetSession();
+  });
 
   it('replaces the boot fallback with the product chrome once the tokens are there', async () => {
     loadDesignTokens();
