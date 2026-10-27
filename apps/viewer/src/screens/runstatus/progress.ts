@@ -1,4 +1,5 @@
 import type { Run, SessionProgress } from '@personavision/contract';
+import { stepLabel } from '@/screens/replay/runWords';
 import { attributionWords, outcomeWords } from '@/session/index.js';
 
 /**
@@ -11,9 +12,10 @@ import { attributionWords, outcomeWords } from '@/session/index.js';
  * estimate, and it is offered only when the run has finished somebody to estimate from: the
  * artifact stores no estimate, and an invented one would be a number with nothing behind it.
  *
- * The words for an outcome and its attribution come from the session vocabulary (#20), so
- * this log and the Sessions screens cannot end up saying different things about one session.
- * *Abandoned*, *failed* and *automation failure* stay three (`docs/FLOW.md` section 8).
+ * The words for an outcome and its attribution come from the session vocabulary (#20), and
+ * a step's label from `runWords` (#22), so this log, the Sessions screens and the replay
+ * cannot end up saying different things about one session. *Abandoned*, *failed* and
+ * *automation failure* stay three (`docs/FLOW.md` section 8).
  */
 
 const MINUTE = 60_000;
@@ -121,13 +123,4 @@ function startedAt(run: Run): number | null {
   if (run.startedAt === undefined) return null;
   const at = Date.parse(run.startedAt);
   return Number.isFinite(at) ? at : null;
-}
-
-/**
- * What this step is called on screen — `Review`, not `review`. The same lookup the replay
- * header makes; a session may end somewhere the run never planned to go, and such a step
- * prints its own id rather than nothing.
- */
-function stepLabel(run: Run, step: string): string {
-  return run.steps.find((candidate) => candidate.id === step)?.label ?? step;
 }

@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runSchema } from '@personavision/contract';
 import type { Run, SessionProgress } from '@personavision/contract';
 import { loadDesignTokens } from '../setup';
-import { forgetRuns, readRunFile, serveRunData } from '../app';
+import { forgetRuns, mountApp, readRunFile, serveRunData } from '../app';
+import { paths } from '../../src/shell/paths';
 import { RunFailedScreen } from '../../src/screens/runstatus/RunFailedScreen';
 import { RunningScreen } from '../../src/screens/runstatus/RunningScreen';
 
@@ -210,7 +211,7 @@ describe('the Running screen', () => {
 
     // The log changes far more often than the progress figures and is the one thing on this
     // screen a reader scrolls: it announces nothing and it takes no focus of its own.
-    const log = screen.getByRole('group', { name: /finished sessions/i });
+    const log = screen.getByRole('region', { name: /finished sessions/i });
     expect(log.getAttribute('aria-live')).toBeNull();
     expect(log.contains(announced)).toBe(false);
     expect(document.activeElement).toBe(container.ownerDocument.body);
@@ -530,5 +531,22 @@ describe('both screens', () => {
       <RunFailedScreen run={failedRun({ reason: 'Nothing to open', detail: '' })} />,
     );
     expect(failed.container.querySelector('[data-section="run-failure"]')).not.toBeNull();
+  });
+
+  it('are neither of them for a run whose status the viewer does not know', async () => {
+    // A status outside the contract's three is a run this viewer cannot read, not a state
+    // to guess at: the route says so rather than rendering one of these two screens.
+    await serveRunData({
+      files: {
+        [`/runs/${SEED}/run.json`]: JSON.stringify({ ...seedJson(), status: 'cancelled' }),
+      },
+    });
+    mountApp(paths.run(SEED));
+
+    expect(
+      await screen.findByRole('heading', { name: 'That test could not be read' }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/people finished/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Test failed to start' })).toBeNull();
   });
 });

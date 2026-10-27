@@ -1,6 +1,9 @@
 import { Fragment, useState } from 'react';
 import type { Run, SessionProgress } from '@personavision/contract';
 import { Button } from '@/components/ui/button';
+// What a version is called on screen — `Current checkout`, not `A`. The lookup lives in
+// one place (#22), so the two screens that name a version cannot disagree.
+import { variantName } from '@/screens/replay/runWords';
 import { VerdictPage } from '@/screens/verdict/VerdictPage';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { CONTRIBUTOR_NOTICE, enginePhrase, ranOnContributorModel, usageLine } from './engine';
@@ -37,10 +40,6 @@ import './RunningScreen.css';
 /** Why the one button that would change the run does nothing yet. */
 const NOT_WIRED =
   'Not wired up yet: stopping a test belongs to the platform and to the New test screen (#110).';
-
-/** What this version is called on screen — `Current checkout`, not `A`. */
-const variantName = (run: Run, variant: string): string =>
-  run.variants.find((candidate) => candidate.id === variant)?.name ?? variant;
 
 /** One variant's share of the swarm, as the progress block records it. */
 type VariantProgress = NonNullable<Run['progress']>['perVariant'][number];
@@ -99,14 +98,16 @@ function VariantRow({ run, variant }: { run: Run; variant: VariantProgress }) {
  *
  * It is a region a reader scrolls, not something that announces itself: the progress
  * figures above are the live region, and a log that interrupted on every landing session
- * would make the screen unusable with a screen reader. It takes no focus of its own either.
+ * would make the screen unusable with a screen reader. It takes no focus of its own
+ * either — the tab stop is there so that the scrolling it holds is reachable by keyboard,
+ * which is what a named, focusable region is for.
  */
 function SessionLog({ run, sessions }: { run: Run; sessions: readonly SessionProgress[] }) {
   // The artifact appends in the order they finished, so the newest is its last entry.
   const newestFirst = [...sessions].reverse();
 
   return (
-    <div className="log" role="group" tabIndex={0} aria-label="Finished sessions, newest first">
+    <div className="log" role="region" tabIndex={0} aria-label="Finished sessions, newest first">
       {newestFirst.length === 0 ? (
         <p>Nobody has finished yet. Each person is listed here as they finish.</p>
       ) : (
