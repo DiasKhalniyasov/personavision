@@ -6,6 +6,7 @@ import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
 import { SideColumn, SidePanel } from './SidePanel';
+import { StepFilmstrip } from './StepFilmstrip';
 import { ThisStepPanel } from './ThisStepPanel';
 import { AttentionStage, stageIsShown, useAttentionStage } from './stage/AttentionStage';
 import type { AttentionStageView } from './stage/AttentionStage';
@@ -104,7 +105,7 @@ export function AttentionScreen({ run }: { run: Run }) {
           <AggregateLine run={run} variant={selection.variant} />
         </div>
 
-        {/* #60 mounts the step filmstrip here. */}
+        <StepFilmstrip run={run} selection={selection} sessions={sessions} />
 
         <div className={styles.stage}>
           <div>
