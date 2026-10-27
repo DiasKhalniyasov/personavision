@@ -64,7 +64,13 @@ export { createFixtureSource } from './fixture-source.js';
 export type { CreateFixtureSource } from './fixture-source.js';
 
 export { createLiveSource, walkTask } from './live-source.js';
-export type { TaskWalk, WalkTask } from './live-source.js';
+export type {
+  DecideAction,
+  TaskWalk,
+  TaskWalkResult,
+  WalkScreen,
+  WalkTask,
+} from './live-source.js';
 
 export { AutomationFailure, NotImplementedError } from './errors.js';
 

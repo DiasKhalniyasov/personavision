@@ -28,6 +28,61 @@ on another package is not made to download 150 MB to run `pnpm test`. The ones t
 the cache key, the budget, the projections, the failure mapping, the stable ids — still run. In
 CI nothing skips: there a missing browser is a broken workflow and has to be loud.
 
+## Running one session
+
+`walkTask` over a live source is the whole module in one call: it opens the variant under the
+device, captures each screen of the task, and acts on each one until the task's last step is
+reached.
+
+```ts
+import {
+  createLiveSource,
+  toAoiEntries,
+  toScreenshotEntries,
+  walkTask,
+} from '@personavision/browser';
+
+const mobile = {
+  name: 'mobile',
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 3,
+  touch: true,
+};
+
+const walked = await walkTask(createLiveSource(), {
+  variant: { id: 'control', url: 'https://shop.example/cart.html' },
+  device: mobile,
+  // The task's steps, each with a URL pattern, a required element and a primary action.
+  task,
+  runDir: 'runs/2026-10-27-1012-shop',
+});
+
+walked.completed; // true when the walk reached the task's last step
+walked.step; // the last step it recognised
+walked.integrity; // { selectorFailures, retries }: the two counters a session records
+walked.outcome; // an automation-failure outcome, or null when nothing of ours broke
+
+const captures = walked.screens.map((screen) => screen.capture);
+const screenshots = toScreenshotEntries(captures); // run.json's `screenshots`
+const aois = toAoiEntries(captures); // run.json's `aois`
+```
+
+**The walk decides nothing.** `decide` — `(screen, step) => Action | null` — is where the
+swarm's decision loop goes: it is handed the capture and the step's declaration, and answers
+with the action to take or with `null` to stop the walk on that screen. Without one the walk
+advances on the control the step declares, which is what drives the task from end to end.
+
+**It reports no product outcome.** A failure of _ours_ ends the walk and comes back as
+`failure` with the one outcome it can produce — `attribution: "automation"`,
+`excludedFromScores: true`, naming the step it broke on — and the screens captured before it
+are kept, because the trace is built from them. Whether a session was a success, was abandoned
+or failed is `packages/swarm`'s `decideOutcome` to decide from that trace and the persona:
+`completed: true` says the walk reached the last step, not that the person did.
+
+**One budget runs the whole session.** Opening, every capture and every action go through a
+single `SessionBudget`, so the caps and the counters are the session's rather than one
+operation's. A caller that holds one — the swarm holds one per session — passes it as `budget`.
+
 ## The fold, and the space everything is in
 
 Every box this module produces is in **page space** and in CSS pixels: the origin is the
@@ -91,9 +146,9 @@ A seam that has not landed yet **exists, is exported and is typed**, and returns
 pass-through result instead of pretending to work — so a partly filled module still builds,
 tests and captures.
 
-| Seam                                     | Until its ticket lands |
-| ---------------------------------------- | ---------------------- |
-| `createFixtureSource` `createLiveSource` | throw                  |
+| Seam                  | Until its ticket lands |
+| --------------------- | ---------------------- |
+| `createFixtureSource` | throws                 |
 
 A capture with only these in place is real geometry, a real content hash, a real step label,
 a written screenshot and the page's elements, one of them marked as the step's primary
@@ -183,6 +238,11 @@ serves it from disk, with no dependency of its own):
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
   captured is one row. No browser.
+- `test/integration/live-source.test.ts` — one live walk of the four-step fixture task: four
+  screenshots on disk with the geometry of each, one primary action marked per step, the
+  control that is below the fold at the mobile device and not at the desktop one, the two
+  `run.json` arrays the walk's captures project into parsed by the contract, and the three
+  ways a walk ends as an automation failure rather than as a verdict on the product.
 
 No test asserts a Playwright _object_ or reaches past the entry point for a result.
 `test/fixture-site.test.ts` holds the fixture site to its own record and needs no browser.

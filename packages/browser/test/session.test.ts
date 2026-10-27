@@ -26,7 +26,6 @@ import {
   captureCacheKey,
   closeSession,
   createFixtureSource,
-  createLiveSource,
   extractElements,
   mapToAutomationFailure,
   openSession,
@@ -36,7 +35,6 @@ import {
   stableElementId,
   toAoiEntries,
   toScreenshotEntries,
-  walkTask,
   withCache,
   writeScreenshot,
 } from '../src/index.js';
@@ -322,20 +320,10 @@ describe('the seams that need no browser', () => {
     expect(budget.sessionIntegrity()).toEqual({ selectorFailures: 0, retries: 0 });
   });
 
-  it('has no fixture source and no live source yet', () => {
+  // The live source and the walk above it are filled and driven in
+  // `test/integration/live-source.test.ts`; the fixture source is still a neutral seam.
+  it('has no fixture source yet', () => {
     expect(() => createFixtureSource('runs/x')).toThrow('fixture source: not implemented');
-    expect(() => createLiveSource()).toThrow('live source: not implemented');
-  });
-
-  it('cannot walk a task yet', async () => {
-    await expect(
-      walkTask({} as never, {
-        variant: { id: 'v', url: 'http://127.0.0.1:1/cart.html' },
-        device: DESKTOP,
-        task: TASK,
-        runDir: 'runs/x',
-      }),
-    ).rejects.toThrow('live source: not implemented');
   });
 });
 
