@@ -1,0 +1,224 @@
+/* =============================================================================
+   The two score cards of `#screen-breakdown`: the friction score, its spread
+   drawn on the 0-100 scale, and the four weighted components.
+
+   The prototype is the acceptance and every value here is a custom property
+   from `docs/design/tokens.css`. The band colours are the `--score-*` ramp —
+   the same tokens whose `--score-threshold-*` properties the screen reads to
+   decide which band a score is in, so a colour and a threshold cannot drift
+   apart. The variant identity stripe is the `--variant-*` pair.
+   ========================================================================== */
+
+.score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.score-card {
+  position: relative;
+  margin: 0;
+}
+
+.score-card[data-variant='a'] {
+  border-top: calc(var(--border-width) * 3) solid var(--variant-a);
+}
+
+.score-card[data-variant='b'] {
+  border-top: calc(var(--border-width) * 3) solid var(--variant-b);
+}
+
+/* The version's name is a heading of the page's second rank: the cards are sections of
+   the screen, and a jump from the title to a third-rank heading is a heading-order
+   violation whatever it is sized at. */
+.score-card h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.score-card .url {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.score-card .footnote {
+  margin-top: var(--space-5);
+}
+
+/* A card whose height is held while the run is read, so the verdict line under
+   the two of them does not jump into place. */
+.score-card-reserve {
+  min-block-size: calc(var(--space-24) * 4);
+}
+
+/* ---- The number, its spread and its band -------------------------------- */
+
+.score-row {
+  display: flex;
+  align-items: flex-end;
+  margin: var(--space-5) 0 var(--space-2);
+  gap: var(--space-4);
+}
+
+.score-value {
+  font-size: var(--text-score);
+  font-weight: var(--weight-extrabold);
+  letter-spacing: var(--tracking-tighter);
+  line-height: var(--leading-tight);
+}
+
+.score-spread {
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+.score-band {
+  padding-bottom: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.band-good {
+  color: var(--score-good);
+}
+
+.band-warn {
+  color: var(--score-warn);
+}
+
+.band-bad {
+  color: var(--score-bad);
+}
+
+/* A score the run recorded no spread for: the number is withheld, and the card
+   says why in the space the number would have taken. */
+.score-missing {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ---- The 0-100 scale, with the spread band drawn on it ------------------- */
+
+.scale {
+  position: relative;
+  height: var(--space-2);
+  margin: var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    to right,
+    var(--score-good-bg),
+    var(--score-warn-bg),
+    var(--score-bad-bg)
+  );
+}
+
+/* Both are drawn in the band's colour, which the element above carries. */
+.scale .spreadband {
+  position: absolute;
+  top: 0;
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: currentcolor;
+  opacity: 0.25;
+}
+
+.scale .marker {
+  position: absolute;
+  top: calc(var(--space-1) * -1);
+  width: calc(var(--border-width) * 3);
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: currentcolor;
+}
+
+.scale-legend {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* ---- The four weighted components --------------------------------------- */
+
+.components {
+  display: grid;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  gap: var(--space-4);
+}
+
+.components li {
+  display: grid;
+  grid-template-columns: 1fr var(--space-20) auto;
+  align-items: center;
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+}
+
+.components .what {
+  color: var(--color-text-muted);
+}
+
+.components .what i {
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  font-style: normal;
+}
+
+.bar {
+  overflow: hidden;
+  height: calc(var(--space-1) * 1.5);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: currentcolor;
+}
+
+.components .val {
+  min-width: var(--space-16);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+/* A control nobody ever looked at is the worst reading there is, not a missing
+   one, so it is marked as the critical severity rather than left to read as a
+   number somebody measured. */
+.components .val[data-never='true'] {
+  color: var(--sev-critical);
+}
+
+/* ---- A narrow window ---------------------------------------------------- */
+
+@media (max-width: 1000px) {
+  /* The two cards stack rather than squash, as the prototype stacks them. */
+  .score-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .score-value {
+    font-size: var(--text-2xl);
+  }
+
+  /* The label above its own bar and reading, so neither is squeezed to nothing. */
+  .components li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .components .what {
+    grid-column: 1 / -1;
+  }
+}

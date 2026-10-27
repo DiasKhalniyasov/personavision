@@ -136,7 +136,7 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
       [paths.newAudience, 'Audience'],
       [paths.audience('outdoor-gear-shoppers'), 'Audience'],
       [paths.newTest, 'New test'],
-      [paths.breakdown(runId), 'Score breakdown'],
+      [paths.breakdown(runId), 'How sure is this, and what drove it'],
       [paths.attention(runId, 'B', 'review'), 'Attention'],
       [paths.sessions(runId), 'Sessions'],
       // The replay's heading names the person, not the screen: `S-01 · Rushed buyer · …`.
