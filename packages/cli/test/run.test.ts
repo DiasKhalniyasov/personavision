@@ -146,6 +146,26 @@ describe('a run that goes through', () => {
     }
   });
 
+  it('never writes over a run of the same minute, which is a finished test', async () => {
+    fixture = await runFixture({ size: 2 });
+    // One fixed clock, so both runs want the same name: the minute and the task are all a
+    // run directory is named for.
+    const sameMinute = (): Date => new Date('2026-10-27T14:02:30.000Z');
+
+    await runCommand(fixture.options({ now: sameMinute }));
+    await runCommand(fixture.options({ now: sameMinute }));
+
+    const runs = (await readdir(fixture.runsRoot)).sort();
+    expect(runs).toEqual([
+      '2026-10-27-1402-buy-the-canvas-tote-bag-and',
+      '2026-10-27-1402-buy-the-canvas-tote-bag-and-2',
+    ]);
+    // Both are whole runs, and the first still holds its own sessions.
+    for (const runId of runs) {
+      expect(await validate(join(fixture.runsRoot, runId))).toEqual([]);
+    }
+  });
+
   it('ends on the counts, the split per version and the run directory', async () => {
     fixture = await runFixture({ size: 2 });
 

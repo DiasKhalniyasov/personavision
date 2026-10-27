@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createLiveSource } from '@personavision/browser';
 import { runDirName } from '@personavision/contract';
@@ -136,6 +137,40 @@ const walkable = (variants: RunRequest['variants']): Variant[] =>
   variants.map((variant) => ({ id: variant.id, url: variant.url }));
 
 /**
+ * How many runs of one task may start in one minute before this gives up naming them.
+ *
+ * A run directory is named for the minute it was created in and the task it ran, so two
+ * runs of one task in one minute want one name. Enough to cover a developer re-running a
+ * command, and few enough that a loop writing runs for ever stops rather than searching.
+ */
+const RUNS_PER_MINUTE = 50;
+
+/**
+ * The run's own directory, created before anything is written to it.
+ *
+ * It is **created rather than checked**, because a check and a write are two steps and a
+ * second run of the same task in the same minute would slip between them: the directory a
+ * run is about to write is the one thing it must not find somebody else in. A name already
+ * taken is numbered rather than overwritten — the artifact under it is a finished test, and
+ * `writeRun` sweeps the sessions of whatever it writes over.
+ */
+const takeRunDir = async (runsRoot: string, wanted: string): Promise<string> => {
+  await mkdir(runsRoot, { recursive: true });
+  for (let attempt = 1; attempt <= RUNS_PER_MINUTE; attempt += 1) {
+    const runId = attempt === 1 ? wanted : `${wanted}-${String(attempt)}`;
+    try {
+      await mkdir(join(runsRoot, runId));
+      return runId;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
+  throw new Error(
+    `${runsRoot} already holds ${String(RUNS_PER_MINUTE)} runs named "${wanted}": this one is left unnamed rather than written over one of them`,
+  );
+};
+
+/**
  * The seeds a run compares: the base seed, and one more per repeat.
  *
  * `repeats` is how many times each person walks each version, and a repeat is a *seed
@@ -167,7 +202,7 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
   }
 
   const createdAt = clock();
-  const runId = runDirName(createdAt, task.id);
+  const runId = await takeRunDir(options.runsRoot, runDirName(createdAt, task.id));
   const runDir = join(options.runsRoot, runId);
   const record = {
     runId,
