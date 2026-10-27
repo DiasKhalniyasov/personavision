@@ -252,7 +252,6 @@ describeWithChromium('a browser session', () => {
         writeScreenshot(handle, { runDir: 'runs/x', variant: 'v', step: null }),
       ).resolves.toBeNull();
     });
-
   });
 });
 
