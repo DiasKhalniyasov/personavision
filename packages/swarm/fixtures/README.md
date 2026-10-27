@@ -60,8 +60,8 @@ layout, and it is the same box at every viewport.
 reading _"Order"_ with an accessible name of _"Continue"_. The engine reads an area's
 accessible name, so the eye has little reason to go there; the policy reads the visible words
 too, so once the agent has looked at it, it is the thing to click. Nothing else on the page
-answers the task in words, and four painted cards, five goal-free links and six paragraphs
-are in the way.
+answers the task in words, and four painted cards, six goal-free links and eight
+paragraphs are in the way.
 
 So a person with no patience spends it on the scenery and leaves, and a person with all of it
 keeps looking and finishes — not on every seed, which is why the suite's claim is a count over
@@ -106,7 +106,7 @@ string or reaches into a provider.
 | the same defect read by somebody with no patience is still the product's         | `mislabelled`, the rushed person                |
 | our own breakage is ours: `automation_failure`, excluded from every score        | `vanishing`, both people                        |
 | the run holding a broken session finishes, and writes the rest                   | a whole `runSwarm` over `vanishing` + `tedious` |
-| every session re-runs identical from its persona, seed and page                  | one per scenario, on two seeds                  |
+| every session re-runs identical from its persona, seed and page                  | all forty-eight of them                         |
 
 ## Changing a page
 

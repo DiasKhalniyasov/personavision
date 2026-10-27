@@ -54,6 +54,27 @@ let walked = 0;
 const key = (variant: string, persona: Persona, seed: number): string =>
   `${variant}/${persona.id}/${seed}`;
 
+/** One session the suite walks: who, on which page, from which seed, under which cap. */
+interface Planned {
+  readonly variant: string;
+  readonly persona: Persona;
+  readonly seed: number;
+  readonly maxScreens?: number;
+}
+
+/**
+ * Every session of the suite, planned before any of them runs — each person on each page on
+ * each seed of the band. The plan is what the reproducibility claim re-walks, so "every
+ * session in the suite" is a list and not a description of one.
+ */
+const PLAN: readonly Planned[] = SEED_BAND.flatMap((seed) =>
+  [RUSHED, DOGGED].flatMap((persona) => [
+    { variant: 'tedious', persona, seed },
+    { variant: 'mislabelled', persona, seed, maxScreens: MISLABELLED_SCREEN_CAP },
+    { variant: 'vanishing', persona, seed },
+  ]),
+);
+
 /** One session: one person, one seed, one scenario page, written into the run directory. */
 const walk = (
   variant: string,
@@ -98,15 +119,9 @@ beforeAll(async () => {
   // The whole suite, with nothing running: a session that reached for Chromium or for a
   // model fails inside this call rather than quietly succeeding on a machine with both.
   await withNothingRunning(async () => {
-    for (const seed of SEED_BAND) {
-      for (const persona of [RUSHED, DOGGED]) {
-        suite.set(key('tedious', persona, seed), await walk('tedious', persona, seed));
-        suite.set(
-          key('mislabelled', persona, seed),
-          await walk('mislabelled', persona, seed, { maxScreens: MISLABELLED_SCREEN_CAP }),
-        );
-        suite.set(key('vanishing', persona, seed), await walk('vanishing', persona, seed));
-      }
+    for (const planned of PLAN) {
+      const { variant, persona, seed, maxScreens } = planned;
+      suite.set(key(variant, persona, seed), await walk(variant, persona, seed, { maxScreens }));
     }
   });
 }, 120_000);
@@ -308,27 +323,21 @@ describe('a surprising session can be re-run', () => {
     const again = await temporaryRunDir();
 
     try {
-      for (const [variant, persona, cap] of [
-        ['tedious', RUSHED, undefined],
-        ['tedious', DOGGED, undefined],
-        ['mislabelled', DOGGED, MISLABELLED_SCREEN_CAP],
-        ['vanishing', DOGGED, undefined],
-      ] as const) {
-        for (const seed of [PAIRED_SEED, SEED_BAND[0] as number]) {
-          const already = session(variant, persona, seed);
-          // The same session id, into a directory of its own: a re-run is the same session
-          // again, not a second one, so every field of it is comparable — the trace, the
-          // outcome, its reason, and the clock the session kept.
-          const rerun = await withNothingRunning(() =>
-            walk(variant, persona, seed, {
-              maxScreens: cap,
-              into: again,
-              sessionId: already.sessionId,
-            }),
-          );
+      // Every session the suite walked, not a sample of them.
+      for (const { variant, persona, seed, maxScreens } of PLAN) {
+        const already = session(variant, persona, seed);
+        // The same session id, into a directory of its own: a re-run is the same session
+        // again, not a second one, so every field of it is comparable — the trace, the
+        // outcome, its reason, and the clock the session kept.
+        const rerun = await withNothingRunning(() =>
+          walk(variant, persona, seed, {
+            maxScreens,
+            into: again,
+            sessionId: already.sessionId,
+          }),
+        );
 
-          expect(rerun, `${variant}/${persona.id}/${seed}`).toEqual(already);
-        }
+        expect(rerun, `${variant}/${persona.id}/${seed}`).toEqual(already);
       }
     } finally {
       await sweep(again);

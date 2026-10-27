@@ -190,7 +190,7 @@ export const MISLABELLED_SCREEN_CAP = 10;
  * its selector, and either of them is the control the agent chose.
  */
 const vanishingControlIds = async (): Promise<ReadonlySet<string>> => {
-  const file = `${BEHAVIOUR_CAPTURES}/captures/vanishing/list.json`;
+  const file = join(BEHAVIOUR_CAPTURES, 'captures', 'vanishing', 'list.json');
   const capture = JSON.parse(await readFile(file, 'utf8')) as {
     elements: { id: string; selector: string }[];
   };
