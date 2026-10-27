@@ -1,0 +1,111 @@
+/* =============================================================================
+   `#screen-newrun` and `#screen-newrun-invalid` of `docs/design/prototype.html`:
+   the form a test is started from, and the same form with its fields refused.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. No colour, size, spacing step, radius or duration is
+   restated, and nothing here animates: the direction gives the three animated
+   moments to #125, #123 and #124.
+
+   The prototype's `Forms` block is global — `.form`, `.field-group`, `.inline2`,
+   `.personagrid` — and shared with screens other tickets own, so what is
+   reproduced here is the layout it draws rather than the selector it draws it
+   with. The primitives this screen sits inside (`.strip`, `.wrap`, `.card`,
+   `.pagehead`, `.lede`, `.notice`, `.faint`) are the app's own, in
+   `src/styles/base.css`.
+   ========================================================================== */
+
+/* One column, and `minmax(0, …)` on every track: an `auto` track grows to its widest
+   item, so a long hint would push the form past the card it sits in. */
+.form {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* `min-width: 0`: a grid item's own minimum is its content, so a long hint or a wide
+   select would stretch the column it sits in rather than wrapping inside it. */
+.fieldGroup {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.fieldGroup > label,
+.groupLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.err {
+  color: var(--sev-critical);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* The two URL fields, and the repeats-and-seed row. */
+.inline2 {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---- The people the audience generates ---------------------------------- */
+
+/* Three to a row inside the form's own width, as the prototype's 210px minimum comes
+   to there; narrower windows take it down with the rows below. */
+.personagrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.personachip {
+  display: grid;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+}
+
+.personachip b {
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- Starting ------------------------------------------------------------ */
+
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  gap: var(--space-4);
+}
+
+/* ---- Narrow windows -----------------------------------------------------
+   The prototype's own breakpoints: the paired rows stack rather than squashing. */
+
+@media (max-width: 1000px) {
+  .inline2 {
+    grid-template-columns: 1fr;
+  }
+
+  .personagrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .personagrid {
+    grid-template-columns: 1fr;
+  }
+}

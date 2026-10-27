@@ -58,7 +58,10 @@ export function AppLayout() {
 export function RequireAudience() {
   const audiences = useAudiences();
 
-  if (audiences.status === 'loading') return null;
+  // The form renders while the list is being read — its picker waits with a placeholder and
+  // the rest of it is usable (#110's loading state) — and a workspace that turns out to
+  // have no audience is sent on the moment the answer arrives.
+  if (audiences.status === 'loading') return <Outlet />;
   if (audiences.audiences.length === 0) return <Navigate to={paths.audiences} replace />;
   return <Outlet />;
 }

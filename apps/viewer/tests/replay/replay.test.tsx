@@ -518,9 +518,14 @@ describe('the screen as a whole', () => {
     const { container } = mountApp(replay('S-15'));
     await ready();
 
-    // The sentence itself is the shell's, written once for every results screen (#14).
-    const disclaimer = container.querySelector('[data-shell="simulated-disclaimer"]');
-    expect(disclaimer?.textContent).toContain('simulated');
-    expect(disclaimer?.textContent).toContain('Outdoor-gear shoppers');
+    // The sentence itself is the shell's, written once for every results screen (#14). The
+    // audience in it is the run's, which the shell reads separately from the session this
+    // screen waited for, so the line is awaited rather than read the moment the screen is up.
+    const disclaimer = (): string =>
+      container.querySelector('[data-shell="simulated-disclaimer"]')?.textContent ?? '';
+    await waitFor(() => {
+      expect(disclaimer()).toContain('Outdoor-gear shoppers');
+    });
+    expect(disclaimer()).toContain('simulated');
   });
 });
