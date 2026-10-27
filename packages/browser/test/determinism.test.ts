@@ -62,6 +62,36 @@ const filesUnder = async (dir: string): Promise<string[]> => {
 };
 
 /**
+ * A recorded file, with the two numbers a font measures taken out of it.
+ *
+ * Where a landmark of the fixture site *is* is the site's own decision — every one of them
+ * is absolutely positioned from the document origin, with its `left` and `top` written on
+ * the element — so a box's origin, the fold, the page height, and every id, role, name and
+ * selector are properties of those pages and hold wherever they are read. How wide a box
+ * **is** need not be: a `<label>` is as wide as its text, and glyph advances differ between
+ * platforms — `payment.html`'s two labels are 73.59 CSS pixels wide where this set was
+ * recorded and 78.73 on the Linux runner that checks it.
+ *
+ * So a fresh recording is held to the committed one over everything a metric is keyed on
+ * and everything an edit to a page would move, and the widths are held where they can be:
+ * between two recordings on one machine, byte for byte, in the test above. The index
+ * compares whole — nothing in it is measured.
+ */
+const comparable = (file: string, text: string): unknown => {
+  const parsed = JSON.parse(text) as unknown;
+  if (!file.endsWith('.json') || !file.includes('captures')) return parsed;
+
+  const capture = parseCapture(parsed, file);
+  return {
+    ...capture,
+    elements: capture.elements.map((element) => ({
+      ...element,
+      bbox: { x: element.bbox.x, y: element.bbox.y },
+    })),
+  };
+};
+
+/**
  * Replays a whole recorded walk through the public interface, into a run directory.
  *
  * This is the call a consumer makes: open the variant under the device it was recorded at,
@@ -270,7 +300,7 @@ describeWithChromium('recording the capture set', () => {
     }
   });
 
-  it('is what the committed set was recorded by, over the site as it stands', async () => {
+  it('is what the recorder writes from the site now, but for the width of a line of text', async () => {
     const recorded = (await filesUnder(once)).filter((file) => file.endsWith('.json'));
 
     expect(recorded).toEqual(
@@ -282,9 +312,9 @@ describeWithChromium('recording the capture set', () => {
       const committed = await readFile(join(COMMITTED_CAPTURES_DIR, file), 'utf8');
 
       expect(
-        JSON.parse(fresh),
+        comparable(file, fresh),
         `${file} is not what the recorder writes from the fixture site now: re-run pnpm -F @personavision/browser record:captures`,
-      ).toEqual(JSON.parse(committed));
+      ).toEqual(comparable(file, committed));
     }
   });
 });
