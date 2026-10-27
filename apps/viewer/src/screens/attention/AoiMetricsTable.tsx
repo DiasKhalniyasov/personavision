@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import {
   Table,
   TableBody,
@@ -23,7 +23,9 @@ import {
   unknownAreaProblem,
 } from './attentionWording';
 import type { Aoi, AttentionArea, AttentionAreas } from './useAttentionAreas';
+import { useAttentionSelection } from './useAttentionSelection';
 import styles from './aoiMetricsTable.module.css';
+import isolate from './isolatedArea.module.css';
 
 /**
  * The "Areas of interest" section of `#screen-attention`: the numbers behind the heatmap,
@@ -48,9 +50,12 @@ import styles from './aoiMetricsTable.module.css';
  * - An area this version does not have keeps its row and says so, and figures naming no
  *   area keep theirs. A row quietly missing reads as a zero nobody wrote down.
  *
- * The row click and the `aria-selected` row belong to the isolate ticket; what is here is
- * the rows and the link out of each of them. A reader with a keyboard reaches a row through
- * that link, which is a real anchor rather than a cell with a handler on it.
+ * Clicking a row isolates that area, and clicking the isolated row again shows every area
+ * once more. The state of it is not held here: it is `?aoi=` in the URL, read and written
+ * through `useAttentionSelection`, so the stage, this table's selected row and the caption
+ * under the stage are three readings of one fact and a reload keeps all three. A reader
+ * with a keyboard isolates through the area's own name, which is a real button rather than
+ * a handler on a cell, and leaves the row through the link, which is a real anchor.
  *
  * There is no loading state here, and none to invent: every figure the table draws is the
  * run's own, and `AttentionPage` renders nothing at all until the run has been read. So the
@@ -88,6 +93,12 @@ export interface AoiMetricsTableProps {
 }
 
 export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps) {
+  const { aoi: isolatedAoiId, setAoi } = useAttentionSelection();
+  // Clicking the area already isolated clears the isolation: the row is a switch, and the
+  // way back to every area is the row the reader has their pointer on.
+  const toggle = (aoiId: string) => {
+    setAoi(isolatedAoiId === aoiId ? null : aoiId);
+  };
   // What this step holds, and what the artifact is wrong about, are counted apart.
   //
   // Figures naming no area have no step to belong to, so they are stated wherever the
@@ -150,7 +161,13 @@ export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps)
             </TableHeader>
             <TableBody>
               {areas.areas.map((area) => (
-                <AreaRow key={area.aoi.id} runId={runId} area={area} />
+                <AreaRow
+                  key={area.aoi.id}
+                  runId={runId}
+                  area={area}
+                  selected={area.aoi.id === isolatedAoiId}
+                  onIsolate={toggle}
+                />
               ))}
               {areas.presentOnOtherVariantOnly.map((aoi) => (
                 <NotHereRow key={`elsewhere-${aoi.id}`} aoi={aoi} variant={variant} />
@@ -168,17 +185,33 @@ export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps)
   );
 }
 
+/** What every row of a real area of this step is given, so that each of them isolates. */
+interface Isolating {
+  /** Whether this is the area the screen is isolated to. */
+  readonly selected: boolean;
+  /** Isolate this area, or clear the isolation when it is the one already isolated. */
+  onIsolate(aoiId: string): void;
+}
+
 /** One area of this version's step: its boundary, its six figures, and its people. */
-function AreaRow({ runId, area }: { runId: string; area: AttentionArea }) {
+function AreaRow({
+  runId,
+  area,
+  selected,
+  onIsolate,
+}: { runId: string; area: AttentionArea } & Isolating) {
   const { aoi, metric } = area;
+  const isolating = { selected, onIsolate };
 
   if (metric === null) {
-    return <AreaFault aoi={aoi} problem={noFiguresRecorded(aoi.id)} kind="no-figures" />;
+    return (
+      <AreaFault aoi={aoi} problem={noFiguresRecorded(aoi.id)} kind="no-figures" {...isolating} />
+    );
   }
 
   const problem = neverFixatedProblem(metric);
   if (problem !== null) {
-    return <AreaFault aoi={aoi} problem={problem} kind="inconsistent" />;
+    return <AreaFault aoi={aoi} problem={problem} kind="inconsistent" {...isolating} />;
   }
 
   // Narrowed here rather than through `isNeverFixated`, which a type cannot see through:
@@ -188,8 +221,7 @@ function AreaRow({ runId, area }: { runId: string; area: AttentionArea }) {
   const firstFixationFor = firstFixationDuration(metric.firstFixationDurationMs);
 
   return (
-    <TableRow data-aoi-row={aoi.id}>
-      <TableCell>{aoi.label}</TableCell>
+    <IsolatingRow aoi={aoi} selected={selected} onIsolate={onIsolate}>
       <TableCell className="faint">{areaSource(aoi)}</TableCell>
       <TableCell className={styles.figure}>
         {firstFixationAt === null ? (
@@ -221,6 +253,43 @@ function AreaRow({ runId, area }: { runId: string; area: AttentionArea }) {
           <span className="sr-only"> who looked at {aoi.label}</span>
         </Link>
       </TableCell>
+    </IsolatingRow>
+  );
+}
+
+/**
+ * A row that isolates its own area: the switch, and what the switch is saying.
+ *
+ * The whole row is the pointer target the prototype draws, and the area's name inside it is
+ * the same switch for a keyboard — a real button, whose activation reaches the row as the
+ * click it already handles. Only the row carries the state a reader is told about twice:
+ * `aria-selected` for the row they are on, `aria-pressed` for the control they just
+ * operated. A click on the link out of the row is the link's, not the row's.
+ */
+function IsolatingRow({
+  aoi,
+  selected,
+  onIsolate,
+  children,
+  fault,
+}: { aoi: Aoi; children: ReactNode; fault?: string } & Isolating) {
+  return (
+    <TableRow
+      data-aoi-row={aoi.id}
+      data-area-fault={fault}
+      className={isolate.row}
+      aria-selected={selected}
+      onClick={(event: MouseEvent<HTMLTableRowElement>) => {
+        if ((event.target as HTMLElement).closest('a') !== null) return;
+        onIsolate(aoi.id);
+      }}
+    >
+      <TableCell>
+        <button type="button" className={isolate.isolate} aria-pressed={selected}>
+          {aoi.label}
+        </button>
+      </TableCell>
+      {children}
     </TableRow>
   );
 }
@@ -231,13 +300,18 @@ function AreaRow({ runId, area }: { runId: string; area: AttentionArea }) {
  * The area and its source still stand, because neither of them is in doubt: what the run is
  * wrong about is the numbers, and naming the area is how a reader finds the row again.
  */
-function AreaFault({ aoi, problem, kind }: { aoi: Aoi; problem: string; kind: string }) {
+function AreaFault({
+  aoi,
+  problem,
+  kind,
+  selected,
+  onIsolate,
+}: { aoi: Aoi; problem: string; kind: string } & Isolating) {
   return (
-    <TableRow data-aoi-row={aoi.id} data-area-fault={kind}>
-      <TableCell>{aoi.label}</TableCell>
+    <IsolatingRow aoi={aoi} selected={selected} onIsolate={onIsolate} fault={kind}>
       <TableCell className="faint">{areaSource(aoi)}</TableCell>
       <Stated span={AFTER_THE_AREA}>{problem}</Stated>
-    </TableRow>
+    </IsolatingRow>
   );
 }
 

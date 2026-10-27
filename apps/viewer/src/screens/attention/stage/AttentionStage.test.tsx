@@ -438,7 +438,9 @@ describe('the area-of-interest outlines', () => {
     expect(rule('.aoibox')['stroke-dasharray']).toBe('var(--gaze-aoi-dash)');
     expect(rule('.aoibox')['stroke-width']).toBe('var(--border-width)');
     // The isolated area is teal, which is this screen's word for data rather than action.
-    expect(rule('.aoibox.isolated')['stroke']).toBe('var(--gaze-aoi-active)');
+    expect(rule('.aoibox.active')['stroke']).toBe('var(--gaze-aoi-active)');
+    // Unless nobody ever looked inside it, which is the finding and so is critical (#73).
+    expect(rule('.aoibox.empty')['stroke']).toBe('var(--sev-critical)');
     expect(rule('.aoilabel')['fill']).toBe('var(--color-text-muted)');
   });
 });
