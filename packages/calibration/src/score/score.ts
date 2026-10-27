@@ -669,37 +669,33 @@ const kernelDivergences = (
       : [{ predictorId: predictor.id, otherId: baseline.id, fields: [...fields] }];
   });
 
-/** The record's image, read once and handed to every predictor, so all three see the same bytes. */
-interface LoadedRecord {
-  readonly record: GroundTruthRecord;
-  readonly image: {
-    readonly bytes: Uint8Array;
-    readonly size: GroundTruthRecord['imageSize'];
-    readonly display: Display;
-  };
+/** What a predictor is handed for one record: the pixels, the size and the display. */
+interface PredictorImageOf {
+  readonly bytes: Uint8Array;
+  readonly size: GroundTruthRecord['imageSize'];
+  readonly display: Display;
 }
 
-const loadImages = (records: readonly GroundTruthRecord[]): readonly LoadedRecord[] =>
-  records.map((record) => {
-    let bytes: Uint8Array;
-    try {
-      bytes = readFileSync(record.imagePath);
-    } catch (cause) {
-      throw new ScoreError(
-        `record ${record.id} has no readable image at ${record.imagePath}: ${String(cause)}`,
-      );
-    }
-    return {
-      record,
-      // The display the humans saw, never a default: a prediction is made at their resolution
-      // (#11, user story 4).
-      image: { bytes, size: record.imageSize, display: record.display },
-    };
-  });
+/**
+ * One record's image, read at the moment it is scored and let go of afterwards.
+ *
+ * Deliberately **not** read once for the whole corpus up front: the committed corpus is four
+ * small pictures, but the real dataset is 1,980 screenshots (#85), and holding all of their
+ * bytes to save a few file reads would trade a gigabyte of memory for nothing measurable.
+ * The bytes are the same on every read, so each predictor still sees the same image.
+ *
+ * `display` is the display the humans saw, never a default: a prediction is made at their
+ * resolution (#11, user story 4).
+ */
+const imageOf = (record: GroundTruthRecord): PredictorImageOf => ({
+  bytes: readFileSync(record.imagePath),
+  size: record.imageSize,
+  display: record.display,
+});
 
 const scoreOnePredictor = async (
   scored: ScoredPredictor,
-  loaded: readonly LoadedRecord[],
+  records: readonly GroundTruthRecord[],
   seed: number,
   report: (progress: Omit<ScoreProgress, 'message' | 'predictorId'>) => void,
 ): Promise<PredictorFigures> => {
@@ -707,10 +703,10 @@ const scoreOnePredictor = async (
   const failures: RecordFailure[] = [];
   const startedAt = performance.now();
 
-  for (const [position, { record, image }] of loaded.entries()) {
+  for (const [position, record] of records.entries()) {
     const predictionStartedAt = performance.now();
     try {
-      const prediction = await scored.predictor(image, seed);
+      const prediction = await scored.predictor(imageOf(record), seed);
       const saliency = scoreSaliency(prediction.saliencyMap, record);
       const agreement = scoreScanpathAgainstHumans(prediction.scanpath, record);
       figures.push({
@@ -726,16 +722,20 @@ const scoreOnePredictor = async (
         elapsedMs: performance.now() - predictionStartedAt,
       });
     } catch (cause) {
-      // One record that cannot be predicted or scored is a record with no figure, not a
-      // sweep that stops: `predict` raises rather than degrading (#68), and a category total
-      // that silently lost a record would be worse than one that says it did.
+      // One record that cannot be read, predicted or scored is a record with no figure,
+      // not a sweep that stops: `predict` raises rather than degrading (#68), and a category
+      // total that silently lost a record would be worse than one that says it did.
       failures.push({
         recordId: record.id,
         category: record.category,
         reason: cause instanceof Error ? cause.message : String(cause),
       });
     }
-    report({ recordId: record.id, predictionsDone: position + 1, predictionsTotal: loaded.length });
+    report({
+      recordId: record.id,
+      predictionsDone: position + 1,
+      predictionsTotal: records.length,
+    });
   }
 
   return {
@@ -774,13 +774,13 @@ export const score = async (options: ScoreOptions): Promise<ScoreResult> => {
   const baselines = options.baselines ?? defaultBaselines();
   for (const baseline of baselines) assertScoredPredictor(baseline, `baseline ${baseline?.id}`);
 
-  const loaded = loadImages(options.corpus.records);
+  const records = options.corpus.records;
   const startedAt = performance.now();
   const onProgress = options.onProgress;
   const figuresFor = async (scored: ScoredPredictor): Promise<PredictorFigures> =>
     scoreOnePredictor(
       scored,
-      loaded,
+      records,
       options.seed,
       ({ recordId, predictionsDone, predictionsTotal }) => {
         onProgress?.({

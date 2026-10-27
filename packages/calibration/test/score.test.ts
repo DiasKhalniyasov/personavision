@@ -462,6 +462,35 @@ describe('a run a person can read, inside a budget', () => {
     expect(result.predictor.categories.mobile?.records).toBe(1);
     expect(result.predictor.categories.webpage).toBeNull();
   });
+
+  it('names a record whose image is not there, and scores the rest', async () => {
+    const corpus = committedCorpus();
+    const missing = {
+      ...corpus,
+      records: corpus.records.map((record, position) =>
+        position === 0 ? { ...record, imagePath: `${record.imagePath}.gone` } : record,
+      ),
+    };
+
+    const result = await score({
+      predictor: enginePredictor(),
+      corpus: missing,
+      seed: SEED,
+      baselines: [],
+    });
+
+    /**
+     * The image is read at the moment the record is scored, not for the whole corpus up
+     * front — the real dataset is 1,980 screenshots (#85) — so a record with no readable
+     * image is one named failure rather than a run that never starts.
+     */
+    expect(result.predictor.failures.map(({ recordId }) => recordId)).toEqual([
+      corpus.records[0]?.id,
+    ]);
+    expect(result.predictor.failures[0]?.reason).toContain('ENOENT');
+    expect(result.predictor.overall?.records).toBe(3);
+    expect(result.predictor.categories.webpage).toBeNull();
+  });
 });
 
 describe('with no network and no API key', () => {
