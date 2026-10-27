@@ -16,6 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
     "corpus": "tsx --conditions development scripts/make-corpus.ts",
     "fit": "tsx --conditions development scripts/fit.ts",
+    "report": "tsx --conditions development scripts/report.ts",
+    "gate": "vitest run test/regression.test.ts",
     "test": "vitest run"
   },
   "dependencies": {
