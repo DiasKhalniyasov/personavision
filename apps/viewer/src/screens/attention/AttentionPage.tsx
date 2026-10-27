@@ -185,9 +185,9 @@ function AggregateLine({ run, variant }: { run: Run; variant: string }) {
  * Where the page and its overlays go (#58).
  *
  * Until that ticket lands the slot is empty, and it is empty on purpose: this screen states
- * the three things that are true *instead of* a page — a session file that could not be
- * read, and a step nobody in the audience ever reached — because both are answers, and a
- * ticket that had not been built yet is not.
+ * the two things that are true *instead of* a page — a session file that could not be read,
+ * and a step nobody in the audience ever reached — because both are answers, and a ticket
+ * that has not been built yet is not.
  */
 function StagePlace({
   run,

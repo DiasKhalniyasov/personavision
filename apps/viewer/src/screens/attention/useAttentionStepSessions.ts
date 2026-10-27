@@ -85,6 +85,15 @@ type Read =
 const problemOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** What the state holds: the reads, and which run they are of. */
+interface ReadState {
+  readonly runId: string | null;
+  readonly reads: ReadonlyMap<string, Read>;
+}
+
+/** The reads of a run that has not been read yet, so one instance serves every render. */
+const EMPTY_READS: ReadonlyMap<string, Read> = new Map();
+
 const EMPTY: AttentionStepSessions = {
   status: 'loading',
   error: null,
@@ -106,16 +115,26 @@ export function useAttentionStepSessions(variant: string, step: string): Attenti
     [run],
   );
 
-  const [reads, setReads] = useState<ReadonlyMap<string, Read>>(() => new Map());
+  // The reads carry the run they are of. The effect that empties them runs *after* the
+  // render that first saw a new run, so without the id one render of the new test would
+  // project the previous one's people — and if the two have the same number of sessions it
+  // would read as settled rather than as still loading.
+  const [read, setRead] = useState<ReadState>(() => ({ runId: null, reads: new Map() }));
+  const reads = read.runId === run?.runId ? read.reads : EMPTY_READS;
 
   useEffect(() => {
     if (run === null || reader === null) return;
     let live = true;
-    setReads(new Map());
+    const { runId } = run;
+    setRead({ runId, reads: new Map() });
 
-    const settle = (sessionId: string, read: Read): void => {
+    const settle = (sessionId: string, one: Read): void => {
       if (!live) return;
-      setReads((current) => new Map(current).set(sessionId, read));
+      setRead((current) =>
+        current.runId === runId
+          ? { runId, reads: new Map(current.reads).set(sessionId, one) }
+          : current,
+      );
     };
 
     for (const sessionId of run.sessionIds) {
@@ -140,14 +159,14 @@ export function useAttentionStepSessions(variant: string, step: string): Attenti
     const scoredSessionCount = scoredSessionCountOf(run, variant);
     // A file that could not be read is the whole answer: an aggregate quietly missing one
     // person is a different claim about the audience from the one the screen is making.
-    const failed = [...reads.values()].find((read) => !read.ok);
+    const failed = [...reads.values()].find((one) => !one.ok);
     if (failed !== undefined && !failed.ok) {
       return { ...EMPTY, status: 'error', error: failed.problem, scoredSessionCount };
     }
 
-    const sessions = [...reads.values()].flatMap((read) =>
-      read.ok && read.session.variant === variant && !read.session.outcome.excludedFromScores
-        ? [read.session]
+    const sessions = [...reads.values()].flatMap((one) =>
+      one.ok && one.session.variant === variant && !one.session.outcome.excludedFromScores
+        ? [one.session]
         : [],
     );
 

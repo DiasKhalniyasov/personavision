@@ -114,6 +114,37 @@ describe('with one area isolated', () => {
   });
 });
 
+describe('with one area isolated', () => {
+  const area = (run: Run, aoiId: string): AttentionArea =>
+    attentionAreas(run, 'B', 'review').areas.find(
+      (candidate) => candidate.aoi.id === aoiId,
+    ) as AttentionArea;
+
+  it('reads none, never a zero, for the area nobody ever looked at', () => {
+    // Beat 5 of the demo: the completing action on the redesign, which no fixation ever
+    // landed in. `0 median per session` and `0.0 s` would read as a glance too brief to
+    // matter; the honest reading of an absence is that there is nothing to average.
+    const run = seedRun();
+
+    panel({ run, variant: 'B', step: 'review', isolated: area(run, 'B-review-complete') });
+
+    expect(reading('Fixations')).toBe('none');
+    expect(reading('Total dwell')).toBe('none');
+    expect(reading('Isolated')).toBe('Completing action — A: "Place order", B: "Confirm purchase"');
+  });
+
+  it('averages the people who looked inside the area, not everyone who reached the step', () => {
+    // Eight of the nine who reached this step looked at the payment method row. The ninth
+    // looked elsewhere on the step — not briefly at this area — so they are not a zero.
+    const run = seedRun();
+
+    panel({ run, variant: 'B', step: 'review', isolated: area(run, 'B-review-pay-with') });
+
+    expect(reading('Fixations')).toBe('2 median per session');
+    expect(reading('Total dwell')).toBe('0.5 s');
+  });
+});
+
 describe('before the sessions are there', () => {
   const nothing: AttentionStepSessions = {
     status: 'loading',

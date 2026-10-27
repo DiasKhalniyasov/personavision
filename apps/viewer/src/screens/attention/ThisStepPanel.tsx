@@ -15,8 +15,16 @@ import styles from './attentionPage.module.css';
  * zero, because they did not look at this step briefly, they did not look at it at all.
  *
  * With an area isolated the first two readings narrow to that area, as the prototype's do,
- * and the last names it. The earliest-fixated area is the artifact's own
- * `timeToFirstFixationMs`, not a time this screen works out from fixations.
+ * and the last names it. The same rule holds one level down: the median is then over the
+ * people who looked **inside that area**, because somebody who never looked there did not
+ * give it a brief glance either. Counting them as zeros would print `0 median per session`
+ * and `0.0 s` for an area four of nine people studied, and the same for one nobody ever saw
+ * — the mistakable zero `docs/FLOW.md` section 3 forbids, where the honest reading is
+ * `never` and `0%`. An area nobody looked at therefore reads *none* here, and the words for
+ * it belong to the isolate caption.
+ *
+ * The earliest-fixated area is the artifact's own `timeToFirstFixationMs`, not a time this
+ * screen works out from fixations.
  */
 
 const seconds = new Intl.NumberFormat('en-US', {
@@ -39,6 +47,22 @@ export function median(values: readonly number[]): number | null {
 const lookedAt = (session: Session, step: string, isolated: string | null): Fixation[] => {
   const here = fixationsOnStep(session, step);
   return isolated === null ? here : here.filter((fixation) => fixation.aoiId === isolated);
+};
+
+/**
+ * One list of looks per person the median is taken over: everybody who reached the step, or
+ * — with an area isolated — everybody who looked inside it. Somebody who looked nowhere near
+ * the isolated area is not a person who looked at it briefly.
+ */
+const perPerson = (
+  sessions: readonly Session[],
+  step: string,
+  isolated: string | null,
+): Fixation[][] => {
+  const looks = sessions
+    .filter((session) => reachedStep(session, step))
+    .map((session) => lookedAt(session, step, isolated));
+  return isolated === null ? looks : looks.filter((one) => one.length > 0);
 };
 
 /** The area of this step the audience fixated first, as the run's own metrics record it. */
@@ -65,8 +89,7 @@ export interface ThisStepPanelProps {
 
 export function ThisStepPanel({ step, sessions, areas, isolated }: ThisStepPanelProps) {
   const isolatedId = isolated?.aoi.id ?? null;
-  const reached = sessions.sessions.filter((session) => reachedStep(session, step.id));
-  const perSession = reached.map((session) => lookedAt(session, step.id, isolatedId));
+  const perSession = perPerson(sessions.sessions, step.id, isolatedId);
 
   const fixations = median(perSession.map((looks) => looks.length));
   const dwellMs = median(
