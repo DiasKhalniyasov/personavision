@@ -143,6 +143,8 @@ const fileWorkspaceStore = (collection: JsonCollection<WorkspaceRecord>): Worksp
       memberAccountIds: [...workspace.memberAccountIds],
       runIds: [...(workspace.runIds ?? [])],
       demoRunId: workspace.demoRunId ?? null,
+      // Standard unless this workspace says contributor: see `NewWorkspace.modelMode`.
+      modelMode: workspace.modelMode ?? 'standard',
       createdAt: now(),
     }),
   byId: (workspaceId) => collection.get(workspaceId),

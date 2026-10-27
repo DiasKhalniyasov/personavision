@@ -10,7 +10,11 @@
  * It depends on `@personavision/contract` for every stored shape, and on
  * `@personavision/personas` for the generator that turns a stored audience into the people
  * a test would run on — the Audience screens read them beside the audience itself, so the
- * generator is called here rather than in a browser (#102). Nothing else in the repository:
+ * generator is called here rather than in a browser (#102). It depends on
+ * `@personavision/provider` for two values and no behaviour: the model id each mode calls
+ * and the typed error selection throws when a mode cannot be served, so that a refused test
+ * names the model from the one place the model ids are written down (#144). Nothing else in
+ * the repository:
  * the run-data mount and the built viewer are passed to `startPlatformServer` by
  * `@personavision/cli`, which owns them.
  */
@@ -36,6 +40,9 @@ export { signIn } from './auth/signin.js';
 export type { Credentials, SignedIn, SignInOptions } from './auth/signin.js';
 
 export { workspaceForAccount } from './workspace/membership.js';
+
+export { NoSuchWorkspaceError, startTest, TestRefusedError } from './run/start.js';
+export type { StartedTest, StartTestOptions, TestDraft, TestPipeline } from './run/start.js';
 
 export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
 export { withPeople } from './audience/people.js';

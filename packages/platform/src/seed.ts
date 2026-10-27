@@ -82,6 +82,9 @@ export const seedDemoWorkspace = async ({
     memberAccountIds: [account.id],
     runIds,
     demoRunId,
+    // The demo, the example audiences and our own development run on the contributor
+    // model: twelve times cheaper, and nothing in here is a customer's content (#144).
+    modelMode: 'contributor',
   });
 
   const audience = newestRunId === null ? null : await audienceOfRun(runsRoot, newestRunId);
