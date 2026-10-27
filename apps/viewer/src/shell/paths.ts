@@ -78,6 +78,17 @@ export const sessionsWithOutcome = (runId: string, outcome: string): string =>
 export const sessionsWithVariant = (runId: string, variant: string): string =>
   `${paths.sessions(runId)}?${new URLSearchParams({ variant }).toString()}`;
 
+/**
+ * `/runs/<id>/sessions?variant=…&aoi=…`: the people who looked at one area of interest.
+ *
+ * Every row of the Attention screen's areas table offers it, and clicking an area anywhere
+ * in the product means this list (`docs/FLOW.md` section 4). The version travels with the
+ * area because an area belongs to exactly one of them, and a list filtered by an area of
+ * the other version is a pair no session can satisfy.
+ */
+export const sessionsWithArea = (runId: string, variant: string, aoi: string): string =>
+  `${paths.sessions(runId)}?${new URLSearchParams({ variant, aoi }).toString()}`;
+
 /** `/signin?next=…`: where sign-in sends a visitor back to once they are in. */
 export const signInWithNext = (intended: string): string =>
   `${paths.signIn}?${new URLSearchParams({ [NEXT_PARAM]: intended }).toString()}`;

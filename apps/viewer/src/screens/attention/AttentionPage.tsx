@@ -10,6 +10,7 @@ import { ThisStepPanel } from './ThisStepPanel';
 import { AttentionStage, stageIsShown, useAttentionStage } from './stage/AttentionStage';
 import type { AttentionStageView } from './stage/AttentionStage';
 import { OverlayTogglesPanel } from './stage/OverlayTogglesPanel';
+import { AoiMetricsTable } from './AoiMetricsTable';
 import { useAttentionAreas } from './useAttentionAreas';
 import { useAttentionSelection } from './useAttentionSelection';
 import type { AttentionSelection } from './useAttentionSelection';
@@ -32,7 +33,7 @@ import styles from './attentionPage.module.css';
  *
  * What is on this file is the screen's own frame — the heading and lede, the version
  * switch, the line stating what the aggregate covers, the side column, the "This step"
- * readings and the footnotes. The filmstrip (#60), the stage and its overlays (#58), the
+ * readings and the disclaimer. The filmstrip (#60), the stage and its overlays (#58), the
  * areas table (#59) and the isolate caption (#73) mount into it, each from its own file,
  * and read this screen's selection and its two data hooks rather than publishing their own.
  *
@@ -62,7 +63,8 @@ export function AttentionPage() {
 export function AttentionScreen({ run }: { run: Run }) {
   const selection = useAttentionSelection();
   const sessions = useAttentionStepSessions(selection.variant, selection.step);
-  const { areas } = useAttentionAreas(selection.variant, selection.step);
+  const areaRows = useAttentionAreas(selection.variant, selection.step);
+  const { areas } = areaRows;
 
   const step = run.steps.find((candidate) => candidate.id === selection.step);
   const isolated = areas.find((area) => area.aoi.id === selection.aoi) ?? null;
@@ -132,13 +134,8 @@ export function AttentionScreen({ run }: { run: Run }) {
           </SideColumn>
         </div>
 
-        {/* #59 mounts the areas-of-interest table here. */}
+        <AoiMetricsTable runId={run.runId} variant={selection.variant} areas={areaRows} />
 
-        <p className="footnote">
-          Medians across the people whose session was scored, never one person&rsquo;s own numbers.
-          &ldquo;Looked at it&rdquo; is the share of those people who looked inside the area at
-          least once.
-        </p>
         <SimulatedDisclaimer />
       </div>
     </div>
