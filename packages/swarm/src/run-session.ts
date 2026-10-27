@@ -84,7 +84,8 @@ export interface SessionScreen {
   readonly capture: Capture;
   /** The areas this screen's fixations were sampled over, as `run.json` records them. */
   readonly aois: readonly Aoi[];
-  readonly decision: Decision;
+  /** `null` when the decision layer answered with nothing this screen could act on. */
+  readonly decision: Decision | null;
   /** What the driver did with the decision, and `null` when it was not a page operation. */
   readonly executed: ActResult | null;
 }
@@ -144,6 +145,13 @@ const SCROLL_SHARE = 0.75;
 /** The step named when the session captured no screen at all: it never reached one. */
 const NO_SCREEN_STEP = 'start';
 
+/**
+ * What the screen card says when the decision layer gave the session nothing it could use —
+ * a reply that never arrived, or one the interface rejected. The screen is still recorded,
+ * because its fixations are, and a screen left out would leave them pointing past the end.
+ */
+const NO_USABLE_DECISION = 'no decision this screen could act on';
+
 /** The kinds the browser driver performs. The other three are the agent's, not the page's. */
 const PAGE_OPERATIONS = new Set<DecisionActionKind>(['click', 'scroll', 'backtrack']);
 
@@ -199,17 +207,32 @@ const boxKey = (box: { x: number; y: number; width: number; height: number }): s
   [box.x, box.y, box.width, box.height].map((value) => Math.round(value)).join(':');
 
 /**
+ * Source precedence, then the element id — the order `buildAois` merges a group in.
+ *
+ * It is spelt again here rather than imported because it is the other half of the same
+ * join: the builder picks which member speaks for an area, and this picks which member an
+ * action is aimed at, and the two have to agree. Without the ordering the answer would come
+ * from wherever the capture happened to list its elements, which the builder goes out of
+ * its way to keep out of its own output, and a session would stop being a fact about the
+ * page.
+ */
+const SOURCE_PRECEDENCE: readonly CaptureElement['source'][] = ['dom', 'a11y'];
+
+const bySourceThenId = (left: CaptureElement, right: CaptureElement): number =>
+  SOURCE_PRECEDENCE.indexOf(left.source) - SOURCE_PRECEDENCE.indexOf(right.source) ||
+  (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+
+/**
  * The element behind an area of interest, which is what an action is aimed at.
  *
  * An area carries the box of whichever element spoke for it, so the box is the join; the
- * DOM's entry is preferred over the accessibility tree's because it is the one that carries
- * a selector. A segmented region explains no element and has none, which is why the areas a
- * run segments cannot be clicked.
+ * DOM's entry wins because it is the one that carries a selector. A segmented region
+ * explains no element and has none — the agent can look at a card grid nobody could name,
+ * and there is nothing underneath it to operate.
  */
 const elementBehind = (aoi: Aoi, capture: Capture): CaptureElement | undefined => {
   const key = boxKey(aoi.bbox);
-  const members = capture.elements.filter((element) => boxKey(element.bbox) === key);
-  return members.find((element) => element.source === 'dom') ?? members[0];
+  return capture.elements.filter((element) => boxKey(element.bbox) === key).sort(bySourceThenId)[0];
 };
 
 /**
@@ -319,18 +342,22 @@ const gotSomewhere = (acted: ActResult, step: string, scrollY: number): boolean 
  * screen with nothing behind it.
  *
  * The driver is right to refuse it — `act` calls a back that leaves the page where it was or
- * off the product entirely a `navigation_error`, and on the session's first page that is
- * what going back does. But an agent choosing to leave the way it came is the agent walking
- * off the task, not our browsing breaking, and `docs/FLOW.md` section 8 keeps those apart:
- * an automation failure is excluded from every score, and excluding a session because the
+ * off the product entirely a `navigation_error`, and with nothing behind it that is what
+ * going back does. But an agent choosing to leave the way it came is the agent walking off
+ * the task, not our browsing breaking, and `docs/FLOW.md` section 8 keeps those apart: an
+ * automation failure is excluded from every score, and excluding a session because the
  * person in it pressed Back would be the simulation blaming itself for the person.
  *
- * So it is recorded as an action that got the agent nowhere and the session carries on from
- * the screen it is still on. Every other refusal, and a `navigation_error` on any other
- * kind, stays ours.
+ * `depth` is how far into the walk the session has got: one per step it advanced, less one
+ * per back that landed, so zero means there is nowhere behind it to go. A back refused at
+ * any other depth is a navigation that genuinely failed and stays ours — otherwise a reset
+ * connection would be written up as a product outcome and counted towards the scores.
+ *
+ * Refused at depth zero, it is recorded as an action that got the agent nowhere and the
+ * session carries on from the screen it is still on.
  */
-const wentBackFromTheStart = (kind: DecisionActionKind, acted: ActResult): boolean =>
-  kind === 'backtrack' && acted.failure === 'navigation_error';
+const wentBackFromTheStart = (kind: DecisionActionKind, acted: ActResult, depth: number): boolean =>
+  kind === 'backtrack' && acted.failure === 'navigation_error' && depth === 0;
 
 /** A failure of our own, in the shape `decideOutcome` reads it. */
 const ourBreakage = (error: unknown, attempting: string, step: string): AutomationFailure => {
@@ -365,6 +392,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   let completed = false;
   let primaryActionAoiId: string | null = null;
   let failure: AutomationFailure | null = null;
+  /** How far into the walk the session has got: what a back has behind it to return to. */
+  let depth = 0;
+  /** Targets the driver reported it could not resolve, which it answers with rather than throws. */
+  let reportedSelectorFailures = 0;
 
   const decider = provider.beginSession({ personaId: persona.id, seed });
   const stepNow = (): string => screens.at(-1)?.step ?? NO_SCREEN_STEP;
@@ -451,25 +482,51 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         ...(provider.readsImages ? { screenshot: { path: screenshot } } : {}),
       };
 
-      const decision = await decider.decide(context);
-      const kind = decision.action.kind;
-      const aoi = aois.find((area) => area.id === decision.action.targetElementId) ?? null;
       // The control that advances the step the session is on: what a reader of the outcome
       // wants to know whether the agent ever looked at.
       primaryActionAoiId = aois.find((area) => area.isPrimaryAction)?.id ?? primaryActionAoiId;
       completed = step === finalStepId;
 
+      let decision: Decision | null = null;
+      try {
+        decision = await decider.decide(context);
+      } catch (error) {
+        // The decision layer is the one call in this loop the browser's failure mapping
+        // knows nothing about, and it is the one most likely to fail in model mode: a 429
+        // or a reset socket on the fourth screen would otherwise throw away every screen,
+        // fixation and action the session had collected and write no file at all.
+        failure = {
+          kind: 'timeout',
+          detail: `the decision on the ${step} step never arrived (${(error as Error).message})`,
+          step,
+        };
+      }
+      const violations = decision === null ? [] : validateDecision(context, decision);
+      // Only a decision the interface accepts may be read: a reply parsed into the wrong
+      // shape can carry a kind outside the six words, and the screen's own copy is composed
+      // from that kind.
+      const usable = decision !== null && violations.length === 0 ? decision : null;
+      const kind = usable === null ? null : usable.action.kind;
+      const aoi =
+        usable === null
+          ? null
+          : (aois.find((area) => area.id === usable.action.targetElementId) ?? null);
+
+      // This screen happened whatever the decision layer did with it, and its fixations are
+      // already on the session: a screen left out here would leave them pointing past the end.
       screens.push({
         index: screenIndex,
         step,
         screenshot,
         scrollY,
-        intent: decision.intent,
-        decidedAction: decidedActionText(kind, aoi?.label ?? null),
+        // The agent's own words, when it managed any. Never ours: an invented intent would
+        // be the simulation putting words in the mouth of the person it is reporting on.
+        intent: typeof decision?.intent === 'string' ? decision.intent : '',
+        decidedAction:
+          kind === null ? NO_USABLE_DECISION : decidedActionText(kind, aoi?.label ?? null),
       });
 
       let executed: ActResult | null = null;
-      const violations = validateDecision(context, decision);
       if (violations.length > 0) {
         // A decision the interface rejects leaves the session with nothing it is allowed to
         // act on, which is our decision layer breaking and never the product's fault. It is
@@ -479,6 +536,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           detail: `the decision on the ${step} step is not one this interface accepts (${violations.join('; ')})`,
           step,
         };
+      } else if (kind === null) {
+        // The decision never arrived; `failure` already says so.
       } else if (kind === 'abandon') {
         record(kind, null, true);
         history.push({ step, kind, targetElementId: null, ok: true });
@@ -488,9 +547,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         // task it was given — the task declares no step after this one to walk to.
       } else if (!PAGE_OPERATIONS.has(kind)) {
         record(kind, aoi, true);
-        history.push({ step, kind, targetElementId: decision.action.targetElementId, ok: true });
+        history.push({ step, kind, targetElementId: aoi?.id ?? null, ok: true });
       } else {
-        const attempted = { step, kind, targetElementId: decision.action.targetElementId };
+        const attempted = { step, kind, targetElementId: aoi?.id ?? null };
+        const depthBefore = depth;
         try {
           executed = await execute(input, budget, handle, ctx, kind, aoi, capture);
         } catch (error) {
@@ -499,19 +559,29 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           failure = ourBreakage(error, `acting on the ${step} screen`, step);
         }
         if (executed === null && failure === null) {
+          // The agent looked at an area with no control under it — a region a segmenter
+          // explained and the DOM did not — and tried to click it. Nothing happened, which
+          // is the page's answer and not our breakage: ending the session here would throw
+          // away every session in which a persona looked hardest at the part of a page the
+          // DOM cannot explain, which is exactly what a segmented run exists to observe.
           record(kind, aoi, false);
           history.push({ ...attempted, ok: false });
-          failure = {
-            kind: 'selector_not_found',
-            detail: `nothing on the ${step} screen carries the area of interest the agent aimed at`,
-            step,
-          };
         } else if (executed !== null) {
           const worked = executed.ok && gotSomewhere(executed, step, scrollY);
+          // Depth counts navigations and not progress: a scroll gets the agent somewhere
+          // and puts nothing behind it to go back to.
+          if (executed.ok && executed.step !== step) {
+            depth = Math.max(0, depth + (kind === 'backtrack' ? -1 : 1));
+          }
           scrollY = executed.scrollY;
           record(kind, aoi, worked, kind === 'scroll' ? String(executed.scrollY) : null);
           history.push({ ...attempted, ok: worked });
-          if (!executed.ok && !wentBackFromTheStart(kind, executed)) {
+          // The driver reports a target it could not resolve rather than throwing one, so
+          // the budget's own counter never sees it: the session artifact's `selectorFailures`
+          // is the two added together, or the replay's integrity card would read "every
+          // action resolved" on the session a selector failure ended.
+          if (executed.failure === 'selector_not_found') reportedSelectorFailures += 1;
+          if (!executed.ok && !wentBackFromTheStart(kind, executed, depthBefore)) {
             failure = {
               kind: executed.failure ?? 'timeout',
               detail: `the ${kind} on the ${step} step did not work (${executed.failure ?? 'no reason given'})`,
@@ -570,7 +640,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     saccades,
     actions,
     outcome: decideOutcome(trace, persona, input.outcomePolicy),
-    integrity: budget.sessionIntegrity(),
+    integrity: {
+      ...budget.sessionIntegrity(),
+      selectorFailures: budget.sessionIntegrity().selectorFailures + reportedSelectorFailures,
+    },
   };
 
   await writeSession(input.runDir, session);

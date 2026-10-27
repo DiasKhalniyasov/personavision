@@ -19,6 +19,7 @@ import { createOfflineDeterministicProvider, FREE_USAGE } from '@personavision/p
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { decideOutcome, runSession } from '../src/index.js';
 import type { ActResult, Capture, CaptureSource } from '@personavision/browser';
+import type { Decision } from '@personavision/provider';
 import type { Session } from '@personavision/contract';
 import type { Aoi } from '@personavision/engine';
 import type { SessionScreen, SessionTrace } from '../src/index.js';
@@ -253,6 +254,70 @@ describe('runSession', () => {
     });
   });
 
+  describe('a decision layer that does not hold up its end', () => {
+    it('writes the session when the provider throws, keeping what it had collected', async () => {
+      let asked = 0;
+
+      const session = await runSession(
+        sessionOver(runDir, {
+          providers: {
+            decision: providerThat(() => {
+              asked += 1;
+              if (asked > 2) throw new Error('the model answered 429');
+              return {
+                intent: 'Looking further down.',
+                action: { kind: 'scroll', targetElementId: null },
+                usage: FREE_USAGE,
+              };
+            }),
+          },
+        }),
+      );
+
+      // The screens, fixations and actions it had already collected are on disk, not lost.
+      expect(session.screens).toHaveLength(3);
+      expect(session.fixations.length).toBeGreaterThan(0);
+      expect(await readSessionFile(runDir, 'S-01')).toEqual(session);
+      expect(session.outcome).toMatchObject({
+        status: 'automation_failure',
+        attribution: 'automation',
+        excludedFromScores: true,
+      });
+      expect(session.outcome.reason).toContain('429');
+      // The screen it never got an answer for says so rather than quoting words nobody said.
+      expect(session.screens.at(-1)).toMatchObject({ intent: '' });
+      expect(session.screens.at(-1)?.decidedAction.trim()).not.toBe('');
+    });
+
+    it('writes the session when a decision carries an action kind outside the six', async () => {
+      const session = await runSession(
+        sessionOver(runDir, {
+          providers: {
+            decision: providerThat(
+              () =>
+                ({
+                  intent: 'Teleporting to the end.',
+                  action: { kind: 'teleport', targetElementId: null },
+                  usage: FREE_USAGE,
+                }) as unknown as Decision,
+            ),
+          },
+        }),
+      );
+
+      expect(() => sessionSchema.parse(session)).not.toThrow();
+      expect(await readSessionFile(runDir, 'S-01')).toEqual(session);
+      expect(session.outcome).toMatchObject({
+        status: 'automation_failure',
+        attribution: 'automation',
+        excludedFromScores: true,
+      });
+      // The agent's own words are kept; what it decided is not quoted, because nothing it
+      // decided was a thing this session could do.
+      expect(session.screens.at(-1)).toMatchObject({ intent: 'Teleporting to the end.' });
+    });
+  });
+
   describe('the actions', () => {
     it('executes every one it decides through the driver, and records whether it worked', async () => {
       const watched = watchingActs(createFixtureSource(COMMITTED));
@@ -323,6 +388,143 @@ describe('runSession', () => {
       });
       expect(session.screens).toHaveLength(1);
       expect(session.actions.at(-1)).toMatchObject({ type: 'click', ok: false });
+      // The driver answers a target it could not resolve rather than throwing one, so the
+      // budget never counts it: the integrity card would otherwise read "every action
+      // resolved" on the session a selector failure ended.
+      expect(session.integrity.selectorFailures).toBe(1);
+    });
+
+    it('carries on past a click on an area with no control under it', async () => {
+      const REGION = 'a-region-nobody-could-name';
+      const session = await runSession(
+        sessionOver(runDir, {
+          // A segmented region: the agent can look at it, and the DOM explains no element
+          // beneath it for a click to land on.
+          segmenter: {
+            segment: () => [
+              {
+                id: REGION,
+                label: 'A region nobody could name',
+                role: null,
+                bbox: { x: 1, y: 1, width: 301, height: 301 },
+              },
+            ],
+          },
+          providers: {
+            decision: providerThat((context) =>
+              context.fixatedElements.some((element) => element.id === REGION)
+                ? {
+                    intent: 'Trying the part of the page I cannot name.',
+                    action: { kind: 'click', targetElementId: REGION },
+                    usage: FREE_USAGE,
+                  }
+                : {
+                    intent: 'Looking further down.',
+                    action: { kind: 'scroll', targetElementId: null },
+                    usage: FREE_USAGE,
+                  },
+            ),
+          },
+          maxScreens: 6,
+        }),
+      );
+
+      const onTheRegion = session.actions.filter((action) => action.aoiId === REGION);
+      expect(onTheRegion.length).toBeGreaterThan(0);
+      // Nothing happened, which is the page's answer and not our breakage: a run that
+      // segments must not lose every session in which a persona looked hardest at a region.
+      expect(onTheRegion.every((action) => !action.ok)).toBe(true);
+      expect(session.outcome.status).not.toBe('automation_failure');
+      expect(session.outcome.attribution).toBe('product');
+      expect(session.screens.length).toBeGreaterThan(onTheRegion.length);
+    });
+  });
+
+  describe('a back the driver refuses', () => {
+    /**
+     * A source that reports what this rule reads and nothing else: a click lands on the
+     * next step, and a back never works. The capture set replays one recorded walk, so the
+     * two answers are stubbed rather than driven — the rule turns on what `act` reports.
+     */
+    const backNeverWorks = (clicksAdvance: boolean): CaptureSource => ({
+      ...createFixtureSource(COMMITTED),
+      act: async (_page, action): Promise<ActResult> =>
+        action.type === 'back'
+          ? {
+              ok: false,
+              action,
+              url: 'https://fixture.test/cart.html',
+              scrollY: 0,
+              step: 'cart',
+              failure: 'navigation_error',
+            }
+          : {
+              ok: true,
+              action,
+              url: 'https://fixture.test/payment.html',
+              scrollY: 0,
+              step: clicksAdvance ? 'payment' : 'cart',
+            },
+    });
+
+    /** Clicks once if it can, then presses Back for the rest of the session. */
+    const clicksThenGoesBack = (): ReturnType<typeof providerThat> => {
+      let clicked = false;
+      return providerThat((context) => {
+        const target = context.fixatedElements[0];
+        if (!clicked && target !== undefined) {
+          clicked = true;
+          return {
+            intent: 'Getting on with it.',
+            action: { kind: 'click' as const, targetElementId: target.id },
+            usage: FREE_USAGE,
+          };
+        }
+        return {
+          intent: 'That was not it — back.',
+          action: { kind: 'backtrack' as const, targetElementId: null },
+          usage: FREE_USAGE,
+        };
+      });
+    };
+
+    it('is the agent leaving when there is nothing behind the screen it started on', async () => {
+      const session = await runSession(
+        sessionOver(runDir, {
+          source: backNeverWorks(false),
+          providers: {
+            decision: providerThat(() => ({
+              intent: 'This is not where I meant to be.',
+              action: { kind: 'backtrack', targetElementId: null },
+              usage: FREE_USAGE,
+            })),
+          },
+          maxScreens: 4,
+        }),
+      );
+
+      expect(session.actions.every((action) => action.type === 'back' && !action.ok)).toBe(true);
+      expect(session.outcome.status).not.toBe('automation_failure');
+      expect(session.outcome.attribution).toBe('product');
+      expect(session.outcome.excludedFromScores).toBe(false);
+    });
+
+    it('is our breakage once the session has somewhere behind it to go', async () => {
+      const session = await runSession(
+        sessionOver(runDir, {
+          source: backNeverWorks(true),
+          providers: { decision: clicksThenGoesBack() },
+          maxScreens: 4,
+        }),
+      );
+
+      expect(session.actions.map((action) => action.type)).toEqual(['click', 'back']);
+      expect(session.outcome).toMatchObject({
+        status: 'automation_failure',
+        attribution: 'automation',
+        excludedFromScores: true,
+      });
+      expect(session.outcome.reason).toContain('navigation_error');
     });
   });
 
