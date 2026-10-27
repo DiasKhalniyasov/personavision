@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Run, RunUsage, Violation } from '../src/index.js';
 import {
@@ -7,6 +7,7 @@ import {
   runPaths,
   validate,
   writeRun,
+  writeSession,
   ZERO_USAGE,
 } from '../src/index.js';
 import {
@@ -97,6 +98,45 @@ describe('a run that is still open', () => {
 
     expect(await validate(dir)).toEqual([]);
     expect(await readRun(dir)).toEqual(artifact);
+  });
+});
+
+describe('writing one finished session', () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await temporaryRunDir());
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  it('writes it at sessions/S-NN.json, and it reads back as what was written', async () => {
+    const session = validSession('S-01', 'A');
+
+    await writeSession(dir, session);
+
+    expect(JSON.parse(await readFile(runPaths(dir).session('S-01'), 'utf8'))).toEqual(session);
+  });
+
+  it('makes the sessions directory, so the first session of a run needs no setup', async () => {
+    // The run it belongs to is written by whatever is driving the run, and a session can
+    // land before it: `runSession` (#44) writes one session and nothing else.
+    await writeSession(dir, validSession('S-02', 'B'));
+
+    expect(JSON.parse(await readFile(runPaths(dir).session('S-02'), 'utf8'))).toMatchObject({
+      sessionId: 'S-02',
+      variant: 'B',
+    });
+  });
+
+  it('refuses a session that would not read back, naming the field', async () => {
+    const broken = { ...validSession('S-01', 'A'), durationMs: -1 };
+
+    await expect(writeSession(dir, broken)).rejects.toThrow('/durationMs');
+    await expect(readFile(runPaths(dir).session('S-01'), 'utf8')).rejects.toThrow();
   });
 });
 

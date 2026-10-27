@@ -42,7 +42,14 @@ export type {
 export { runDirName, runPaths } from './paths.js';
 export type { RunPaths } from './paths.js';
 
-export { appendFinishedSession, listRunDirs, readRun, validate, writeRun } from './io.js';
+export {
+  appendFinishedSession,
+  listRunDirs,
+  readRun,
+  validate,
+  writeRun,
+  writeSession,
+} from './io.js';
 export type { RunArtifact, Violation } from './io.js';
 
 export { createSeededRandom } from './random.js';
