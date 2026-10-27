@@ -250,15 +250,19 @@ describe('appending a finished session', () => {
       aois: [area],
       screenshots: [screen],
     });
-    // A second session saw the same screen, as every session of a variant does.
+    // A second session saw the same screen, as every session of a variant does, and found it
+    // a little longer — a cart with three things in it rather than one.
+    const taller = { ...screen, pageHeight: 2400 };
     const after = await appendFinishedSession(dir, validSession('S-02', 'B'), {
       aois: [area],
-      screenshots: [screen],
+      screenshots: [taller],
     });
 
+    // One row per key, and the row is the last one reported: the image on disk is the last
+    // one written, and a row describing the shorter page would not fit it.
+    expect(after.screenshots.filter((row) => row.step === CART)).toEqual([taller]);
     expect(after.aois.filter((row) => row.id === area.id)).toEqual([area]);
     expect(after.aois).toHaveLength(validRun().aois.length + 1);
-    expect(after.screenshots.filter((row) => row.step === CART)).toEqual([screen]);
     expect(await validate(dir)).toEqual([]);
   });
 

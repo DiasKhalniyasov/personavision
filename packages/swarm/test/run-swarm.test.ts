@@ -322,7 +322,7 @@ describe('runSwarm', () => {
         seedGroups: [11],
         concurrency: 1,
         source: neverCloses,
-        sessionTimeoutMs: 200,
+        sessionTimeoutMs: 400,
       }),
     );
 
@@ -385,8 +385,14 @@ describe('runSwarm', () => {
       seed: 11,
       totalSessions: 8,
     });
-    expect(finished[0]?.outcome.status).toBeTruthy();
-    expect(finished[0]?.elapsedMs).toBeGreaterThanOrEqual(0);
+    // The event reports the outcome the session was written with, not one of its own.
+    const { sessions } = await readRun(runDir);
+    expect(finished.map((event) => event.outcome)).toEqual(
+      finished.map(
+        (event) => sessions.find((session) => session.sessionId === event.sessionId)?.outcome,
+      ),
+    );
+    expect(finished.every((event) => Number.isFinite(event.elapsedMs))).toBe(true);
   });
 
   it('moves the run from open to finished', async () => {

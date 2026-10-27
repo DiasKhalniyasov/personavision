@@ -487,10 +487,17 @@ const NO_PROGRESS: RunProgress = {
 };
 
 /**
- * One entry per key: the last one given, in the order the keys first appeared — the same
- * rule `@personavision/browser`'s capture projection follows, and for the same reason. The
- * image on disk is the last one written, so a row describing an earlier capture of that
- * screen would state a page height the image does not have.
+ * One entry per key: the last one given, in the order the keys first appeared — the same rule
+ * `@personavision/browser`'s capture projection follows, so a screen captured twice in one
+ * session is recorded as the capture whose image is the one left on disk.
+ *
+ * **Across sessions it is the last one appended, which need not be the last one captured.**
+ * A run directory holds one row and one image per `(variant, step)`, and a swarm sends many
+ * sessions over the same screens: which session's geometry survives is the order they landed
+ * in, and which session's image survives is the order they captured in. Those two orders are
+ * the same only when sessions run one at a time. It matters most for an audience whose device
+ * mix puts sessions on two viewports, where the two are different pages — and the artifact has
+ * nowhere to put a second geometry, so this is a limit of the shape rather than of the merge.
  *
  * An area of interest cannot disagree with itself this way: its id is derived from its
  * variant, step, role, label and box, so two rows under one key describe one area.

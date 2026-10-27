@@ -77,9 +77,25 @@ export const DEFAULT_CONCURRENCY = 4;
  * overrun page operation and its decision deadline ends a reply that never came, and either
  * way the session itself writes a file that says so. The race around the whole of it is the
  * backstop for a session that cannot even do that, and it waits this much longer so that it
- * is never the one that fires first.
+ * is never the one that fires first. What has to fit in it: letting go of the decision layer
+ * (`LET_GO_MS` of it), closing the page, and writing one file.
  */
-const WRITE_UP_GRACE_MS = 500;
+const WRITE_UP_GRACE_MS = 1_000;
+
+/**
+ * How long the decision layer gets to let go of a call nobody is waiting for.
+ *
+ * A session's decider holds every turn still in flight and its `close` waits for them, which
+ * is right for a turn that is still coming and wrong for one the session has already given up
+ * on: nothing can cancel a request, so that wait never ends. `runSession` closes the decider
+ * in a `finally`, so an unbounded wait there costs the whole session — the page it holds is
+ * never closed and the file it was about to write is never written. Capped, the wait ends, the
+ * page closes, and the session records the reply that never arrived.
+ *
+ * It is a cap on *waiting*, not on flushing: a decider that closes promptly — every normal
+ * session — is never cut short, because it is already closed before this fires.
+ */
+const LET_GO_MS = 400;
 
 /**
  * A cap, made usable, as `packages/browser`'s budget makes its own: floored to a whole
@@ -210,8 +226,12 @@ export interface RunSwarmInput extends SwarmPlanInput {
   readonly maxScreens?: number;
   /**
    * The clock, which is the one thing a reproducible run cannot derive: it stamps each
-   * session's `startedAt`, measures elapsed time and records when the run finished. A test
-   * passes its own.
+   * session's `startedAt` and records when the run finished. A test passes its own.
+   *
+   * The caps are **not** measured on it. A run that fixes its clock to get reproducible
+   * timestamps would otherwise be fixing its deadlines too — a session's remaining time
+   * would never go down — so what a session has left, and how long it took, are read from
+   * the process clock.
    */
   readonly now?: () => Date;
   /**
@@ -244,7 +264,7 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   const concurrency = capOf(input.concurrency, DEFAULT_CONCURRENCY);
   const timeoutMs = capOf(input.sessionTimeoutMs, DEFAULT_SESSION_BUDGET.wallClockMs);
 
-  const opened = await openRun(input.runDir, planned);
+  const opened = await openRun(input.runDir, planned, input.providers.decision.mode);
   const startedAt = opened.startedAt ?? clock().toISOString();
 
   const sessions: Session[] = [];
@@ -288,6 +308,13 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
         throw error;
       }
       finishedSessions += 1;
+      // The run has claimed this session: its id, its progress entry and its areas are this
+      // record's, so the file has to be too. A session the race gave up on is still running
+      // and writes its own when it lands, so the run writes its record again over it.
+      if (walked.landsLate !== null) {
+        const ours = walked.session;
+        void walked.landsLate.then(() => writeSession(input.runDir, ours)).catch(() => undefined);
+      }
       await input.onProgress?.({
         kind: 'session-finished',
         sessionId: plan.sessionId,
@@ -343,6 +370,12 @@ interface WalkedSession {
   readonly aois: readonly Aoi[];
   readonly screenshots: Run['screenshots'];
   readonly elapsedMs: number;
+  /**
+   * Set only for a session the race gave up on: it is still running, and `runSession` writes
+   * its own file when it lands. `null` for a session that answered, which is every session
+   * of a run that went well.
+   */
+  readonly landsLate: Promise<unknown> | null;
 }
 
 const walkOne = async (
@@ -357,16 +390,16 @@ const walkOne = async (
   const usages: DecisionUsage[] = [];
 
   const startedAt = clock().toISOString();
-  const startedMs = clock().getTime();
+  const startedMs = Date.now();
   /** What is left of this session's own deadline, which is what a decision gets. */
-  const remainingMs = (): number => Math.max(1, startedMs + timeoutMs - clock().getTime());
+  const remainingMs = (): number => Math.max(1, startedMs + timeoutMs - Date.now());
   const spent = (): WalkedSession['usage'] => runUsageOf(usages, provider.mode);
   // Copied, not handed over: a session the race gave up on goes on capturing screens, and
   // what the run declares has to be what it was told at the time.
   const seen = (): Pick<WalkedSession, 'aois' | 'screenshots' | 'elapsedMs'> => ({
     aois: [...aois],
     screenshots: toScreenshotEntries(captures),
-    elapsedMs: Math.max(0, clock().getTime() - startedMs),
+    elapsedMs: Math.max(0, Date.now() - startedMs),
   });
 
   const settled = runSession({
@@ -413,17 +446,19 @@ const walkOne = async (
       detail: `the session passed its ${timeoutMs / 1000} s cap with no answer`,
       step: stepNamed(captures),
     });
-    void settled.then(() => writeSession(input.runDir, ours)).catch(() => undefined);
-    return { session: ours, usage: spent(), ...seen() };
+    // Handed back rather than chained here: the run's record is only worth re-asserting once
+    // the run has actually claimed this session, and a session whose append failed was swept.
+    return { session: ours, usage: spent(), ...seen(), landsLate: settled };
   }
   if (finished.kind === 'error') {
     return {
       session: brokenSession(input, runId, plan, startedAt, ourBreakage(finished.error, captures)),
       usage: spent(),
       ...seen(),
+      landsLate: null,
     };
   }
-  return { session: finished.session, usage: spent(), ...seen() };
+  return { session: finished.session, usage: spent(), ...seen(), landsLate: null };
 };
 
 /**
@@ -439,6 +474,12 @@ const walkOne = async (
  * screen it happened on, with everything it had reached: `runSession` catches a decision
  * that throws and ends the session as our breakage, which is what a reply that never came
  * is. The race stays, a grace period further out, for a session that hangs somewhere else.
+ *
+ * **`close` is capped too, and that is what makes the rest of it work.** A session's decider
+ * holds the turns still in flight and its `close` waits for all of them, so the call this
+ * wrapper stopped waiting for is one `close` would wait for for ever — in a `finally` of
+ * `runSession`, which would cost the session its page and its file after all. Both caps are
+ * needed or neither does anything.
  *
  * The stateless `decide` is capped with it, so a provider reached either way answers within
  * one session's deadline or not at all.
@@ -466,7 +507,19 @@ const answersWithin = (provider: DecisionProvider, remainingMs: () => number): D
     decide: within((context) => provider.decide(context)),
     beginSession: (identity) => {
       const session = provider.beginSession(identity);
-      return { ...session, decide: within((context) => session.decide(context)) };
+      return {
+        ...session,
+        decide: within((context) => session.decide(context)),
+        close: async () => {
+          // Settled either way, because what a close failed at is the decider's to report
+          // and not a reason to hold the session open.
+          const closing = session.close().then(
+            () => undefined,
+            () => undefined,
+          );
+          await withinTimeout(closing, LET_GO_MS);
+        },
+      };
     },
   };
 };
@@ -559,30 +612,51 @@ interface OpenedRun {
   readonly startedAt: string | undefined;
 }
 
-const openRun = async (runDir: string, planned: readonly SwarmSession[]): Promise<OpenedRun> => {
+const openRun = async (
+  runDir: string,
+  planned: readonly SwarmSession[],
+  mode: ProviderMode,
+): Promise<OpenedRun> => {
   const { run } = await readRun(runDir);
   if (run.status !== 'open') {
     throw new Error(
       `${runDir}: this run's status is ${run.status === undefined ? 'absent' : `"${run.status}"`}, and a swarm runs into a run that is open`,
     );
   }
+  // What a run says it ran on is part of its record, and the decision layer it is handed is
+  // what it ran on: a run's mode is never silently changed. Refused here, because both
+  // alternatives are worse — a model provider into an offline run is rejected by the writer
+  // on the first session, in a message about usage rather than about the mode, and an offline
+  // provider into a model run is not rejected at all and records a model run that cost
+  // nothing.
+  if (run.engine.mode !== mode) {
+    throw new Error(
+      `${runDir}: this run records the ${run.engine.mode} engine and the swarm was handed a ${mode} decision layer`,
+    );
+  }
   // Checked here rather than discovered on the session that overruns the plan: the writer
   // refuses a session the run left no room for, and refusing the twentieth would leave a
-  // directory holding sessions `run.json` does not list.
+  // directory holding sessions `run.json` does not list. The total is its own claim and not
+  // part of the per-variant split, so it is held on its own: a run that declared eight and is
+  // handed twelve would otherwise have its total raised one session at a time by the writer,
+  // and the Running screen would read "8 of 8" and then "9 of 9".
+  //
+  // A run that declared no plan at all is left alone: the writer grows its total as sessions
+  // land, which is the one bar a run that never said how many to expect shows.
   const { progress } = run;
-  if (progress !== undefined && progress.perVariant.length > 0) {
+  if (progress !== undefined && progress.totalSessions > 0) {
     if (progress.totalSessions !== planned.length) {
       throw new Error(
         `${runDir}: this run plans ${progress.totalSessions} sessions and the swarm plans ${planned.length}`,
       );
     }
-    for (const row of progress.perVariant) {
-      const mine = planned.filter((plan) => plan.variant.id === row.variant).length;
-      if (mine !== row.totalSessions) {
-        throw new Error(
-          `${runDir}: this run plans ${row.totalSessions} sessions on variant "${row.variant}" and the swarm plans ${mine}`,
-        );
-      }
+  }
+  for (const row of progress?.perVariant ?? []) {
+    const mine = planned.filter((plan) => plan.variant.id === row.variant).length;
+    if (mine !== row.totalSessions) {
+      throw new Error(
+        `${runDir}: this run plans ${row.totalSessions} sessions on variant "${row.variant}" and the swarm plans ${mine}`,
+      );
     }
   }
   return { runId: run.runId, startedAt: run.startedAt };

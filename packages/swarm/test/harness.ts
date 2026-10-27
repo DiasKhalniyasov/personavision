@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFixtureSource } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeRun, ZERO_USAGE } from '@personavision/contract';
-import { createOfflineDeterministicProvider } from '@personavision/provider';
+import { createDecisionSession, createOfflineDeterministicProvider } from '@personavision/provider';
 import type { CaptureSource, Device, TaskDefinition } from '@personavision/browser';
 import type { Persona, Run } from '@personavision/contract';
 import type {
@@ -139,7 +139,15 @@ export const sessionOver = (
   ...over,
 });
 
-/** A provider that answers whatever a test tells it to, through one session handle or none. */
+/**
+ * A provider that answers whatever a test tells it to.
+ *
+ * Its session handle is `createDecisionSession`'s, because that is the body of `beginSession`
+ * in both providers that ship — so a test provider that hand-rolled one would behave
+ * differently from either of them in the one way that matters here: a real handle holds every
+ * turn still in flight and its `close` waits for all of them, so a test with a reply that
+ * never comes would pass against a hand-rolled handle and hang against a real one.
+ */
 export const providerThat = (
   answer: (context: DecisionContext) => Decision,
   over: Partial<Pick<DecisionProvider, 'name' | 'mode' | 'readsImages'>> = {},
@@ -151,12 +159,8 @@ export const providerThat = (
     readsImages: false,
     ...over,
     decide,
-    beginSession: ({ personaId, seed }): DecisionSession => ({
-      personaId,
-      seed,
-      decide,
-      close: async () => undefined,
-    }),
+    beginSession: ({ personaId, seed }): DecisionSession =>
+      createDecisionSession({ personaId, seed, decide }),
   };
 };
 
