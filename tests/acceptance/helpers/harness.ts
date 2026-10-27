@@ -62,26 +62,27 @@ export interface RegenerateOptions {
  */
 export const regenerate = async (options: RegenerateOptions = {}): Promise<Regeneration> => {
   const runsRoot = await scratch('run');
-  try {
-    await generateDemoRun({ runsRoot, ...options });
-  } catch (error) {
-    // A run that never finished has no artifact to read, so the directory it half wrote is
-    // of no use to anybody: it goes now rather than waiting for a hook that may not run.
-    await discard(runsRoot);
-    throw error;
-  }
-
   const runDir = join(runsRoot, RUN_ID);
   const paths = runPaths(runDir);
   const read = async <Parsed>(file: string): Promise<Parsed> =>
     JSON.parse(await readFile(file, 'utf8')) as Parsed;
 
-  return {
-    runsRoot,
-    runDir,
-    run: await read<Run>(paths.run),
-    findings: await read<Findings>(paths.findings),
-  };
+  try {
+    await generateDemoRun({ runsRoot, ...options });
+    return {
+      runsRoot,
+      runDir,
+      run: await read<Run>(paths.run),
+      findings: await read<Findings>(paths.findings),
+    };
+  } catch (error) {
+    // Nothing is handed back, so no hook can be given this directory to remove: whether the
+    // run failed or its artifact would not parse, what it half wrote goes now. The whole of
+    // a run — twenty-four sessions and eight screenshots — is what would otherwise be left
+    // in the temporary directory.
+    await discard(runsRoot);
+    throw error;
+  }
 };
 
 /**
@@ -133,19 +134,26 @@ const SPACER = '<div class="pushdown" aria-hidden="true"></div>';
  */
 export const shopWithoutDefect1 = async (): Promise<string> => {
   const root = await scratch('shop');
-  for (const directory of SERVED_DIRECTORIES) {
-    await cp(join(shopRoot, directory), join(root, directory), { recursive: true });
-  }
+  try {
+    for (const directory of SERVED_DIRECTORIES) {
+      await cp(join(shopRoot, directory), join(root, directory), { recursive: true });
+    }
 
-  const review = join(root, 'b', 'review.html');
-  const markup = await readFile(review, 'utf8');
-  if (!markup.includes(SPACER)) {
-    throw new Error(
-      `b/review.html no longer carries ${SPACER}, so this is not the way defect 1 is planted any more: find how it is planted now and remove that instead`,
-    );
+    const review = join(root, 'b', 'review.html');
+    const markup = await readFile(review, 'utf8');
+    if (!markup.includes(SPACER)) {
+      throw new Error(
+        `b/review.html no longer carries ${SPACER}, so this is not the way defect 1 is planted any more: find how it is planted now and remove that instead`,
+      );
+    }
+    await writeFile(review, markup.replace(SPACER, ''), 'utf8');
+    return root;
+  } catch (error) {
+    // The copy is only ever handed back finished, so the caller has nothing to clean up
+    // when the guard above fires — which it will the day defect 1 is planted another way.
+    await discard(root);
+    throw error;
   }
-  await writeFile(review, markup.replace(`${SPACER}\n`, '').replace(SPACER, ''), 'utf8');
-  return root;
 };
 
 /** A finding, as a reader of a failure message needs to see it. */

@@ -27,7 +27,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { declaredDefects } from '@personavision/northwind-demo/defects.ts';
 import { evaluateAgainstPlantedDefects } from '@personavision/scoring';
-import { acceptanceThresholds, bandsDisjoint } from '../../packages/scoring/src/bands.js';
+import { acceptanceThresholds, bandOf, bandsDisjoint } from '../../packages/scoring/src/bands.js';
 import {
   committedRunDir,
   defectReport,
@@ -48,8 +48,14 @@ import type { Regeneration } from './helpers/harness.js';
 const TAG = 'PERSONAVISION_ACCEPTANCE';
 const tagged = process.env[TAG] === '1';
 
-/** Three browser runs of about twenty seconds each, on a laptop or a shared runner. */
-const REGENERATION_TIMEOUT = 900_000;
+/**
+ * One browser run takes about twenty seconds here and the gate's two hooks run three
+ * between them. Ten minutes a hook is thirty times that, and deliberately less than half
+ * the CI job's own `timeout-minutes`: a hung regeneration has to be reported by vitest,
+ * naming the hook and running the cleanup that removes the temporary directories, rather
+ * than killed by the runner with neither.
+ */
+const REGENERATION_TIMEOUT = 600_000;
 
 /**
  * The planted-defect floors, taken from the measurement #78 recorded on #10 on 2026-10-27
@@ -76,6 +82,20 @@ const PLANTED_DEFECT_FLOORS = {
 
 /** How many findings the demo's headline claims the planted defects are. */
 const HEADLINE_PLACES = 3;
+
+/**
+ * Which version is which, by name rather than by what the run decided.
+ *
+ * `docs/FLOW.md` section 5 names the rows — the clean one is the current checkout, the
+ * defective one carries the three planted defects — and `demo/northwind/defects.json`
+ * declares all three of them on **B**. Reading the two versions off
+ * `verdict.preferredVariant` and `verdict.harderVariant` instead would make the table's
+ * assertions unfalsifiable: a sign inversion in the score that put A at 70 and B at 22
+ * would simply swap which version each assertion was applied to, and every one of them
+ * would still pass on a verdict that was exactly backwards.
+ */
+const CLEAN = 'A';
+const DEFECTIVE = 'B';
 
 const defects = declaredDefects().defects;
 
@@ -120,8 +140,8 @@ describe.runIf(tagged)('the project’s gate, over a regenerated run', () => {
 
   describe('the score table of docs/FLOW.md section 5', () => {
     it('reads the clean version at or under its ceiling and the defective one at or over its floor', () => {
-      const clean = scoreOf(first.run, first.run.verdict.preferredVariant);
-      const defective = scoreOf(first.run, first.run.verdict.harderVariant);
+      const clean = scoreOf(first.run, CLEAN);
+      const defective = scoreOf(first.run, DEFECTIVE);
 
       expect(clean.frictionScore.median).toBeLessThanOrEqual(
         acceptanceThresholds.frictionCleanAtMost,
@@ -131,16 +151,24 @@ describe.runIf(tagged)('the project’s gate, over a regenerated run', () => {
       );
     });
 
-    it('separates the two by at least the table’s gap, and prefers the clean one', () => {
+    it('separates the two by at least the table’s gap, and calls the defective one harder', () => {
+      const clean = scoreOf(first.run, CLEAN);
+      const defective = scoreOf(first.run, DEFECTIVE);
+
       expect(first.run.verdict.gapPoints).toBeGreaterThanOrEqual(
         acceptanceThresholds.gapPointsAtLeast,
       );
-      expect(first.run.verdict.preferredVariant).not.toBe(first.run.verdict.harderVariant);
+      expect(first.run.verdict.gapPoints).toBeCloseTo(
+        defective.frictionScore.median - clean.frictionScore.median,
+        6,
+      );
+      expect(first.run.verdict.harderVariant).toBe(DEFECTIVE);
+      expect(first.run.verdict.preferredVariant).toBe(CLEAN);
     });
 
-    it('holds in at least three seed groups, with the ±1σ bands apart in each', () => {
-      const clean = scoreOf(first.run, first.run.verdict.preferredVariant);
-      const defective = scoreOf(first.run, first.run.verdict.harderVariant);
+    it('holds in at least three seed groups, with the ±1σ bands apart', () => {
+      const clean = scoreOf(first.run, CLEAN);
+      const defective = scoreOf(first.run, DEFECTIVE);
 
       expect(first.run.verdict.bandsDisjoint).toBe(true);
       expect(first.run.verdict.seedGroupsAgreeing).toBeGreaterThanOrEqual(
@@ -150,30 +178,36 @@ describe.runIf(tagged)('the project’s gate, over a regenerated run', () => {
         acceptanceThresholds.seedGroupsAgreeingAtLeast,
       );
 
-      // The verdict's own count is a number the scoring step wrote; this is the comparison
-      // behind it, made again from the per-seed-group scores the artifact carries.
-      const band = (score: Run['scores'][number], seed: number): { low: number; high: number } => {
+      // The two numbers above are what the scoring step wrote; these are the two
+      // comparisons behind them, made again from the per-variant and per-seed-group
+      // scores the artifact carries — `bandOf` and `bandsDisjoint` for the bands, and the
+      // strict comparison `verdict` counts groups with for the groups. The gate adds no
+      // third criterion of its own: a band of a single seed group has no spread of its
+      // own, and pairing one group's score with the whole run's deviation would be a
+      // stricter test than section 5 asks for and could fail on a run that reads as the
+      // table requires.
+      expect(bandsDisjoint(bandOf(clean), bandOf(defective))).toBe(true);
+
+      const scoreIn = (score: Run['scores'][number], seed: number): number => {
         const group = score.perSeedGroup.find((entry) => entry.seed === seed);
         if (group === undefined) throw new Error(`no seed group ${String(seed)}`);
-        return {
-          low: group.frictionScore - score.frictionScore.sd,
-          high: group.frictionScore + score.frictionScore.sd,
-        };
+        return group.frictionScore;
       };
-      for (const seed of first.run.seedGroups) {
-        expect(
-          bandsDisjoint(band(clean, seed), band(defective, seed)),
-          `seed group ${String(seed)}`,
-        ).toBe(true);
-      }
+      const agreeing = first.run.seedGroups.filter(
+        (seed) => scoreIn(defective, seed) > scoreIn(clean, seed),
+      );
+      expect(
+        agreeing,
+        `agreed in ${String(agreeing.length)} of the run's seed groups`,
+      ).toHaveLength(first.run.verdict.seedGroupsAgreeing);
     });
 
     it('completes the clean version and not the defective one', () => {
       // The three assertions the owner's direction change on #1 added: the friction score
       // alone could in principle separate two versions a business reader would read the
       // same way, and the product leads with the completion rate.
-      const clean = scoreOf(first.run, first.run.verdict.preferredVariant);
-      const defective = scoreOf(first.run, first.run.verdict.harderVariant);
+      const clean = scoreOf(first.run, CLEAN);
+      const defective = scoreOf(first.run, DEFECTIVE);
 
       expect(clean.completionRate).toBeGreaterThanOrEqual(
         acceptanceThresholds.completionCleanAtLeast,
@@ -181,7 +215,7 @@ describe.runIf(tagged)('the project’s gate, over a regenerated run', () => {
       expect(defective.completionRate).toBeLessThanOrEqual(
         acceptanceThresholds.completionDefectiveAtMost,
       );
-      expect(first.run.verdict.preferredVariant).toBe(clean.variant);
+      expect(first.run.verdict.preferredVariant).toBe(CLEAN);
     });
   });
 
@@ -195,6 +229,16 @@ describe.runIf(tagged)('the project’s gate, over a regenerated run', () => {
         ranked(first).map((finding) => finding.id),
       );
       expect(second.findings.findings).toEqual(first.findings.findings);
+    });
+
+    it('leaves the whole directory byte-identical, screenshots and sessions and all', () => {
+      // What `scripts/generate-demo-run.ts` and `demo/README.md` both promise, and the
+      // property a re-commit of the artifact being a reviewable diff rests on. The scores
+      // and the findings above are the two things a screen leads with; this is everything
+      // else — a screenshot that stopped capturing deterministically, or a session field
+      // that picked up the host clock, moves no score and would otherwise land as a
+      // twenty-four-file diff the next time anybody ran `pnpm demo:run`.
+      expect(fingerprint(second.runDir)).toEqual(fingerprint(first.runDir));
     });
   });
 

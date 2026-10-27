@@ -75,15 +75,20 @@ What the committed run reads as, and the numbers behind it, are on issues #78 an
 
 `tests/acceptance/pipeline.test.ts` is the project's gate: it runs `pnpm demo:run`'s own
 script again, into a **temporary** directory, and holds the result to the table above, to the
-completion figures, to determinism and to planted-defect precision and recall against
-`defects.json`. It is tagged, because it is three browser runs long, so the ordinary
-`pnpm test` collects it and runs nothing in it. The command that does run it:
+completion figures, to determinism — including the whole directory being byte-identical twice
+over — and to planted-defect precision and recall against `defects.json`. It is tagged,
+because it is three browser runs long, so the ordinary `pnpm test` collects it and runs
+nothing in it. The command that does run it:
 
 ```sh
 pnpm build && pnpm test:acceptance
 ```
 
-CI runs the same two commands as a job of its own after `check`. The suite writes nothing
+CI runs the same two commands as a job of its own after `check`. One difference from
+`pnpm demo:run` is worth knowing: under vitest the workspace resolves to its TypeScript
+sources rather than to `dist`, so the gate measures the pipeline but not the built output —
+which is why the command above still builds first, and why the `keepNames` hazard described
+earlier is `pnpm demo:run`'s to catch. The suite writes nothing
 into `runs/2026-10-24-1402-northwind-demo/` — it fingerprints that directory before the first
 regeneration and compares it after the last one — and the run it produces is offline, names
 no model and costs nothing, which it asserts off the artifact.

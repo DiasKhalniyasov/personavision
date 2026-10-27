@@ -124,9 +124,15 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @personavision/browser exec playwright install-deps chromium
 
-      # After the build, as the ticket asks: the suite drives built packages the way
-      # `pnpm demo:run` does, so a package that compiles but does not build fails before the
-      # gate rather than inside it.
+      # After the build, as the ticket asks, so that a package which typechecks but does not
+      # build fails before the gate rather than inside it.
+      #
+      # It is worth being exact about what this does not cover. Vitest resolves the
+      # workspace's `development` export condition, so the suite drives `packages/*/src`
+      # and not `dist`: a regression that only shows up in the built output — the
+      # `keepNames` hazard `scripts/generate-demo-run.ts` describes is one — would pass here
+      # and fail `pnpm demo:run`. The committed artifact is produced by that command, and
+      # `tests/cold-start.test.ts` is what drives the built CLI.
       - run: pnpm build
 
       - run: pnpm test:acceptance
