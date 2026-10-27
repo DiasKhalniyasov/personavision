@@ -106,7 +106,11 @@
 .unreadable {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  /* Above the layers: the overlays stay drawn over a page whose file would not
+     load, because its box is still known, and a heatmap is area rather than a
+     hairline — the sentence saying why the page is not there has to stay
+     readable through it. */
+  z-index: 5;
   display: grid;
   place-content: center;
   padding: var(--space-5);

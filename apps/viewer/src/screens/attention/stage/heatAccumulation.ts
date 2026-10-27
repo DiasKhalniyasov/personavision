@@ -121,12 +121,39 @@ interface Cell {
 }
 
 /**
- * Every place attention held on this version's step, hottest first.
+ * Whether there is any dwell to draw at all — the cheap half of `accumulateHeat`, for a
+ * caller that only needs to know whether there is a heatmap here.
  *
- * `isolatedAoiId` is honoured here rather than by the caller, because the registry hands
- * every layer the isolated area and holds each one to drawing only it (`overlayLayers.ts`):
- * a heatmap still showing the whole page while the address bar says one area would be
- * telling the reader something the URL they are about to share does not.
+ * Three ways there is not, and each of them is a reading rather than a fault: nobody
+ * fixated on this version of this step, nobody fixated inside the area the screen is
+ * isolated to, or every fixation here holds for no time at all. That last one would
+ * otherwise paint the whole page, because every place would weigh the same as the hottest
+ * — a heatmap drawn from a total dwell of zero. The fourth way is a fault and not a
+ * reading: a capture of no size is no page to place anything on, and the stage says so in
+ * its own words rather than having this draw a page's worth of heat at the origin.
+ */
+export const hasHeat = (
+  fixations: readonly Fixation[],
+  transform: Transform,
+  isolatedAoiId: string | null = null,
+): boolean =>
+  transform.pageWidth > 0 &&
+  transform.pageHeight > 0 &&
+  fixations.some(
+    (fixation) =>
+      (isolatedAoiId === null || fixation.aoiId === isolatedAoiId) && fixation.durationMs > 0,
+  );
+
+/**
+ * Every place attention held on this version's step, coolest first — which is the order
+ * they are drawn in, so that a hot core is painted over the cool spread around it.
+ *
+ * `isolatedAoiId` is this layer's own reading of the screen's isolation: the heatmap drops
+ * to that area's fixations, because heat over the whole page while the address bar says one
+ * area would tell the reader something the URL they are about to share does not. The
+ * outlines beside it read the same field differently and deliberately — every area drawn,
+ * the isolated one marked — so the registry hands both layers `isolatedAoiId` and holds
+ * neither of them to a particular meaning (`overlayLayers.ts`).
  *
  * Only `pageX` / `pageY` are read. The viewport-relative `x` / `y` belong to the replay,
  * where one person's scroll offset is the subject; here the page is.
@@ -136,6 +163,8 @@ export function accumulateHeat(
   transform: Transform,
   isolatedAoiId: string | null = null,
 ): readonly HeatBlob[] {
+  if (!hasHeat(fixations, transform, isolatedAoiId)) return [];
+
   const cells = new Map<string, Cell>();
 
   for (const fixation of fixations) {
@@ -143,14 +172,17 @@ export function accumulateHeat(
 
     const { x, y } = pageToOverlay(fixation, transform);
     const key = `${Math.round(x / HEAT_CELL)},${Math.round(y / HEAT_CELL)}`;
-    const cell = cells.get(key) ?? { xSum: 0, ySum: 0, dwellMs: 0, fixationCount: 0 };
+    let cell = cells.get(key);
+    if (cell === undefined) {
+      cell = { xSum: 0, ySum: 0, dwellMs: 0, fixationCount: 0 };
+      cells.set(key, cell);
+    }
     // Where the blob sits is the mean of the fixations in the cell, not the cell's own
     // centre: one fixation is drawn exactly where it landed, whatever grid it fell on.
     cell.xSum += x;
     cell.ySum += y;
     cell.dwellMs += fixation.durationMs;
     cell.fixationCount += 1;
-    cells.set(key, cell);
   }
 
   const hottest = Math.max(0, ...[...cells.values()].map((cell) => cell.dwellMs));
@@ -169,8 +201,8 @@ export function accumulateHeat(
           radius: heatRadius(intensity),
         };
       })
-      // Hottest last, so the hot cores are painted over the cool spread around them rather
-      // than under it. The order is the drawing order and nothing else reads it.
+      // Coolest first: the order is the drawing order, so a hot core is painted over the
+      // cool spread around it rather than under it.
       .sort((one, other) => one.dwellMs - other.dwellMs)
   );
 }

@@ -11,6 +11,7 @@ import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../../tests/app';
 import { ruleIn, rulesOf } from '../../../../tests/cssom';
 import { loadDesignTokens } from '../../../../tests/setup';
+import type { AttentionArea } from '../useAttentionAreas';
 import type { Fixation } from '../useAttentionStepSessions';
 import { HEAT_DRAWN_STEPS, HEAT_STEPS, accumulateHeat } from './heatAccumulation';
 import { HEATMAP_LAYER, HeatKey, HeatmapLayer } from './HeatmapLayer';
@@ -181,19 +182,39 @@ describe('on the screen', () => {
     expect(isolated).toBeLessThan(everywhere);
   });
 
-  it('draws nothing where nobody fixated, and the key says so rather than showing a ramp', async () => {
+  it('draws nothing where nobody fixated, and says so instead of showing a ramp', async () => {
     await withoutFixations();
     const { container } = attention();
     await ready();
     decoded(container);
-    // The key only says this once the sessions are all in; until then it says they are not.
+    // Only once the sessions are all in; until then what it says is that they are not.
     await screen.findByText(/No fixation landed anywhere on this version of this step/);
 
     expect(blobsIn(container).length).toBe(0);
-    expect((keyIn(container) as HTMLElement).dataset.heatKey).toBe('nothing');
-    expect(keyIn(container)?.textContent).not.toContain('long dwell');
-    // The switch is still the reader's, and the other layers are untouched.
-    expect(heatToggle().getAttribute('aria-pressed')).toBe('true');
+    expect(layerIn(container)).toBeNull();
+    // No ramp: a legend for colours that are not on the page is a reading of nothing.
+    expect(keyIn(container)).toBeNull();
+    // The reason is tied to the switch it is about, which stays reachable and announces
+    // itself unavailable rather than being made unreachable.
+    const control = screen.getByRole('button', { name: /Attention heatmap/ });
+    expect(control.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toMatch(/No fixation landed anywhere/);
+  });
+
+  it('leaves the page undimmed when it has nothing to draw over it', async () => {
+    await withoutFixations();
+    const { container } = attention();
+    await ready();
+    decoded(container);
+    await screen.findByText(/No fixation landed anywhere on this version of this step/);
+
+    // The scrim is there so that what is drawn over the screenshot reads on top of it. A
+    // page washed out for a layer that drew nothing is a treatment with nothing to serve.
+    expect((container.querySelector('#att-frame') as HTMLElement).hasAttribute('data-dim')).toBe(
+      false,
+    );
   });
 });
 
@@ -269,9 +290,31 @@ describe('what it draws', () => {
     const { container } = render(<HeatmapLayer {...given({ fixations, loading: true })} />);
 
     expect(container.querySelector('[data-overlay-layer="heat"]')).toBeNull();
-    // And the key says why, rather than a ramp over half an audience.
-    render(<HeatKey {...given({ fixations, loading: true })} />);
-    expect(screen.getByText(/Still reading your audience’s sessions/)).toBeDefined();
+    // And the panel says why, rather than offering a ramp over half an audience.
+    expect(HEATMAP_LAYER.unavailable?.(given({ fixations, loading: true }))).toMatch(
+      /Still reading your audience’s sessions/,
+    );
+  });
+
+  it('draws nothing over a capture of no size, which is no page to place a fixation on', () => {
+    const given0 = given({
+      fixations: [fixation()],
+      transform: { pageWidth: 0, pageHeight: 0 },
+    });
+
+    expect(render(<HeatmapLayer {...given0} />).container.querySelector('circle')).toBeNull();
+    expect(HEATMAP_LAYER.unavailable?.(given0)).toMatch(/no heat to show/);
+  });
+
+  it('draws nothing for fixations that held for no time at all', () => {
+    const fixations = [fixation({ durationMs: 0 }), fixation({ pageX: 100, durationMs: 0 })];
+
+    // Weighed against each other they would every one be the hottest place on the page,
+    // which would paint a whole heatmap out of a total dwell of nothing.
+    expect(accumulateHeat(fixations, PAGE)).toEqual([]);
+    expect(
+      render(<HeatmapLayer {...given({ fixations })} />).container.querySelector('circle'),
+    ).toBeNull();
   });
 
   it('is a pure renderer: the same fixations draw the same thing twice over', () => {
@@ -290,20 +333,32 @@ describe('what it draws', () => {
 
 describe('the heat key', () => {
   it('names the two ends of the ramp in the prototype’s words', () => {
-    const { container } = render(<HeatKey {...given({ fixations: [fixation()] })} />);
+    const { container } = render(<HeatKey />);
 
     expect(container.textContent).toBe('brieflong dwell');
   });
 
-  it('says there is nothing to show for an area nobody fixated, naming it', () => {
-    render(
-      <HeatKey
-        {...given({ fixations: [fixation({ aoiId: 'pay' })], isolatedAoiId: 'complete' })}
-      />,
+  it('says there is nothing to show for an area nobody fixated, in the table’s words for it', () => {
+    const area = {
+      aoi: { id: 'B-review-complete', label: 'Complete purchase' },
+    } as unknown as AttentionArea;
+
+    const sentence = HEATMAP_LAYER.unavailable?.(
+      given({
+        fixations: [fixation({ aoiId: 'B-review-pay-with' })],
+        areas: [area],
+        isolatedAoiId: 'B-review-complete',
+      }),
     );
 
-    expect(screen.getByText(/No fixation landed in “complete”/)).toBeDefined();
-    expect(screen.queryByText('long dwell')).toBeNull();
+    // The label, never the id: the areas table beside it calls the area this, and the two
+    // are about the same row of the same page.
+    expect(sentence).toMatch(/No fixation landed in “Complete purchase”/);
+  });
+
+  it('is a ramp whenever it is mounted at all, because the panel only mounts it then', () => {
+    expect(HEATMAP_LAYER.unavailable?.(given({ fixations: [fixation()] }))).toBeNull();
+    expect(render(<HeatKey />).container.textContent).toContain('long dwell');
   });
 });
 

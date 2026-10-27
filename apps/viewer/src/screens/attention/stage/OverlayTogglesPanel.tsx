@@ -57,9 +57,10 @@ export function OverlayTogglesPanel({ layers, setShown }: OverlayLayerState) {
 
       {/* A layer that needs a legend to be read has one, under the switches, where the
           prototype puts the heat key. It is the layer's own (`Legend`), it is mounted only
-          while that layer is switched on, and a layer without one adds nothing here. */}
-      {layers.map(({ layer, on, props }) =>
-        !on || layer.Legend === undefined || props === undefined ? null : (
+          while that layer is actually being drawn — a legend for something not on the page
+          would be a reading of nothing — and a layer without one adds nothing here. */}
+      {layers.map(({ layer, drawn, props }) =>
+        !drawn || layer.Legend === undefined || props === undefined ? null : (
           <div key={layer.id} data-overlay-legend={layer.id}>
             <layer.Legend {...props} />
           </div>
