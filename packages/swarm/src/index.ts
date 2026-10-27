@@ -10,6 +10,8 @@
  */
 
 export { AUTOMATION_FAILURE_KINDS, decideOutcome, OUTCOME_POLICY } from './outcome.js';
+export { runSession } from './run-session.js';
+export type { RunSessionInput, SessionProviders, SessionScreen } from './run-session.js';
 export type {
   Attribution,
   AutomationFailure,

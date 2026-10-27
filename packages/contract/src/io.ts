@@ -422,6 +422,29 @@ export const readRun = async (runDir: string): Promise<RunArtifact> => {
 const serialize = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 /**
+ * One session, written to `sessions/S-NN.json` and nothing else.
+ *
+ * It is the writer for a session that is finished while the run it belongs to is not: the
+ * swarm's `runSession` (#44) walks one persona through one variant and lands its file here,
+ * and `appendFinishedSession` is the same write plus the run's own index and counters, which
+ * belong to whatever is driving the run (#49). Keeping them apart is what lets sessions be
+ * written concurrently — a session file is this session's and nobody else's, while `run.json`
+ * is one file every session would have to take a turn at.
+ *
+ * What it writes is what the schema parsed, so reading it back yields the same value, and it
+ * throws with every violation rather than writing a session that would not read back.
+ */
+export const writeSession = async (runDir: string, session: Session): Promise<void> => {
+  const paths = runPaths(runDir);
+  const violations: Violation[] = [];
+  const parsed = parse(sessionSchema, session, relative.session(session.sessionId), violations);
+  if (parsed === undefined) throw new Error(report(runDir, violations));
+
+  await mkdir(paths.sessionsDir, { recursive: true });
+  await writeFile(paths.session(parsed.sessionId), serialize(parsed));
+};
+
+/**
  * A whole run directory, written. What it writes is what the schemas parsed, so reading it
  * back yields the same value. Throws with every violation rather than writing an artifact
  * that would not read back.
@@ -588,8 +611,7 @@ export const appendFinishedSession = async (
   // The session file first and the index second: between the two writes the directory holds
   // a session run.json does not list yet, which is the shorter-lived of the two half-states
   // and the one a reader can tell apart from a lost session.
-  await mkdir(paths.sessionsDir, { recursive: true });
-  await writeFile(paths.session(finished.sessionId), serialize(finished));
+  await writeSession(runDir, finished);
   await writeFile(paths.run, serialize(next));
   return next;
 };

@@ -276,9 +276,18 @@ importers:
 
   packages/swarm:
     dependencies:
+      '@personavision/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@personavision/contract':
         specifier: workspace:*
         version: link:../contract
+      '@personavision/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@personavision/provider':
+        specifier: workspace:*
+        version: link:../provider
     devDependencies:
       vitest:
         specifier: ^5.0.5
