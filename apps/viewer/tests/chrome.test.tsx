@@ -66,9 +66,11 @@ describe('the chrome names whose data this is', () => {
 
     const bar = within(await waitFor(() => chrome()));
     expect(bar.getByRole('link', { name: 'New test' }).getAttribute('href')).toBe(paths.newTest);
-    // The avatar says who is signed in and does nothing yet: there is no account screen
-    // to reach, and the corner must not send a signed-in reader back to sign-in.
-    expect(bar.getByText('Signed in as Workspace owner of Northwind Outdoors')).toBeTruthy();
+    // The avatar says who is signed in, and since #103 it is the trigger of the account
+    // menu, so the name it reads out to a screen reader is the button's own.
+    expect(
+      bar.getByRole('button', { name: /^Signed in as Workspace owner of Northwind Outdoors/ }),
+    ).toBeTruthy();
 
     // Everything in the chrome that does something is a link or a button, so the whole bar
     // is operable with the keyboard alone and nothing needs a pointer.

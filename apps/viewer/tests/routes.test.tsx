@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from './setup';
 import { forgetRuns, mountApp, serveRunData } from './app';
 import { NEXT_PARAM, paths, patterns } from '../src/shell/paths';
+import type { SessionState } from '../src/shell/useSession';
 
 /**
  * The route table of `docs/FLOW.md` section 3, over the repository's own run directories.
@@ -129,8 +130,10 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
   it('resolves each one without falling through to the not-found page', async () => {
     const { runIds } = await serveRunData();
     const runId = runIds[0] as string;
-    const expected: [string, string | RegExp][] = [
-      [paths.signIn, 'Sign in'],
+    // The third entry is who is signed in, where it matters: since #103 a signed-in
+    // reader is redirected away from `/signin`, so that route is checked signed out.
+    const expected: [string, string | RegExp, SessionState?][] = [
+      [paths.signIn, 'Sign in', { status: 'signed-out' }],
       [paths.demo, 'Demo'],
       [paths.audiences, 'Audiences'],
       [paths.newAudience, 'Audience'],
@@ -143,8 +146,8 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
       [paths.session(runId, 'S-01'), /^S-01 · /],
     ];
 
-    for (const [path, heading] of expected) {
-      const { unmount } = mountApp(path);
+    for (const [path, heading, session] of expected) {
+      const { unmount } = mountApp(path, session === undefined ? {} : { session });
       expect(await screen.findByRole('heading', { name: heading }), path).toBeTruthy();
       unmount();
     }
