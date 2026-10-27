@@ -486,6 +486,27 @@ const NO_PROGRESS: RunProgress = {
   sessions: [],
 };
 
+/**
+ * One entry per key: the last one given, in the order the keys first appeared — the same
+ * rule `@personavision/browser`'s capture projection follows, and for the same reason. The
+ * image on disk is the last one written, so a row describing an earlier capture of that
+ * screen would state a page height the image does not have.
+ *
+ * An area of interest cannot disagree with itself this way: its id is derived from its
+ * variant, step, role, label and box, so two rows under one key describe one area.
+ */
+const lastOfEach = <T>(rows: readonly T[], keyOf: (row: T) => string): T[] => {
+  const byKey = new Map<string, T>();
+  for (const row of rows) byKey.set(keyOf(row), row);
+  return [...byKey.values()];
+};
+
+/** What addresses one screen of the run, and what addresses one area on it. */
+const screenKey = (row: { variant: string; step: string }): string =>
+  `${row.variant}\u0000${row.step}`;
+const areaKey = (row: { variant: string; step: string; id: string }): string =>
+  `${screenKey(row)}\u0000${row.id}`;
+
 const addUsage = (total: RunUsage, spent: RunUsage): RunUsage => ({
   calls: total.calls + spent.calls,
   inputTokens: total.inputTokens + spent.inputTokens,
@@ -541,19 +562,37 @@ const withFinishedSession = (
 
 /**
  * One finished session, appended to an open run: its file written, its id listed, the
- * progress block and the per-variant counts updated, and what it spent added to the run's
- * totals. The swarm calls this as each session lands, so that the Running screen reads a
- * run that is still open and the run directory validates before, during and after.
+ * progress block and the per-variant counts updated, what it spent added to the run's
+ * totals, and the screens and areas it looked at declared. The swarm calls this as each
+ * session lands, so that the Running screen reads a run that is still open and the run
+ * directory validates before, during and after.
  *
  * The log entry is derived from the session and the run — the persona's name comes from
- * the run's `personas` unless it is passed, for a real session that has no persona — so
+ * the run's `personas` unless it is passed, for a real session that has no participant — so
  * that nothing is stated twice and the artifact stores no display text. Returns the run as
  * it now stands, and throws with every violation rather than writing one.
+ *
+ * `aois` and `screenshots` are what the session saw rather than what it is: a session's
+ * fixations name areas, and a dangling name makes the whole directory invalid, so the run
+ * declares an area in the same write that lists the session which looked at it (#49). They
+ * are merged into what the run already declares, one row per screen and one per area.
  */
 export const appendFinishedSession = async (
   runDir: string,
   session: Session,
-  { personaName, usage }: { personaName?: string; usage?: RunUsage } = {},
+  {
+    personaName,
+    usage,
+    aois,
+    screenshots,
+  }: {
+    personaName?: string;
+    usage?: RunUsage;
+    /** The areas this session's fixations and actions name, as the engine built them. */
+    aois?: ReadonlyArray<Run['aois'][number]>;
+    /** The screens it captured, with the geometry the overlays register to. */
+    screenshots?: ReadonlyArray<Run['screenshots'][number]>;
+  } = {},
 ): Promise<Run> => {
   const paths = runPaths(runDir);
   const violations: Violation[] = [];
@@ -602,6 +641,11 @@ export const appendFinishedSession = async (
       sessionIds: [...current.sessionIds, finished.sessionId],
       progress: withFinishedSession(current.progress ?? NO_PROGRESS, entry, fail),
       usage: usage === undefined ? current.usage : addUsage(current.usage ?? ZERO_USAGE, usage),
+      aois: aois === undefined ? current.aois : lastOfEach([...current.aois, ...aois], areaKey),
+      screenshots:
+        screenshots === undefined
+          ? current.screenshots
+          : lastOfEach([...current.screenshots, ...screenshots], screenKey),
     },
     relative.run,
     violations,

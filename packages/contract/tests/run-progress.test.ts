@@ -11,6 +11,7 @@ import {
   ZERO_USAGE,
 } from '../src/index.js';
 import {
+  CART,
   CONFIRM,
   finishedEntry,
   finishedProgress,
@@ -221,6 +222,43 @@ describe('appending a finished session', () => {
       reasoningTokens: 344,
       estimatedCostUsd: 0.0084,
     });
+    expect(await validate(dir)).toEqual([]);
+  });
+
+  it('declares the areas and screens a session reports, one row each', async () => {
+    const area = {
+      id: 'a-cart-basket',
+      variant: 'A',
+      step: CART,
+      label: 'Basket',
+      source: 'dom' as const,
+      role: 'region',
+      bbox: { x: 40, y: 80, width: 300, height: 200 },
+      isPrimaryAction: false,
+      belowFold: false,
+    };
+    const screen = {
+      variant: 'A',
+      step: CART,
+      path: runPaths('').screenshot('A', CART),
+      viewport: { width: 1440, height: 900 },
+      pageHeight: 2000,
+      foldY: 900,
+    };
+
+    await appendFinishedSession(dir, validSession('S-01', 'A'), {
+      aois: [area],
+      screenshots: [screen],
+    });
+    // A second session saw the same screen, as every session of a variant does.
+    const after = await appendFinishedSession(dir, validSession('S-02', 'B'), {
+      aois: [area],
+      screenshots: [screen],
+    });
+
+    expect(after.aois.filter((row) => row.id === area.id)).toEqual([area]);
+    expect(after.aois).toHaveLength(validRun().aois.length + 1);
+    expect(after.screenshots.filter((row) => row.step === CART)).toEqual([screen]);
     expect(await validate(dir)).toEqual([]);
   });
 
