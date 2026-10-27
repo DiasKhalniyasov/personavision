@@ -76,6 +76,7 @@ const committedHistory: History = existsSync(historyPath)
   : { schemaVersion: 1, rows: [] };
 
 let history = committedHistory;
+let recorded: string | null = null;
 if (record) {
   const note = stringArg('--note');
   if (note === null) {
@@ -83,13 +84,22 @@ if (record) {
   }
   // The clock is read here and nowhere else: the report itself carries no date, so that
   // re-rendering it leaves the working tree clean.
-  const date = stringArg('--date') ?? new Date().toISOString().slice(0, 10);
-  history = appendHistory(committedHistory, historyRowOf(result, { date, note, dataset }));
-  writeFileSync(historyPath, renderHistory(history));
-  process.stdout.write(`appended the measurement of ${date} to ${historyPath}\n`);
+  recorded = stringArg('--date') ?? new Date().toISOString().slice(0, 10);
+  history = appendHistory(
+    committedHistory,
+    historyRowOf(result, { date: recorded, note, dataset }),
+  );
 }
 
+// Rendered before either file is written, so that nothing a renderer refuses — a real corpus
+// with no dataset version, an objective its scope has no record for — can leave a recorded
+// row behind with a report that does not mention it.
 const text = renderReport({ result, history, dataset });
+
+if (recorded !== null) {
+  writeFileSync(historyPath, renderHistory(history));
+  process.stdout.write(`appended the measurement of ${recorded} to ${historyPath}\n`);
+}
 
 const { overall, categories } = result.predictor;
 process.stdout.write(
