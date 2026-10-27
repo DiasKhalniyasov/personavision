@@ -205,14 +205,21 @@ the history below. A figure that falls past its floor by more than its tolerance
 rises past it is a result, not a failure, and is recorded by appending a row rather than by moving an earlier
 one.
 
-The tolerances exist for one reason: the figures are deterministic on one machine — `test/score.test.ts`
-asserts two runs and two processes agree character for character — and the gate runs on another. CI is Linux on
-x64 and these floors were measured on macOS on arm64, and the image decode and the sums after it are not
-bit-identical across them. Each tolerance is at most a hundredth of the range its metric covers on this corpus,
-which is orders of magnitude above that drift and far below the smallest regression worth catching: the
-engine’s own defaults score 0.18 on web ScanMatch against the fitted 0.41, so a fit silently reverting would be
-an eighteen-tolerance fall. `packages/calibration/src/report/render.ts` carries the same argument beside the
-numbers, and a worker widening one has to replace it.
+The figures are deterministic — one corpus, one seed, one configuration, and `test/score.test.ts` asserts two
+runs and two processes agree character for character — so a tolerance is not there for noise in the
+measurement. It is there because a floor is a claim about the **engine**, and three things that are not the
+engine can still move a figure by a hair: `sharp` decodes this corpus’s PNGs through whichever libvips build is
+on the machine, `Math.exp` and `Math.pow` are specified only to within an ulp, and a refactor that changes
+nothing can change the order a sum is taken in. **None of those has been observed to move a figure here**, and
+this repository has only ever measured on one machine, so these sizes are a declared allowance and not a
+measured drift — the report regenerated in CI is compared to four decimal places on every run, which is what
+would say otherwise.
+
+Each tolerance is at most a hundredth of the range its metric covers on this corpus, which is far below the
+smallest regression worth catching: handing the fit back to the engine’s defaults drops the web category’s
+ScanMatch by **eighteen** of its tolerances, which `test/regression.test.ts` measures rather than quotes.
+`packages/calibration/src/report/render.ts` carries the same argument beside the numbers, and a worker widening
+one has to replace it.
 
 **What this gate holds, and what it does not — measured, not assumed.** Handing the fit back to the engine’s
 defaults breaks floors in every scope, the web category’s ScanMatch among them by eighteen tolerances. So does

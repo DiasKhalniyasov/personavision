@@ -107,11 +107,23 @@ export const REPORT_METRIC_IDS: readonly ReportMetricId[] = [
   ...SCANPATH_METRIC_IDS,
 ];
 
-/** A metric's label and the direction it reads in, from the metric module's own descriptor. */
+/**
+ * Every metric's label and the direction it reads in, from the metric modules' own
+ * descriptors.
+ *
+ * One table rather than a test on the id, so a seventh metric added to either module appears
+ * here by construction and the `Record<ReportMetricId, …>` annotation refuses one that does
+ * not. A hand-written branch would have sent it to the wrong module and returned `undefined`
+ * to every table in the report.
+ */
+const DESCRIPTORS: Readonly<
+  Record<ReportMetricId, { readonly label: string; readonly direction: MetricDirection }>
+> = Object.freeze({ ...SALIENCY_METRICS, ...SCANPATH_METRICS });
+
+/** A metric's label and the direction it reads in. */
 const descriptorOf = (
   id: ReportMetricId,
-): { readonly label: string; readonly direction: MetricDirection } =>
-  id === 'scanMatch' || id === 'sequenceScore' ? SCANPATH_METRICS[id] : SALIENCY_METRICS[id];
+): { readonly label: string; readonly direction: MetricDirection } => DESCRIPTORS[id];
 
 /** The six metrics of one aggregate, by name, so a loop can read them. */
 const metricsOf = (figures: {
@@ -184,6 +196,18 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * A dataset version, with blank read as absent.
+ *
+ * `--dataset "$VERSION"` with the variable unset passes an empty string, and a guard that
+ * only caught `null` would have let a row claim real-benchmark figures while naming no
+ * version — which is the one thing that guard exists to stop.
+ */
+const namedDataset = (given: string | null | undefined): string | null => {
+  const named = (given ?? '').trim();
+  return named.length === 0 ? null : named;
+};
+
+/**
  * Reads a history file, refusing one it cannot trust rather than reporting a floor from it.
  *
  * The gate's floors come from the last row here, so a history that parses loosely would be a
@@ -216,9 +240,30 @@ export const parseHistory = (text: string, where: string): History => {
     if (!isRecord(row['corpus']) || typeof row['corpus']['id'] !== 'string') {
       throw new ReportError(`${at} names no corpus, so its figures could be about anything`);
     }
+    if (typeof row['seed'] !== 'number' || !Number.isFinite(row['seed'])) {
+      throw new ReportError(`${at} names no seed, so its figures cannot be reproduced`);
+    }
+    if (typeof row['note'] !== 'string' || row['note'].trim().length === 0) {
+      throw new ReportError(`${at} says nothing about why it was recorded`);
+    }
+    if (row['dataset'] !== null && typeof row['dataset'] !== 'string') {
+      throw new ReportError(`${at} carries a dataset version that is neither a string nor null`);
+    }
+    const objective = row['objective'];
+    if (
+      !isRecord(objective) ||
+      typeof objective['id'] !== 'string' ||
+      typeof objective['value'] !== 'number' ||
+      !Number.isFinite(objective['value'])
+    ) {
+      throw new ReportError(`${at} names no objective and no value it reached on one`);
+    }
     if (!isRecord(row['figures'])) throw new ReportError(`${at} carries no figures`);
     for (const scope of SCOPES) {
       const figures = (row['figures'] as Record<string, unknown>)[scope];
+      // A scope the row does not hold is read as no figure, which `floorsOf` and the history
+      // table both handle: a corpus with no poster record is ordinary. What is refused is a
+      // scope that is there and malformed.
       if (figures === null || figures === undefined) continue;
       if (!isRecord(figures)) throw new ReportError(`${at} figures for ${scope} are not an object`);
       for (const metric of [...REPORT_METRIC_IDS, 'records'] as const) {
@@ -276,7 +321,7 @@ export const historyRowOf = (result: ScoreResult, options: RecordOptions): Histo
   if (options.note.trim().length === 0) {
     throw new ReportError('a recorded measurement carries one line saying why it was recorded');
   }
-  const dataset = options.dataset ?? null;
+  const dataset = namedDataset(options.dataset);
   if (!result.provenance.corpus.synthetic && dataset === null) {
     throw new ReportError(
       `the corpus ${result.provenance.corpus.id} is not the synthetic stand-in, so the row has to name the dataset version its figures came from`,
@@ -322,11 +367,16 @@ export const renderHistory = (history: History): string => `${JSON.stringify(his
  *
  * **Why a tolerance exists at all.** The figures are deterministic: one corpus, one seed, one
  * configuration, and `test/score.test.ts` asserts two runs and two processes agree character
- * for character. So on one machine the honest tolerance is zero. It is not zero because the
- * gate runs on a different machine from the one the floors were measured on — CI is Linux on
- * x64 and the committed figures were measured on macOS on arm64 — and the image decode, the
- * resampling and the sums that follow are not bit-identical across them. That drift is in
- * the last few digits; these numbers are several orders of magnitude above it.
+ * for character. So the tolerance is not there for noise in the measurement. It is there
+ * because a floor is a claim about the *engine*, and three things that are not the engine can
+ * still move a figure by a hair: `sharp` decodes the corpus's PNGs through whichever libvips
+ * build is on the machine, `Math.exp` and `Math.pow` are specified only to within an ulp, and
+ * a refactor that changes nothing can change the order a sum is taken in.
+ *
+ * **None of those has been observed to move a figure here**, and this repository has only
+ * ever measured on one machine, so the sizes below are a declared allowance and not a
+ * measured drift. The report regenerated in CI is compared to four decimal places on every
+ * run, which is the thing that would say otherwise.
  *
  * **Why these sizes.** Each is at most a hundredth of the range its metric covers over this
  * corpus, so the same argument reads the same for a metric on the unit interval and for one
@@ -347,9 +397,10 @@ export const renderHistory = (history: History): string => `${JSON.stringify(his
  * for the report's sentence back.
  *
  * **Why not wider.** The smallest regression worth catching on this corpus is far larger:
- * the engine's own defaults score 0.18 on web ScanMatch against the fitted 0.41, so a fit
- * silently reverting is an eighteen-tolerance fall. A worker who needs these numbers wider
- * is being asked to say here why the drift they are absorbing is drift and not a regression.
+ * handing the fit back to the engine's defaults drops the web category's ScanMatch by
+ * **eighteen** of its tolerances, which `test/regression.test.ts` measures rather than
+ * quotes. A worker who needs these numbers wider is being asked to say here why the drift
+ * they are absorbing is drift and not a regression.
  */
 export const REGRESSION_TOLERANCE: Readonly<Record<ReportMetricId, number>> = Object.freeze({
   cc: 0.01,
@@ -390,7 +441,7 @@ export const floorsOf = (history: History): readonly Floor[] => {
       `no measurement has been recorded, so there is no floor to hold the engine to: ${REPORT_COMMAND} --record writes the first`,
     );
   }
-  return SCOPES.flatMap((scope) => {
+  const read = SCOPES.flatMap((scope) => {
     const figures = last.figures[scope];
     if (figures === null || figures === undefined) return [];
     return REPORT_METRIC_IDS.map((metric) => {
@@ -408,6 +459,16 @@ export const floorsOf = (history: History): readonly Floor[] => {
       };
     });
   });
+  if (read.length === 0) {
+    // A row every scope of which is `null` — a run where every record failed would write
+    // one — would otherwise return no floor at all, and a gate with no floor passes
+    // anything. `breachesOf` is exported and callable on its own, so the invariant lives
+    // here rather than in the test that happens to count them.
+    throw new ReportError(
+      `the measurement recorded on ${last.date} holds no figure for any scope, so it is no floor: a run that scored nothing cannot hold the engine to anything`,
+    );
+  }
+  return read;
 };
 
 /** A figure that fell past its floor by more than the tolerance. */
@@ -488,7 +549,7 @@ const corpusHeading = (input: ReportInput): string => {
   const { corpus } = input.result.provenance;
   if (corpus.synthetic)
     return 'the committed synthetic corpus (synthetic, not the UEyes benchmark)';
-  const dataset = input.dataset ?? null;
+  const dataset = namedDataset(input.dataset);
   if (dataset === null) {
     throw new ReportError(
       `the corpus ${corpus.id} is not the synthetic stand-in, so the report has to name the dataset version its figures came from`,
@@ -515,7 +576,7 @@ const provenanceSection = (input: ReportInput): string => {
         ],
         [
           'Corpus',
-          `\`${corpus.id}\` — ${corpus.label}, ${corpus.synthetic ? '**synthetic**' : `**${input.dataset ?? ''}**`}, ${records(corpus.records)}`,
+          `\`${corpus.id}\` — ${corpus.label}, ${corpus.synthetic ? '**synthetic**' : `**${namedDataset(input.dataset) ?? ''}**`}, ${records(corpus.records)}`,
         ],
         ['Seed', `\`${String(provenance.seed)}\``],
         ['Predictors', provenance.predictorIds.map((id) => `\`${id}\``).join(', ')],
@@ -718,14 +779,21 @@ const gateSection = (input: ReportInput): string => {
     'rises past it is a result, not a failure, and is recorded by appending a row rather than by moving an earlier',
     'one.',
     '',
-    'The tolerances exist for one reason: the figures are deterministic on one machine — `test/score.test.ts`',
-    'asserts two runs and two processes agree character for character — and the gate runs on another. CI is Linux on',
-    'x64 and these floors were measured on macOS on arm64, and the image decode and the sums after it are not',
-    'bit-identical across them. Each tolerance is at most a hundredth of the range its metric covers on this corpus,',
-    'which is orders of magnitude above that drift and far below the smallest regression worth catching: the',
-    'engine’s own defaults score 0.18 on web ScanMatch against the fitted 0.41, so a fit silently reverting would be',
-    'an eighteen-tolerance fall. `packages/calibration/src/report/render.ts` carries the same argument beside the',
-    'numbers, and a worker widening one has to replace it.',
+    'The figures are deterministic — one corpus, one seed, one configuration, and `test/score.test.ts` asserts two',
+    'runs and two processes agree character for character — so a tolerance is not there for noise in the',
+    'measurement. It is there because a floor is a claim about the **engine**, and three things that are not the',
+    'engine can still move a figure by a hair: `sharp` decodes this corpus’s PNGs through whichever libvips build is',
+    'on the machine, `Math.exp` and `Math.pow` are specified only to within an ulp, and a refactor that changes',
+    'nothing can change the order a sum is taken in. **None of those has been observed to move a figure here**, and',
+    'this repository has only ever measured on one machine, so these sizes are a declared allowance and not a',
+    'measured drift — the report regenerated in CI is compared to four decimal places on every run, which is what',
+    'would say otherwise.',
+    '',
+    'Each tolerance is at most a hundredth of the range its metric covers on this corpus, which is far below the',
+    'smallest regression worth catching: handing the fit back to the engine’s defaults drops the web category’s',
+    'ScanMatch by **eighteen** of its tolerances, which `test/regression.test.ts` measures rather than quotes.',
+    '`packages/calibration/src/report/render.ts` carries the same argument beside the numbers, and a worker widening',
+    'one has to replace it.',
     '',
     '**What this gate holds, and what it does not — measured, not assumed.** Handing the fit back to the engine’s',
     'defaults breaks floors in every scope, the web category’s ScanMatch among them by eighteen tolerances. So does',
@@ -796,8 +864,9 @@ const historySection = (input: ReportInput): string =>
         'Why',
       ],
       input.history.rows.map((historyRow) => {
-        const web = historyRow.figures.webpage;
-        const overall = historyRow.figures.overall;
+        /** `?? null` and not `=== null`: a row may hold no key for a scope at all. */
+        const web = historyRow.figures.webpage ?? null;
+        const overall = historyRow.figures.overall ?? null;
         return [
           historyRow.date,
           `\`${historyRow.engineVersion}\``,
@@ -845,7 +914,7 @@ export const renderReport = (input: ReportInput): string => {
             '> changes the data and not a line of the code, and this report will then name the dataset version it was',
             '> measured on in its own heading.',
           ].join('\n')
-        : `> These figures are measured over **${input.dataset ?? ''}**, the real benchmark.`,
+        : `> These figures are measured over **${namedDataset(input.dataset) ?? ''}**, the real benchmark.`,
       '',
       provenanceSection(input),
       '',

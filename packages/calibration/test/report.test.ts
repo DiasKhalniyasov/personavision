@@ -112,6 +112,19 @@ describe('honest about scope', () => {
     expect(() => renderReport({ result, history: loadHistory() })).toThrowError(/dataset version/);
   }, 60_000);
 
+  it('and reads a blank dataset version as naming nothing, because that is what it is', async () => {
+    const result = overTheRealBenchmark(await freshRun());
+
+    // `--dataset "$VERSION"` with the variable unset passes an empty string. A guard that
+    // only caught null would have published real-benchmark figures naming no version.
+    for (const dataset of ['', '   ']) {
+      expect(() => renderReport({ result, history: loadHistory(), dataset })).toThrowError(
+        /dataset version/,
+      );
+      expect(() => historyRowOf(result, { ...ROW, dataset })).toThrowError(/dataset version/);
+    }
+  }, 60_000);
+
   it('and names that version in the heading when it is given one', async () => {
     const result = overTheRealBenchmark(await freshRun());
 
@@ -241,6 +254,15 @@ describe('the committed history', () => {
     expect(last?.engineVersion).toBe(result.predictor.provenance.version);
     expect(last?.corpus).toEqual(result.provenance.corpus);
     expect(last?.seed).toBe(result.provenance.seed);
+    /**
+     * Full precision, deliberately — and the strongest claim in this file: that the thirty
+     * doubles committed in `history.json` are this run's, not a rounding of it. The CI step
+     * makes the same claim to four decimal places when it regenerates the report, so this
+     * adds no risk the ticket did not already take. If it ever goes red on a machine that is
+     * not the one the floors were measured on, that is the answer to the open question in
+     * `REGRESSION_TOLERANCE`'s doc comment — the figures would then be platform-dependent,
+     * and that comment says so is unobserved rather than impossible.
+     */
     expect(last?.figures).toEqual(historyRowOf(result, ROW).figures);
   }, 60_000);
 
@@ -304,6 +326,28 @@ describe('a history file that cannot be trusted', () => {
     expect(() => parseHistory('{', 'a file')).toThrowError(/not JSON/);
     refused((history) => ({ ...history, schemaVersion: 99 }), /schema version/);
     refused((history) => ({ ...history, rows: 'later' }), /no rows array/);
+  });
+
+  it('and so is a row that names no seed, no objective and no reason', () => {
+    const first = (history: History, edit: Partial<HistoryRow>): unknown => ({
+      ...history,
+      rows: [{ ...history.rows[0], ...edit }],
+    });
+
+    refused((history) => first(history, { seed: undefined }), /names no seed/);
+    refused((history) => first(history, { note: '  ' }), /says nothing about why/);
+    refused((history) => first(history, { objective: undefined }), /names no objective/);
+    refused(
+      (history) =>
+        first(history, {
+          objective: {
+            ...history.rows[0]?.objective,
+            value: 'high',
+          } as unknown as HistoryRow['objective'],
+        }),
+      /names no objective/,
+    );
+    refused((history) => first(history, { dataset: 7 as unknown as null }), /dataset version/);
   });
 
   it('and so is a row that cannot say when, what or how much', () => {

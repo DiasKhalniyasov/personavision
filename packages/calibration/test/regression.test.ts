@@ -19,6 +19,7 @@ import {
   score,
   type Floor,
   type History,
+  type HistoryRow,
   type RecordedFigures,
   type ScoreResult,
   type ScoredCorpus,
@@ -149,15 +150,18 @@ describe('the gate on a knowingly worsened configuration', () => {
     expect(said).toContain(web.recordedOn);
   }, 60_000);
 
-  it('and the fall is far larger than the tolerance, which is why the tolerance is where it is', async () => {
+  it('and the fall is eighteen tolerances, which is the figure the report quotes', async () => {
     const breaches = breachesOf(await run(DE_FITTED), floors());
     const web = breaches.find(
       (breach) => breach.scope === 'webpage' && breach.metric === 'scanMatch',
     );
 
-    // Eighteen tolerances. A regression this gate would miss has to be smaller than a
-    // hundredth of the metric's range, and this one is nowhere near that.
-    expect((web?.beyond ?? 0) / REGRESSION_TOLERANCE.scanMatch).toBeGreaterThan(10);
+    // The report says **eighteen** of its tolerances where it argues the sizes are not too
+    // wide. This is that number, measured — bounded on both sides so the word cannot drift
+    // away from the figure without a test asking for the sentence to be rewritten.
+    const tolerances = (web?.beyond ?? 0) / REGRESSION_TOLERANCE.scanMatch;
+    expect(tolerances).toBeGreaterThan(17);
+    expect(tolerances).toBeLessThan(20);
   }, 60_000);
 });
 
@@ -265,6 +269,19 @@ describe('a gate that stopped measuring', () => {
 
   it('and a history with no row at all cannot hold the engine to anything', () => {
     expect(() => floorsOf({ schemaVersion: 1, rows: [] })).toThrowError(/no measurement/);
+  });
+
+  it('and neither can a recorded row that holds no figure for any scope', () => {
+    const history = loadHistory();
+    const last = history.rows.at(-1);
+    if (last === undefined) throw new Error('the committed history has no row');
+    const empty = Object.fromEntries(SCOPES.map((scope) => [scope, null])) as HistoryRow['figures'];
+
+    // A run where every record failed writes such a row (`overall` is `null` then). Without
+    // this, `floorsOf` would answer no floors and the gate would pass anything at all.
+    expect(() =>
+      floorsOf({ ...history, rows: [...history.rows.slice(0, -1), { ...last, figures: empty }] }),
+    ).toThrowError(/holds no figure for any scope/);
   });
 });
 
