@@ -1,0 +1,68 @@
+/* =============================================================================
+   The filter row of `#screen-sessions` — the `.seg` groups and the `.chip` of
+   `docs/design/prototype.html`, as this screen's own.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies, and nothing here moves: the two animated moments
+   this direction allows are elsewhere.
+
+   The segment is the shadcn `toggle-group` primitive, whose registry file
+   carries Tailwind defaults this design does not use — a 2.25rem item, a medium
+   radius, its own hover and pressed colours. The prototype draws one pill with
+   hairlines between its options, so those are answered here, once, in the
+   prototype's own selectors rather than in an override string per option.
+   ========================================================================== */
+
+.seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.seg button {
+  height: auto;
+  padding: var(--space-2) var(--space-4);
+  border-right: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.seg button:last-child {
+  border-right: 0;
+}
+
+/* The active option, and the one rule the primitive's own pressed colours lose
+   to: a reader has to be able to see which way the list is narrowed. */
+.seg button[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* The area-of-interest filter a reader arrived with, and can dismiss. It is a
+   button because it does something; the prototype's pressed chip is the only
+   state it has, because an unpressed one is a chip that is not there. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  gap: var(--space-2);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+}

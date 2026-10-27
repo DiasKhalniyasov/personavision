@@ -243,20 +243,15 @@ describe('a run the screen cannot list', () => {
 });
 
 describe('a link that asked for a narrower list', () => {
-  it('says the narrowing is not built yet, rather than passing every person off as the few', async () => {
+  it('narrows the list to the people it asked for, and never passes everybody off as the few', async () => {
     await serveRunData();
     mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
 
-    expect(await screen.findByText(/This link asked for a narrower list \(outcome\)/)).toBeTruthy();
-    // Every person is still listed, and the notice is what says so.
-    expect(await dataRows()).toHaveLength(sessionIds().length);
-  });
-
-  it('says nothing of the sort when no filter was asked for', async () => {
-    await serveRunData();
-    mountApp(paths.sessions(SEED));
-
-    await screen.findByRole('table');
+    // The Verdict's excluded banner links here with this very query: the two people whose
+    // sessions our own automation broke, and nobody else. #23's filters do the narrowing.
+    await waitFor(async () => {
+      expect(await dataRows()).toHaveLength(2);
+    });
     expect(screen.queryByText(/asked for a narrower list/)).toBeNull();
   });
 });

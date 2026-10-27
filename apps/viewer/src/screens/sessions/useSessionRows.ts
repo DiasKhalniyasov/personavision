@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Run } from '@personavision/contract';
+import type { Run, Session } from '@personavision/contract';
 import { runSessions, sessionRow } from '@/session';
 import type { SessionRow } from '@/session';
 import { runDataBase } from '@/shell/useRun';
@@ -21,7 +21,18 @@ import { runDataBase } from '@/shell/useRun';
 
 export type SessionRowState =
   | { readonly status: 'pending'; readonly sessionId: string }
-  | { readonly status: 'ready'; readonly sessionId: string; readonly row: SessionRow }
+  | {
+      readonly status: 'ready';
+      readonly sessionId: string;
+      readonly row: SessionRow;
+      /**
+       * The session as it was read. The row is what the table prints; the three filters
+       * (#23) are evaluated over the session itself, through `matchesSessionFilter`, so
+       * "fixated this area of interest" asks `fixations[].aoiId` rather than a second
+       * projection of it kept in step by hand.
+       */
+      readonly session: Session;
+    }
   | { readonly status: 'failed'; readonly sessionId: string; readonly problem: string };
 
 const pending = (sessionId: string): SessionRowState => ({ status: 'pending', sessionId });
@@ -47,7 +58,7 @@ export function useSessionRows(run: Run): readonly SessionRowState[] {
     for (const sessionId of run.sessionIds) {
       void sessions.session(sessionId).then(
         (session) => {
-          settle({ status: 'ready', sessionId, row: sessionRow(run, session) });
+          settle({ status: 'ready', sessionId, row: sessionRow(run, session), session });
         },
         (error: unknown) => {
           settle({ status: 'failed', sessionId, problem: problem(error) });
