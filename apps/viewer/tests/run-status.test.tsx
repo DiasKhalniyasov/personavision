@@ -43,7 +43,9 @@ describe('the screen a test is', () => {
     mountApp(paths.run(SEED));
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Running' })).toBeTruthy();
+      // `#screen-running`'s heading names the test beside the state, the way the chrome
+      // names it (#18); what this suite is about is which screen the status chose.
+      expect(screen.getByRole('heading', { level: 1, name: /^Running · / })).toBeTruthy();
     });
     // The chrome above it is the chrome of any other test: a run being read is named
     // whatever state it is in.
