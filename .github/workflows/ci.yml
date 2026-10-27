@@ -62,9 +62,12 @@ jobs:
       #
       # Its own step because its failure is its own: a red gate means the engine changed, not
       # that a test broke. It needs no network, no API key and no dataset download — the
-      # corpus is committed (#82) and the segmenter is offline — and one run over the four
-      # records costs about 34 ms of scoring (`SCORING_BUDGET`), so the budget below is for
-      # the Node and `sharp` start-up around it on a shared runner, not for the measurement.
+      # corpus is committed (#82) and the segmenter is offline.
+      #
+      # Measured on this runner: **two seconds** for both commands, against about 34 ms of
+      # actual scoring (`SCORING_BUDGET`) — the rest is Node and `sharp` starting twice. The
+      # budget below is a hundred and fifty times that, loose on purpose, because a tighter
+      # one would be a bound on a shared runner's load rather than on this gate.
       - name: calibration gate
         timeout-minutes: 5
         run: |

@@ -210,10 +210,13 @@ runs and two processes agree character for character — so a tolerance is not t
 measurement. It is there because a floor is a claim about the **engine**, and three things that are not the
 engine can still move a figure by a hair: `sharp` decodes this corpus’s PNGs through whichever libvips build is
 on the machine, `Math.exp` and `Math.pow` are specified only to within an ulp, and a refactor that changes
-nothing can change the order a sum is taken in. **None of those has been observed to move a figure here**, and
-this repository has only ever measured on one machine, so these sizes are a declared allowance and not a
-measured drift — the report regenerated in CI is compared to four decimal places on every run, which is what
-would say otherwise.
+nothing can change the order a sum is taken in.
+
+**None of those has been observed to move a figure here, and two platforms have now been compared.** These
+floors were measured on macOS on arm64; CI, on Ubuntu on x64, regenerates this report byte for byte and finds
+`history.json`’s thirty doubles bit-identical — `report --check` asserts the first to four decimal places and
+`test/report.test.ts` the second at full precision, on every run. So these sizes cover a toolchain that has not
+yet differed rather than one that has, which is the honest reason they are small.
 
 Each tolerance is at most a hundredth of the range its metric covers on this corpus, which is far below the
 smallest regression worth catching: handing the fit back to the engine’s defaults drops the web category’s
