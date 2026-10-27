@@ -323,6 +323,34 @@ describe('personavision calibrate score', () => {
   );
 
   it(
+    'exits 4 naming the record and the field when the corpus in the cache is malformed',
+    async () => {
+      const cache = await cacheDir('score-malformed-dataset');
+      const corpus = await writeConvertedDataset(cache, loadCorpus());
+      const parsed = JSON.parse(await readFile(corpus, 'utf8')) as {
+        records: Record<string, unknown>[];
+      };
+      // A record that lost its ground truth: the realistic accident is a truncated file or
+      // a cache written by an older reader, and either way it must not reach a metric.
+      delete parsed.records[1]?.saliencyMap;
+      await writeFile(corpus, JSON.stringify(parsed, null, 2));
+
+      const { code, stderr } = await personavision(
+        ['calibrate', 'score', '--dataset', '--cache', cache],
+        temp,
+      );
+
+      expect(code).toBe(4);
+      expect(stderr).toContain('is not a corpus this can score');
+      expect(stderr).toContain('desktop-two-panels');
+      expect(stderr).toContain('saliencyMap');
+      // A failure a developer is meant to read: the message is the whole output.
+      expect(stderr).not.toContain('at Array.map');
+    },
+    SLOW,
+  );
+
+  it(
     'prints a sentence rather than a number when the corpus is empty',
     async () => {
       const cache = await cacheDir('score-empty-dataset');

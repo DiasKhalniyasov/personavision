@@ -425,6 +425,78 @@ export interface CalibrateScoreOptions {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+/** `width` × `height`, or `null` when the value is not a positive size. */
+const positiveSize = (
+  value: unknown,
+): { readonly width: number; readonly height: number } | null =>
+  isObject(value) &&
+  typeof value.width === 'number' &&
+  typeof value.height === 'number' &&
+  value.width > 0 &&
+  value.height > 0
+    ? { width: value.width, height: value.height }
+    : null;
+
+/**
+ * One record of `corpus.json`, checked for what the scoring depends on.
+ *
+ * It is not a schema validator — the reader that writes this file is the only thing that
+ * writes it, and `packages/calibration` holds every rule about what a record means. What
+ * this catches is the realistic accident: a truncated file, a cache written by an older
+ * version of the reader, a record hand-edited in the cache. Without it a missing field
+ * reaches a metric and comes back as a Node stack trace about `path.resolve`, which names
+ * neither the file nor the record — and a `CliError` exists precisely so that the message
+ * is the whole output.
+ */
+const parseCorpusRecord = (
+  corpusPath: string,
+  position: number,
+  value: unknown,
+): GroundTruthRecord => {
+  const refuse = (field: string, expectation: string): never => {
+    const named =
+      isObject(value) && typeof value.id === 'string' ? value.id : `records[${String(position)}]`;
+    throw new CliError(
+      `${corpusPath} is not a corpus this can score: record ${named} — ${field} ${expectation}. Delete the converted directory and run \`personavision calibrate fetch\` again.`,
+      CALIBRATE_EXIT_CODES.noConvertedDataset,
+    );
+  };
+  if (!isObject(value)) return refuse(`records[${String(position)}]`, 'is not an object');
+  if (typeof value.id !== 'string' || value.id === '') return refuse('id', 'is not a name');
+  if (
+    typeof value.category !== 'string' ||
+    !(RECORD_CATEGORIES as readonly string[]).includes(value.category)
+  ) {
+    return refuse('category', `is not one of ${RECORD_CATEGORIES.join(', ')}`);
+  }
+  if (typeof value.imagePath !== 'string' || value.imagePath === '') {
+    return refuse('imagePath', 'is not a path to the image the humans saw');
+  }
+  if (positiveSize(value.imageSize) === null) return refuse('imageSize', 'is not a positive size');
+  if (!isObject(value.display)) {
+    return refuse(
+      'display',
+      'is missing, and a prediction is made at the resolution the humans saw and never at a default',
+    );
+  }
+  const map = value.saliencyMap;
+  const resolution = positiveSize(map);
+  if (!isObject(map) || resolution === null) {
+    return refuse('saliencyMap', 'has no positive resolution');
+  }
+  const cells = resolution.width * resolution.height;
+  if (!Array.isArray(map.values) || map.values.length !== cells) {
+    return refuse('saliencyMap.values', `is not ${String(cells)} cells`);
+  }
+  if (!Array.isArray(value.scanpaths) || value.scanpaths.length === 0) {
+    return refuse(
+      'scanpaths',
+      'is empty, and a record with no human gaze is nothing to score against',
+    );
+  }
+  return value as unknown as GroundTruthRecord;
+};
+
 /**
  * The converted dataset in the cache, as a corpus to score.
  *
@@ -470,11 +542,11 @@ const loadConvertedCorpus = async (
     );
   }
   const dataset = isObject(parsed.dataset) ? parsed.dataset : {};
-  const records = (parsed.records as readonly GroundTruthRecord[]).map((record) => ({
-    ...record,
+  const records = parsed.records.map((value, position) => {
+    const record = parseCorpusRecord(corpusPath, position, value);
     // Written relative so the cache can be moved; resolved here so a predictor reads bytes.
-    imagePath: resolve(convertedDir, record.imagePath),
-  }));
+    return { ...record, imagePath: resolve(convertedDir, record.imagePath) };
+  });
   return {
     id: typeof dataset.id === 'string' ? dataset.id : manifest.dataset.id,
     label: typeof dataset.label === 'string' ? dataset.label : manifest.dataset.name,
