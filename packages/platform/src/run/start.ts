@@ -1,8 +1,9 @@
 import { runRequestSchema } from '@personavision/contract';
-import type { ModelMode, RunRequest } from '@personavision/contract';
+import type { Audience, ModelMode, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
 import type { ModelId } from '@personavision/provider';
-import type { WorkspaceStore } from '../store/types.js';
+import { audienceForNewTest } from '../audience/freeze.js';
+import type { AudienceStore, WorkspaceStore } from '../store/types.js';
 
 /**
  * Starting a test: the one place the model mode is decided, and the one place a test that
@@ -39,35 +40,68 @@ export interface StartedTest {
   readonly modelMode?: ModelMode;
 }
 
-/** The swarm, behind one call: handed a complete request, it answers with what it ran. */
-export type TestPipeline = (request: RunRequest) => Promise<StartedTest>;
+/**
+ * The swarm, behind one call: handed a complete request, it answers with what it ran.
+ *
+ * It is handed the audience **by value** as well, because `RunRequest` names it by id and
+ * `run.json` carries it by value — resolving that id is the platform's, since only the
+ * platform knows which workspace asked (`audienceForNewTest`). The pipeline copies this
+ * object into the artifact and reads no audience of its own.
+ */
+export type TestPipeline = (request: RunRequest, audience: Audience) => Promise<StartedTest>;
+
+/** What the pipeline reported it ran, in the words a refusal states it in. */
+const whatRan = (started: StartedTest): string => {
+  if (started.engineMode !== 'model') return 'ran on the offline deterministic engine';
+  if (started.modelMode === undefined) return 'ran on a model it did not name';
+  return `ran on the ${started.modelMode} model ${MODEL_ID_BY_MODE[started.modelMode]}`;
+};
 
 /**
- * A test that was not started, and never will be under another model.
+ * A test that was refused rather than answered by a model nobody asked for.
  *
- * The standard model could not be served — no key is configured for this deployment, or
- * the provider is unavailable — so the test is refused. The alternative is what the owner
- * forbade: a result produced by the contributor model, or by the offline deterministic
- * engine, presented to a paying customer as a test of their own site.
+ * Two cases, and they are told apart because one message is a lie in the other's case:
+ *
+ * - **Before anything ran.** The model could not be served — no key is configured for this
+ *   deployment, or the provider is unavailable — so nothing was simulated. This is the
+ *   refusal a standard workspace gets on a machine with no key.
+ * - **After something ran.** The pipeline answered on another model, or on the offline
+ *   deterministic engine. Sessions did run and a run directory was written, so the refusal
+ *   says that, names where it is, and says it is not recorded as this workspace's. Telling
+ *   a customer nothing happened while a billed run sits on disk is its own kind of lying.
+ *
+ * Either way the result is not a test of their site on the model they asked for, which is
+ * what the owner's decision forbids presenting as one.
  *
  * The message is written here in full and carries nothing from the error underneath it:
  * what reaches a screen, a response body or a log line is these words, so no key value can
- * travel inside them.
+ * travel inside them. The error below it is where it was thrown, which is where a
+ * deployment logs its own diagnosis.
  */
 export class TestRefusedError extends Error {
-  /** The mode that was asked for and could not be served. */
+  /** The mode the workspace asked for. */
   readonly modelMode: ModelMode;
-  /** The model that could not be used, named so the Test failed screen can state it. */
+  /** The model that was asked for, named so the Test failed screen can state it. */
   readonly modelId: ModelId;
+  /**
+   * The run the pipeline had already written when the substitution was caught, or `null`
+   * where nothing ran. It is left where the pipeline wrote it — this package does not own
+   * run directories — and it is registered to no workspace, so nothing in the product
+   * offers it.
+   */
+  readonly ranAnywayRunId: string | null;
 
-  constructor(modelMode: ModelMode) {
+  constructor(modelMode: ModelMode, ranAnyway: StartedTest | null = null) {
     const modelId = MODEL_ID_BY_MODE[modelMode];
     super(
-      `The test was not started: the ${modelMode} model ${modelId} could not be used. Nothing was simulated — no sessions ran, no result was stored, and no other model was tried.`,
+      ranAnyway === null
+        ? `The test was not started: the ${modelMode} model ${modelId} could not be used. Nothing was simulated — no sessions ran, no result was stored, and no other model was tried.`
+        : `The test was refused: it was to run on the ${modelMode} model ${modelId}, and ${whatRan(ranAnyway)} instead. That is not a test of your site on ${modelId}, so it is recorded as nobody's: the run directory "${ranAnyway.runId}" was left where it was written and belongs to no workspace.`,
     );
     this.name = 'TestRefusedError';
     this.modelMode = modelMode;
     this.modelId = modelId;
+    this.ranAnywayRunId = ranAnyway?.runId ?? null;
   }
 }
 
@@ -84,6 +118,8 @@ export class NoSuchWorkspaceError extends Error {
 
 export interface StartTestOptions {
   workspaces: WorkspaceStore;
+  /** The workspace's audiences: the one the draft names is resolved against these alone. */
+  audiences: AudienceStore;
   /** The workspace the test belongs to — the session's, and the one that names the mode. */
   workspaceId: string;
   draft: TestDraft;
@@ -91,21 +127,26 @@ export interface StartTestOptions {
 }
 
 /**
- * Whether what ran is what a standard workspace asked for.
+ * Whether what ran is what the workspace asked for.
  *
- * Only standard is checked, and it is checked on the way back as well as on the way out,
- * because the rule is about the result and not only about the request: a run that reports
- * the contributor model, or reports the offline engine, is not this customer's test. A
- * contributor workspace keeps today's behaviour — no key means offline, said plainly on the
- * screen, which is what keeps the demo and a cold start working.
+ * A model that ran has to be the one that was asked for, **in either direction**: standard
+ * served by contributor sends a paying customer's content to the model Meta may train on,
+ * and contributor served by standard bills a development run at twelve times what it should
+ * be. `packages/provider`'s own selection guards both (#143), and so does this, because the
+ * rule is about the result and not only about the request.
+ *
+ * Where no model ran at all, the offline deterministic engine is today's answer for a
+ * contributor workspace — no key means offline, said plainly on the screen, which is what
+ * keeps the demo and a cold start working — and is never an answer for a standard one.
  */
 const servedAsAsked = (request: RunRequest, started: StartedTest): boolean =>
-  request.modelMode !== 'standard' ||
-  request.engineMode !== 'model' ||
-  (started.engineMode === 'model' && started.modelMode === 'standard');
+  started.engineMode === 'model'
+    ? started.modelMode === request.modelMode
+    : request.modelMode !== 'standard' || request.engineMode !== 'model';
 
 export const startTest = async ({
   workspaces,
+  audiences,
   workspaceId,
   draft,
   pipeline,
@@ -116,22 +157,27 @@ export const startTest = async ({
   // Parsed rather than spread together, so that what the pipeline receives is a request the
   // contract has already accepted — the mode included.
   const request = runRequestSchema.parse({ ...draft, modelMode: workspace.modelMode });
+  // Resolved against the workspace that asked, and frozen: a test is never started for an
+  // audience this workspace cannot read, and it is refused here rather than by the
+  // pipeline, which is handed no workspace to scope it against. Throws before anything
+  // runs, so an unofferable audience costs no sessions either.
+  const audience = await audienceForNewTest(audiences, workspaceId, request.audienceId);
 
   let started: StartedTest;
   try {
-    started = await pipeline(request);
+    started = await pipeline(request, audience);
   } catch (error) {
     // Provider selection refusing to serve the mode is this workspace's test being
     // refused (#143). For contributor it is not supposed to happen — no key means offline,
     // not an error — so it is left as the failure it is rather than dressed up as a
     // refusal nobody can act on.
-    if (error instanceof ModelModeUnavailableError && request.modelMode === 'standard') {
+    if (error instanceof ModelModeUnavailableError && workspace.modelMode === 'standard') {
       throw new TestRefusedError('standard');
     }
     throw error;
   }
 
-  if (!servedAsAsked(request, started)) throw new TestRefusedError('standard');
+  if (!servedAsAsked(request, started)) throw new TestRefusedError(workspace.modelMode, started);
 
   // Registered only once something ran: a refused test leaves the workspace's runs as they
   // were, so nothing in the product offers a result that does not exist.
