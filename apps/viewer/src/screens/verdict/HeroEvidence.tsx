@@ -112,13 +112,43 @@ const quoted = (areas: readonly AttentionArea[]): string => {
  */
 const hottestAreas = (areas: readonly AttentionArea[]): AttentionArea[] =>
   areas
-    .filter((area) => (area.metric?.totalDwellMs ?? 0) > 0)
+    .filter((area) => isNamed(area) && (area.metric?.totalDwellMs ?? 0) > 0)
     .sort((one, other) => (other.metric?.totalDwellMs ?? 0) - (one.metric?.totalDwellMs ?? 0))
     .slice(0, CAPTION_AREAS);
 
-/** The area `heroEvidence.aoiId` names, when it names one of this version's step. */
+/** The area `heroEvidence.aoiId` names, when it names one on the page in the frame. */
 const namedArea = (areas: readonly AttentionArea[], aoiId: string | null): AttentionArea | null =>
   aoiId === null || aoiId === '' ? null : (areas.find((area) => area.aoi.id === aoiId) ?? null);
+
+/**
+ * The areas that are on the page in the frame.
+ *
+ * `aois` is keyed by version and step and not by device, and an audience with a device mix
+ * is measured on all of them: a run therefore carries boxes from a 1440-wide rendering of
+ * the same step beside the 390-wide one this capture recorded. This block shows one page
+ * and speaks about it, so an area reaching past that page's right edge is not an area of
+ * the picture, and neither the outline nor the caption is entitled to it — a box drawn from
+ * it would land outside the screenshot, and a sentence naming it would describe something
+ * the reader cannot see. The areas table one click away is where every box lives.
+ */
+const onThisPage = (
+  areas: readonly AttentionArea[],
+  capture: Capture | null,
+): readonly AttentionArea[] =>
+  capture === null
+    ? []
+    : areas.filter(({ aoi }) => aoi.bbox.x + aoi.bbox.width <= capture.viewport.width);
+
+/**
+ * Whether the run has a name for this area, rather than only a kind.
+ *
+ * The pipeline labels an area from the page itself and falls back to its accessibility role
+ * where the element carries no accessible name: `label: "generic"` beside `role: "generic"`.
+ * The areas table prints that, because a row stands for a box whatever it is called. A
+ * sentence cannot — "attention burns on generic" names nothing — so the caption draws on the
+ * areas the run can name and leaves the rest to that table.
+ */
+const isNamed = ({ aoi }: AttentionArea): boolean => aoi.label !== aoi.role;
 
 /**
  * The step's primary action, when the run records no fixation in it at all.
@@ -200,13 +230,15 @@ export function HeroEvidence({ run }: { run: Run }) {
   const heatDrawn = drawable && unavailable === null;
 
   const fold = capture === null || !isDrawable(capture) ? null : foldMark(capture);
-  const hottest = hottestAreas(areas);
+  // Everything this block outlines or names is an area of the page it is showing.
+  const framed = onThisPage(areas, capture);
+  const hottest = hottestAreas(framed);
   // The one vector the direction allows on this screen, and only when the run itself named
   // the area: the absence the pipeline pointed at, outlined with nothing in it.
-  const outlined = namedArea(areas, hero?.aoiId ?? null);
+  const outlined = namedArea(framed, hero?.aoiId ?? null);
   // What the caption's second sentence is about: the area the run named, or — when it named
   // none — a primary action nobody ever looked at.
-  const subject = outlined ?? unseenPrimaryAction(areas);
+  const subject = outlined ?? unseenPrimaryAction(framed);
 
   const href =
     hero === null

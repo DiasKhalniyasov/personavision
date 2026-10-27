@@ -301,6 +301,86 @@ describe('one heatmap and nothing else', () => {
   });
 });
 
+/**
+ * Two areas a run of the real pipeline carries and this block must not speak about: a box
+ * from another device's rendering of the same step, and a box the page gave no name to.
+ * `aois` is keyed by version and step rather than by device, and the pipeline falls back to
+ * an element's accessibility role when it has no accessible name, so both reach a screen
+ * reading a generated artifact (`runs/`) even though the hand-authored fixture has neither.
+ */
+const OFF_PAGE = 'B-review-desktop-rail';
+const UNNAMED = 'B-review-unnamed';
+
+const withExtraAreas = (run: Run): Run => ({
+  ...run,
+  aois: [
+    ...run.aois,
+    {
+      id: OFF_PAGE,
+      variant: HERO.variant,
+      step: HERO.step,
+      label: 'Desktop order rail',
+      source: 'dom',
+      role: 'complementary',
+      // 960 wide, on a page the capture says is 390 wide: another device's rendering.
+      bbox: { x: 0, y: 100, width: 960, height: 400 },
+      isPrimaryAction: false,
+      belowFold: false,
+    },
+    {
+      id: UNNAMED,
+      variant: HERO.variant,
+      step: HERO.step,
+      // The page gave this element no accessible name, so the run labels it by its role.
+      label: 'generic',
+      source: 'dom',
+      role: 'generic',
+      bbox: { x: 20, y: 200, width: 350, height: 60 },
+      isPrimaryAction: false,
+      belowFold: false,
+    },
+  ],
+  aoiMetrics: [
+    ...run.aoiMetrics,
+    // Hotter than anything the fixture records, so only the filters can keep them out.
+    ...[OFF_PAGE, UNNAMED].map((aoiId) => ({
+      aoiId,
+      timeToFirstFixationMs: 1_000,
+      firstFixationDurationMs: 200,
+      totalDwellMs: 99_999,
+      fixationCount: 40,
+      revisits: 3,
+      lookedAtShare: 1,
+      sessionCount: 9,
+    })),
+  ],
+});
+
+describe('the block speaks only about the page in its frame', () => {
+  it('names neither another device’s box nor one the run has no name for', async () => {
+    await serveChangedRun(withExtraAreas);
+    const { container } = verdict();
+    await aggregated();
+
+    const caption = captionOf(container).textContent ?? '';
+    // Both are hotter than every area of this page, and neither is a thing this picture
+    // can be said to show.
+    expect(caption).not.toContain('Desktop order rail');
+    expect(caption).not.toContain('generic');
+    expect(caption).toContain('Order summary');
+  });
+
+  it('outlines nothing when the area the run named is not on this capture', async () => {
+    await serveChangedRun((run) => withHero(withExtraAreas(run), { aoiId: OFF_PAGE }));
+    const { container } = verdict();
+    await aggregated();
+
+    expect(container.querySelector(`[data-never-looked="${OFF_PAGE}"]`)).toBeNull();
+    // And the caption falls back to the absence it can still show: the completing action.
+    expect(captionOf(container).textContent).toContain('Confirm purchase');
+  });
+});
+
 describe('the caption, and the one click to beat 5', () => {
   it('states what the heat shows and what it does not land on', async () => {
     await serveRunData();
