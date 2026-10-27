@@ -9,9 +9,14 @@
  * **It records through the module's own seams.** `openSession`, `capture` and `act` are
  * what a live run uses, so a recorded capture is a live capture — the same geometry, the
  * same elements from the DOM and the accessibility tree, the same stable ids, the same
- * image — and not a hand-written approximation of one. The directory it writes into is
- * passed as the run directory, which is why the screenshots land where the contract puts a
- * run's and why a recorded `screenshot` field is the path `run.json` records.
+ * image — and not a hand-written approximation of one.
+ *
+ * **The run directory it captures into is a temporary one**, and the images it wrote there
+ * are copied into the capture set. So a recorded `screenshot` field is still the path
+ * `run.json` records and the bytes are still the ones `writeScreenshot` produced — while
+ * everything else a run directory accumulates stays out of committed test material. It
+ * accumulates more than it used to: the capture cache (#51) keeps `.capture-cache/` there,
+ * keyed on the variant URL, which holds the port the recording server happened to get.
  *
  * **Re-running it against an unchanged site rewrites identical files.** Nothing it writes
  * depends on when it ran or on the machine that ran it: no timestamps, no ephemeral port —
@@ -30,9 +35,11 @@
  */
 
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { runPaths } from '@personavision/contract';
 import {
   act,
   capture as takeCapture,
@@ -153,7 +160,7 @@ export interface RecordedFile {
 export interface RecordCapturesResult {
   readonly dir: string;
   readonly set: CaptureSet;
-  /** The JSON files written, in the order they were written; the images are beside them. */
+  /** Every file written, captures and images alike, in the order they were written. */
   readonly files: readonly RecordedFile[];
 }
 
@@ -244,6 +251,13 @@ const writeText = async (path: string, text: string): Promise<RecordedFile> => {
   return { path, bytes: Buffer.byteLength(text) };
 };
 
+/** The screenshot `writeScreenshot` took, moved from the temporary run directory into the set. */
+const copyImage = async (from: string, to: string): Promise<RecordedFile> => {
+  await mkdir(dirname(to), { recursive: true });
+  await copyFile(from, to);
+  return { path: to, bytes: (await stat(to)).size };
+};
+
 /**
  * Walks one variant and writes its captures.
  *
@@ -254,6 +268,7 @@ const writeText = async (path: string, text: string): Promise<RecordedFile> => {
  */
 const recordWalk = async (
   dir: string,
+  runDir: string,
   task: TaskDefinition,
   walk: RecordedWalk,
   origin: string,
@@ -270,7 +285,7 @@ const recordWalk = async (
     variant: walk.variant,
     device: walk.device,
     task,
-    runDir: dir,
+    runDir,
   };
 
   try {
@@ -290,6 +305,15 @@ const recordWalk = async (
       parseCapture(JSON.parse(json) as unknown, file);
       files.push(await writeText(file, json));
       steps.push({ step: step.id, path: pathOf(url, origin) });
+
+      if (captured.screenshot !== null) {
+        files.push(
+          await copyImage(
+            runPaths(runDir).screenshot(walk.variant, step.id),
+            runPaths(dir).screenshot(walk.variant, step.id),
+          ),
+        );
+      }
 
       const last = index === task.steps.length - 1;
       if (last) break;
@@ -375,6 +399,7 @@ export const recordCaptures = async (
   const walks = options.walks ?? FIXTURE_WALKS;
 
   await mkdir(dir, { recursive: true });
+  const runDir = await mkdtemp(join(tmpdir(), 'personavision-recording-'));
   const site = await serveFixtureSite({ root: FIXTURE_SITE_DIR });
   const files: RecordedFile[] = [];
   let set: CaptureSet;
@@ -382,13 +407,14 @@ export const recordCaptures = async (
   try {
     const variants: RecordedVariant[] = [];
     for (const walk of walks) {
-      const recorded = await recordWalk(dir, task, walk, site.url);
+      const recorded = await recordWalk(dir, runDir, task, walk, site.url);
       files.push(...recorded.files);
       variants.push({ id: walk.variant, device: walk.device, steps: recorded.steps });
     }
     set = { formatVersion: CAPTURE_SET_FORMAT_VERSION, variants };
   } finally {
     await site.close();
+    await rm(runDir, { recursive: true, force: true });
   }
 
   const paths = captureSetPaths(dir);
@@ -410,7 +436,7 @@ const main = async (): Promise<void> => {
     );
   }
   const bytes = result.files.reduce((total, file) => total + file.bytes, 0);
-  process.stdout.write(`${result.files.length} JSON files, ${bytes} B, in ${result.dir}\n`);
+  process.stdout.write(`${result.files.length} files, ${bytes} B, in ${result.dir}\n`);
 };
 
 /**

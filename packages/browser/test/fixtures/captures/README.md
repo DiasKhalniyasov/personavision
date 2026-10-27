@@ -25,12 +25,13 @@ captures/<variant>/<step>.json   one capture per variant and step: the geometry,
 screenshots/<variant>/<step>.png the full-page screenshot beside it
 ```
 
-The first two names are this module's own; the third is not. The recorder passes this
-directory as its **run directory**, so the images are written by `writeScreenshot` to exactly
-where `runPaths(dir).screenshot(variant, step)` puts a run's, and a capture's `screenshot`
-field is the run-directory-relative path `run.json` records. That is what lets a replay copy
-the recorded image into a real run directory and hand back the same path the live source
-would.
+The first two names are this module's own; the third is not. The recorder captures into a
+**temporary run directory**, so the images are written by `writeScreenshot` to exactly where
+`runPaths(runDir).screenshot(variant, step)` puts a run's, and then copied in here at that
+same relative path. A capture's `screenshot` field is therefore the run-directory-relative
+path `run.json` records, which is what lets a replay copy the recorded image into a real run
+directory and hand back the same path the live source would — and everything else a run
+directory accumulates, the capture cache's `.capture-cache/` among it, stays out of here.
 
 ## What was recorded
 
