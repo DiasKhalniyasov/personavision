@@ -7,6 +7,7 @@ import { paths } from '@/shell/paths';
 import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
+import { OutcomeCard } from './OutcomeCard';
 import { ReplayFrame } from './ReplayFrame';
 import { ReplayHeader } from './ReplayHeader';
 import { ScreenTimeline } from './ScreenTimeline';
@@ -165,7 +166,6 @@ function Replay({
             />
           </div>
 
-          {/* #25 closes this column with the outcome card. */}
           <div className={styles.timeline} id="rp-timeline">
             <ScreenTimeline
               run={run}
@@ -174,6 +174,10 @@ function Replay({
               moment={moment}
               onGoTo={goTo}
             />
+            {/* The card that closes the column: what this session means, and why it can be
+                believed. It is about the session as a whole, so it does not move with the
+                scrubber. */}
+            <OutcomeCard run={run} session={session} />
           </div>
         </div>
 
