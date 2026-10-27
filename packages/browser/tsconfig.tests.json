@@ -6,5 +6,8 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["test"]
+  // The capture recorder is checked with the tests: it writes this package's committed
+  // test material, and the determinism test imports it to compare against the committed
+  // bytes.
+  "include": ["test", "scripts"]
 }

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The recorder drives a real page, and `page.evaluate` serialises a function into the
+    // browser: a transform that rewrites one — esbuild's `keepNames`, which `tsx` has on —
+    // sends a `__name` call the page cannot resolve. So the script is compiled by the same
+    // compiler as the rest of the package and run as plain JavaScript. `dist/` is ignored
+    // by git, so the emit is not a file anyone has to remember to clean up.
+    "rootDir": ".",
+    "outDir": "dist/record",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src", "scripts", "test/helpers"]
+}

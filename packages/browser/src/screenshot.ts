@@ -54,8 +54,11 @@ export type WriteScreenshot = (
  * that turns them into a write, so it is where an id that is not a name gets refused: a
  * step called `../../etc` would otherwise take `mkdir -p` and the image outside the run
  * directory, and be recorded in `run.json` as a path the viewer would resolve.
+ *
+ * Exported because `fixture-source.ts` reads a variant and a step out of a file on disk and
+ * writes a screenshot under them, which is the same write and so is the same rule.
  */
-const isOneSegment = (value: string): boolean =>
+export const isOneSegment = (value: string): boolean =>
   /^[^/\\\0]+$/.test(value) && value !== '.' && value !== '..';
 
 /**

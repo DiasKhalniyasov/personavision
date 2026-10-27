@@ -1,0 +1,270 @@
+{
+  "variant": "B",
+  "step": "review",
+  "screenshot": "screenshots/B/review.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "pageHeight": 1100,
+  "foldY": 900,
+  "elements": [
+    {
+      "id": "e-7833390d2654",
+      "source": "dom",
+      "role": "heading",
+      "name": "Review your order",
+      "text": "Review your order",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-heading"
+    },
+    {
+      "id": "e-ddbebee0ab44",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The last step before the order is placed. Nothing is charged: placing this order loads the confirmation page of this site.",
+      "text": "The last step before the order is placed. Nothing is charged: placing this order loads the confirmation page of this site.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-intro"
+    },
+    {
+      "id": "e-4e60d530d968",
+      "source": "dom",
+      "role": "img",
+      "name": "Canvas tote bag, natural",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-product-image"
+    },
+    {
+      "id": "e-6aef68b79d72",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 200
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-summary"
+    },
+    {
+      "id": "e-a02c0f9ddd18",
+      "source": "dom",
+      "role": "generic",
+      "name": "Total 48.00",
+      "text": "Total 48.00",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 334,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-total"
+    },
+    {
+      "id": "e-839dd85a212c",
+      "source": "dom",
+      "role": "link",
+      "name": "Back to payment",
+      "text": "Back to payment",
+      "bbox": {
+        "x": 16,
+        "y": 520,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-back"
+    },
+    {
+      "id": "e-8ef1fc8ee32c",
+      "source": "dom",
+      "role": "link",
+      "name": "Place order",
+      "text": "Place order",
+      "bbox": {
+        "x": 16,
+        "y": 600,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#review-place-order"
+    },
+    {
+      "id": "e-de733d1673fc",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1000,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#review-footer-note"
+    },
+    {
+      "id": "e-baa672ef8026",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Review your order",
+      "text": "Review your order",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-heading"
+    },
+    {
+      "id": "e-5ae7a4dfb058",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The last step before the order is placed. Nothing is charged: placing this order loads the confirmation page of this site.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-intro"
+    },
+    {
+      "id": "e-37de4de53815",
+      "source": "a11y",
+      "role": "img",
+      "name": "Canvas tote bag, natural",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-product-image"
+    },
+    {
+      "id": "e-aa8bf7929e1e",
+      "source": "a11y",
+      "role": "region",
+      "name": "Order summary",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 200
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-summary"
+    },
+    {
+      "id": "e-6e58aeabe585",
+      "source": "a11y",
+      "role": "link",
+      "name": "Back to payment",
+      "text": "Back to payment",
+      "bbox": {
+        "x": 16,
+        "y": 520,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-back"
+    },
+    {
+      "id": "e-d920ca0db387",
+      "source": "a11y",
+      "role": "link",
+      "name": "Place order",
+      "text": "Place order",
+      "bbox": {
+        "x": 16,
+        "y": 600,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-place-order"
+    },
+    {
+      "id": "e-f40a7561abe0",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1000,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#review-footer-note"
+    },
+    {
+      "id": "e-296c863c0bfb",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Total 48.00",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 334,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#review-total"
+    }
+  ],
+  "contentHash": "5fc2673339dd8ad5"
+}

@@ -1,0 +1,65 @@
+{
+  "formatVersion": 1,
+  "variants": [
+    {
+      "id": "A",
+      "device": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "touch": true
+      },
+      "steps": [
+        {
+          "step": "cart",
+          "path": "/cart.html"
+        },
+        {
+          "step": "payment",
+          "path": "/payment.html"
+        },
+        {
+          "step": "review",
+          "path": "/review.html?card=&expiry=01"
+        },
+        {
+          "step": "confirmation",
+          "path": "/confirmation.html"
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "device": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "touch": false
+      },
+      "steps": [
+        {
+          "step": "cart",
+          "path": "/cart.html"
+        },
+        {
+          "step": "payment",
+          "path": "/payment.html"
+        },
+        {
+          "step": "review",
+          "path": "/review.html?card=&expiry=01"
+        },
+        {
+          "step": "confirmation",
+          "path": "/confirmation.html"
+        }
+      ]
+    }
+  ]
+}
