@@ -117,9 +117,11 @@ export async function servePlatform(behaviour: PlatformBehaviour = {}): Promise<
     const url = String(input instanceof Request ? input.url : input);
     if ((init?.method ?? 'GET') === 'GET') return reads(input, init);
 
+    // The path first: a test started is a `POST /runs` and nothing else, so a post to
+    // anywhere else is counted as what it is rather than as a test.
+    if (new URL(url).pathname !== '/runs') return refusal('That is not something to post.', 404);
     const request = JSON.parse(String(init?.body)) as RunRequest;
     started.push(request);
-    if (new URL(url).pathname !== '/runs') return refusal('That is not something to post.', 404);
     return behaviour.answer === undefined
       ? json({ runId: STARTED_RUN_ID }, 201)
       : behaviour.answer(request);

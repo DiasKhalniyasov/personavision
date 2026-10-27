@@ -1,3 +1,4 @@
+import { runSchema } from '@personavision/contract';
 import { z } from 'zod';
 import type { RunRequest } from '@personavision/contract';
 
@@ -11,7 +12,11 @@ import type { RunRequest } from '@personavision/contract';
  * writing. The browser's whole part is this request and the route it then goes to.
  *
  * A refusal is read as carefully as an answer, and nothing here throws: a test that was not
- * started must leave the form standing with everything typed still in it.
+ * started must leave the form standing with everything typed still in it. The ladder below
+ * reads the way `screens/audience/store.ts` reads #102's routes, deliberately: the rule the
+ * app is held to is that **the request itself** lives in the one module named for the
+ * interface it speaks to (`tests/skeleton.test.ts`), so lifting the `fetch` out into a
+ * shared helper would move the call out of this file and break exactly that rule.
  */
 
 const RUNS = '/runs';
@@ -20,10 +25,13 @@ const RUNS = '/runs';
 const absolute = (path: string): string => new URL(path, window.location.href).toString();
 
 /**
- * What the platform answers with. Only the id is read: the run's own fields are read from
- * the artifact by `useRun`, through the contract, like every other figure in this app.
+ * What the platform answers with. Only the id is read, and its shape is the contract's own
+ * `runId` rather than a second spelling of it: the run's other fields are read from the
+ * artifact by `useRun`, through the contract, like every other figure in this app. The
+ * object is tolerant on purpose — an answer that carries the whole run is not an answer this
+ * screen should refuse.
  */
-const startedSchema = z.object({ runId: z.string().min(1) });
+const startedSchema = z.object({ runId: runSchema.shape.runId });
 
 const refusalSchema = z.object({ error: z.string().optional() });
 

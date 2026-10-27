@@ -24,9 +24,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* `min-width: 0`: a grid item's own minimum is its content, so a long hint or a wide
+   select would stretch the column it sits in rather than wrapping inside it. */
 .fieldGroup {
   display: grid;
-  min-inline-size: 0;
   min-width: 0;
   align-content: start;
   gap: var(--space-2);
@@ -54,12 +55,6 @@
   display: grid;
   gap: var(--space-5);
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-/* The registry's select trigger sizes itself to its content; in a form field it takes
-   the column, as every other control on this screen does. */
-.picker {
-  width: 100%;
 }
 
 /* ---- The people the audience generates ---------------------------------- */

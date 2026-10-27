@@ -17,6 +17,7 @@ import {
   attentionSummary,
   describedTest,
   emptyDraft,
+  peopleCount,
   REPEAT_CHOICES,
   TASK_EXAMPLE,
   VARIANTS,
@@ -52,25 +53,10 @@ export function NewTestForm({
   defaultAudienceId: string;
 }) {
   const navigate = useNavigate();
-  const audienceId = useId();
-  const audienceHintId = useId();
-  const audienceErrId = useId();
-  const urlAId = useId();
-  const urlAHintId = useId();
-  const urlAErrId = useId();
-  const urlBId = useId();
-  const urlBHintId = useId();
-  const urlBErrId = useId();
-  const taskId = useId();
-  const taskHintId = useId();
-  const taskErrId = useId();
-  const peopleLabelId = useId();
-  const repeatsId = useId();
-  const repeatsHintId = useId();
-  const seedId = useId();
-  const seedHintId = useId();
-  const seedErrId = useId();
-  const noticeId = useId();
+  // One id for the screen and a name per field under it: the fields the form itself owns.
+  // The audience picker and the people grid hold their own.
+  const base = useId();
+  const id = (part: string): string => `${base}-${part}`;
 
   const [draft, setDraft] = useState<TestDraft>(emptyDraft);
   const [issues, setIssues] = useState<IssuesByField>({});
@@ -103,9 +89,11 @@ export function NewTestForm({
     setProblem(answer.problem);
   };
 
-  const refused = Object.keys(issues).length;
-  const describedBy = (hintId: string, errId: string, message: string | undefined): string =>
-    message === undefined ? hintId : `${errId} ${hintId}`;
+  // `form` is not a field, so it is not counted as one: a refusal that belongs to no field
+  // is said above the form on its own rather than making the notice point at nothing.
+  const refused = Object.keys(issues).filter((key) => key !== 'form').length;
+  const describedBy = (part: string, message: string | undefined): string =>
+    message === undefined ? id(`${part}-hint`) : `${id(`${part}-err`)} ${id(`${part}-hint`)}`;
 
   return (
     <form
@@ -118,13 +106,13 @@ export function NewTestForm({
     >
       {problem === null ? null : (
         <p className="notice" role="alert">
-          {problem} Nothing you typed has been lost — try again when it is back.
+          {problem} Nothing you typed has been lost.
         </p>
       )}
-      {refused === 0 ? null : (
-        <p className="notice" role="alert" id={noticeId}>
-          {attentionSummary(refused)}
-          {issues.form === undefined ? null : ` ${issues.form}`}
+      {refused === 0 && issues.form === undefined ? null : (
+        <p className="notice" role="alert">
+          {refused === 0 ? '' : `${attentionSummary(refused)} `}
+          {issues.form ?? ''}
         </p>
       )}
 
@@ -136,90 +124,82 @@ export function NewTestForm({
         onChoose={(recordId) => {
           setDraft({ ...draft, audienceId: recordId });
         }}
-        fieldId={audienceId}
-        hintId={audienceHintId}
-        errId={audienceErrId}
       />
 
       <div className={styles.inline2}>
         <div className={styles.fieldGroup}>
-          <Label htmlFor={urlAId}>Variant A URL</Label>
+          <Label htmlFor={id('url-a')}>Variant A URL</Label>
           <Input
-            id={urlAId}
+            id={id('url-a')}
             type="url"
             value={draft.urlA}
             aria-invalid={issues.urlA !== undefined}
-            aria-describedby={describedBy(urlAHintId, urlAErrId, issues.urlA)}
+            aria-describedby={describedBy('url-a', issues.urlA)}
             onChange={(event) => {
               setDraft({ ...draft, urlA: event.target.value });
             }}
           />
           {issues.urlA === undefined ? null : (
-            <span className={styles.err} role="alert" id={urlAErrId}>
+            <span className={styles.err} role="alert" id={id('url-a-err')}>
               {issues.urlA}
             </span>
           )}
-          <span className={styles.hint} id={urlAHintId}>
+          <span className={styles.hint} id={id('url-a-hint')}>
             Named <b>{VARIANTS[0].name}</b> in results.
           </span>
         </div>
         <div className={styles.fieldGroup}>
-          <Label htmlFor={urlBId}>Variant B URL</Label>
+          <Label htmlFor={id('url-b')}>Variant B URL</Label>
           <Input
-            id={urlBId}
+            id={id('url-b')}
             type="url"
             value={draft.urlB}
             aria-invalid={issues.urlB !== undefined}
-            aria-describedby={describedBy(urlBHintId, urlBErrId, issues.urlB)}
+            aria-describedby={describedBy('url-b', issues.urlB)}
             onChange={(event) => {
               setDraft({ ...draft, urlB: event.target.value });
             }}
           />
           {issues.urlB === undefined ? null : (
-            <span className={styles.err} role="alert" id={urlBErrId}>
+            <span className={styles.err} role="alert" id={id('url-b-err')}>
               {issues.urlB}
             </span>
           )}
-          <span className={styles.hint} id={urlBHintId}>
+          <span className={styles.hint} id={id('url-b-hint')}>
             Named <b>{VARIANTS[1].name}</b> in results.
           </span>
         </div>
       </div>
 
       <div className={styles.fieldGroup}>
-        <Label htmlFor={taskId}>Task</Label>
+        <Label htmlFor={id('task')}>Task</Label>
         <Input
-          id={taskId}
+          id={id('task')}
           type="text"
           value={draft.task}
           aria-invalid={issues.task !== undefined}
-          aria-describedby={describedBy(taskHintId, taskErrId, issues.task)}
+          aria-describedby={describedBy('task', issues.task)}
           onChange={(event) => {
             setDraft({ ...draft, task: event.target.value });
           }}
         />
         {issues.task === undefined ? null : (
-          <span className={styles.err} role="alert" id={taskErrId}>
+          <span className={styles.err} role="alert" id={id('task-err')}>
             {issues.task}
           </span>
         )}
-        <span className={styles.hint} id={taskHintId}>
+        <span className={styles.hint} id={id('task-hint')}>
           {issues.task === undefined
             ? 'One sentence, in the user’s words. It must say what counts as finishing — the simulated people stop when they believe the task is done.'
             : TASK_EXAMPLE}
         </span>
       </div>
 
-      <TestPeople
-        people={people}
-        repeats={draft.repeats}
-        variants={VARIANTS.length}
-        labelId={peopleLabelId}
-      />
+      <TestPeople people={people} repeats={draft.repeats} variants={VARIANTS.length} />
 
       <div className={styles.inline2}>
         <div className={styles.fieldGroup}>
-          <Label htmlFor={repeatsId}>Repeats per persona</Label>
+          <Label htmlFor={id('repeats')}>Repeats per persona</Label>
           <Select
             value={String(draft.repeats)}
             onValueChange={(value) => {
@@ -227,9 +207,9 @@ export function NewTestForm({
             }}
           >
             <SelectTrigger
-              id={repeatsId}
-              className={styles.picker}
-              aria-describedby={repeatsHintId}
+              id={id('repeats')}
+              className="w-full"
+              aria-describedby={id('repeats-hint')}
             >
               <SelectValue />
             </SelectTrigger>
@@ -241,30 +221,30 @@ export function NewTestForm({
               ))}
             </SelectContent>
           </Select>
-          <span className={styles.hint} id={repeatsHintId}>
+          <span className={styles.hint} id={id('repeats-hint')}>
             Each person repeats the task this many times, on a different seed. This is what produces
             the spread the verdict is stated with.
           </span>
         </div>
         <div className={styles.fieldGroup}>
-          <Label htmlFor={seedId}>Base seed</Label>
+          <Label htmlFor={id('seed')}>Base seed</Label>
           <Input
-            id={seedId}
+            id={id('seed')}
             type="text"
             inputMode="numeric"
             value={draft.seed}
             aria-invalid={issues.seed !== undefined}
-            aria-describedby={describedBy(seedHintId, seedErrId, issues.seed)}
+            aria-describedby={describedBy('seed', issues.seed)}
             onChange={(event) => {
               setDraft({ ...draft, seed: event.target.value });
             }}
           />
           {issues.seed === undefined ? null : (
-            <span className={styles.err} role="alert" id={seedErrId}>
+            <span className={styles.err} role="alert" id={id('seed-err')}>
               {issues.seed}
             </span>
           )}
-          <span className={styles.hint} id={seedHintId}>
+          <span className={styles.hint} id={id('seed-hint')}>
             Same seed and same persona reproduce the run exactly.
           </span>
         </div>
@@ -272,10 +252,21 @@ export function NewTestForm({
 
       <div className={styles.formfoot}>
         <Button type="submit" size="lg" disabled={starting}>
-          {starting
-            ? 'Starting…'
-            : `Start test · ${String(people.length)} ${people.length === 1 ? 'person' : 'people'}`}
+          {starting ? 'Starting…' : `Start test · ${peopleCount(people.length)}`}
         </Button>
+        {refused === 0 && problem === null ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setDraft(emptyDraft());
+              setIssues({});
+              setProblem(null);
+            }}
+          >
+            Reset
+          </Button>
+        )}
         <span className="faint">
           You can leave this page; we will have the verdict when you come back.
         </span>

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { Persona } from '@personavision/contract';
 import styles from './newtest.module.css';
 
@@ -16,15 +17,14 @@ export function TestPeople({
   people,
   repeats,
   variants,
-  labelId,
 }: {
   people: readonly Persona[];
   /** Sessions per person per version — what the repeats field is set to. */
   repeats: number;
   /** How many versions the test compares, which is what makes the total. */
   variants: number;
-  labelId: string;
 }) {
+  const labelId = useId();
   const perVersion = people.length * repeats;
 
   return (

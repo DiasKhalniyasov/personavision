@@ -11,10 +11,13 @@ import type { RunRequest } from '@personavision/contract';
  *
  * The wording of every refusal is `#screen-newrun-invalid` in
  * `docs/design/prototype.html`, and `packages/cli/src/commands/run.ts` rejects the same
- * arguments with the same sentences at the command line. The two checks are deliberate
- * twins rather than one shared module: the CLI is a Node package the browser cannot import
- * (it reads files and serves them), and the sentences belong to the prototype, which is the
- * contract both of them answer to.
+ * arguments with the same sentences at the command line. The two are **twins, and will have
+ * to drift together**: the CLI is a Node package the browser cannot import — its barrel
+ * reads files and serves them — so the only place that could hold the check once is
+ * `packages/contract`, as a refinement on `runRequestSchema`. That is a contract change, not
+ * a screen change: the schema is what the pipeline validates a request with, and a product
+ * sentence moved into it binds every caller to this screen's copy. Worth doing deliberately,
+ * by a ticket that owns the contract; the ticket that owns this screen says so instead.
  */
 
 /** Variant A is the checkout as it stands, B the candidate; the names results carry. */
@@ -49,7 +52,11 @@ export const REPEAT_CHOICES: readonly { readonly repeats: number; readonly label
  */
 const ENGINE_MODE = 'offline';
 
-/** What the form holds, as typed: every field a string, because that is what a reader types. */
+/**
+ * What the form holds. The typed fields are strings, exactly as they were typed, so nothing
+ * a reader entered is lost to a parse before they have pressed Start; the repeats are a
+ * number because they are chosen from a list rather than typed.
+ */
 export interface TestDraft {
   /**
    * The **record's** id in the audience store, which is what a test names. Empty while the
@@ -161,6 +168,8 @@ export const TASK_EXAMPLE = 'Example: “Buy the hiking boots and pay with the s
  * How many fields the reader has to look at, in the prototype's own words: *The test was
  * not started. Two fields need attention.*
  */
+// Index 0 is never read — the summary is only written when a field was refused — and is
+// there so that the word for a count sits at that count.
 const COUNT_WORDS = ['no', 'One', 'Two', 'Three', 'Four', 'Five'];
 
 export const attentionSummary = (count: number): string => {
@@ -169,6 +178,10 @@ export const attentionSummary = (count: number): string => {
     ? `The test was not started. ${named} field needs attention.`
     : `The test was not started. ${named} fields need attention.`;
 };
+
+/** `4 people`, `1 person` — the audience's own people, which is never a session count. */
+export const peopleCount = (count: number): string =>
+  `${String(count)} ${count === 1 ? 'person' : 'people'}`;
 
 export type DescribedTest =
   | { readonly ok: true; readonly request: RunRequest }
@@ -193,8 +206,10 @@ export const describedTest = (draft: TestDraft): DescribedTest => {
   const problemB = urlProblem(draft.urlB);
   if (problemA !== null) issues.urlA = problemA;
   if (problemB !== null) issues.urlB = problemB;
-  // Against B, which is the version a reader changes: A is the page as it stands.
-  if (problemA === null && problemB === null && urlA === urlB) {
+  // Against B, which is the version a reader changes: A is the page as it stands. Compared
+  // as URLs rather than as text, so a difference only a parser can see — the case of the
+  // host, an explicit `:80` — is not two versions to compare.
+  if (problemA === null && problemB === null && new URL(urlA).href === new URL(urlB).href) {
     issues.urlB = 'The same URL as variant A: there would be nothing to compare.';
   }
 

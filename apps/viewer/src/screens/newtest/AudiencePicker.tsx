@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Link } from 'react-router';
 import { Label } from '@/components/ui/label';
 import {
@@ -9,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { paths } from '@/shell/paths';
 import { ageWords, deviceShares, priceWords } from '@/screens/audience/words';
+import { peopleCount } from './draft';
 import styles from './newtest.module.css';
 import type { AudienceRecord } from '@/screens/audience/store';
 
@@ -35,8 +37,7 @@ export const audienceOption = (record: AudienceRecord): string => {
     loudest === undefined ? null : `mostly ${loudest}`,
     priceWords(audience.priceSensitivity).toLowerCase(),
   ].filter((part) => part !== null);
-  const count = `${String(people.length)} ${people.length === 1 ? 'person' : 'people'}`;
-  return `${audience.name} — ${parts.join(', ')} (${count})`;
+  return `${audience.name} — ${parts.join(', ')} (${peopleCount(people.length)})`;
 };
 
 export function AudiencePicker({
@@ -46,19 +47,19 @@ export function AudiencePicker({
   loading,
   problem,
   onChoose,
-  fieldId,
-  hintId,
-  errId,
 }: {
   audiences: readonly AudienceRecord[];
   chosen: AudienceRecord | null;
   loading: boolean;
   problem: string | undefined;
   onChoose: (recordId: string) => void;
-  fieldId: string;
-  hintId: string;
-  errId: string;
 }) {
+  // The field's own three ids. Nothing outside this component refers to them, so it holds
+  // them rather than taking them from the form.
+  const fieldId = useId();
+  const hintId = useId();
+  const errId = useId();
+
   return (
     <div className={styles.fieldGroup}>
       <Label htmlFor={fieldId}>Audience</Label>
@@ -71,7 +72,7 @@ export function AudiencePicker({
       >
         <SelectTrigger
           id={fieldId}
-          className={styles.picker}
+          className="w-full"
           aria-invalid={problem !== undefined}
           aria-describedby={problem === undefined ? hintId : `${errId} ${hintId}`}
         >

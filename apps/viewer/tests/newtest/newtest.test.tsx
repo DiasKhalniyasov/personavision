@@ -256,8 +256,10 @@ describe('a field that was refused', () => {
     await openForm();
 
     const user = act();
-    await user.type(field('Variant A URL'), 'http://localhost:4173/checkout-a');
-    await user.type(field('Variant B URL'), 'http://localhost:4173/checkout-a');
+    await user.type(field('Variant A URL'), 'http://localhost/checkout-a');
+    // The same page, spelled the way only a parser sees through: the host's case, and the
+    // port HTTP would have assumed anyway.
+    await user.type(field('Variant B URL'), 'HTTP://LocalHost:80/checkout-a');
     await user.type(field('Task'), 'Buy the hiking boots and pay with the saved card.');
     await start();
 
@@ -294,6 +296,29 @@ describe('a field that was refused', () => {
     expect(field('Variant A URL').value).toBe('localhost:4173/checkout-a');
     expect(field('Variant B URL').value).toBe('http://localhost:4173/checkout-b');
     expect(field('Task').value).toBe('Have a look around');
+  });
+});
+
+describe('resetting a refused form', () => {
+  it('is offered only once something was refused, and empties the form', async () => {
+    await servePlatform();
+    await openForm();
+
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
+
+    const user = act();
+    await user.type(field('Variant A URL'), 'localhost:4173/checkout-a');
+    await user.type(field('Task'), 'Have a look around');
+    await start();
+
+    await user.click(screen.getByRole('button', { name: 'Reset' }));
+
+    expect(field('Variant A URL').value).toBe('');
+    expect(field('Task').value).toBe('');
+    expect(field('Base seed').value).toBe('20261024');
+    expect(field('Variant A URL').getAttribute('aria-invalid')).toBe('false');
+    expect(screen.queryByText('The test was not started. Two fields need attention.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
   });
 });
 
@@ -356,8 +381,8 @@ describe('starting the test', () => {
     await start();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain(
-        'That audience has no people to test with.',
+      expect(screen.getByRole('alert').textContent).toBe(
+        'That audience has no people to test with. Nothing you typed has been lost.',
       );
     });
     expect(router.state.location.pathname).toBe(paths.newTest);
