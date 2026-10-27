@@ -22,7 +22,15 @@
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { act, closeSession, openSession, readSessionState, stableElementId } from '../src/index.js';
+import {
+  act,
+  closeSession,
+  detectStep,
+  extractElements,
+  openSession,
+  readGeometry,
+  readSessionState,
+} from '../src/index.js';
 import type {
   CaptureContext,
   CaptureElement,
@@ -86,8 +94,8 @@ const BROWSER_TIMEOUT_MS = 60_000;
  */
 const ABSENT_TARGET_TIMEOUT_MS = 1_000;
 
-/** The cart's checkout link, as `LANDMARKS.md` records it. */
-const CHECKOUT_BOX = { x: 16, y: 784, width: 358, height: 44 };
+/** The cart's primary action, as `LANDMARKS.md` records it. */
+const CHECKOUT_SELECTOR = '#cart-checkout';
 
 describeWithChromium('acting on a page', () => {
   let site: FixtureSite;
@@ -137,6 +145,29 @@ describeWithChromium('acting on a page', () => {
     }, selector);
 
   /** Where a control sits relative to what is on screen: the test of "in view". */
+  /**
+   * The checkout link as the extractor itself describes it: the id `act` is asked to
+   * resolve is the one a capture of this page would carry, not one written out by hand.
+   */
+  const extractCheckout = async (
+    handle: PageHandle,
+  ): Promise<{ elements: readonly CaptureElement[]; checkout: CaptureElement }> => {
+    const elements = await extractElements(
+      handle,
+      await readGeometry(handle),
+      await detectStep(handle, TASK),
+    );
+    const checkout = elements.find((element) => element.selector === CHECKOUT_SELECTOR);
+    if (checkout === undefined) {
+      throw new Error(
+        `no extracted element selects ${CHECKOUT_SELECTOR}: ${elements
+          .map((element) => element.selector)
+          .join(', ')}`,
+      );
+    }
+    return { elements, checkout };
+  };
+
   const viewportRect = (
     handle: PageHandle,
     selector: string,
@@ -152,7 +183,7 @@ describeWithChromium('acting on a page', () => {
     'advances to the next step when the cart page is clicked through',
     async () =>
       withSession(DESKTOP, '/cart.html', async (handle) => {
-        const action = { type: 'click', selector: '#cart-checkout' } as const;
+        const action = { type: 'click', selector: CHECKOUT_SELECTOR } as const;
 
         const result = await act(handle, action, contextFor(DESKTOP));
 
@@ -170,30 +201,17 @@ describeWithChromium('acting on a page', () => {
   it(
     'acts on the same control whether it is named by element id or by selector',
     async () => {
-      // The id is minted the way an extractor mints it, from the box `LANDMARKS.md`
-      // records for the checkout link. The capture it belongs to is built here rather
-      // than taken from `capture()`, because extraction is a seam #45 fills: what this
-      // holds is that `act` resolves an id against the capture it is handed, to the
-      // control the equivalent selector picks.
-      const checkout: CaptureElement = {
-        id: stableElementId({ source: 'dom', role: 'link', name: 'Checkout', bbox: CHECKOUT_BOX }),
-        source: 'dom',
-        role: 'link',
-        name: 'Checkout',
-        text: 'Checkout',
-        bbox: CHECKOUT_BOX,
-        isPrimaryAction: true,
-        belowFold: false,
-        selector: '#cart-checkout',
-      };
-
-      const byElementId = await withSession(DESKTOP, '/cart.html', (handle) =>
-        act(handle, { type: 'click', elementId: checkout.id }, contextFor(DESKTOP), {
-          screen: { elements: [checkout] },
-        }),
-      );
+      // The capture is the extractor's own reading of the page, so the id handed to `act`
+      // is the id an agent would have decided against. What this holds is that resolving
+      // it lands on the control the equivalent selector picks.
+      const byElementId = await withSession(DESKTOP, '/cart.html', async (handle) => {
+        const { elements, checkout } = await extractCheckout(handle);
+        return act(handle, { type: 'click', elementId: checkout.id }, contextFor(DESKTOP), {
+          screen: { elements },
+        });
+      });
       const bySelector = await withSession(DESKTOP, '/cart.html', (handle) =>
-        act(handle, { type: 'click', selector: checkout.selector }, contextFor(DESKTOP)),
+        act(handle, { type: 'click', selector: CHECKOUT_SELECTOR }, contextFor(DESKTOP)),
       );
 
       expect(byElementId.ok).toBe(true);
@@ -364,6 +382,29 @@ describeWithChromium('acting on a page', () => {
   );
 
   it(
+    'resolves an element id off the live page when it is handed no capture',
+    async () =>
+      withSession(DESKTOP, '/cart.html', async (handle) => {
+        // `CaptureSource.act` takes three parameters, so the walk and the swarm above it
+        // cannot hand their capture over: every `elementId` they decide on is resolved by
+        // reading the page again. That reading has to mint the same id the capture did.
+        const { checkout } = await extractCheckout(handle);
+
+        const result = await act(
+          handle,
+          { type: 'click', elementId: checkout.id },
+          contextFor(DESKTOP),
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.failure).toBeUndefined();
+        expect(result.url).toBe(`${site.url}/payment.html`);
+        expect((await readSessionState(handle)).url).toBe(`${site.url}/payment.html`);
+      }),
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'reports an element id no capture explains, without reaching the page',
     async () =>
       withSession(DESKTOP, '/cart.html', async (handle) => {
@@ -385,9 +426,8 @@ describeWithChromium('acting on a page', () => {
     'looks an element id up on the page when it is handed no capture',
     async () =>
       withSession(DESKTOP, '/cart.html', async (handle) => {
-        // The swarm passes the screen it decided against; a caller that passes none has
-        // the page read again to resolve the id. No element of the cart carries this one,
-        // which is the answer both before and after #45 fills the extractor.
+        // The same reading, for an id nothing on the cart carries: a page read in full
+        // still resolves no element, and that is `selector_not_found` rather than a throw.
         const result = await act(
           handle,
           { type: 'click', elementId: 'e-000000000000' },

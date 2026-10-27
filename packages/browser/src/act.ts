@@ -13,14 +13,16 @@
  * 1. A target that cannot be resolved — no element of the capture carries that id, no node
  *    matches that selector, more than one does, or nothing on the page can be seen under it
  *    — is `selector_not_found`. The page is untouched, so it is left usable for the next
- *    action. A page or frame that breaks *while* a target is being resolved is reported the
- *    same way, because telling the two apart means reading the error, which is #50's seam;
- *    `frame_error` therefore has no producer here.
+ *    action. Resolution is **not** passed through `mapToAutomationFailure`, even though that
+ *    reads a driver's errors well: a control that is in the DOM and invisible leaves a call
+ *    log saying the locator resolved, which that reading calls a `timeout` — and a control
+ *    nobody could have acted on is a target this step cannot resolve, not an operation that
+ *    ran out of time. `frame_error` therefore has no producer here.
  * 2. A navigation that never completes after a click, or a back that leaves the page where
  *    it was or off the product entirely, is `navigation_error`.
  * 3. Anything thrown while the action itself runs is handed to `mapToAutomationFailure`,
- *    and rethrown when that seam cannot place it. Reading a timeout out of an error is that
- *    seam's job; retrying, capping and counting is the budget's. This file invents neither.
+ *    and rethrown when it cannot be placed. Reading a timeout out of an error is that
+ *    module's job; retrying, capping and counting is the budget's. This file invents neither.
  *
  * It does not retry. One action is one attempt, and the policy above it is #50's.
  *
@@ -271,7 +273,8 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     // Resolution is separated from the action so that the two failures stay apart, and it
     // waits for what all three actions need: an element in the DOM that can be seen. A
     // selector that is unparseable or matches two nodes fails here too, and a control that
-    // is present but invisible is not a target a person could have acted on.
+    // is present but invisible is not a target a person could have acted on — which is why
+    // what this catch answers is decided by where it sits, not by reading the error.
     await target.waitFor({ state: 'visible', timeout: timeoutMs });
   } catch {
     return report('selector_not_found');
