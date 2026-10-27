@@ -17,9 +17,8 @@ import type {
   SamTransport,
   SamUnavailable,
 } from '../src/aois/sam-segmenter.js';
-import { defaultSegmenter } from '../src/aois/segmenter.js';
 import type { SegmentedArea, Segmenter, SegmenterInput } from '../src/aois/segmenter.js';
-import { loadFixture } from './fixtures/index.js';
+import { FIXTURES_DIR, loadFixture } from './fixtures/index.js';
 
 /**
  * #69: the SAM 3.1 segmenter, additive and never required.
@@ -123,18 +122,31 @@ describe('selection: configuration, never ambient magic', () => {
 
     expect(unavailable(segmentation).reason).toBe('credential');
     expect(unavailable(segmentation).message).toContain(SAM_CREDENTIAL_ENV);
-    expect(segmentation.segmenter).toBe(defaultSegmenter);
     expect(requests).toEqual([]);
+  });
 
-    // The caller's fallback is the offline segmenter, and the run goes on: the areas are
-    // the element-derived ones, because the fixture's screenshot path is run-relative and
-    // the default segmenter was built with no run directory.
+  it('falls back to an offline segmenter that can find the screenshot it is given', async () => {
+    // The commonest road of the lot, and the one the fallback has to really work on: no
+    // credential. A capture's screenshot path is run-directory-relative, so a fallback
+    // built without the run directory would answer nothing and "falls back to the offline
+    // segmenter" would mean no segmentation at all.
+    const { transport } = answering(RECORDED);
+    const segmentation = samSegmenter({
+      mode: 'model',
+      modelId: 'sam-3.1',
+      transport,
+      readScreenshot,
+      runDir: FIXTURES_DIR,
+    });
+
+    expect(unavailable(segmentation).reason).toBe('credential');
+
     const areas = await buildAois({
-      capture: fixture.capture,
+      capture: { ...fixture.capture, screenshot: 'card-grid-unexplained.png' },
       variant: VARIANT,
       segmenter: segmentation.segmenter,
     });
-    expect(areas.map((area) => area.source)).toEqual(['dom', 'dom']);
+    expect(areas.some((area) => area.source === 'sam')).toBe(true);
   });
 
   it('is unavailable when the run did not ask for the model engine', () => {
@@ -257,6 +269,39 @@ describe('the recorded reply, mapped with no network', () => {
     expect(areas.map((area) => area.label)).toEqual([UNNAMED_SEGMENT_LABEL]);
   });
 
+  it('reads mask coordinates in image pixels, not CSS pixels, on a scaled capture', async () => {
+    // The browser step captures with `scale: 'device'`, so a persona on a device whose
+    // scale factor is three hands over an image three times the page's size and the model
+    // answers in that image's pixels. The same region, stated at both scales, maps to one
+    // area — and the instruction tells the model the size of the image it was actually
+    // shown.
+    const atOne = answering({ masks: [{ label: 'product card grid', box: [16, 112, 464, 344] }] });
+    const atThree = answering({
+      masks: [{ label: 'product card grid', box: [48, 336, 1392, 1032] }],
+    });
+
+    const unscaled = await available(configured({ transport: atOne.transport })).segment(input);
+    const scaled = await available(
+      configured({ transport: atThree.transport, imageScale: 3 }),
+    ).segment(input);
+
+    expect(scaled).toEqual(unscaled);
+    expect(scaled[0]?.bbox).toEqual({ x: 16, y: 112, width: 448, height: 232 });
+
+    const sent = atThree.requests[0]?.body.input[0]?.content ?? [];
+    const text = sent.find((part) => part.type === 'input_text');
+    expect(text?.type === 'input_text' && text.text).toContain('1440 by 1080 image pixels');
+  });
+
+  it('reads a "bbox" as extents and a "box" as corners, which is what each one means', async () => {
+    const { transport } = answering({
+      masks: [{ label: 'promo tile', bbox: [300, 60, 120, 40] }],
+    });
+    const areas = await available(configured({ transport })).segment(input);
+
+    expect(areas[0]?.bbox).toEqual({ x: 300, y: 60, width: 120, height: 40 });
+  });
+
   it('asks the model for the regions the elements did not explain', async () => {
     const { transport, requests } = answering(RECORDED);
     await available(configured({ transport })).segment(await withExplained());
@@ -347,6 +392,26 @@ describe('every failure is a stated reason and the offline fallback', () => {
       await segmentWith(configured({ transport: none, report: (one) => void empty.push(one) })),
     ).toEqual([]);
     expect(empty).toEqual([]);
+  });
+
+  it('reports a reply whose masks were all dropped rather than answering nothing', async () => {
+    // Every mask well-formed, every one of them off the page — the shape a wrong image
+    // scale or a different wire format takes. Answering `[]` here would read as a screen
+    // with nothing on it; it is reported, and the call answers with the fallback's areas.
+    const reports: SamUnavailable[] = [];
+    const { transport } = answering({
+      masks: [
+        { label: 'off-page banner', box: [480, 400, 620, 520] },
+        { label: 'further still', box: [900, 900, 1000, 1000] },
+      ],
+    });
+    const areas = await segmentWith(
+      configured({ transport, report: (one) => void reports.push(one) }),
+    );
+
+    expect(reports.map((one) => one.reason)).toEqual(['unparseable']);
+    expect(reports[0]?.message).toContain('all 2 masks');
+    expect(areas).toEqual([FALLBACK_AREA]);
   });
 
   it('reports a screenshot it could not read, and never throws', async () => {

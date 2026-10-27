@@ -2,7 +2,7 @@ import { resolveEngineConfig } from '../config.js';
 import type { EngineConfigOverrides } from '../config.js';
 import type { BoundingBox, Capture } from '../types.js';
 import { aoiId } from './aoi-id.js';
-import { defaultSegmenter } from './segmenter.js';
+import { heuristicSegmenter } from './heuristic-segmenter.js';
 import type { SegmentedArea, Segmenter, SegmenterInput } from './segmenter.js';
 
 /**
@@ -186,6 +186,20 @@ export interface SamSegmenterOptions {
   readonly credential?: string;
   /** The run directory `capture.screenshot` is relative to, as #66's option of that name. */
   readonly runDir?: string;
+  /**
+   * Image pixels per CSS pixel in the screenshot — the device scale factor the capture was
+   * taken at, which is **1 only on a device that has no scaling**.
+   *
+   * The browser step captures with `scale: 'device'`, so a persona on a device whose scale
+   * factor is three hands over an image three times the size of the page the capture
+   * describes. The model answers in the pixels of the image it was shown, and a capture
+   * carries no scale factor of its own, so the caller that knows the persona's device
+   * states it here: mask coordinates are divided by it to reach page space, and the
+   * instruction tells the model the image's real size. Left at 1 for a scaled capture,
+   * every mask lands outside the page and the call reports that it found nothing usable
+   * rather than placing regions at two or three times their true position.
+   */
+  readonly imageScale?: number;
   /** Defaults to `DEFAULT_SAM_TIMEOUT_MS`. */
   readonly timeoutMs?: number;
   /** Defaults to `SAM_RESPONSES_ENDPOINT`. */
@@ -261,17 +275,40 @@ const rectangleOfPolygon = (points: readonly unknown[]): BoundingBox | null => {
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 };
 
+const quadruple = (value: unknown): readonly number[] | null =>
+  Array.isArray(value) && value.length === 4 && value.every(isFiniteNumber)
+    ? (value as readonly number[])
+    : null;
+
+const extentsObject = (value: unknown): BoundingBox | null =>
+  isRecord(value) && [value['x'], value['y'], value['width'], value['height']].every(isFiniteNumber)
+    ? {
+        x: value['x'] as number,
+        y: value['y'] as number,
+        width: value['width'] as number,
+        height: value['height'] as number,
+      }
+    : null;
+
 /**
- * One mask as a rectangle in the screenshot's pixel space, in whichever of the three
- * spellings it arrived in: `[x0, y0, x1, y1]`, `{ x, y, width, height }`, or the mask's own
- * polygon. A run-length-encoded mask is *not* decoded — there is no pixel work in the
- * engine — so one that carries nothing but RLE is dropped, which is why a reply whose every
- * mask is undecodable is reported as `unparseable` rather than as an empty segmentation.
+ * One mask as a rectangle in the screenshot's pixel space.
+ *
+ * The two array spellings mean different things and are read as what each one means, not
+ * as whichever came first: `box` is a corner pair, `[x0, y0, x1, y1]`, and `bbox` is
+ * extents, `[x, y, width, height]`, as it is throughout the SAM and COCO lineage. Reading a
+ * `bbox` as corners would place a plausible-looking rectangle in the wrong part of the page
+ * and pass every check after it, which is the one mistake here that could not be caught
+ * later. Either key may also arrive as `{ x, y, width, height }`, and a mask with neither
+ * may carry its own polygon.
+ *
+ * A run-length-encoded mask is *not* decoded — there is no pixel work in the engine — so
+ * one that carries nothing but RLE is dropped, and a reply whose masks are all dropped is
+ * reported rather than presented as an empty segmentation.
  */
 const rectangleOfMask = (mask: Record<string, unknown>): BoundingBox | null => {
-  const box = mask['box'] ?? mask['bbox'];
-  if (Array.isArray(box) && box.length === 4 && box.every(isFiniteNumber)) {
-    const [left = 0, top = 0, right = 0, bottom = 0] = box as readonly number[];
+  const corners = quadruple(mask['box']);
+  if (corners !== null) {
+    const [left = 0, top = 0, right = 0, bottom = 0] = corners;
     return {
       x: Math.min(left, right),
       y: Math.min(top, bottom),
@@ -279,20 +316,24 @@ const rectangleOfMask = (mask: Record<string, unknown>): BoundingBox | null => {
       height: Math.abs(bottom - top),
     };
   }
-  if (isRecord(box) && [box['x'], box['y'], box['width'], box['height']].every(isFiniteNumber)) {
-    return {
-      x: box['x'] as number,
-      y: box['y'] as number,
-      width: box['width'] as number,
-      height: box['height'] as number,
-    };
+  const extents = quadruple(mask['bbox']);
+  if (extents !== null) {
+    const [x = 0, y = 0, width = 0, height = 0] = extents;
+    return { x, y, width: Math.abs(width), height: Math.abs(height) };
   }
+  const object = extentsObject(mask['box']) ?? extentsObject(mask['bbox']);
+  if (object !== null) return object;
+
   const polygon = mask['polygon'] ?? mask['points'];
   return Array.isArray(polygon) ? rectangleOfPolygon(polygon) : null;
 };
 
 /**
  * The part of a mask's rectangle that is on the page, rounded to whole pixels.
+ *
+ * The rectangle arrives in the image's pixels and the page is in CSS pixels, so it is
+ * divided by `imageScale` first — the capture was taken at the device's scale factor, and
+ * on a scaled device the two spaces are not the same space.
  *
  * A model works in the image it was given and can answer half a pixel outside it, so a
  * rectangle is **clipped** to the page rather than trusted: `0, 0` to the viewport's width
@@ -301,11 +342,15 @@ const rectangleOfMask = (mask: Record<string, unknown>): BoundingBox | null => {
  * outside the page. Rounding is here and not in the id, because a mask edge is a pixel
  * boundary and the area in the artifact should read the same as the id derived from it.
  */
-const clippedToPage = (bbox: BoundingBox, capture: Capture): BoundingBox | null => {
-  const left = Math.round(Math.max(bbox.x, 0));
-  const top = Math.round(Math.max(bbox.y, 0));
-  const right = Math.round(Math.min(bbox.x + bbox.width, capture.viewport.width));
-  const bottom = Math.round(Math.min(bbox.y + bbox.height, capture.pageHeight));
+const clippedToPage = (
+  bbox: BoundingBox,
+  capture: Capture,
+  imageScale: number,
+): BoundingBox | null => {
+  const left = Math.round(Math.max(bbox.x / imageScale, 0));
+  const top = Math.round(Math.max(bbox.y / imageScale, 0));
+  const right = Math.round(Math.min((bbox.x + bbox.width) / imageScale, capture.viewport.width));
+  const bottom = Math.round(Math.min((bbox.y + bbox.height) / imageScale, capture.pageHeight));
   if (right <= left || bottom <= top) return null;
   return { x: left, y: top, width: right - left, height: bottom - top };
 };
@@ -346,7 +391,12 @@ type Mapped = { readonly areas: readonly SegmentedArea[] } | { readonly failed: 
  * one id are one region. What survives is cut to `segmentation.maxRegions`, largest first,
  * and returned in reading order.
  */
-const mapMasks = (body: unknown, input: SegmenterInput, maxRegions: number): Mapped => {
+const mapMasks = (
+  body: unknown,
+  input: SegmenterInput,
+  maxRegions: number,
+  imageScale: number,
+): Mapped => {
   const masks = findMasks(body);
   if (masks === null) {
     return { failed: { reason: 'unparseable', message: 'the reply holds no masks array' } };
@@ -354,19 +404,12 @@ const mapMasks = (body: unknown, input: SegmenterInput, maxRegions: number): Map
 
   const explained = input.explained.map((area) => area.bbox);
   const byId = new Map<string, SegmentedArea>();
-  let undecodable = 0;
 
   for (const mask of masks) {
-    if (!isRecord(mask)) {
-      undecodable += 1;
-      continue;
-    }
+    if (!isRecord(mask)) continue;
     const rectangle = rectangleOfMask(mask);
-    if (rectangle === null) {
-      undecodable += 1;
-      continue;
-    }
-    const bbox = clippedToPage(rectangle, input.capture);
+    if (rectangle === null) continue;
+    const bbox = clippedToPage(rectangle, input.capture, imageScale);
     if (bbox === null || explained.some((box) => intersects(bbox, box))) continue;
 
     const label = labelOfMask(mask);
@@ -380,11 +423,15 @@ const mapMasks = (body: unknown, input: SegmenterInput, maxRegions: number): Map
     if (!byId.has(id)) byId.set(id, { id, label, role: null, bbox });
   }
 
-  if (byId.size === 0 && undecodable > 0) {
+  // A reply that found nothing says `masks: []`, and that is an honest empty answer. A
+  // reply that listed masks and kept none of them is not: every one was undecodable, off
+  // the page or over a control, which is the shape a wrong `imageScale` or a different wire
+  // format takes. It is reported, and the call answers with the fallback's areas.
+  if (masks.length > 0 && byId.size === 0) {
     return {
       failed: {
         reason: 'unparseable',
-        message: `none of the ${masks.length} masks in the reply carries a box or a polygon`,
+        message: `all ${masks.length} masks in the reply were dropped: no box or polygon, outside the page, or over an area the elements explain`,
       },
     };
   }
@@ -415,7 +462,7 @@ const screenshotPathOf = (capture: Capture, runDir: string | undefined): string 
  * screenshot alone would ask for every region on the page, and the regions this seam wants
  * are the ones the DOM is silent about.
  */
-const instructionFor = (input: SegmenterInput): string => {
+const instructionFor = (input: SegmenterInput, imageScale: number): string => {
   const { capture, explained } = input;
   const boxes = explained.map(
     (area) =>
@@ -423,8 +470,9 @@ const instructionFor = (input: SegmenterInput): string => {
   );
   return [
     'Segment the visually distinct regions of this web page screenshot that are NOT already',
-    `covered by the listed elements. The image is the full page: ${capture.viewport.width} by`,
-    `${capture.pageHeight} pixels, with the fold at y=${capture.foldY}.`,
+    `covered by the listed elements. The image is the full page, ${Math.round(capture.viewport.width * imageScale)} by`,
+    `${Math.round(capture.pageHeight * imageScale)} image pixels, laid out as ${capture.viewport.width} by`,
+    `${capture.pageHeight} CSS pixels with the fold at y=${capture.foldY}.`,
     'Answer with a "masks" array; give every mask a "box" as [x0, y0, x1, y1] in image pixels',
     'and a short "label" a designer would recognise, such as "hero image" or "product card".',
     explained.length === 0
@@ -439,13 +487,14 @@ const requestBodyFor = (
   input: SegmenterInput,
   screenshot: Uint8Array,
   screenshotPath: string,
+  imageScale: number,
 ): SamRequestBody => ({
   model: modelId,
   input: [
     {
       role: 'user',
       content: [
-        { type: 'input_text', text: instructionFor(input) },
+        { type: 'input_text', text: instructionFor(input, imageScale) },
         {
           type: 'input_image',
           image_url: `data:${mediaTypeOf(screenshotPath)};base64,${Buffer.from(screenshot).toString('base64')}`,
@@ -479,7 +528,12 @@ const transportFailure = (error: unknown, signal: AbortSignal): SamUnavailable =
  * not an exception, and not a segmenter that would quietly answer nothing.
  */
 export const samSegmenter = (options: SamSegmenterOptions = {}): SamSegmentation => {
-  const fallback = options.fallback ?? defaultSegmenter;
+  // The default fallback is built with this call's own run directory, not
+  // `defaultSegmenter`: a capture's screenshot path is run-directory-relative, so the
+  // package-level default could not open it and "falls back to the offline segmenter" would
+  // quietly mean no segmentation at all on the commonest road of the lot — no credential.
+  const fallback =
+    options.fallback ?? heuristicSegmenter({ runDir: options.runDir, config: options.config });
   const unavailable = (reason: SamUnavailableReason, message: string): SamSegmentation => ({
     available: false,
     unavailable: { reason, message },
@@ -513,6 +567,12 @@ export const samSegmenter = (options: SamSegmenterOptions = {}): SamSegmentation
 
   const { config } = resolveEngineConfig(options.config);
   const maxRegions = config.segmentation.maxRegions;
+  const imageScale =
+    options.imageScale !== undefined &&
+    Number.isFinite(options.imageScale) &&
+    options.imageScale > 0
+      ? options.imageScale
+      : 1;
   const endpoint = options.endpoint ?? SAM_RESPONSES_ENDPOINT;
   const timeoutMs = options.timeoutMs ?? DEFAULT_SAM_TIMEOUT_MS;
   const report = options.report ?? ((): void => {});
@@ -527,7 +587,13 @@ export const samSegmenter = (options: SamSegmenterOptions = {}): SamSegmentation
       const screenshotPath = screenshotPathOf(input.capture, options.runDir);
       let body: SamRequestBody;
       try {
-        body = requestBodyFor(modelId, input, await readScreenshot(screenshotPath), screenshotPath);
+        body = requestBodyFor(
+          modelId,
+          input,
+          await readScreenshot(screenshotPath),
+          screenshotPath,
+          imageScale,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return give({
@@ -562,7 +628,7 @@ export const samSegmenter = (options: SamSegmenterOptions = {}): SamSegmentation
         });
       }
 
-      const mapped = mapMasks(response.body, input, maxRegions);
+      const mapped = mapMasks(response.body, input, maxRegions, imageScale);
       return 'failed' in mapped ? give(mapped.failed) : mapped.areas;
     },
   };

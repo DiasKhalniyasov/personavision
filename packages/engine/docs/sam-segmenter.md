@@ -53,6 +53,7 @@ const segmentation = samSegmenter({
   mode: run.engine.mode,                        // 'model' — anything else is reason 'mode'
   modelId: run.engine.models?.segmentation,     // as run.json spells it
   credential: selected.credential,              // from provider selection's sanctioned read
+  imageScale: persona.device.deviceScaleFactor, // the screenshot is in device pixels
   runDir,
   readScreenshot: (path) => readFile(path),
   transport: async ({ url, method, headers, body, signal }) => {
@@ -63,7 +64,15 @@ const segmentation = samSegmenter({
       signal,
     });
     const text = await response.text();
-    return { status: response.status, body: JSON.parse(text) as unknown };
+    // A proxy's HTML 502 is not JSON, and a transport that threw on it would lose the
+    // status: the body is passed on as it came and the status is reported as `http_status`.
+    let body: unknown = text;
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = text;
+    }
+    return { status: response.status, body };
   },
   report: (unavailable) => log.warn(unavailable.message),
 });
@@ -71,6 +80,14 @@ const segmentation = samSegmenter({
 if (!segmentation.available) log.warn(segmentation.unavailable.message);
 const aois = await buildAois({ capture, variant, segmenter: segmentation.segmenter });
 ```
+
+`imageScale` is the capture's device scale factor, and it matters: the browser step
+captures with `scale: 'device'`, so a persona on a device whose scale factor is three hands
+over an image three times the size of the page the capture describes, and the model answers
+in the pixels of the image it was shown. A capture carries no scale factor of its own, so
+the caller states it. Left at its default of 1 on a scaled capture, every mask lands outside
+the page and the call reports that it kept nothing — loudly, and with the offline segmenter
+behind it — rather than placing regions at three times their true position.
 
 The transport and the screenshot reader are **injected, with no defaults**, because
 `packages/engine` opens no socket and reads no file — a rule its own tests assert over
@@ -92,11 +109,13 @@ readable message — never an exception and never a segmenter that quietly answe
 | `transport` | the call never reached a reply, or the screenshot could not be read |
 | `timeout` | our own timeout (`DEFAULT_SAM_TIMEOUT_MS`, 60s) ran out first |
 | `http_status` | a reply arrived with a status that is not 2xx |
-| `unparseable` | a 2xx reply holding no mask that can be turned into a rectangle |
+| `unparseable` | a 2xx reply with no `masks` array, or one whose masks were all dropped |
 
 The first three are answered by the factory, up front. The last four happen during a call:
 they go to `report`, and **that call answers with the fallback segmenter's areas** — the
-offline heuristic one unless `fallback` named another. So a torn connection costs a run its
+offline heuristic one, built with the `runDir` and the `config` this factory was given so
+that it can open the capture's run-directory-relative screenshot, unless `fallback` named
+another. So a torn connection costs a run its
 model-segmented regions and nothing else. An empty `masks` array is *not* a failure: it is
 a screen with no unexplained region on it, and it is reported as no regions rather than as
 the fallback's.
@@ -122,13 +141,20 @@ the question: the seam asks for what the DOM is silent about, not for every regi
 **Response.** The first `masks` array found in the reply, searched depth-first in document
 order — so the envelope may be top-level, under `output`, or inside a content part without
 the parser caring, which is deliberate while the shape is unconfirmed. Each mask may spell
-its geometry three ways:
+its geometry four ways, and the two array spellings mean different things:
 
 ```json
 { "label": "product card grid", "box": [16, 112, 464, 344] }
+{ "label": "product card grid", "bbox": [16, 112, 448, 232] }
 { "label": "product card grid", "box": { "x": 16, "y": 112, "width": 448, "height": 232 } }
 { "label": "promo tile", "polygon": [[300, 60], [420, 60], [420, 100], [300, 100]] }
 ```
+
+`box` is a **corner pair**, `[x0, y0, x1, y1]`; `bbox` is **extents**,
+`[x, y, width, height]`, as it is throughout the SAM and COCO lineage. Reading one as the
+other would put a plausible-looking rectangle in the wrong part of the page and pass every
+check after it, so each key is read as what it means rather than as whichever arrived
+first.
 
 A run-length-encoded mask with no box and no polygon is **not** decoded — there is no pixel
 work in the engine — and is dropped. A reply whose every mask is undecodable is reported
@@ -139,8 +165,8 @@ work in the engine — and is dropped. A reply whose every mask is undecodable i
 Each one is stated here and tested in `tests/sam-segmenter.test.ts` against the recorded
 reply in `tests/sam-response.fixture.json`:
 
-- **Page space.** Boxes are read in the screenshot's pixel space, which is the page space
-  the capture's elements use — the screenshot is the full page.
+- **Image pixels to page space.** Boxes are read in the screenshot's pixel space and
+  divided by `imageScale` to reach the page space the capture's elements use.
 - **Outside the page is dropped; the edge is clipped.** A rectangle is clipped to
   `0,0 … viewport.width × pageHeight`, then rounded to whole pixels; one wholly outside, or
   with no extent left, is dropped.
@@ -157,6 +183,11 @@ reply in `tests/sam-response.fixture.json`:
   same reply gives byte-identical areas, ids and order.
 - **`source: "sam"` and `role: null`.** Both are `buildAois`'s to set, not a segmenter's;
   a region nobody could name is never the primary action.
+- **Nothing kept is reported, nothing found is not.** A reply saying `masks: []` is an
+  honest empty answer: no unexplained region on this screen, and no fallback. A reply that
+  listed masks and kept none of them — all undecodable, all off the page, all over controls
+  — is reported `unparseable` and answered with the fallback's areas, because an empty
+  segmentation presented as a success would read as a screen with nothing on it.
 
 ## Testing
 
