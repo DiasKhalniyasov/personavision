@@ -1,0 +1,97 @@
+/* ---- The scanpath ------------------------------------------------------
+   The prototype's `#att-vec` scanpath: `.fx-num` numerals over marks in
+   `--gaze-fixation`, the saccades between them in `--gaze-saccade` at
+   `--gaze-saccade-width`, and the `.scale-legend` beside the switch.
+
+   Every value here is a custom property from `docs/design/tokens.css`, which
+   the app imports and never copies: the colours are the four `--gaze-*` the
+   ticket names, the type is `--text-2xs` — whose own comment in the tokens
+   calls it the size of an overlay fixation number — and the legend's three
+   marks are the spacing scale.
+
+   No transition and no animation: the direction allows this screen the 150ms
+   base transition and `pv-pulse` on live or loading states only, and a layer
+   that is a pure drawing of an aggregate has neither.
+
+   One stated refinement of the prototype. The prototype draws its numbers as
+   SVG `text` inside the overlay's own `viewBox`, where a font size is in
+   overlay units; this layer draws them as HTML spans over the surface, where it
+   is in CSS pixels. The prototype has one zoom level and the app has three, and
+   a number in overlay units would double with the page at 200% and halve at
+   50%: the mark is page geometry and scales with the page, the number on it is
+   a label and stays the size the tokens give it. `fill` becomes `color`
+   accordingly, and nothing else about it changes. */
+
+/* ---- What is drawn over the page ---------------------------------------- */
+
+.scan {
+  /* The marks sit over the heatmap they are read against, and under nothing:
+     `.layer`'s own stacking is what orders the overlays, and this layer adds no
+     z-index of its own. */
+  position: absolute;
+  inset: 0;
+}
+
+.fixation {
+  fill: var(--gaze-fixation);
+}
+
+.saccade {
+  fill: none;
+  stroke: var(--gaze-saccade);
+  stroke-width: var(--gaze-saccade-width);
+}
+
+/* The number on the mark, centred on it. Its place is a percentage of the same
+   box the marks are drawn in, set by the layer from the artifact's own figures;
+   its size is the tokens', in CSS pixels, so the zoom cannot change it. */
+.number {
+  position: absolute;
+  color: var(--gaze-fixation-label);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+/* ---- The scale, beside the switch --------------------------------------
+   `.scale-legend` from the prototype's Overlays panel, over a ramp of marks
+   rather than of colours: on this layer a dwell is read as a size, so the key
+   is three marks growing. Their diameters are the spacing scale's, which is
+   what the heat key's own height is taken from too. */
+
+.sizes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block: var(--space-2) var(--space-1);
+}
+
+.dot {
+  border-radius: var(--radius-full);
+  background: var(--gaze-fixation);
+}
+
+.brief {
+  width: var(--space-1);
+  height: var(--space-1);
+}
+
+.middling {
+  width: var(--space-2);
+  height: var(--space-2);
+}
+
+.long {
+  width: var(--space-3);
+  height: var(--space-3);
+}
+
+.scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}

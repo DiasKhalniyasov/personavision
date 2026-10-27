@@ -4,6 +4,7 @@ import type { AttentionArea } from '../useAttentionAreas';
 import type { Fixation, Saccade } from '../useAttentionStepSessions';
 import { AOI_OUTLINE_LAYER } from './AoiOutlineLayer';
 import { HEATMAP_LAYER } from './HeatmapLayer';
+import { SCANPATH_LAYER } from './ScanpathLayer';
 import type { Transform } from './overlayTransform';
 
 /**
@@ -80,10 +81,12 @@ export interface OverlayLayer {
  * Every overlay, in the order the panel lists them — the prototype's order, which is also
  * back to front: the heatmap is the ground the scanpath is read over, and the outlines are
  * the frame around both.
- *
- * #72 adds its entry between these two when it lands.
  */
-export const OVERLAY_LAYERS: readonly OverlayLayer[] = [HEATMAP_LAYER, AOI_OUTLINE_LAYER];
+export const OVERLAY_LAYERS: readonly OverlayLayer[] = [
+  HEATMAP_LAYER,
+  SCANPATH_LAYER,
+  AOI_OUTLINE_LAYER,
+];
 
 /** One registered layer, with what the panel shows about it and what the stage draws. */
 export interface StageLayer {
