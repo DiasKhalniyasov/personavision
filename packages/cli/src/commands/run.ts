@@ -2,7 +2,7 @@ import { modelModeSchema, runRequestSchema } from '@personavision/contract';
 import { AudienceValidationError } from '@personavision/personas';
 import { CliError } from '../cli-error.js';
 import { resolveAudience } from '../run/audience.js';
-import { engineFailureNotice, FAILURE_CHECKS } from '../run/progress.js';
+import { engineFailureNotice } from '../run/progress.js';
 import { RunNotStartedError, RunStoppedError, startRun } from '../run/start.js';
 import { readTaskSteps } from '../run/task.js';
 import type { CaptureSource } from '@personavision/browser';
@@ -96,6 +96,21 @@ const FINISHING_ACTS = [
 
 /** One alternation, built once: the list is literals, so there is nothing to escape. */
 const FINISHING_ACT = new RegExp(`\\b(?:${FINISHING_ACTS.join('|')})\\b`);
+
+/**
+ * The largest seed a run can be told apart by: what a 32-bit seeded generator can
+ * distinguish.
+ *
+ * Past it a seed stops being a seed. `createSeededRandom` reduces one modulo 2³², so a run
+ * at seed 4294967297 would be sampled at seed 1 while its artifact said otherwise — a figure
+ * quoted with a number that does not reproduce it, which is the one thing a seed exists to
+ * prevent. A negative seed is the same failure from the other side: −1 samples exactly as
+ * 4294967295 does.
+ *
+ * It is declared here, where `--seed` is read, and `calibrate`'s own seeds are held to it
+ * too: it is a fact about the generator, not about one command.
+ */
+export const MAX_SEED = 4_294_967_295;
 
 const saysWhatFinishingMeans = (task: string): boolean => FINISHING_ACT.test(task.toLowerCase());
 
@@ -218,7 +233,11 @@ export const parseRunRequest = (
       : 'Needs to be at least 1: it is how many times each person repeats the task.',
   );
   if (isProblem(repeats)) problems.push(repeats);
-  const seed = integer('--seed', argv.seed, () => null);
+  const seed = integer('--seed', argv.seed, (parsed) =>
+    parsed >= 0 && parsed <= MAX_SEED
+      ? null
+      : `Needs to be 0..${String(MAX_SEED)}: past that a seed is reduced to one inside it, and the run would record a number that does not reproduce it.`,
+  );
   if (isProblem(seed)) problems.push(seed);
 
   const engineMode = runRequestSchema.shape.engineMode;
@@ -322,20 +341,35 @@ const failedToStart = (error: RunNotStartedError): CliError =>
       ...(error.run.failure === undefined || error.run.failure.detail === ''
         ? ['  Nothing was captured from the attempt.']
         : error.run.failure.detail.split('\n').map((line) => `  | ${line}`)),
-      ...FAILURE_CHECKS.map((check) => `  - ${check}`),
+      // Only the checks this failure is about: the prototype's three are about a page that
+      // could not be opened, and printing them under a missing credential would send a
+      // reader to look at a URL that was never the problem.
+      ...error.checks.map((check) => `  - ${check}`),
       `  ${engineFailureNotice(error.run.engine)}`,
       `The failure is recorded in ${error.runDir}`,
     ].join('\n'),
   );
 
-/** The default stop: the two signals a terminal and a test runner send. */
+/**
+ * The default stop: the two signals a terminal and a test runner send.
+ *
+ * **It never exits the process itself.** The sessions in flight cannot be cancelled — a page
+ * operation in Chromium is not interruptible — and exiting from under them would abandon the
+ * write of `run.json` that is in flight at every session boundary, leaving a truncated file
+ * and a directory nobody can read. That is the opposite of what the line above it promises,
+ * so the wait is honoured instead: every session is capped, so the wait is a bounded one, and
+ * the second signal says how long it can be rather than cutting a write in half.
+ */
 const onSignals = (stop: () => void): (() => void) => {
   const signals = ['SIGINT', 'SIGTERM'] as const;
   let asked = false;
   const handle = (): void => {
-    // The second signal is somebody who meant it: the sessions in flight cannot be
-    // cancelled, and waiting for them is not what a person pressing Ctrl-C twice wants.
-    if (asked) process.exit(STOPPED_EXIT_CODE);
+    if (asked) {
+      process.stderr.write(
+        'Still stopping: a session in Chromium cannot be cancelled, so the ones in flight are being waited for. Each ends at its own cap, within a minute of when it started.\n',
+      );
+      return;
+    }
     asked = true;
     process.stderr.write('\nStopping: the sessions already finished are kept.\n');
     stop();

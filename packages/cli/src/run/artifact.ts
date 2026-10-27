@@ -28,8 +28,17 @@ import type { Audience, Persona, Run, RunFailure } from '@personavision/contract
  *   so it carries a placeholder that says so in words rather than a sentence nobody measured.
  * - **One declared screen.** A verdict names the evidence it turns on, and the evidence has
  *   to be a screenshot the run declares — so the first version's first step is declared with
- *   the viewport the first person will see it at. Each session's real capture replaces it as
- *   it lands.
+ *   the viewport the first person will see it at. A session that captures that screen
+ *   replaces the row with the real geometry as it lands.
+ *
+ * Both outlive the run where the pipeline that replaces them has not run. This command
+ * writes **no scores**: the friction score, the findings and the verdict are the scoring
+ * step's (#26, #27, #28), so a run it produces reads as "nothing has been scored yet" and
+ * its hero evidence still names the placeholder screen — which, on a run where the first
+ * version's first step was never captured, names an image that is not on disk. Nothing
+ * downstream of this command can mend that while a verdict has to name a declared
+ * screenshot, so whichever ticket scores a run is the one that replaces both. Recorded on
+ * #54.
  */
 
 /** What an open run says where a finished one leads with its verdict. */

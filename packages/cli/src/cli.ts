@@ -14,7 +14,7 @@ import {
   calibrateScoreCommand,
 } from './commands/calibrate.js';
 import { openCommand } from './commands/open.js';
-import { runCommand } from './commands/run.js';
+import { MAX_SEED, runCommand } from './commands/run.js';
 import { serveCommand } from './commands/serve.js';
 import { validateCommand } from './commands/validate.js';
 import { DEFAULT_AUDIENCE } from './run/audience.js';
@@ -205,17 +205,6 @@ program
       openBrowser: options.open,
     });
   });
-
-/**
- * The upper bound on a seed and a candidate count: what a 32-bit seeded generator can tell
- * apart.
- *
- * Past it a seed stops being a seed. The engine's generator reduces one modulo 2³², so
- * `--seed 4294967297` would be measured at seed 1 while the output said otherwise — a
- * figure quoted with a number that does not reproduce it, which is the one thing a seed
- * exists to prevent.
- */
-const MAX_SEED = 4_294_967_295;
 
 const integer = (flag: string, value: string): number => {
   // Digits only, as `--port` is: `Number` would take `1e3` and `0x10`, and a seed nobody

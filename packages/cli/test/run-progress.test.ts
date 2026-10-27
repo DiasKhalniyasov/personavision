@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   closingLines,
+  engineFailureNotice,
   enginePhrase,
   finishedPhrase,
   logLine,
@@ -187,6 +188,36 @@ describe('the engine', () => {
     );
   });
 
+  it('says what a failed start was to run on, and claims nothing about what ran', () => {
+    const run = runningRun();
+
+    const offline = engineFailureNotice(run.engine);
+    expect(offline).toContain(`was to run on the ${OFFLINE_ENGINE}`);
+    expect(offline).toContain('Nothing was simulated');
+    // Two things the screen's own finished-run notice says that are false of a run that
+    // never started: that the engine was used, and that no key is configured.
+    expect(offline).not.toContain('was used');
+    expect(offline).not.toContain('No model key is configured');
+  });
+
+  it('names the model a failed model run was to use, and no engine in its place', () => {
+    const run = runningRun({
+      engine: {
+        mode: 'model',
+        modelMode: 'standard',
+        provider: 'meta-model-api',
+        models: { decision: 'muse-spark-1.3', segmentation: 'none', planning: 'none' },
+        weights: { alpha: 0.5, beta: 0.35, gamma: 0.15 },
+        version: 'uncalibrated',
+      },
+    });
+
+    const notice = engineFailureNotice(run.engine);
+    expect(notice).toContain('Muse Spark 1.3 · standard mode');
+    expect(notice).toContain('no other engine’s result was saved in its place');
+    expect(notice).not.toContain(OFFLINE_ENGINE);
+  });
+
   it('says the standard mode by name, so a paying customer can see which model ran', () => {
     const run = runningRun({
       engine: {
@@ -234,5 +265,19 @@ describe('the report’s opening and closing', () => {
       '  A 5 / 12 sessions',
       '  B 2 / 12 sessions',
     ]);
+  });
+
+  it('counts one session as one, at either end of the report', () => {
+    const run = runningRun({
+      progress: {
+        totalSessions: 1,
+        finishedSessions: 1,
+        perVariant: [{ variant: 'A', totalSessions: 1, finishedSessions: 1 }],
+        sessions: [],
+      },
+    });
+
+    expect(openingLines(run)[2]).toContain('· 1 session ·');
+    expect(closingLines(run, Date.parse(RUN_STARTED_AT))).toContain('  A 1 / 1 session');
   });
 });

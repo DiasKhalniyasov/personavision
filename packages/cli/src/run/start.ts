@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createLiveSource } from '@personavision/browser';
 import { runDirName } from '@personavision/contract';
@@ -13,7 +13,13 @@ import {
   writeRunRecord,
 } from './artifact.js';
 import { requestedEngine, selectEngine } from './engine.js';
-import { closingLines, finishedPhrase, openingLines, reportLine } from './progress.js';
+import {
+  closingLines,
+  FAILURE_CHECKS,
+  finishedPhrase,
+  openingLines,
+  reportLine,
+} from './progress.js';
 import { taskFor } from './task.js';
 import type { CaptureSource, TaskStep, Variant } from '@personavision/browser';
 import type { Audience, Run, RunFailure, RunRequest } from '@personavision/contract';
@@ -56,13 +62,26 @@ export class RunNotStartedError extends Error {
   readonly runDir: string;
   /** The artifact as it was written: status `failed`, its reason, and no session. */
   readonly run: Run;
+  /**
+   * What is worth checking about **this** failure, in the words the Test failed screen uses,
+   * and empty where nothing on that list applies. A reader sent to look at a URL that was
+   * never reached for is a reader sent the wrong way.
+   */
+  readonly checks: readonly string[];
 
-  constructor(run: Run, runDir: string, message: string, options?: { cause?: unknown }) {
+  constructor(
+    run: Run,
+    runDir: string,
+    message: string,
+    checks: readonly string[],
+    options?: { cause?: unknown },
+  ) {
     super(message, options);
     this.name = 'RunNotStartedError';
     this.runId = run.runId;
     this.runDir = runDir;
     this.run = run;
+    this.checks = checks;
   }
 }
 
@@ -222,6 +241,25 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
   };
 
   /**
+   * Whether anything has been written into the directory claimed above.
+   *
+   * The name has to be claimed before the record can be built, because the record carries
+   * it — so between the claim and the first write there is a region that can throw, and an
+   * empty directory named like a run is worse than no directory: `listRunDirs` returns it
+   * first, `personavision open` resolves `/` to it, and `personavision validate` fails on a
+   * run nobody wrote. So it is swept unless something is in it.
+   */
+  let written = false;
+  const write = async (run: Run): Promise<void> => {
+    await writeRunRecord(runDir, run);
+    written = true;
+  };
+  const sweepIfEmpty = async (): Promise<void> => {
+    if (written) return;
+    await rm(runDir, { recursive: true, force: true }).catch(() => undefined);
+  };
+
+  /**
    * A run that could not start, recorded and handed back to the caller to report.
    *
    * The engine block is passed in rather than derived here, because what a failed run
@@ -233,11 +271,12 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
   const refuse = async (
     engine: Run['engine'],
     failure: RunFailure,
+    checks: readonly string[],
     cause: unknown,
   ): Promise<never> => {
     const run = failedRunRecord(openRunRecord({ ...record, engine }, planned), failure, clock());
-    await writeRunRecord(runDir, run);
-    throw new RunNotStartedError(run, runDir, failure.reason, { cause });
+    await write(run);
+    throw new RunNotStartedError(run, runDir, failure.reason, checks, { cause });
   };
 
   /**
@@ -267,14 +306,26 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
               : `The ${request.modelMode} model could not be used`,
           detail: error.message,
         },
+        // Nothing to check: the engine notice beneath it says which model could not be used
+        // and that nothing stood in for it, and no URL was ever reached for.
+        [],
         error,
       );
     }
   };
-  const selected = await selectOrRefuse();
-
-  const open = openRunRecord({ ...record, engine: selected.engine }, planned);
-  await writeRunRecord(runDir, open);
+  let selected: SelectedEngine;
+  let open: Run;
+  try {
+    selected = await selectOrRefuse();
+    open = openRunRecord({ ...record, engine: selected.engine }, planned);
+    await write(open);
+  } catch (error) {
+    // Either the selection refused — which wrote the failure and is the caller's to report —
+    // or something threw before the record reached disk. Either way the directory is left
+    // only if it holds a run.
+    await sweepIfEmpty();
+    throw error;
+  }
   for (const line of openingLines(open)) report(line);
   report(`  ${selected.reason}`);
 
@@ -331,10 +382,18 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
         await refuse(
           selected.engine,
           { reason: 'The test could not be started', detail: (error as Error).message },
+          // A run that reached no session is, nine times in ten, a page that could not be
+          // opened, which is what the prototype's three checks are about.
+          FAILURE_CHECKS,
           error,
         );
       }
-      run = await closeStoppedRun(runDir, plannedOrder, clock());
+      // The close reads the whole directory back, which is the very thing a swarm-level
+      // failure is likely to have broken: a close that throws must not replace the failure
+      // it was called to report with a validation dump.
+      run = await closeStoppedRun(runDir, plannedOrder, clock()).catch(() => {
+        throw error;
+      });
       throw new RunStoppedError(
         run,
         runDir,

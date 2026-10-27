@@ -265,7 +265,7 @@ describe('a run that cannot start', () => {
     await expect(readdir(runPaths(runDir).sessionsDir)).resolves.toEqual([]);
   });
 
-  it('reports the model it was to run on, and the checks worth making', async () => {
+  it('reports the model it was to run on, and sends nobody to check a URL', async () => {
     fixture = await runFixture({ size: 2 });
     const options = fixture.options({ engine: 'model', mode: 'standard', env: {} });
 
@@ -275,7 +275,10 @@ describe('a run that cannot start', () => {
 
     expect(error.message).toContain('Muse Spark 1.3 · standard mode');
     expect(error.message).toContain('no other engine’s result was saved in its place');
-    expect(error.message).toContain('Both versions have to be reachable');
+    // The prototype's three checks are about a page that could not be opened. This failure
+    // reached no page at all, so printing them would send a reader the wrong way.
+    expect(error.message).not.toContain('Both versions have to be reachable');
+    expect(error.message).not.toContain('reachable at that address');
   });
 
   it('refuses --engine offline together with --mode standard before anything is written', async () => {
@@ -304,6 +307,39 @@ describe('a run that cannot start', () => {
     expect(error.message).toContain('does not declare the task’s steps');
     expect(error.message).toContain('steps.0.label');
     expect(error.message).toContain('no run directory was created');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses a seed the generator cannot tell from another, and writes nothing', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options({ seed: '4294967297' });
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    // Reduced modulo 2³² it would be sampled at seed 1, and the artifact would record a
+    // number that does not reproduce it.
+    expect(error.message).toContain('--seed "4294967297"');
+    expect(error.message).toContain('Needs to be 0..4294967295');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('leaves no empty run directory behind when it throws before writing one', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options({
+      engine: 'model',
+      mode: 'contributor',
+      env: { MODEL_API_KEY: STAND_IN_CREDENTIAL },
+      createModelProvider: () => {
+        throw new Error('the provider could not be built');
+      },
+    });
+
+    // Not a refusal this command knows how to word: it is handed on as the failure it is.
+    await expect(runCommand(options)).rejects.toThrow('the provider could not be built');
+    // And the directory it had claimed for the run is swept: a directory named like a run
+    // is the one `personavision open` resolves to and `personavision validate` checks.
     expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
   });
 

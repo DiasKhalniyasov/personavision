@@ -228,10 +228,10 @@ export const openingLines = (run: Run): string[] => {
   return [
     `Running · ${run.task.prompt}`,
     `${finishedPhrase(run.progress?.finishedSessions ?? 0, planned)} · ${engine.join(' · ')}`,
-    ...run.variants.map(
-      (variant) =>
-        `  ${variant.id} ${variant.name} · ${String(perVariantTotal(run, variant.id))} sessions · ${variant.url}`,
-    ),
+    ...run.variants.map((variant) => {
+      const sessions = perVariantTotal(run, variant.id);
+      return `  ${variant.id} ${variant.name} · ${String(sessions)} ${sessions === 1 ? 'session' : 'sessions'} · ${variant.url}`;
+    }),
     `  ${run.audience.name} · ${String(run.personas.length)} ${run.personas.length === 1 ? 'person' : 'people'} · seeds ${run.seedGroups.join(', ')}`,
   ];
 };
@@ -259,25 +259,27 @@ export const closingLines = (run: Run, now: number): string[] => {
     ].join(' · '),
     ...(progress?.perVariant ?? []).map(
       (row) =>
-        `  ${row.variant} ${String(row.finishedSessions)} / ${String(row.totalSessions)} sessions`,
+        `  ${row.variant} ${String(row.finishedSessions)} / ${String(row.totalSessions)} ${row.totalSessions === 1 ? 'session' : 'sessions'}`,
     ),
   ];
 };
 
-/** The prototype's `.notice info`, for a workspace with no model key configured. */
-export const OFFLINE_NOTICE = `No model key is configured for this workspace, so the ${OFFLINE_ENGINE} was used. Simulated attention is unaffected; what each person says about their intent is terser than with a model.`;
-
 /**
- * What a run that failed to start says about the engine: which model could not be used, and
+ * What a run that failed to start says about the engine: which engine it was to run on, and
  * that nothing stood in for it.
  *
- * A test that asked for a model and failed **never** reports another engine's result in its
- * place (#144), so the sentence names the model and states the absence rather than
+ * Both sentences are in the **past conditional**, because nothing ran: the screen's own
+ * notice for an offline test — "no model key is configured, so the offline deterministic
+ * engine was used" — is true of a test that *finished* offline and would be two falsehoods
+ * here, claiming an engine was used when none was and a key is absent without having looked.
+ *
+ * A test that asked for a model and failed never reports another engine's result in its
+ * place (#144), so that sentence names the model and states the absence rather than
  * mentioning any other engine at all.
  */
 export const engineFailureNotice = (engine: Run['engine']): string =>
   engine.mode === 'offline'
-    ? OFFLINE_NOTICE
+    ? `This test was to run on the ${OFFLINE_ENGINE}. Nothing was simulated, so there is nothing to read: no session ran and no engine stood in for it.`
     : `This test was to run on ${enginePhrase(engine)}. That model could not be used, so nobody was simulated and no other engine’s result was saved in its place.`;
 
 /**
