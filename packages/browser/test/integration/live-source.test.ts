@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runPaths, runSchema } from '@personavision/contract';
 import { chromium } from 'playwright';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   SessionBudget,
   UNKNOWN_STEP,
@@ -27,7 +27,13 @@ import {
   toScreenshotEntries,
   walkTask,
 } from '../../src/index.js';
-import type { Capture, Device, TaskDefinition } from '../../src/index.js';
+import type {
+  CaptureSource,
+  Capture,
+  DecideAction,
+  Device,
+  TaskDefinition,
+} from '../../src/index.js';
 import { serveFixtureSite } from '../helpers/static-site.js';
 import type { FixtureSite } from '../helpers/static-site.js';
 
@@ -245,6 +251,114 @@ describeWithChromium('a live walk of the fixture task', () => {
         );
         expect(promoApply(mobile).map((element) => element.belowFold)).not.toContain(false);
         expect(promoApply(desktop).map((element) => element.belowFold)).not.toContain(true);
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
+    'takes an action aimed at an element of the capture it was decided against',
+    async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'personavision-walk-element-'));
+      /** The swarm's own targeting: the element the capture marked, by its stable id. */
+      const clickThePrimaryAction: DecideAction = (screen) => {
+        if (screen.step !== 'cart') return null;
+        const primary = screen.elements.find((element) => element.isPrimaryAction);
+        return primary === undefined ? null : { type: 'click', elementId: primary.id };
+      };
+
+      try {
+        const walked = await walkTask(createLiveSource(), {
+          variant: variantAt(DESKTOP),
+          device: DESKTOP,
+          task: TASK,
+          runDir,
+          decide: clickThePrimaryAction,
+        });
+
+        expect(walked.screens.map((screen) => screen.capture.step)).toEqual(['cart', 'payment']);
+        expect(walked.screens[0]?.action).toMatchObject({ ok: true, step: 'payment' });
+        expect(walked).toMatchObject({ step: 'payment', completed: false, failure: null });
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
+    'ends at its screen cap when the decision layer never advances the step',
+    async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'personavision-walk-cap-'));
+      /** A decision layer that only ever scrolls, and so never leaves the cart. */
+      const scrollForEver: DecideAction = () => ({ type: 'scroll', deltaY: 40 });
+
+      try {
+        const walked = await walkTask(createLiveSource(), {
+          variant: variantAt(DESKTOP),
+          device: DESKTOP,
+          task: TASK,
+          runDir,
+          decide: scrollForEver,
+          maxScreens: 3,
+        });
+
+        expect(walked.screens.map((screen) => screen.capture.step)).toEqual([
+          'cart',
+          'cart',
+          'cart',
+        ]);
+        // The cap is not a failure of ours: a trace that went nowhere is what decides the
+        // outcome, and a session nobody drove anywhere is not the product's fault either.
+        expect(walked).toMatchObject({
+          step: 'cart',
+          completed: false,
+          failure: null,
+          outcome: null,
+        });
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
+    'closes a session that opens after the budget has given up on it',
+    async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'personavision-walk-abandoned-'));
+      const live = createLiveSource();
+      let closed = 0;
+      /** The live source, counting its closes: a browser nobody holds never goes away. */
+      const source: CaptureSource = {
+        ...live,
+        close: async (page) => {
+          closed += 1;
+          await live.close(page);
+        },
+      };
+
+      try {
+        const walked = await walkTask(source, {
+          variant: variantAt(DESKTOP),
+          device: DESKTOP,
+          task: TASK,
+          runDir,
+          // A millisecond: the session's clock runs out while Chromium is still launching.
+          budget: new SessionBudget({ wallClockMs: 1 }),
+        });
+
+        expect(walked.failure?.reason).toBe('timeout');
+        expect(walked).toMatchObject({ screens: [], step: null, completed: false });
+        // The abandoned open lands after the walk has answered, and is closed when it does.
+        await vi.waitFor(
+          () => {
+            expect(closed).toBe(1);
+          },
+          { timeout: WALK_TIMEOUT_MS, interval: 100 },
+        );
       } finally {
         await rm(runDir, { recursive: true, force: true });
       }

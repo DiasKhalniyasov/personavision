@@ -70,7 +70,10 @@ const aois = toAoiEntries(captures); // run.json's `aois`
 **The walk decides nothing.** `decide` — `(screen, step) => Action | null` — is where the
 swarm's decision loop goes: it is handed the capture and the step's declaration, and answers
 with the action to take or with `null` to stop the walk on that screen. Without one the walk
-advances on the control the step declares, which is what drives the task from end to end.
+advances on the control the step declares, which is what drives the task from end to end. A
+walk is capped in screens too — `maxScreens`, eight per declared step by default — so a
+decision layer that never advances the step ends the walk rather than spending the session's
+whole clock and being recorded as our breakage.
 
 **It reports no product outcome.** A failure of _ours_ ends the walk and comes back as
 `failure` with the one outcome it can produce — `attribution: "automation"`,
@@ -240,9 +243,12 @@ serves it from disk, with no dependency of its own):
   captured is one row. No browser.
 - `test/integration/live-source.test.ts` — one live walk of the four-step fixture task: four
   screenshots on disk with the geometry of each, one primary action marked per step, the
-  control that is below the fold at the mobile device and not at the desktop one, the two
-  `run.json` arrays the walk's captures project into parsed by the contract, and the three
-  ways a walk ends as an automation failure rather than as a verdict on the product.
+  control that is below the fold at the mobile device and not at the desktop one, an action
+  aimed by `elementId` at the capture it was decided against, the screen cap that ends a walk
+  whose decision layer never advances, a session abandoned mid-launch being closed rather than
+  leaked, the two `run.json` arrays the walk's captures project into parsed by the contract,
+  and the two ways a walk ends as an automation failure rather than as a verdict on the
+  product.
 
 No test asserts a Playwright _object_ or reaches past the entry point for a result.
 `test/fixture-site.test.ts` holds the fixture site to its own record and needs no browser.
