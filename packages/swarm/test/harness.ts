@@ -6,14 +6,16 @@
  * in — so this suite starts no browser, opens no socket and reads the same bytes every time.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFixtureSource } from '@personavision/browser';
-import { createOfflineDeterministicProvider } from '@personavision/provider';
+import { runPaths, SCHEMA_VERSION, writeRun, ZERO_USAGE } from '@personavision/contract';
+import { createDecisionSession, createOfflineDeterministicProvider } from '@personavision/provider';
 import type { CaptureSource, Device, TaskDefinition } from '@personavision/browser';
-import type { Persona } from '@personavision/contract';
+import type { Persona, Run } from '@personavision/contract';
 import type {
   Decision,
   DecisionContext,
@@ -21,6 +23,9 @@ import type {
   DecisionSession,
 } from '@personavision/provider';
 import type { RunSessionInput } from '../src/index.js';
+
+/** The run every test here writes, named as a run directory is. */
+export const RUN_ID = '2026-10-27-1200-fixture';
 
 /** The capture set `pnpm -F @personavision/browser record:captures` wrote. */
 export const COMMITTED = fileURLToPath(
@@ -120,7 +125,7 @@ export const sessionOver = (
   over: Partial<RunSessionInput> = {},
 ): RunSessionInput => ({
   runDir,
-  runId: '2026-10-27-1200-fixture',
+  runId: RUN_ID,
   sessionId: 'S-01',
   variant: variantFor('A'),
   persona: personaWho('careful'),
@@ -134,7 +139,15 @@ export const sessionOver = (
   ...over,
 });
 
-/** A provider that answers whatever a test tells it to, through one session handle or none. */
+/**
+ * A provider that answers whatever a test tells it to.
+ *
+ * Its session handle is `createDecisionSession`'s, because that is the body of `beginSession`
+ * in both providers that ship — so a test provider that hand-rolled one would behave
+ * differently from either of them in the one way that matters here: a real handle holds every
+ * turn still in flight and its `close` waits for all of them, so a test with a reply that
+ * never comes would pass against a hand-rolled handle and hang against a real one.
+ */
 export const providerThat = (
   answer: (context: DecisionContext) => Decision,
   over: Partial<Pick<DecisionProvider, 'name' | 'mode' | 'readsImages'>> = {},
@@ -146,12 +159,8 @@ export const providerThat = (
     readsImages: false,
     ...over,
     decide,
-    beginSession: ({ personaId, seed }): DecisionSession => ({
-      personaId,
-      seed,
-      decide,
-      close: async () => undefined,
-    }),
+    beginSession: ({ personaId, seed }): DecisionSession =>
+      createDecisionSession({ personaId, seed, decide }),
   };
 };
 
@@ -194,4 +203,228 @@ export const watchingActs = (
       },
     },
   };
+};
+
+/**
+ * A capture set whose two variants were recorded under one device, derived into a temporary
+ * directory from the committed one.
+ *
+ * The committed set records variant A on mobile and variant B on desktop, and a replay
+ * rightly refuses a device the variant was not recorded under: every `belowFold` in a
+ * capture came from that viewport's fold. But a swarm runs **the same people** against both
+ * variants and a person has one device, so no swarm can walk that set end to end. This
+ * mints variant B from the recorded A — the same pages at the same viewport under B's name
+ * — so a session on either variant replays bytes that were really recorded, and the two
+ * variants' areas of interest still have ids of their own.
+ */
+export const oneDeviceCaptureSet = async (): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), 'personavision-captures-'));
+  const index = JSON.parse(await readFile(join(COMMITTED, 'capture-set.json'), 'utf8')) as {
+    formatVersion: number;
+    variants: { id: string; device: Device; steps: { step: string; path: string }[] }[];
+  };
+  const recorded = index.variants.find((variant) => variant.id === 'A');
+  if (recorded === undefined) throw new Error(`${COMMITTED} records no variant "A"`);
+
+  await writeFile(
+    join(dir, 'capture-set.json'),
+    JSON.stringify({ ...index, variants: [recorded, { ...recorded, id: 'B' }] }, null, 2),
+  );
+  for (const { step } of recorded.steps) {
+    const capture = JSON.parse(
+      await readFile(join(COMMITTED, 'captures', 'A', `${step}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+    for (const variant of ['A', 'B']) {
+      const screenshot = runPaths('').screenshot(variant, step);
+      await mkdir(join(dir, 'captures', variant), { recursive: true });
+      await mkdir(dirname(join(dir, screenshot)), { recursive: true });
+      await writeFile(
+        join(dir, 'captures', variant, `${step}.json`),
+        JSON.stringify({ ...capture, variant, screenshot }, null, 2),
+      );
+      await copyFile(join(COMMITTED, runPaths('').screenshot('A', step)), join(dir, screenshot));
+    }
+  }
+  return dir;
+};
+
+/** The task's steps, as `run.json` lists them. */
+const STEPS = TASK.steps.map((step) => ({ id: step.id, label: step.label }));
+
+/** One variant as `run.json` records it: the id and url a session walks, plus its name. */
+export const runVariant = (id: 'A' | 'B'): Run['variants'][number] => ({
+  ...variantFor(id),
+  name: `Variant ${id}`,
+});
+
+/**
+ * The audience the people below were generated from. Inline rather than the committed
+ * preset, because a run's audience declares how many people it generates and these tests
+ * run two, four or none of them.
+ */
+export const audienceOf = (size: number): Run['audience'] => ({
+  id: 'outdoor-gear-shoppers',
+  name: 'Outdoor-gear shoppers',
+  ageRange: { min: 25, max: 55 },
+  roles: ['Shopper'],
+  regions: ['UK'],
+  goals: ['Buy a tote bag'],
+  devices: [{ ...MOBILE, share: 1 }],
+  techSavviness: 0.5,
+  priceSensitivity: 0.5,
+  size,
+  generatedFrom: { seed: 7, generatorVersion: 'test' },
+});
+
+/**
+ * One generated person on the one device the capture set was recorded under.
+ *
+ * The device carries the person's own `name`, which is a label a recording does not depend
+ * on — the replay compares the viewport and the scale factor, as a fold-dependent number
+ * must. It is what lets a test break the page for one person and watch the rest of the
+ * swarm carry on, because a capture source is handed a variant and a device and never a
+ * persona.
+ */
+export const personOnMobile = (
+  who: 'careful' | 'rushed',
+  { id, name, segment }: { id: string; name: string; segment?: string },
+): Persona => ({
+  ...personaWho(who),
+  id,
+  name,
+  device: { ...MOBILE, name: `mobile-${id}` },
+  ...(segment === undefined ? {} : { segment }),
+});
+
+/** The four people of the demo, as a generator would hand them over. */
+export const FOUR_PEOPLE: readonly Persona[] = [
+  personOnMobile('rushed', { id: 'rushed', name: 'Rushed buyer' }),
+  personOnMobile('careful', { id: 'careful', name: 'Careful comparer' }),
+  personOnMobile('rushed', { id: 'firsttime', name: 'First-time visitor', segment: 'First-time' }),
+  personOnMobile('careful', { id: 'price', name: 'Price-sensitive scanner', segment: 'Price' }),
+];
+
+/**
+ * The open run a swarm runs into, written as its caller writes it (#54): the audience, the
+ * people, the task, the engine mode and the plan's per-variant totals, with status `open`
+ * and nothing finished.
+ *
+ * The placeholder verdict and the one screen it points at are the contract's requirement of
+ * any `run.json`, open or not: a run names the evidence its verdict turns on, and the
+ * screens are declared for the areas the sessions have not reported yet.
+ */
+export const writeOpenRun = async (
+  runDir: string,
+  plan: {
+    personas: readonly Persona[];
+    variants: ReadonlyArray<Run['variants'][number]>;
+    seedGroups: number[];
+    /** Offline unless a test is about what a model run cost. */
+    engine?: Run['engine'];
+  },
+): Promise<Run> => {
+  const total = plan.personas.length * plan.seedGroups.length;
+  const run: Run = {
+    schemaVersion: SCHEMA_VERSION,
+    runId: RUN_ID,
+    createdAt: '2026-10-27T12:00:00.000Z',
+    status: 'open',
+    startedAt: '2026-10-27T12:00:00.000Z',
+    progress: {
+      totalSessions: total * plan.variants.length,
+      finishedSessions: 0,
+      perVariant: plan.variants.map((variant) => ({
+        variant: variant.id,
+        totalSessions: total,
+        finishedSessions: 0,
+      })),
+      sessions: [],
+    },
+    usage: { ...ZERO_USAGE },
+    task: { id: TASK.id, prompt: TASK.prompt },
+    variants: [...plan.variants],
+    steps: STEPS,
+    stepCaptions: [],
+    audience: audienceOf(plan.personas.length),
+    personas: [...plan.personas],
+    seedGroups: plan.seedGroups,
+    engine: plan.engine ?? {
+      mode: 'offline',
+      provider: 'offline-deterministic',
+      models: null,
+      weights: { alpha: 1, beta: 1, gamma: 1 },
+      version: 'test',
+    },
+    sessionIds: [],
+    screenshots: [
+      {
+        variant: plan.variants[0]?.id ?? 'A',
+        step: STEPS[0]?.id ?? 'cart',
+        path: runPaths('').screenshot(plan.variants[0]?.id ?? 'A', STEPS[0]?.id ?? 'cart'),
+        viewport: MOBILE.viewport,
+        pageHeight: 1400,
+        foldY: MOBILE.viewport.height,
+      },
+    ],
+    aois: [],
+    aoiMetrics: [],
+    scores: [],
+    verdict: {
+      harderVariant: plan.variants.at(-1)?.id ?? 'A',
+      gapPoints: 0,
+      bandsDisjoint: false,
+      seedGroupsAgreeing: 0,
+      sentence: 'Nothing has been scored yet.',
+      preferredVariant: plan.variants[0]?.id ?? 'A',
+      audienceSentence: 'Nothing has been scored yet.',
+      reasons: ['Nothing has been scored yet.'],
+      headlineFindingIds: [],
+      heroEvidence: {
+        variant: plan.variants[0]?.id ?? 'A',
+        step: STEPS[0]?.id ?? 'cart',
+        aoiId: null,
+      },
+    },
+    calibration: null,
+  };
+  await writeRun(runDir, {
+    run,
+    sessions: [],
+    findings: { schemaVersion: SCHEMA_VERSION, runId: RUN_ID, findings: [] },
+  });
+  return run;
+};
+
+const nodeRequire = createRequire(import.meta.url);
+
+const LAUNCHERS = ['spawn', 'spawnSync', 'fork', 'exec', 'execFile', 'execFileSync', 'execSync'];
+
+/**
+ * Runs something with every way of launching a process or opening a socket broken.
+ *
+ * The project's promise is that a cold clone with no API key and no network runs the whole
+ * of the loop (step #8), and this is where it is checked rather than intended: a session or
+ * a swarm that reached for Chromium or for a model fails inside the call instead of quietly
+ * succeeding on a machine that happens to have both. The technique is
+ * `packages/browser/test/fixture-source.test.ts`'s, applied one layer up.
+ */
+export const withNothingRunning = async <T>(body: () => Promise<T>): Promise<T> => {
+  const childProcess = nodeRequire('node:child_process') as Record<string, unknown>;
+  const net = nodeRequire('node:net') as { Socket: { prototype: Record<string, unknown> } };
+
+  const saved = new Map(LAUNCHERS.map((name) => [name, childProcess[name]]));
+  const savedConnect = net.Socket.prototype.connect;
+  const refuse = (what: string) => (): never => {
+    throw new Error(`a session in fixture mode reached for ${what}`);
+  };
+
+  for (const name of LAUNCHERS) childProcess[name] = refuse(`child_process.${name}`);
+  net.Socket.prototype.connect = refuse('a socket');
+
+  try {
+    return await body();
+  } finally {
+    for (const [name, original] of saved) childProcess[name] = original;
+    net.Socket.prototype.connect = savedConnect;
+  }
 };

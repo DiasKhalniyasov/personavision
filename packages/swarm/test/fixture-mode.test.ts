@@ -12,39 +12,13 @@
  * scans every source file in the repository for a credential read and sanctions exactly two,
  * neither of them in this package.
  *
- * The technique is `packages/browser/test/fixture-source.test.ts`'s, applied one layer up.
+ * `withNothingRunning` is the harness's, so that the swarm's own suite holds a whole run of
+ * twenty-four sessions to the same promise.
  */
 
-import { createRequire } from 'node:module';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { runSession } from '../src/index.js';
-import { personaWho, sessionOver, sweep, temporaryRunDir } from './harness.js';
-
-const nodeRequire = createRequire(import.meta.url);
-
-const LAUNCHERS = ['spawn', 'spawnSync', 'fork', 'exec', 'execFile', 'execFileSync', 'execSync'];
-
-/** Runs something with every way of launching a process or opening a socket broken. */
-const withNothingRunning = async <T>(body: () => Promise<T>): Promise<T> => {
-  const childProcess = nodeRequire('node:child_process') as Record<string, unknown>;
-  const net = nodeRequire('node:net') as { Socket: { prototype: Record<string, unknown> } };
-
-  const saved = new Map(LAUNCHERS.map((name) => [name, childProcess[name]]));
-  const savedConnect = net.Socket.prototype.connect;
-  const refuse = (what: string) => (): never => {
-    throw new Error(`a session in fixture mode reached for ${what}`);
-  };
-
-  for (const name of LAUNCHERS) childProcess[name] = refuse(`child_process.${name}`);
-  net.Socket.prototype.connect = refuse('a socket');
-
-  try {
-    return await body();
-  } finally {
-    for (const [name, original] of saved) childProcess[name] = original;
-    net.Socket.prototype.connect = savedConnect;
-  }
-};
+import { personaWho, sessionOver, sweep, temporaryRunDir, withNothingRunning } from './harness.js';
 
 let runDir: string;
 
