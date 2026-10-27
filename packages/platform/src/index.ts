@@ -41,7 +41,12 @@ export type { Credentials, SignedIn, SignInOptions } from './auth/signin.js';
 
 export { workspaceForAccount } from './workspace/membership.js';
 
-export { NoSuchWorkspaceError, startTest, TestRefusedError } from './run/start.js';
+export {
+  DraftNotAcceptedError,
+  NoSuchWorkspaceError,
+  startTest,
+  TestRefusedError,
+} from './run/start.js';
 export type { StartedTest, StartTestOptions, TestDraft, TestPipeline } from './run/start.js';
 
 export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
@@ -50,6 +55,9 @@ export type { AudienceWithPeople } from './audience/people.js';
 
 export { audienceRoutes } from './server/routes/audiences.js';
 export type { AudienceRouteOptions } from './server/routes/audiences.js';
+
+export { runRoutes } from './server/routes/runs.js';
+export type { RunRouteOptions } from './server/routes/runs.js';
 
 export { isNavigation, routeMount } from './server/router.js';
 export { notImplemented, readJsonBody, sendJson } from './server/routes/types.js';

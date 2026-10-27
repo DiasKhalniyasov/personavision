@@ -105,6 +105,23 @@ export class TestRefusedError extends Error {
   }
 }
 
+/**
+ * A draft the contract does not accept, reported **at the path each problem is at** so that
+ * the New test form can render every message against its own field (#110).
+ *
+ * A typed caller cannot reach this — `TestDraft` is the contract's own type — so it exists
+ * for the one untyped caller there is: a submitted body.
+ */
+export class DraftNotAcceptedError extends Error {
+  readonly issues: readonly { readonly path: string; readonly message: string }[];
+
+  constructor(issues: readonly { readonly path: string; readonly message: string }[]) {
+    super('that test could not be started from what was submitted.');
+    this.name = 'DraftNotAcceptedError';
+    this.issues = issues;
+  }
+}
+
 /** A workspace id no workspace answers to. A session carries one that does. */
 export class NoSuchWorkspaceError extends Error {
   readonly workspaceId: string;
@@ -155,8 +172,19 @@ export const startTest = async ({
   if (workspace === null) throw new NoSuchWorkspaceError(workspaceId);
 
   // Parsed rather than spread together, so that what the pipeline receives is a request the
-  // contract has already accepted — the mode included.
-  const request = runRequestSchema.parse({ ...draft, modelMode: workspace.modelMode });
+  // contract has already accepted — the mode included. The spread comes first, so a
+  // submitted body naming a mode of its own is overridden rather than honoured: the model a
+  // test is billed at is not the submitter's to choose.
+  const parsed = runRequestSchema.safeParse({ ...draft, modelMode: workspace.modelMode });
+  if (!parsed.success) {
+    throw new DraftNotAcceptedError(
+      parsed.error.issues.map((issue) => ({
+        path: issue.path.map(String).join('.'),
+        message: issue.message,
+      })),
+    );
+  }
+  const request = parsed.data;
   // Resolved against the workspace that asked, and frozen: a test is never started for an
   // audience this workspace cannot read, and it is refused here rather than by the
   // pipeline, which is handed no workspace to scope it against. Throws before anything
