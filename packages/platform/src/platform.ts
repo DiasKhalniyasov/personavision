@@ -4,6 +4,8 @@ import { sessionGuard } from './auth/guard.js';
 import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
+import { runRoutes } from './server/routes/runs.js';
+import type { TestPipeline } from './run/start.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
 import { readSessionId, sessionCookieHeader, signSessionId } from './server/session.js';
@@ -29,6 +31,12 @@ export interface PlatformOptions {
   dataDir: string;
   /** The directory the run directories sit in — `./runs`. */
   runsRoot: string;
+  /**
+   * What `POST /runs` drives a test with: the swarm (#54). Absent — as it is until that
+   * ticket lands — means the route answers 501 naming it, rather than the product looking
+   * as though it started something.
+   */
+  pipeline?: TestPipeline;
 }
 
 export interface Platform {
@@ -62,7 +70,11 @@ export interface Platform {
   sessionCookie: (sessionId: string, options: { secure: boolean }) => string;
 }
 
-export const createPlatform = async ({ dataDir, runsRoot }: PlatformOptions): Promise<Platform> => {
+export const createPlatform = async ({
+  dataDir,
+  runsRoot,
+  pipeline,
+}: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
   const resolvedRunsRoot = resolve(runsRoot);
   // The settings file is what "this data directory has been started before" means: it is
@@ -98,6 +110,7 @@ export const createPlatform = async ({ dataDir, runsRoot }: PlatformOptions): Pr
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
+      ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),
     seeded,

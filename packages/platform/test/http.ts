@@ -1,5 +1,6 @@
 import { runDataMount } from '../../cli/src/run-data.js';
 import { createPlatform } from '../src/platform.js';
+import type { TestPipeline } from '../src/run/start.js';
 import type { Platform } from '../src/platform.js';
 import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
@@ -24,6 +25,12 @@ export interface TestServerOptions {
    * workspace that adds it and is public to nobody, which is the seed's own rule.
    */
   runs?: readonly { stamp: string; name: string }[];
+  /**
+   * What `POST /runs` drives a test with. Omitted — as every suite but the one about
+   * starting a test omits it — leaves the route answering 501 for #54, which is what
+   * `personavision serve` does today.
+   */
+  pipeline?: TestPipeline;
 }
 
 export interface TestServer {
@@ -49,11 +56,12 @@ const viewerStandIn: Middleware = (_request, response) => {
 
 export const startTestServer = async ({
   runs = [],
+  pipeline,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
   const runIds: string[] = [];
   for (const run of runs) runIds.push(await writeRunAt(directories.runsRoot, run));
-  const platform = await createPlatform(directories);
+  const platform = await createPlatform({ ...directories, pipeline });
   const server = await startPlatformServer({
     guard: platform.guard,
     routes: platform.routes,

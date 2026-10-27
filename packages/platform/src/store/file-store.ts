@@ -135,6 +135,22 @@ const fileAccountStore = (collection: JsonCollection<AccountRecord>): AccountSto
   },
 });
 
+/**
+ * A stored workspace as this build declares it.
+ *
+ * A record written before the model mode existed carries none, and `NewWorkspace.modelMode`
+ * promises that an unstated mode is `standard`. That is a promise about the record and not
+ * only about the moment it was created, so it is kept here, where every reader goes
+ * through: a workspace nobody stated a mode for is refused a test it has no key for rather
+ * than quietly answered by the model Meta may train on (#144).
+ */
+const stored = (workspace: WorkspaceRecord): WorkspaceRecord =>
+  // The cast is the point: the declared type says the mode is there, and a record written
+  // before the field existed does not carry it.
+  (workspace as { modelMode?: unknown }).modelMode === undefined
+    ? { ...workspace, modelMode: 'standard' }
+    : workspace;
+
 const fileWorkspaceStore = (collection: JsonCollection<WorkspaceRecord>): WorkspaceStore => ({
   create: async (workspace: NewWorkspace) =>
     collection.put({
@@ -143,16 +159,25 @@ const fileWorkspaceStore = (collection: JsonCollection<WorkspaceRecord>): Worksp
       memberAccountIds: [...workspace.memberAccountIds],
       runIds: [...(workspace.runIds ?? [])],
       demoRunId: workspace.demoRunId ?? null,
+      // Standard unless this workspace says contributor: see `NewWorkspace.modelMode`.
+      modelMode: workspace.modelMode ?? 'standard',
       createdAt: now(),
     }),
-  byId: (workspaceId) => collection.get(workspaceId),
+  byId: async (workspaceId) => {
+    const workspace = await collection.get(workspaceId);
+    return workspace === null ? null : stored(workspace);
+  },
   forAccount: async (accountId) =>
-    (await collection.all()).filter((workspace) => workspace.memberAccountIds.includes(accountId)),
+    (await collection.all())
+      .filter((workspace) => workspace.memberAccountIds.includes(accountId))
+      .map(stored),
   addRun: async (workspaceId, runId) => {
     const workspace = await collection.get(workspaceId);
     if (workspace === null) throw missing('workspace', workspaceId);
-    if (workspace.runIds.includes(runId)) return workspace;
-    return collection.put({ ...workspace, runIds: [...workspace.runIds, runId] });
+    // Normalised before it is written back, so a record that predates the field gains it
+    // the first time anything touches it rather than being rewritten without it.
+    if (workspace.runIds.includes(runId)) return stored(workspace);
+    return collection.put({ ...stored(workspace), runIds: [...workspace.runIds, runId] });
   },
   publicRunIds: async () => [
     // A set, so that two workspaces naming the same demo run do not list it twice.

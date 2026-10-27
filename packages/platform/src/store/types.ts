@@ -1,4 +1,4 @@
-import type { Audience } from '@personavision/contract';
+import type { Audience, ModelMode } from '@personavision/contract';
 
 /**
  * The store seam: what the platform keeps, and the four interfaces it keeps it behind.
@@ -46,6 +46,16 @@ export interface WorkspaceRecord {
    * ever read-only (`docs/FLOW.md` section 3).
    */
   readonly demoRunId: string | null;
+  /**
+   * The model mode this workspace's tests run in (#144): `contributor` is cheap and Meta
+   * may train on the content, `standard` is the published price and is not trained on.
+   *
+   * It hangs off the workspace and nowhere else, because the choice is about who pays and
+   * whose content it is rather than about the test — no screen offers it, and the person
+   * starting a test does not pick it. One field, and no plan, tier or entitlement around
+   * it: `docs/FLOW.md` section 9 defers anything finer.
+   */
+  readonly modelMode: ModelMode;
   readonly createdAt: string;
 }
 
@@ -95,6 +105,12 @@ export interface NewWorkspace {
   memberAccountIds: readonly string[];
   runIds?: readonly string[];
   demoRunId?: string | null;
+  /**
+   * Omitted means `standard`, which is the only safe way round: a workspace whose mode
+   * nobody stated is refused a test it cannot pay for rather than quietly answered by the
+   * model Meta may train on. The seeded demo workspace states `contributor`.
+   */
+  modelMode?: ModelMode;
 }
 
 export interface WorkspaceStore {

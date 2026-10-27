@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "@personavision/contract": "workspace:*",
-    "@personavision/personas": "workspace:*"
+    "@personavision/personas": "workspace:*",
+    "@personavision/provider": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^5.0.5"
