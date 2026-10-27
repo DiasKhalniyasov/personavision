@@ -36,9 +36,15 @@ const MOMENT_TOKEN = {
 
 export type Moment = keyof typeof MOMENT_TOKEN;
 
-/** `900ms` and `2s` both as milliseconds. */
+/**
+ * `900ms`, `2s` and `.7s` all as milliseconds.
+ *
+ * The leading dot is not a curiosity: the production build minifies the tokens file, and
+ * `700ms` comes out of it as `.7s`. A parser that insisted on a digit first read the app's
+ * own stylesheet as unreadable — the one place it has to be able to read.
+ */
 const milliseconds = (raw: string): number | null => {
-  const match = /^(-?\d+(?:\.\d+)?)(ms|s)$/.exec(raw.trim());
+  const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(ms|s)$/.exec(raw.trim());
   if (match === null) return null;
   const value = Number(match[1]);
   return match[2] === 's' ? value * 1000 : value;

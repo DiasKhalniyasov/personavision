@@ -1,10 +1,13 @@
+import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { runPaths } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
 import { isNeverFixated, neverFixatedProblem } from '@/screens/attention/attentionWording';
 import { useAttentionStage } from '@/screens/attention/stage/AttentionStage';
 import { HEATMAP_LAYER, HeatmapLayer } from '@/screens/attention/stage/HeatmapLayer';
+import stage from '@/screens/attention/stage/attentionStage.module.css';
 import {
   OVERLAY_SPAN,
   boxToOverlay,
@@ -17,6 +20,7 @@ import { attentionAreas } from '@/screens/attention/useAttentionAreas';
 import type { AttentionArea } from '@/screens/attention/useAttentionAreas';
 import { useAttentionStepSessions } from '@/screens/attention/useAttentionStepSessions';
 import { AOI_PARAM } from '@/screens/sessions/filters';
+import { useMoment } from '@/shell/motion';
 import { paths } from '@/shell/paths';
 import styles from './heroEvidence.module.css';
 
@@ -201,6 +205,49 @@ const absenceSentence = (area: AttentionArea, label: string): string => {
     : `The area this verdict turns on is ${label}${belowFold}.`;
 };
 
+/** Milliseconds to the seconds Motion writes a transition in. */
+const A_SECOND = 1000;
+
+/**
+ * The heatmap warming up: the second animated moment of `docs/FLOW.md` section 10.
+ *
+ * The heat ramps from nothing to its full value over `--moment-heat-duration`, once, as the
+ * layer first has something to draw — the aggregate arrives over every session of the run, so
+ * the moment belongs to the heat appearing and not to the screen mounting. One pass, no loop
+ * and no pulse: `pv-pulse` is for a live or loading state, and this is neither.
+ *
+ * **It animates the layer and nothing else.** #71's `HeatmapLayer` stays the pure renderer it
+ * is — the same fixations draw the same pixels, with no timer and no state — and what moves
+ * is the opacity of the box it is mounted in. There is no second heat accumulation here, and
+ * so no way for this screen and the Attention screen to disagree about where the audience
+ * looked.
+ *
+ * **The box is the layer's own box.** An element at less than full opacity is a stacking
+ * context, so a plain wrapper would hold the layer's `z-index` inside it and the page's scrim
+ * and the fold line would paint over the heat for as long as it was warming up. Mounted as a
+ * layer, it stacks exactly where the layer it carries stacks.
+ *
+ * Under `prefers-reduced-motion` `useMoment` answers `0` and the layer is mounted bare: the
+ * heatmap is simply there, which is what the static prototype shows.
+ */
+function Warming({ warm, children }: { warm: boolean; children: ReactNode }) {
+  const duration = useMoment('heat');
+  if (duration === 0) return <>{children}</>;
+
+  return (
+    <motion.div
+      className={stage.layer}
+      data-moment="heat"
+      data-duration-ms={duration}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: warm ? 1 : 0 }}
+      transition={{ duration: duration / A_SECOND }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 /** How far the screenshot has got, which is what the frame says instead of showing a gap. */
 type ScreenshotState = 'loading' | 'shown' | 'unreadable';
 
@@ -361,8 +408,11 @@ export function HeroEvidence({ run }: { run: Run }) {
 
               {/* #71's layer, mounted as it is. It withholds itself while the sessions are
                   still arriving and when there is no dwell to draw, so there is one answer
-                  to "is there heat here" and this screen does not hold a second. */}
-              <HeatmapLayer {...layerProps} />
+                  to "is there heat here" and this screen does not hold a second. The box it
+                  is in warms it up once, as it appears (#125). */}
+              <Warming warm={heatDrawn}>
+                <HeatmapLayer {...layerProps} />
+              </Warming>
 
               {outlined === null ? null : (
                 <VerdictAreaLayer area={outlined} transform={layerProps.transform} />
