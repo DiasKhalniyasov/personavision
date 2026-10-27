@@ -173,6 +173,129 @@
   gap: var(--space-4);
 }
 
+/* ---- The screen cards: the intent and the event log -------------------- */
+
+.tlScreen {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-5);
+}
+
+/* The card the scrubber is on. The accent border is the prototype's; the word
+   beside the microlabel is what keeps the state off colour alone. */
+.tlScreen[data-active='true'] {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.tlScreen header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.tlScreen h2 {
+  margin: 0;
+}
+
+.meta {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.showing {
+  color: var(--color-text);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+}
+
+.intent {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.intent::before {
+  content: '\201C';
+}
+
+.intent::after {
+  content: '\201D';
+}
+
+.nothing {
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+.events {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+/* Every row moves the scrubber, so every row is a button: the log is how the
+   session is navigated as well as how it is read. The timestamp column is the
+   nearest spacing token to the prototype's 54px, which the tokens do not name. */
+.event {
+  display: grid;
+  grid-template-columns: var(--space-12) 1fr;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  padding-inline-start: var(--space-3);
+  border: 0;
+  border-inline-start: var(--border-width-strong) solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--duration-base);
+}
+
+.event:hover {
+  color: var(--color-text);
+}
+
+.event:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: var(--space-1);
+}
+
+/* The current row: a rule, a weight and a colour, so it is not the colour alone. */
+.event[aria-current='true'] {
+  border-inline-start-color: var(--color-accent);
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+.event .t {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.event .kind {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+/* A session that records no screens at all: stated where a reader will see it. */
+.broken {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 /* The prototype's own breakpoint for this screen: below it the two columns
    stack, and the frame keeps the width the device gives it. */
 @media (max-width: 1000px) {
