@@ -1,0 +1,85 @@
+/* =============================================================================
+   The step filmstrip of `#screen-attention` — the `.filmstrip`, `.step`,
+   `.reach` and `.reach.zero` rules of `docs/design/prototype.html`, as this
+   section's own.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. There is no motion here: the three animated moments
+   the visual direction allows belong elsewhere, and a strip whose frames moved
+   while the sessions were still being read would be the one place on this screen
+   a number appears to change by itself.
+
+   The frames are the shadcn `toggle` primitive, whose registry file carries
+   Tailwind defaults this design does not use: one centred line that never wraps,
+   a 2.25rem height and a `data-[state=on]` fill. Those are answered here, once —
+   as `attentionPage.module.css` answers them for the version switch — rather
+   than in an override string on each frame. The rules reach the primitive
+   through `.filmstrip button`, so they outrank the utility classes on it
+   whatever order the two stylesheets land in.
+   ========================================================================== */
+
+.filmstrip {
+  display: flex;
+  margin-bottom: var(--space-5);
+  gap: var(--space-3);
+}
+
+.filmstrip button {
+  /* The four frames share the width evenly, as the prototype draws them. */
+  display: block;
+  flex: 1;
+  height: auto;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  /* Two lines, and on a narrow window the count wraps rather than overflowing. */
+  white-space: normal;
+  cursor: pointer;
+}
+
+/* The step the screen is showing. `aria-pressed` is what the control says, so it
+   is also what the style is drawn from: one fact, not a class beside it. */
+.filmstrip button[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.filmstrip button :global(.microlabel) {
+  display: block;
+}
+
+.reach {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Nobody reached this step. The prototype's zero marker is the critical colour,
+   and it is on a `0` that is printed rather than a blank: a step with no people
+   is a finding, and the only thing that could be mistaken for it is a gap. */
+.reach.zero {
+  color: var(--sev-critical);
+}
+
+/* While the sessions are being read, and when they could not be read: the words
+   stand where the count will, in the faint colour the rest of the screen uses
+   for a reading that is not in yet. */
+.reach.unsettled {
+  color: var(--color-text-faint);
+}
+
+/* The prototype's own breakpoint for the strip: four frames side by side need
+   the width of the stage, and under it they stack. */
+@media (max-width: 760px) {
+  .filmstrip {
+    flex-wrap: wrap;
+  }
+
+  .filmstrip button {
+    flex-basis: calc(50% - var(--space-3));
+  }
+}
