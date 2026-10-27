@@ -1,12 +1,18 @@
+import { useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { Run } from '@personavision/contract';
+import { matchesSessionFilter } from '@/session';
+import type { SessionFilter } from '@/session';
 import { paths } from '@/shell/paths';
 import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
-import { countsLine, isScored, sessionCounts } from './counts';
+import { readFilter, without } from './filters';
+import { NoMatch } from './NoMatch';
+import { SessionsFilters } from './SessionsFilters';
 import { SessionsTable } from './SessionsTable';
 import { useSessionRows } from './useSessionRows';
+import type { SessionRowState } from './useSessionRows';
 
 /**
  * `/runs/:runId/sessions` — one row per simulated person: what happened, how long it took
@@ -17,8 +23,10 @@ import { useSessionRows } from './useSessionRows';
  * the fixation count and `excludedFromScores` come from the session module exactly as the
  * pipeline wrote them, and the counts line sums the totals the run already holds.
  *
- * The filter controls on the left of the control row are **#23's** — this screen leaves
- * their side of the row as a slot, and renders the unfiltered list.
+ * Its three filters are **the query string** (`filters.ts`): the screen holds no selection
+ * a reload would lose, a narrowed list is a link, and a reader arriving from an area of
+ * interest on the Attention screen lands with the list already narrowed to the people who
+ * fixated it.
  */
 export function SessionsPage() {
   const { runId = '' } = useParams();
@@ -41,10 +49,25 @@ export function SessionsPage() {
 /** The screen itself, over a run that has been read. Exported so a test can mount it alone. */
 export function SessionsScreen({ run }: { run: Run }) {
   const rows = useSessionRows(run);
-  const counts = sessionCounts(run);
+  const [query, setQuery] = useSearchParams();
+  const { filter, aoi, unknown } = readFilter(run, query);
+
+  // A `?aoi=` naming no area of this run, or a version or outcome the run never had, is a
+  // bad link rather than a filter: it leaves the URL, and the reader gets the list. The
+  // parameters are the effect's own dependency as one string, so a URL that cannot be
+  // cleaned any further is a settled screen rather than a render that navigates again.
+  const stale = unknown.join(',');
+  useEffect(() => {
+    if (stale !== '') setQuery(without(query, stale.split(',')), { replace: true });
+  }, [stale, query, setQuery]);
+
+  const shown = rows.filter((state) => matches(state, filter));
   const empty = rows.length === 0;
-  const [query] = useSearchParams();
-  const asked = FILTERS.filter((filter) => (query.get(filter) ?? '') !== '');
+  // Every session the filter needs has been read, which is what lets the counts line state
+  // a filtered reading at all: until then the rows the filter cannot judge are on screen,
+  // and "24 of 24 sessions" over twenty-four still-loading rows would pass every person in
+  // the test off as the few the reader asked for.
+  const read = rows.every((state) => state.status !== 'pending');
 
   return (
     <div className="strip">
@@ -59,16 +82,24 @@ export function SessionsScreen({ run }: { run: Run }) {
           One row per generated person × version × seed. Open one to watch it back.
         </p>
 
-        {/* The left of this row is where #23's two version and outcome groups and its area
-            chip go; until they exist it is empty and the counts sit on the right of it. */}
-        <div className="my-5 flex flex-wrap items-center gap-2">
-          <span className="grow" />
-          {empty ? null : <span className="microlabel">{countsLine(counts, isScored(run))}</span>}
-        </div>
+        {empty ? null : (
+          <div className="my-5 flex flex-wrap items-center gap-2">
+            <SessionsFilters
+              run={run}
+              filter={filter}
+              aoi={aoi}
+              shown={read ? shown.length : null}
+            />
+          </div>
+        )}
 
-        {asked.length === 0 ? null : <FilterNotRead asked={asked} />}
-
-        {empty ? <NoSessions /> : <SessionsTable run={run} rows={rows} />}
+        {empty ? (
+          <NoSessions />
+        ) : shown.length === 0 ? (
+          <NoMatch run={run} filter={filter} aoi={aoi} />
+        ) : (
+          <SessionsTable run={run} rows={shown} />
+        )}
 
         <p className="footnote">
           When our own browser automation breaks, that is our fault and never your checkout's: those
@@ -82,26 +113,17 @@ export function SessionsScreen({ run }: { run: Run }) {
   );
 }
 
-/** The three filters `docs/FLOW.md` section 3 puts in this screen's URL, all #23's. */
-const FILTERS = ['variant', 'outcome', 'aoi'] as const;
-
 /**
- * A link that asked for a filtered list, on a screen that cannot filter yet.
+ * Whether one row belongs in the filtered list.
  *
- * The Verdict's excluded banner and every outcome finding already link here with
- * `?variant=`, `?outcome=` or `?aoi=` set, and #23 builds the controls that read them.
- * Until it lands, a reader who clicked "See those 2" would be shown all twenty-four people
- * with nothing to say they are not the two — and would conclude the test excluded everybody.
- * Saying so is the smallest honest thing; #23 deletes this with the slot above.
+ * A row whose session has not been read yet, or whose file could not be read, is **kept**:
+ * nothing is known about it, and a filter that hid it would be claiming it does not match.
+ * That is also what keeps the no-match screen honest — an empty list can only mean every
+ * session was read and none of them matched, so the screen cannot say "no session matches"
+ * while the sessions the filter needs are still arriving.
  */
-function FilterNotRead({ asked }: { asked: readonly string[] }) {
-  return (
-    <p className="notice info">
-      This link asked for a narrower list ({asked.join(', ')}). Narrowing is not built yet, so every
-      person in the test is listed below.
-    </p>
-  );
-}
+const matches = (state: SessionRowState, filter: SessionFilter): boolean =>
+  state.status !== 'ready' || matchesSessionFilter(state.session, filter);
 
 /**
  * A test that recorded nobody.
