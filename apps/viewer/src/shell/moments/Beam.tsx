@@ -93,24 +93,40 @@ export function Beam({ index, at }: BeamProps) {
 const evenly = (count: number): number[] =>
   Array.from({ length: count }, (_unused, index) => (index + 0.5) / count);
 
-/**
- * Where each target sits across the field, as a fraction of its width.
- *
- * Measured once, because a beam has to end on a figure and a row of figures is laid out by
- * the browser: their widths are their own words' widths. A document that lays nothing out —
- * jsdom, a server render — answers nothing, and the beams are then spread evenly instead;
- * what that costs is a decoration pointing a little to one side.
- */
-const landings = (field: HTMLElement | null, count: number): number[] => {
-  if (field === null) return evenly(count);
-  const box = field.getBoundingClientRect();
-  const targets = [...(field.parentElement?.querySelectorAll(`[${BEAM_TARGET}]`) ?? [])];
-  if (box.width === 0 || targets.length !== count) return evenly(count);
+interface Placement {
+  /** Where each beam lands, as a fraction of the block's width. */
+  at: number[];
+  /** How far below the block's own top edge the targets start, in pixels. */
+  from: number | null;
+}
 
-  return targets.map((target) => {
-    const landing = target.getBoundingClientRect();
-    return (landing.x + landing.width / 2 - box.x) / box.width;
-  });
+/**
+ * Where the beams go, measured off the block once.
+ *
+ * Measured, because a beam has to end on a figure and a row of figures is laid out by the
+ * browser: their widths are their own words' widths. The vertical is measured for a second
+ * reason — the whitespace the beams run in is the targets' own top margin, and whether that
+ * margin sits inside the block or collapses out of it depends on what the block is a child
+ * of. On the Verdict screen it collapses out; inside the landing page's grid it does not,
+ * and a field placed by the first answer would draw its lines a whole step too high, across
+ * the sentence above.
+ *
+ * A document that lays nothing out — jsdom, a server render — answers nothing, and the beams
+ * are then spread evenly in the field the stylesheet gives them.
+ */
+const placement = (field: HTMLElement | null, count: number): Placement => {
+  const block = field?.parentElement ?? null;
+  if (block === null) return { at: evenly(count), from: null };
+
+  const box = block.getBoundingClientRect();
+  const targets = [...block.querySelectorAll(`[${BEAM_TARGET}]`)];
+  if (box.width === 0 || targets.length !== count) return { at: evenly(count), from: null };
+
+  const landings = targets.map((target) => target.getBoundingClientRect());
+  return {
+    at: landings.map((landing) => (landing.x + landing.width / 2 - box.x) / box.width),
+    from: Math.min(...landings.map((landing) => landing.y)) - box.y,
+  };
 };
 
 export interface BeamFieldProps {
@@ -130,18 +146,32 @@ export interface BeamFieldProps {
  */
 export function BeamField({ children, count }: BeamFieldProps) {
   const field = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState<readonly number[]>(() => evenly(count));
+  const [{ at, from }, setPlacement] = useState<Placement>(() => ({
+    at: evenly(count),
+    from: null,
+  }));
 
   // Before the first paint, and once: the beams are drawn over a block that is laid out by
   // then, and a moment of section 10 does not replay.
   useLayoutEffect(() => {
-    setAt(landings(field.current, count));
+    setPlacement(placement(field.current, count));
   }, [count]);
 
   return (
     <div className={styles.reveal}>
       {children}
-      <div className={styles.beams} ref={field}>
+      <div
+        className={styles.beams}
+        ref={field}
+        // The step of whitespace that ends where the targets begin. The stylesheet's own
+        // offset is the answer for a block whose targets' margin collapses out of it, which
+        // is every block until one is measured.
+        style={
+          from === null
+            ? undefined
+            : { insetBlockStart: `calc(${String(from)}px - var(--space-10))` }
+        }
+      >
         {at.map((fraction, index) => (
           <Beam key={index} index={index} at={fraction} />
         ))}

@@ -128,9 +128,16 @@ export function CompletionFigures({ run }: { run: Run }) {
             <Figure key={variant.id} name={variant.name} score={score} preferred={preferred} />
           );
 
-          // The spotlight lands on the card the stored field names, and only there. A run that
-          // names no version mounts no spotlight, as a moment with no data does not mount.
-          return preferred ? <Spotlight key={variant.id}>{figure}</Spotlight> : figure;
+          // The spotlight lands on the card the stored field names, and only when that card
+          // is a figure: a version nobody scored renders as unavailable and says nothing
+          // about shipping, so a ring around it would be the only mark of the verdict's
+          // choice — and it is decoration a screen reader never sees. A run that names no
+          // version at all mounts no spotlight either: a moment with no data does not mount.
+          return preferred && score.scoredSessionCount > 0 ? (
+            <Spotlight key={variant.id}>{figure}</Spotlight>
+          ) : (
+            figure
+          );
         })}
 
         {variants.length < COMPARISON ? (

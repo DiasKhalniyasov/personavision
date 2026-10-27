@@ -7,6 +7,7 @@ import type { Run } from '@personavision/contract';
 import { isNeverFixated, neverFixatedProblem } from '@/screens/attention/attentionWording';
 import { useAttentionStage } from '@/screens/attention/stage/AttentionStage';
 import { HEATMAP_LAYER, HeatmapLayer } from '@/screens/attention/stage/HeatmapLayer';
+import stage from '@/screens/attention/stage/attentionStage.module.css';
 import {
   OVERLAY_SPAN,
   boxToOverlay,
@@ -221,6 +222,11 @@ const A_SECOND = 1000;
  * so no way for this screen and the Attention screen to disagree about where the audience
  * looked.
  *
+ * **The box is the layer's own box.** An element at less than full opacity is a stacking
+ * context, so a plain wrapper would hold the layer's `z-index` inside it and the page's scrim
+ * and the fold line would paint over the heat for as long as it was warming up. Mounted as a
+ * layer, it stacks exactly where the layer it carries stacks.
+ *
  * Under `prefers-reduced-motion` `useMoment` answers `0` and the layer is mounted bare: the
  * heatmap is simply there, which is what the static prototype shows.
  */
@@ -230,6 +236,7 @@ function Warming({ warm, children }: { warm: boolean; children: ReactNode }) {
 
   return (
     <motion.div
+      className={stage.layer}
       data-moment="heat"
       data-duration-ms={duration}
       initial={{ opacity: 0 }}

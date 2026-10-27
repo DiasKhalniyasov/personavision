@@ -12,7 +12,7 @@ import { forgetRuns, mountApp, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { ruleIn, rulesOf } from '../../../tests/cssom';
 import { loadDesignTokens } from '../../../tests/setup';
-import { seedRun, show, withVerdict } from '../../../tests/verdict/fixture';
+import { seedRun, show, withScore, withVerdict } from '../../../tests/verdict/fixture';
 import { NumberTicker } from './NumberTicker';
 
 /**
@@ -223,6 +223,17 @@ describe('the spotlight on the winning version', () => {
     expect(lit.textContent).not.toContain('Current checkout');
   });
 
+  it('does not light a card that has no figure on it', () => {
+    // The version the field names was scored over nobody, so its card says it is unavailable
+    // and says nothing about shipping. A ring would then be the only mark of the verdict's
+    // choice on the screen, and it is decoration a screen reader never reaches.
+    const { container } = show(
+      <CompletionFigures run={withScore(seedRun(), 'A', { scoredSessionCount: 0 })} />,
+    );
+
+    expect(container.querySelectorAll('[data-moment="spotlight"]')).toHaveLength(0);
+  });
+
   it('does not mount at all when the run names no version to ship', () => {
     const { container } = show(
       <CompletionFigures run={withVerdict(seedRun(), { preferredVariant: '' })} />,
@@ -291,6 +302,19 @@ describe('the heatmap warming up', () => {
     expect(container.querySelectorAll('[data-overlay-layer="heat"] svg')).toHaveLength(1);
     // No loop and no pulse: `pv-pulse` is for a live or a loading state, and this is neither.
     expect((warming[0] as HTMLElement).style.animation).toBe('');
+  });
+
+  it('warms up inside the layer’s own box, so the heat keeps stacking where it stacks', async () => {
+    // An element at less than full opacity is a stacking context: a plain wrapper would hold
+    // the layer's `z-index` inside it, and the frame's scrim and its fold line would paint
+    // over the heat for the whole of the warm-up. The box carries the layer's own class, so
+    // it stacks exactly where what is inside it stacks.
+    const { container } = await openVerdict();
+    const box = container.querySelector('[data-moment="heat"]') as HTMLElement;
+    const layer = box.querySelector('[data-overlay-layer="heat"]') as HTMLElement;
+
+    expect(box.className).not.toBe('');
+    expect([...layer.classList], layer.className).toContain(box.className);
   });
 
   it('accumulates no heat of its own anywhere this ticket touched', () => {
