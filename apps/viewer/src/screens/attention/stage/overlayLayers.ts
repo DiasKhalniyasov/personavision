@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { AttentionArea } from '../useAttentionAreas';
 import type { Fixation, Saccade } from '../useAttentionStepSessions';
 import { AOI_OUTLINE_LAYER } from './AoiOutlineLayer';
+import { HEATMAP_LAYER } from './HeatmapLayer';
 import type { Transform } from './overlayTransform';
 
 /**
@@ -35,6 +36,16 @@ export interface OverlayLayerProps {
   readonly isolatedAoiId: string | null;
   /** The screenshot's page box: what `pageToOverlay` and `boxToOverlay` draw against. */
   readonly transform: Transform;
+  /**
+   * Whether the sessions are still arriving, so what is above is part of the audience
+   * rather than all of it (#71, threaded through by `AttentionStage`).
+   *
+   * Optional, and absent means settled: a layer that aggregates every session has to
+   * withhold itself rather than draw half of them and fill in as the rest land, and a
+   * layer drawing something the loading cannot change — the outlines, which come from the
+   * run and not from the sessions — never reads it.
+   */
+  readonly loading?: boolean;
 }
 
 export interface OverlayLayer {
@@ -54,6 +65,15 @@ export interface OverlayLayer {
    */
   unavailable?(props: OverlayLayerProps): string | null;
   Component(props: OverlayLayerProps): ReactNode;
+  /**
+   * What the panel shows under this layer's switch while it is on, where a layer needs a
+   * legend to be read at all — the heatmap's cool-to-hot key (#71), which also says when
+   * there is nothing to show rather than presenting an empty ramp as data.
+   *
+   * It belongs to the layer and not to the panel because only the layer knows what it drew.
+   * Switching the layer off unmounts it with the layer, and no other layer is touched.
+   */
+  Legend?(props: OverlayLayerProps): ReactNode;
 }
 
 /**
@@ -61,9 +81,9 @@ export interface OverlayLayer {
  * back to front: the heatmap is the ground the scanpath is read over, and the outlines are
  * the frame around both.
  *
- * #71 and #72 add their entries above this one when they land.
+ * #72 adds its entry between these two when it lands.
  */
-export const OVERLAY_LAYERS: readonly OverlayLayer[] = [AOI_OUTLINE_LAYER];
+export const OVERLAY_LAYERS: readonly OverlayLayer[] = [HEATMAP_LAYER, AOI_OUTLINE_LAYER];
 
 /** One registered layer, with what the panel shows about it and what the stage draws. */
 export interface StageLayer {
@@ -74,6 +94,14 @@ export interface StageLayer {
   readonly unavailable: string | null;
   /** On, and drawable: the stage mounts exactly these. */
   readonly drawn: boolean;
+  /**
+   * What this layer would be handed, for the panel to render its `Legend` with (#71).
+   *
+   * Optional only so that a test of the panel can hand it layers of its own invention
+   * without a run behind them; the hook below always sets it, and a layer with no legend
+   * never reads it.
+   */
+  readonly props?: OverlayLayerProps;
 }
 
 export interface OverlayLayerState {
@@ -108,7 +136,7 @@ export function useOverlayLayers(props: OverlayLayerProps): OverlayLayerState {
       OVERLAY_LAYERS.map((layer) => {
         const on = shown[layer.id] ?? layer.defaultOn;
         const unavailable = layer.unavailable?.(props) ?? null;
-        return { layer, on, unavailable, drawn: on && unavailable === null };
+        return { layer, on, unavailable, drawn: on && unavailable === null, props };
       }),
     [shown, props],
   );
