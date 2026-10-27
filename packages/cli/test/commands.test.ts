@@ -222,6 +222,29 @@ describe('personavision run', () => {
     expect(await runsBefore()).toEqual(before);
   });
 
+  it('still takes the audience under --personas, the name the surface publishes', async () => {
+    const before = await runsBefore();
+
+    const { code, stderr } = await personavision(
+      [
+        'run',
+        '--url',
+        'http://localhost:4173/checkout-a',
+        '--task',
+        'Buy the boots',
+        '--personas',
+        'nobody-in-particular',
+      ],
+      workspace.dir,
+    );
+
+    // The error names the audience that argument carried, which is how this test knows the
+    // argument reached the resolver under either of its two names.
+    expect(code).not.toBe(0);
+    expect(stderr).toContain('there is no audience "nobody-in-particular"');
+    expect(await runsBefore()).toEqual(before);
+  });
+
   it('refuses the standard model with no key in the environment, and simulates nobody', async () => {
     const { code, stderr } = await personavision(
       [
