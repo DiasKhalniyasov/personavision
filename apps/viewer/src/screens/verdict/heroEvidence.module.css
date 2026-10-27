@@ -123,6 +123,17 @@
   stroke-width: var(--border-width-strong);
 }
 
+/* The area the verdict turns on that the audience did reach. The prototype's
+   `.aoibox.active`, in the teal the product uses for data rather than for an
+   action: it says *this is the box the verdict is about*, and makes no claim
+   about what anybody did inside it. The critical colour above is the only
+   outline on this screen that makes one. */
+.heroArea {
+  fill: none;
+  stroke: var(--gaze-aoi-active);
+  stroke-width: var(--border-width-strong);
+}
+
 /* ---- The fold ---------------------------------------------------------- */
 
 .fold {

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { runPaths } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
-import { isNeverFixated } from '@/screens/attention/attentionWording';
+import { isNeverFixated, neverFixatedProblem } from '@/screens/attention/attentionWording';
 import { useAttentionStage } from '@/screens/attention/stage/AttentionStage';
 import { HEATMAP_LAYER, HeatmapLayer } from '@/screens/attention/stage/HeatmapLayer';
 import {
@@ -59,6 +59,9 @@ type HeroEvidenceRef = Run['verdict']['heroEvidence'];
 
 /** The areas whose heat the caption names: the two the audience held on longest. */
 const CAPTION_AREAS = 2;
+
+/** How much of a pixel a box may overrun the page by and still be a box of that page. */
+const ROUNDING = 1;
 
 /**
  * The hero evidence, read as if the field might not be there.
@@ -137,7 +140,14 @@ const onThisPage = (
 ): readonly AttentionArea[] =>
   capture === null
     ? []
-    : areas.filter(({ aoi }) => aoi.bbox.x + aoi.bbox.width <= capture.viewport.width);
+    : areas.filter(
+        ({ aoi }) =>
+          aoi.bbox.x < capture.viewport.width &&
+          // A DOM rect is fractional, and a full-bleed row on a 390-wide page is recorded
+          // as 390.4 as readily as as 390. A pixel of rounding is the same box; a box from
+          // another device's rendering is wider than the page by hundreds.
+          aoi.bbox.x + aoi.bbox.width <= capture.viewport.width + ROUNDING,
+      );
 
 /**
  * Whether the run has a name for this area, rather than only a kind.
@@ -151,6 +161,20 @@ const onThisPage = (
 const isNamed = ({ aoi }: AttentionArea): boolean => aoi.label !== aoi.role;
 
 /**
+ * Whether the run says plainly that no fixation ever landed in this area.
+ *
+ * The outline layer of the Attention screen asks exactly this question before it draws a
+ * box in the critical colour (#73), and it is asked here through the same two helpers so
+ * the two screens cannot disagree about the word *never*. The two cases it withholds are
+ * the point: an area the run holds **no** figures for is a gap and not a claim that nobody
+ * looked, and an area whose figures contradict each other about "never" is a fault the
+ * areas table states in words. Neither entitles this screen to say "nothing at all lands
+ * here", which is the strongest sentence it has.
+ */
+const neverLooked = ({ metric }: AttentionArea): boolean =>
+  metric !== null && neverFixatedProblem(metric) === null && isNeverFixated(metric);
+
+/**
  * The step's primary action, when the run records no fixation in it at all.
  *
  * The caption's second sentence is about the place the heat does *not* reach, and with no
@@ -158,19 +182,7 @@ const isNamed = ({ aoi }: AttentionArea): boolean => aoi.label !== aoi.role;
  * purchase is the whole finding, and a button four people in nine looked at is not.
  */
 const unseenPrimaryAction = (areas: readonly AttentionArea[]): AttentionArea | null =>
-  areas.find(
-    (area) => area.aoi.isPrimaryAction && area.metric !== null && isNeverFixated(area.metric),
-  ) ?? null;
-
-/**
- * Whether the run records no fixation in this area at all.
- *
- * An area the run holds no figures for counts as one: the honest reading of a gap is not a
- * claim that somebody looked. `isNeverFixated` is the areas table's own rule, so the
- * caption and that table can never disagree about the word *never*.
- */
-const neverLooked = (area: AttentionArea): boolean =>
-  area.metric === null || isNeverFixated(area.metric);
+  areas.find((area) => area.aoi.isPrimaryAction && neverLooked(area)) ?? null;
 
 /**
  * The caption's second sentence: the place the heat does not land, or the area the verdict
@@ -225,8 +237,11 @@ export function HeroEvidence({ run }: { run: Run }) {
 
   // The registry's own answer to "is there a heatmap here", so the frame is dimmed only
   // while heat is actually on it and the words for its absence are #71's rather than a
-  // second opinion written on this screen.
-  const unavailable = HEATMAP_LAYER.unavailable?.(layerProps) ?? null;
+  // second opinion written on this screen. It is read off the stage rather than asked
+  // again: `useOverlayLayers` has already worked it out, from the same props, and asking
+  // twice is a second walk over every fixation of the aggregate on every render.
+  const unavailable =
+    stage.layers.find(({ layer }) => layer.id === HEATMAP_LAYER.id)?.unavailable ?? null;
   const heatDrawn = drawable && unavailable === null;
 
   const fold = capture === null || !isDrawable(capture) ? null : foldMark(capture);
@@ -259,7 +274,11 @@ export function HeroEvidence({ run }: { run: Run }) {
    */
   const note =
     screenshot === 'unreadable' && capture !== null
-      ? `The screenshot at ${capture.path} could not be read. The heat drawn over it is still placed on the page it recorded, ${capture.viewport.width} by ${capture.pageHeight} pixels.`
+      ? `The screenshot at ${capture.path} could not be read.${
+          heatDrawn
+            ? ` The heat drawn over it is still placed on the page it recorded, ${capture.viewport.width} by ${capture.pageHeight} pixels.`
+            : ` The page it recorded is ${capture.viewport.width} by ${capture.pageHeight} pixels.`
+        }`
       : sessions.status === 'error'
         ? `Your audience’s sessions could not all be read: ${sessions.error ?? 'the reason was not recorded'}. No heat is drawn, because an aggregate quietly missing one person is a different claim about your audience from the one this screen is making.`
         : sessions.status === 'ready'
@@ -283,9 +302,14 @@ export function HeroEvidence({ run }: { run: Run }) {
             <span className="microlabel">
               {variantName} &middot; {stepLabel} step
               {capture === null ? '' : ` · ${deviceLabel(run, capture)}`} &middot;{' '}
-              {sessions.status === 'loading'
-                ? 'reading the sessions…'
-                : people(sessions.reachedCount)}
+              {/* `reachedCount` is `0` on a read that failed as surely as on a step
+                  nobody stood on, and the two are opposite claims about the audience.
+                  Only a settled aggregate carries a count. */}
+              {sessions.status === 'ready'
+                ? people(sessions.reachedCount)
+                : sessions.status === 'loading'
+                  ? 'reading the sessions…'
+                  : 'the sessions could not all be read'}
             </span>
           </div>
 
@@ -339,7 +363,7 @@ export function HeroEvidence({ run }: { run: Run }) {
               <HeatmapLayer {...layerProps} />
 
               {outlined === null ? null : (
-                <NeverLookedLayer area={outlined} transform={layerProps.transform} />
+                <VerdictAreaLayer area={outlined} transform={layerProps.transform} />
               )}
 
               {fold === null ? null : (
@@ -361,9 +385,14 @@ export function HeroEvidence({ run }: { run: Run }) {
               figure's own description, so the evidence on this screen is not sight-only
               without a second, hidden copy of the sentence to keep in step with it. */}
           <figcaption className={styles.cap}>
-            {hottest.length === 0
-              ? `No area this test marked collected any dwell on ${variantName} at the ${stepLabel} step.`
-              : `Attention burns on ${quoted(hottest)}.`}{' '}
+            {/* Only ever about the page in the frame. With no page there is no picture to
+                describe, and the sentence above the caption has already said why; the
+                figures in `aoiMetrics` are about something the reader cannot see. */}
+            {!drawable
+              ? ''
+              : hottest.length === 0
+                ? `No area this test names collected any dwell on ${variantName} at the ${stepLabel} step.`
+                : `Attention burns on ${quoted(hottest)}.`}{' '}
             {subject === null ? '' : absenceSentence(subject, quoted([subject]))}{' '}
             {href === null ? null : <Link to={href}>Open this in Attention &rarr;</Link>}
           </figcaption>
@@ -374,29 +403,40 @@ export function HeroEvidence({ run }: { run: Run }) {
 }
 
 /**
- * The outline of the area nobody looked at: the prototype's `#vd-vec`, carrying one box.
+ * The outline of the area the verdict turns on: the prototype's `#vd-vec`, carrying one box.
  *
  * The only thing this screen draws itself, and it draws no geometry of its own: the box is
  * `aois[].bbox` as the run recorded it, put into overlay units by #58's `boxToOverlay`, in
  * the same `viewBox` the heat is drawn in — so the outline and the heat are one picture at
  * every frame width, and neither can come out of register with the page under them.
  *
+ * **Two treatments, and which one it is, is the whole claim.** `heroEvidence.aoiId` is the
+ * area of the highest-severity finding that has one, and several of those findings are
+ * about areas the audience *did* reach — a promo banner that pulls attention away, a total
+ * people kept coming back to. So the critical colour is drawn only where the run says
+ * plainly that no fixation ever landed, which is the prototype's own `.aoibox.empty`, and
+ * everything else takes the teal of `.aoibox.active`: *this is the box the verdict is
+ * about*, which is a different sentence from *nobody saw this*. The caption beside it is
+ * written from the same predicate, so the picture and the words cannot disagree.
+ *
  * `aria-hidden`, like every layer: the caption names the area in words, which is a better
  * alternative than a label on a rectangle.
  */
-function NeverLookedLayer({ area, transform }: { area: AttentionArea; transform: Transform }) {
+function VerdictAreaLayer({ area, transform }: { area: AttentionArea; transform: Transform }) {
   const box = boxToOverlay(area.aoi.bbox, transform);
+  const unseen = neverLooked(area);
 
   return (
-    <div className={styles.layer} data-overlay-layer="never-looked">
+    <div className={styles.layer} data-overlay-layer="verdict-area">
       <svg
         viewBox={`0 0 ${OVERLAY_SPAN} ${overlaySpanY(transform)}`}
         aria-hidden="true"
         focusable="false"
       >
         <rect
-          className={styles.neverLooked}
-          data-never-looked={area.aoi.id}
+          className={unseen ? styles.neverLooked : styles.heroArea}
+          data-verdict-area={area.aoi.id}
+          data-never-looked={unseen ? '' : undefined}
           x={box.x}
           y={box.y}
           width={box.w}

@@ -36,6 +36,8 @@ const HERO = { variant: 'B', step: 'review' } as const;
 const FEE_ROW = 'B-review-fee-row';
 /** The completing action of that step, which no fixation ever landed in. */
 const COMPLETE = 'B-review-complete';
+/** An area of that step the audience did reach, below the fold. */
+const LOOKED_AT = 'B-review-fee-row';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
@@ -87,7 +89,7 @@ const heatBlobs = (container: HTMLElement) =>
 
 /** The one box this screen outlines, in the same overlay units. */
 const outlineBox = (container: HTMLElement, aoiId: string) => {
-  const rect = container.querySelector(`[data-never-looked="${aoiId}"]`) as SVGRectElement;
+  const rect = container.querySelector(`[data-verdict-area="${aoiId}"]`) as SVGRectElement;
   const read = (name: string) => Number(rect.getAttribute(name));
   return { x: read('x'), y: read('y'), w: read('width'), h: read('height') };
 };
@@ -265,6 +267,7 @@ describe('the frame, the mat and the fold', () => {
     expect(rule('.head')['margin-bottom']).toBe('var(--frame-mat-pad)');
     expect(rule('.frame[data-dim] .page::after')['background']).toBe('var(--screenshot-scrim)');
     expect(rule('.neverLooked')['stroke']).toBe('var(--sev-critical)');
+    expect(rule('.heroArea')['stroke']).toBe('var(--gaze-aoi-active)');
     expect(rule('.cap')['margin-top']).toBe('var(--frame-mat-pad)');
   });
 });
@@ -293,11 +296,50 @@ describe('one heatmap and nothing else', () => {
     await aggregated();
     decoded(container);
 
-    expect(container.querySelector(`[data-never-looked="${COMPLETE}"]`)).not.toBeNull();
+    const rect = container.querySelector(`[data-verdict-area="${COMPLETE}"]`) as SVGRectElement;
+    // No fixation ever landed in it, so the box makes the claim the colour makes.
+    expect(rect.getAttribute('data-never-looked')).toBe('');
     const area = run.aois.find((aoi) => aoi.id === COMPLETE);
     expect(captionOf(container).textContent).toContain(area?.label);
     expect(captionOf(container).textContent).toContain('Nothing at all lands on');
     expect(captionOf(container).textContent).toContain('which sits below the fold');
+  });
+
+  it('does not say nobody looked at an area the audience did reach', async () => {
+    // `heroEvidence.aoiId` is the area of the top finding, and several of those findings
+    // are about areas people did look at — a fee row they kept coming back to, a promo
+    // that pulled attention away. The box is still drawn; the claim is not made.
+    const run = await serveChangedRun((changed) => withHero(changed, { aoiId: LOOKED_AT }));
+    const { container } = verdict();
+    await aggregated();
+    decoded(container);
+
+    const rect = container.querySelector(`[data-verdict-area="${LOOKED_AT}"]`) as SVGRectElement;
+    expect(rect.getAttribute('data-never-looked')).toBeNull();
+
+    const area = run.aois.find((aoi) => aoi.id === LOOKED_AT);
+    const caption = captionOf(container).textContent ?? '';
+    expect(caption).toContain('The area this verdict turns on is');
+    expect(caption).toContain(area?.label as string);
+    expect(caption).not.toContain('Nothing at all lands on');
+  });
+
+  it('withholds the claim where the run’s own figures do not support it', async () => {
+    // A row whose fields disagree about "never" is a fault the areas table states in
+    // words, not a finding this box is entitled to draw (#73 holds its outline to the
+    // same rule).
+    await serveChangedRun((run) => ({
+      ...withHero(run, { aoiId: COMPLETE }),
+      aoiMetrics: run.aoiMetrics.map((metric) =>
+        metric.aoiId === COMPLETE ? { ...metric, lookedAtShare: 0.5 } : metric,
+      ),
+    }));
+    const { container } = verdict();
+    await aggregated();
+
+    const rect = container.querySelector(`[data-verdict-area="${COMPLETE}"]`) as SVGRectElement;
+    expect(rect.getAttribute('data-never-looked')).toBeNull();
+    expect(captionOf(container).textContent).not.toContain('Nothing at all lands on');
   });
 });
 
@@ -370,12 +412,52 @@ describe('the block speaks only about the page in its frame', () => {
     expect(caption).toContain('Order summary');
   });
 
+  it('keeps a box the page overruns by a fraction of a pixel', async () => {
+    const OVERRUN = 'B-review-overrun';
+    await serveChangedRun((run) => ({
+      ...withHero(run, { aoiId: OVERRUN }),
+      aois: [
+        ...run.aois,
+        {
+          id: OVERRUN,
+          variant: HERO.variant,
+          step: HERO.step,
+          label: 'Full-bleed row',
+          source: 'dom',
+          role: 'generic',
+          // A DOM rect on a 390-wide page, as a browser really measures one.
+          bbox: { x: 0, y: 400, width: 390.4, height: 40 },
+          isPrimaryAction: false,
+          belowFold: false,
+        },
+      ],
+      aoiMetrics: [
+        ...run.aoiMetrics,
+        {
+          aoiId: OVERRUN,
+          timeToFirstFixationMs: null,
+          firstFixationDurationMs: null,
+          totalDwellMs: 0,
+          fixationCount: 0,
+          revisits: 0,
+          lookedAtShare: 0,
+          sessionCount: 9,
+        },
+      ],
+    }));
+    const { container } = verdict();
+    await aggregated();
+
+    expect(container.querySelector(`[data-verdict-area="${OVERRUN}"]`)).not.toBeNull();
+    expect(captionOf(container).textContent).toContain('Full-bleed row');
+  });
+
   it('outlines nothing when the area the run named is not on this capture', async () => {
     await serveChangedRun((run) => withHero(withExtraAreas(run), { aoiId: OFF_PAGE }));
     const { container } = verdict();
     await aggregated();
 
-    expect(container.querySelector(`[data-never-looked="${OFF_PAGE}"]`)).toBeNull();
+    expect(container.querySelector(`[data-verdict-area="${OFF_PAGE}"]`)).toBeNull();
     // And the caption falls back to the absence it can still show: the completing action.
     expect(captionOf(container).textContent).toContain('Confirm purchase');
   });
@@ -482,6 +564,42 @@ describe('when there is no attention to show', () => {
     expect(block(container).textContent).toContain('does not name the moment its verdict turns on');
     expect(frameOf(container)).toBeNull();
     expect(captionOf(container)).toBeNull();
+  });
+
+  it('claims nothing about dwell when there is no page to have shown it', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      screenshots: run.screenshots.filter(
+        (shot) => !(shot.variant === HERO.variant && shot.step === HERO.step),
+      ),
+    }));
+    const { container } = verdict();
+
+    await waitFor(() => {
+      expect(block(container).textContent).toContain('holds no screenshot');
+    });
+    // `aoiMetrics` has nothing to do with screenshots, and the areas of this step did
+    // collect dwell: the caption must not read the absence of a page as an absence of
+    // attention. It keeps its link and says nothing else.
+    const caption = captionOf(container).textContent ?? '';
+    expect(caption).not.toContain('collected any dwell');
+    expect(caption).not.toContain('Attention burns on');
+    expect(captionOf(container).querySelector('a')).not.toBeNull();
+  });
+
+  it('prints no head count when the sessions could not all be read', async () => {
+    await serveRunData({ files: { [`/runs/${RUN_ID}/sessions/S-01.json`]: '{' } });
+    const { container } = verdict();
+    await shown();
+
+    const label = block(container).querySelector('.microlabel') as HTMLElement;
+    await waitFor(() => {
+      expect(label.textContent).toContain('could not all be read');
+    });
+    // `0 people` would read as "nobody reached this step", which is the opposite claim
+    // about the audience from the one the note under it is making.
+    expect(label.textContent).not.toContain('0 people');
+    expect(block(container).textContent).toContain('could not all be read');
   });
 
   it('names the path it looked for when the run holds no screenshot of that step', async () => {
