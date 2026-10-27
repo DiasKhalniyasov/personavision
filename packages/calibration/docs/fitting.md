@@ -16,7 +16,7 @@ A **seeded, bounded random search** over the engine's own configuration object (
 (#88). Not gradient-based — #11 settled that, and there is no gradient to take: the objective runs through a
 sampled scanpath and a heuristic segmenter, so a finite-difference estimate would cost more engine passes than the
 whole search. Random rather than a grid because the twelve bounded parameters below, at their documented steps,
-make **13,635,312,058,368** grid points: a full grid is not a long search but an impossible one, and a
+make **15,378,171,494,400** grid points: a full grid is not a long search but an impossible one, and a
 one-parameter-at-a-time sweep is a grid that cannot see an interaction between the softmax weights and the
 inhibition terms, which is exactly where one would be expected.
 
@@ -72,6 +72,31 @@ Seed **1**, **128 drawn candidates** beside the defaults, over the four committe
 | Improvement | **+0.1003** | +0.0078 | +0.1927 |
 
 The best candidate was number 19 of 128; a run at 256 candidates reaches the same value.
+
+### The lower bound binds, and it was honoured over the objective
+
+Two committed values sit on the edge of their range — `fixationDuration.medianMs` at its minimum of 150 and
+`fixationDuration.minMs` at its minimum of 60 — so **the bound chose them, not the data**. The file records that
+under `fit.atBound`, the command prints it, and `test/fit.test.ts` asserts it, because a search space's edge
+passing for a fit would be the quietest way to mislead a reader of this document.
+
+The objective is still climbing when the box stops it. Scored at seed 1 on this corpus, with everything else at the
+committed values:
+
+| `fixationDuration.medianMs` | 150 (committed) | 120 | 100 | 80 |
+| --- | --- | --- | --- | --- |
+| Objective | 0.6555 | 0.7043 | 0.7456 | **0.8056** |
+
+The forgone gain is half again larger than the whole committed improvement. It is forgone deliberately. ScanMatch
+is dwell-weighted (#84): a fixation contributes `max(1, round(durationMs / 50))` letters, so shortening every
+fixation shortens the predicted letter sequence toward the human one and the figure keeps rising all the way down
+to dwells no eye performs. **The objective is degenerate downward**, and the bound is the only thing between it and
+a physiologically impossible engine. 150 ms is the lowest median any free-viewing study reports — already below the
+published 200–300 ms region — so the committed value is the lowest defensible one rather than the best-scoring one.
+
+Widening the bound downward would be fitting the metric's temporal binning, not the engine. The honest repairs are
+elsewhere and belong to later tickets: an objective that is not monotone in dwell, or the real dataset, where a
+screenshot's many areas give the search something other than duration to move.
 
 ### What moved, and what was handed back
 
@@ -149,6 +174,9 @@ earned them live in **one file**, so the badge's number and the configuration be
 | `fit.objective` | The objective with its terms and weights |
 | `fit.defaults`, `fit.improvement` | What the defaults scored in the same run, and the gain |
 | `fit.pinnedToDefault` | The parameters the objective could not see |
+| `fit.atBound` | Committed values sitting on the edge of their range, with which bound |
+| `fit.enginePasses` | Engine passes the fit made in all, the pin phase included |
+| `fit.defaults.overall` | What the defaults scored over the whole corpus, beside `fit.overall` |
 | `fit.command` | The one command above |
 
 No timings are written into it: a wall-clock figure would be a fact about a machine and would make every re-fit a
@@ -159,7 +187,7 @@ metrics at all when the file is absent — the honest source for `docs/FLOW.md`'
 
 | | |
 | --- | --- |
-| The committed fit | **0.79 s** (median of three: 788, 730, 787 ms) for about 140 engine passes over the four committed records |
+| The committed fit | **0.78 s** (median of three: 788, 730, 787 ms) for **142** engine passes over the four committed records — 129 candidates and 13 in the pin phase, as `fit.enginePasses` records |
 | One engine pass over the corpus | 5–6 ms here; #88 measured 34 ms under parallel load, which is what `SEARCH_COST.estimatedMs` budgets from |
 | Machine | Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin 27) |
 | Asserted bound | `SEARCH_COST.limitMs` 30 000 ms, about forty times the measurement |
@@ -175,6 +203,7 @@ since a real screenshot is far larger than a 320 × 240 synthetic one.
 
 ```sh
 pnpm --filter @personavision/calibration run fit -- --check   # is the committed file this fit?
+# --check takes no --seed or --candidates: it reports on the committed fit and nothing else.
 pnpm --filter @personavision/calibration exec vitest run test/fit.test.ts
 ```
 

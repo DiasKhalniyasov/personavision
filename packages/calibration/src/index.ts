@@ -261,8 +261,10 @@ export {
   objectiveOf,
 } from './fit/index.js';
 export type {
+  BoundReached,
   CalibratedFileRecord,
   Candidate,
+  CorpusFigures,
   FitOptions,
   FitProgress,
   FitResult,

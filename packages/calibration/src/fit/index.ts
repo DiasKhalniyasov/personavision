@@ -29,8 +29,10 @@ export {
   gridCandidates,
 } from './search.js';
 export type {
+  BoundReached,
   CalibratedFileRecord,
   Candidate,
+  CorpusFigures,
   FitOptions,
   FitProgress,
   FitResult,

@@ -91,8 +91,10 @@ describe('the search space', () => {
     expect(SEARCH_KIND).toBe('random');
     // Fourteen million million points at the documented steps: #90 asks which coarse search this
     // is and why, and this is the arithmetic behind the answer.
-    expect(gridCandidates()).toBeGreaterThan(1e13);
-    expect(SEARCH_COST.committedPasses).toBe(CANDIDATES + 1);
+    expect(gridCandidates()).toBe(15_378_171_494_400);
+    // The pin phase costs passes too, so the published cost counts them: the defaults, every
+    // drawn candidate, one revert per searched parameter and one confirming pass.
+    expect(SEARCH_COST.committedPasses).toBe(CANDIDATES + 1 + SEARCH_SPACE.length + 1);
   });
 
   it('reaches no metric parameter: the fit searches the engine, never the ruler', () => {
@@ -298,9 +300,36 @@ describe('a fit', () => {
     ).rejects.toThrow(FitError);
   });
 
-  it('refuses a seed that is not a number, since a fit is only replayable from one', async () => {
-    await expect(fit({ seed: Number.NaN, candidates: 1 })).rejects.toThrow(/seed/);
+  it('refuses a seed that is not the seed it would draw at', async () => {
+    // `createSeededRandom` takes a 32-bit word (`seed >>> 0`), so 1.5 and 2^32 + 1 both draw
+    // seed 1's sequence while the file would record the number it was handed.
+    for (const seed of [Number.NaN, 1.5, 4_294_967_296 + 1, -1]) {
+      await expect(fit({ seed, candidates: 1 }), String(seed)).rejects.toThrow(/seed/);
+    }
   });
+
+  it('counts the engine passes it made, the pin phase included', async () => {
+    const result = await fit({ seed: SEED, candidates: FEW });
+
+    expect(result.enginePasses).toBeGreaterThan(FEW + 1);
+    expect(result.enginePasses).toBeLessThanOrEqual(FEW + 1 + SEARCH_SPACE.length + 1);
+  }, 60_000);
+
+  it('names a committed value that sits on a bound, because the bound chose it', async () => {
+    const result = await fit({ seed: SEED, candidates: CANDIDATES });
+
+    // The objective is degenerate downward — ScanMatch is dwell-weighted — so the shortest
+    // fixations win and the lower bound is what stops them. That is recorded rather than
+    // read off a table: `docs/fitting.md` answers for every entry here.
+    expect(result.atBound).toEqual([
+      { path: 'fixationDuration.medianMs', bound: 'min', value: 150 },
+      { path: 'fixationDuration.minMs', bound: 'min', value: 60 },
+    ]);
+    for (const { path, bound, value } of result.atBound) {
+      const parameter = SEARCH_SPACE.find((searched) => searched.path === path);
+      expect(value, path).toBe(bound === 'min' ? parameter?.min : parameter?.max);
+    }
+  }, 120_000);
 });
 
 describe('the same seed and search space', () => {
@@ -375,6 +404,12 @@ describe('the committed configuration', () => {
     // The figure the fit had to beat, measured in the same run rather than quoted.
     expect(record.fit.defaults.objective).toBe(result.defaults.objective.value);
     expect(record.fit.improvement).toBeGreaterThan(0);
+    expect(record.fit.enginePasses).toBe(result.enginePasses);
+    expect(record.fit.atBound).toEqual(result.atBound);
+    // The whole corpus on both sides, so `overall` has a baseline to be read against.
+    expect(record.fit.defaults.overall?.records).toBe(4);
+    expect(record.fit.overall?.records).toBe(4);
+    expect(record.fit.overall?.cc).toBeGreaterThan(record.fit.defaults.overall?.cc ?? 1);
   }, 120_000);
 
   it('scores better on the objective than the engine’s defaults do', async () => {

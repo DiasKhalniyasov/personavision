@@ -14,7 +14,7 @@
  * sampled scanpath and a segmenter, and a finite-difference estimate of it would cost more
  * engine passes than this whole search. Between the two coarse searches #90 allows, the
  * space below is twelve bounded parameters whose documented steps give `gridCandidates()`
- * 13,635,312,058,368 points — about 1.4 × 10^13: a full grid is not a long search but an
+ * 15,378,171,494,400 points — about 1.5 × 10^13: a full grid is not a long search but an
  * impossible one, and a
  * one-parameter-at-a-time sweep would be a grid that cannot see an interaction between the
  * softmax weights and the inhibition terms — which is exactly where one is expected, since
@@ -101,7 +101,7 @@ export const SEARCH_SPACE: readonly SearchParameter[] = Object.freeze(
       max: 400,
       step: 10,
       reason:
-        'the published free-viewing region is 200–300 ms; the bounds reach well past both ends so the data can argue with the literature, and the step is finer than the metrics can tell apart',
+        'the published free-viewing region is 200-300 ms. The upper bound reaches well past it; the lower one is a floor and binds, because the objective is degenerate downward — ScanMatch is dwell-weighted, so shorter fixations keep raising it (0.80 at a 80 ms median, against 0.66 at 150) all the way to dwells no eye performs. 150 ms is the lowest median any free-viewing study reports, and it is honoured over the objective',
     },
     {
       path: 'fixationDuration.logSigma',
@@ -117,7 +117,7 @@ export const SEARCH_SPACE: readonly SearchParameter[] = Object.freeze(
       max: 140,
       step: 10,
       reason:
-        'the floor a dwell is clamped to, kept below the median’s own lower bound so no draw can cross it. A fixation under 60 ms is not a fixation in any published definition',
+        'the floor a dwell is clamped to, kept below the median’s own lower bound so no draw can cross it. A fixation under 60 ms is not a fixation in any published definition, so this bound binds for the same reason the median’s does',
     },
     {
       path: 'fixationDuration.maxMs',
@@ -172,7 +172,9 @@ export const SEARCH_SPACE: readonly SearchParameter[] = Object.freeze(
 
 /** How many points a full grid over `SEARCH_SPACE` would hold, which is why this is random. */
 export const gridCandidates = (space: readonly SearchParameter[] = SEARCH_SPACE): number =>
-  space.reduce((product, { min, max, step }) => product * (Math.floor((max - min) / step) + 1), 1);
+  // Rounded, not floored: `(3 - 0.2) / 0.2` is 13.999999999999998 in binary floating point,
+  // and flooring it would drop a grid point from `alpha` and another from the decay.
+  space.reduce((product, { min, max, step }) => product * (Math.round((max - min) / step) + 1), 1);
 
 /** The drawn candidates a committed fit uses, and the file it writes. */
 export const FIT_DEFAULTS = Object.freeze({
@@ -200,9 +202,19 @@ export const FIT_DEFAULTS = Object.freeze({
 export const SEARCH_COST = Object.freeze({
   enginePassMs: SCORING_BUDGET.enginePassMs,
   corpusId: SCORING_BUDGET.corpusId,
-  /** The committed fit: 129 passes over the four committed records. */
-  committedPasses: FIT_DEFAULTS.candidates + 1,
-  estimatedMs: (FIT_DEFAULTS.candidates + 1) * SCORING_BUDGET.enginePassMs,
+  /** The defaults and every drawn candidate: 129 passes over the four committed records. */
+  searchPasses: FIT_DEFAULTS.candidates + 1,
+  /**
+   * …and the pin phase after it, which re-scores once per parameter that differs from the
+   * engine's default and once more to confirm the configuration it commits. At most one
+   * pass per searched parameter, so the upper bound is the space's own size plus one; the
+   * committed fit spends all of them, for 142 passes in all. `FitResult.enginePasses` is
+   * the count a run actually made, and the file records it.
+   */
+  pinPasses: SEARCH_SPACE.length + 1,
+  committedPasses: FIT_DEFAULTS.candidates + 1 + SEARCH_SPACE.length + 1,
+  estimatedMs:
+    (FIT_DEFAULTS.candidates + 1 + SEARCH_SPACE.length + 1) * SCORING_BUDGET.enginePassMs,
   /**
    * The bound `test/fit.test.ts` asserts the committed fit inside: thirty seconds, where the
    * measured search is under a second on a quiet machine and about three on a loaded one.
@@ -215,8 +227,13 @@ export const SEARCH_COST = Object.freeze({
 
 /** One point of the search space: the values, and the engine overrides they become. */
 export interface Candidate {
-  /** 0 is the engine's defaults; 1 … n are the drawn candidates, in the order drawn. */
+  /**
+   * 0 is the engine's defaults; 1 … n are the drawn candidates, in the order drawn. The pin
+   * phase re-scores configurations that are none of those, which is what `label` is for.
+   */
   readonly index: number;
+  /** How an error or a progress line names it: `candidate 19`, `the defaults`, a revert. */
+  readonly label: string;
   /** Every searched parameter's value, by its path. */
   readonly values: Readonly<Record<string, number>>;
   /** The same values as the layer `predict` and `resolveEngineConfig` take. */
@@ -278,10 +295,44 @@ export interface FitResult {
    * engine's default, measured one at a time and handed back rather than committed.
    */
   readonly pinned: readonly string[];
+  /**
+   * Searched parameters whose committed value sits on the edge of its own range.
+   *
+   * A bound that binds chose that value, not the data, so it is recorded rather than read
+   * off a table: `docs/fitting.md` has to say why the bound is honoured over the objective.
+   */
+  readonly atBound: readonly BoundReached[];
+  /** Engine passes the whole fit made: every candidate, plus the pin phase. */
+  readonly enginePasses: number;
   /** Every candidate scored, in the order scored, the defaults first. */
   readonly candidates: readonly ScoredCandidate[];
   readonly elapsedMs: number;
 }
+
+/** A committed value sitting on the edge of its searched range. */
+export interface BoundReached {
+  readonly path: string;
+  readonly bound: 'min' | 'max';
+  readonly value: number;
+}
+
+/**
+ * Which committed values sit on a bound.
+ *
+ * The objective was still improving when the box stopped it, so the number committed is the
+ * bound's and not the data's. Silence here would let a search space's edge pass for a fit.
+ */
+const boundsReached = (
+  fitted: ScoredCandidate,
+  space: readonly SearchParameter[],
+): readonly BoundReached[] =>
+  space.flatMap<BoundReached>(({ path, min, max }) => {
+    const value = fitted.candidate.values[path];
+    if (value === undefined || value === defaultAt(path)) return [];
+    if (value === min) return [{ path, bound: 'min', value }];
+    if (value === max) return [{ path, bound: 'max', value }];
+    return [];
+  });
 
 /**
  * A fit as text two runs must agree on, character for character: everything but the
@@ -353,8 +404,13 @@ const weightsOf = (values: Readonly<Record<string, number>>): EngineConfigOverri
   return root as EngineConfigOverrides;
 };
 
-const candidateOf = (index: number, values: Readonly<Record<string, number>>): Candidate => ({
+const candidateOf = (
+  index: number,
+  values: Readonly<Record<string, number>>,
+  label = index === 0 ? 'the defaults' : `candidate ${String(index)}`,
+): Candidate => ({
   index,
+  label,
   values,
   weights: weightsOf(values),
 });
@@ -445,7 +501,7 @@ const scoreCandidate = async (
   const failed = result.predictor.failures;
   if (failed.length > 0) {
     throw new FitError(
-      `candidate ${String(candidate.index)} scored no figure for ${failed.length === 1 ? 'record' : 'records'} ${failed.map(({ recordId }) => recordId).join(', ')}: ${failed[0]?.reason ?? 'no reason given'}`,
+      `${candidate.label} scored no figure for ${failed.length === 1 ? 'record' : 'records'} ${failed.map(({ recordId }) => recordId).join(', ')}: ${failed[0]?.reason ?? 'no reason given'}`,
     );
   }
   return {
@@ -481,19 +537,29 @@ const pinInertParameters = async (
   corpus: ScoredCorpus,
   seed: number,
   objective: Objective,
-): Promise<{ readonly fitted: ScoredCandidate; readonly pinned: readonly string[] }> => {
+): Promise<{
+  readonly fitted: ScoredCandidate;
+  readonly pinned: readonly string[];
+  readonly passes: number;
+}> => {
   const pinned: string[] = [];
+  let passes = 0;
   let values: Record<string, number> = { ...best.candidate.values };
 
   for (const { path } of space) {
     if (values[path] === defaultAt(path)) continue;
     const reverted = { ...values, [path]: defaultAt(path) };
     const candidate = await scoreCandidate(
-      candidateOf(best.candidate.index, reverted),
+      candidateOf(
+        best.candidate.index,
+        reverted,
+        `${best.candidate.label} with ${path} handed back`,
+      ),
       corpus,
       seed,
       objective,
     );
+    passes += 1;
     if (candidate.objective.value === best.objective.value) {
       values = reverted;
       pinned.push(path);
@@ -505,7 +571,7 @@ const pinInertParameters = async (
    * rather than figures inferred from another candidate's run.
    */
   const fitted = await scoreCandidate(
-    candidateOf(best.candidate.index, values),
+    candidateOf(best.candidate.index, values, 'the committed configuration'),
     corpus,
     seed,
     objective,
@@ -515,7 +581,7 @@ const pinInertParameters = async (
       `handing back ${pinned.join(', ')} moved the objective from ${String(best.objective.value)} to ${String(fitted.objective.value)}; a parameter measured as inert one at a time is not inert together`,
     );
   }
-  return { fitted, pinned };
+  return { fitted, pinned, passes: passes + 1 };
 };
 
 /**
@@ -536,9 +602,14 @@ export const fit = async (options: FitOptions = {}): Promise<FitResult> => {
   }
   const seed = options.seed ?? FIT_DEFAULTS.seed;
   const candidates = options.candidates ?? FIT_DEFAULTS.candidates;
-  if (!Number.isFinite(seed)) {
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
+    /**
+     * A whole 32-bit seed, because that is what the generator takes: `createSeededRandom`
+     * does `seed >>> 0`, so 1.5 and 4294967297 both draw seed 1's sequence while the file
+     * would record the number it was given — a fit that does not name the seed it drew at.
+     */
     throw new FitError(
-      `the seed is ${String(options.seed)}; a fit is only replayable if it names the seed its candidates were drawn at`,
+      `the seed is ${String(options.seed)}; a fit is only replayable if it names the seed its candidates were drawn at, which is a whole number from 0 to 4294967295`,
     );
   }
   if (!Number.isInteger(candidates) || candidates < 0) {
@@ -590,7 +661,7 @@ export const fit = async (options: FitOptions = {}): Promise<FitResult> => {
   if (defaults === undefined || best === null) {
     throw new FitError('a fit scored no candidate at all, not even the defaults');
   }
-  const { fitted, pinned } = await pinInertParameters(best, space, corpus, seed, objective);
+  const pin = await pinInertParameters(best, space, corpus, seed, objective);
 
   return {
     kind: SEARCH_KIND,
@@ -606,8 +677,10 @@ export const fit = async (options: FitOptions = {}): Promise<FitResult> => {
     },
     defaults,
     best,
-    fitted,
-    pinned,
+    fitted: pin.fitted,
+    pinned: pin.pinned,
+    atBound: boundsReached(pin.fitted, space),
+    enginePasses: scored.length + pin.passes,
     candidates: scored,
     elapsedMs: performance.now() - startedAt,
   };
@@ -642,6 +715,13 @@ export interface CalibratedFileRecord extends CalibratedRecord {
     /** The committed value for every searched parameter, by path. */
     readonly values: Readonly<Record<string, number>>;
     /**
+     * Committed values sitting on the edge of their searched range: the bound chose them,
+     * not the data. Empty is the ordinary case; `docs/fitting.md` answers for any entry.
+     */
+    readonly atBound: readonly BoundReached[];
+    /** Engine passes the fit made in all: every candidate, plus the pin phase. */
+    readonly enginePasses: number;
+    /**
      * Parameters whose drawn value the objective could not tell from the engine's default,
      * measured one at a time and left at that default rather than committed.
      */
@@ -650,6 +730,8 @@ export interface CalibratedFileRecord extends CalibratedRecord {
     readonly defaults: {
       readonly objective: number;
       readonly values: Readonly<Record<string, number>>;
+      /** …and over the whole corpus, so `overall` below has a baseline to be read against. */
+      readonly overall: CorpusFigures | null;
     };
     /** Best minus defaults on the objective: the improvement the fit is committed for. */
     readonly improvement: number;
@@ -657,17 +739,33 @@ export interface CalibratedFileRecord extends CalibratedRecord {
      * The same six metrics over the whole corpus, not only the objective's scope. A fit that
      * raised the web figures at the cost of everything else says so here rather than nowhere.
      */
-    readonly overall: {
-      readonly records: number;
-      readonly cc: number;
-      readonly nss: number;
-      readonly kld: number;
-      readonly aucJudd: number;
-      readonly scanMatch: number;
-      readonly sequenceScore: number;
-    } | null;
+    readonly overall: CorpusFigures | null;
   };
 }
+
+/** The six metrics over a whole corpus, with the records behind them. */
+export interface CorpusFigures {
+  readonly records: number;
+  readonly cc: number;
+  readonly nss: number;
+  readonly kld: number;
+  readonly aucJudd: number;
+  readonly scanMatch: number;
+  readonly sequenceScore: number;
+}
+
+const corpusFiguresOf = (aggregate: Aggregate | null): CorpusFigures | null =>
+  aggregate === null
+    ? null
+    : {
+        records: aggregate.records,
+        cc: aggregate.saliency.cc,
+        nss: aggregate.saliency.nss,
+        kld: aggregate.saliency.kld,
+        aucJudd: aggregate.saliency.aucJudd,
+        scanMatch: aggregate.scanpath.scanMatch,
+        sequenceScore: aggregate.scanpath.sequenceScore,
+      };
 
 /** The file's schema version, so a later shape can be told from this one. */
 export const CALIBRATED_SCHEMA_VERSION = 1;
@@ -716,21 +814,16 @@ export const calibratedRecordOf = (result: FitResult): CalibratedFileRecord => {
         default: defaultAt(parameter.path),
       })),
       values: best.candidate.values,
+      atBound: result.atBound,
+      enginePasses: result.enginePasses,
       pinnedToDefault: result.pinned,
-      defaults: { objective: defaults.objective.value, values: defaults.candidate.values },
+      defaults: {
+        objective: defaults.objective.value,
+        values: defaults.candidate.values,
+        overall: corpusFiguresOf(defaults.overall),
+      },
       improvement: best.objective.value - defaults.objective.value,
-      overall:
-        overall === null
-          ? null
-          : {
-              records: overall.records,
-              cc: overall.saliency.cc,
-              nss: overall.saliency.nss,
-              kld: overall.saliency.kld,
-              aucJudd: overall.saliency.aucJudd,
-              scanMatch: overall.scanpath.scanMatch,
-              sequenceScore: overall.scanpath.sequenceScore,
-            },
+      overall: corpusFiguresOf(overall),
     },
   };
 };

@@ -92,7 +92,7 @@
         "min": 150,
         "max": 400,
         "step": 10,
-        "reason": "the published free-viewing region is 200–300 ms; the bounds reach well past both ends so the data can argue with the literature, and the step is finer than the metrics can tell apart",
+        "reason": "the published free-viewing region is 200-300 ms. The upper bound reaches well past it; the lower one is a floor and binds, because the objective is degenerate downward — ScanMatch is dwell-weighted, so shorter fixations keep raising it (0.80 at a 80 ms median, against 0.66 at 150) all the way to dwells no eye performs. 150 ms is the lowest median any free-viewing study reports, and it is honoured over the objective",
         "default": 250
       },
       {
@@ -108,7 +108,7 @@
         "min": 60,
         "max": 140,
         "step": 10,
-        "reason": "the floor a dwell is clamped to, kept below the median’s own lower bound so no draw can cross it. A fixation under 60 ms is not a fixation in any published definition",
+        "reason": "the floor a dwell is clamped to, kept below the median’s own lower bound so no draw can cross it. A fixation under 60 ms is not a fixation in any published definition, so this bound binds for the same reason the median’s does",
         "default": 80
       },
       {
@@ -174,6 +174,19 @@
       "inhibitionOfReturn.deliberateReturnAfterFixations": 3,
       "inhibitionOfReturn.deliberateReturnRelevance": 0.6
     },
+    "atBound": [
+      {
+        "path": "fixationDuration.medianMs",
+        "bound": "min",
+        "value": 150
+      },
+      {
+        "path": "fixationDuration.minMs",
+        "bound": "min",
+        "value": 60
+      }
+    ],
+    "enginePasses": 142,
     "pinnedToDefault": [
       "alpha",
       "beta",
@@ -200,6 +213,15 @@
         "inhibitionOfReturn.immediateRepeatAllowance": 1,
         "inhibitionOfReturn.deliberateReturnAfterFixations": 3,
         "inhibitionOfReturn.deliberateReturnRelevance": 0.6
+      },
+      "overall": {
+        "records": 4,
+        "cc": 0.6682211470527395,
+        "nss": 2.3788914390598745,
+        "kld": 5.8710754270145245,
+        "aucJudd": 0.8379833672534504,
+        "scanMatch": 0.18357059824451627,
+        "sequenceScore": 0.11944444444444445
       }
     },
     "improvement": 0.10026412264839657,

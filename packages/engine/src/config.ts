@@ -314,6 +314,11 @@ export interface ResolvedEngineConfig {
   /**
    * `true` only when `config/calibrated.json` is in the build. Defaults never claim to be
    * calibrated, and an absent file means defaults rather than a fabricated number.
+   *
+   * It is a fact about the build and not about this answer: a caller that overrides every
+   * fitted value back to the defaults still resolves a calibrated engine, because the
+   * record it would have used is still there. What the figures were measured on is in
+   * `metrics`.
    */
   readonly calibrated: boolean;
   /**
@@ -518,7 +523,9 @@ export const resolveFrom = (
   return {
     config,
     calibrated: record !== null,
-    metrics: record === null ? null : { benchmark: 'UEyes', ...record.metrics },
+    // The benchmark name last: the record's own fields cannot overwrite the one name
+    // `packages/contract`'s calibration block admits, whatever a JSON file happens to hold.
+    metrics: record === null ? null : { ...record.metrics, benchmark: 'UEyes' },
   };
 };
 
