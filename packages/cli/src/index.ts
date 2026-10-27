@@ -33,7 +33,14 @@ export { openCommand } from './commands/open.js';
 export type { OpenCommandOptions } from './commands/open.js';
 export { serveCommand } from './commands/serve.js';
 export type { ServeCommandOptions, ServeResult } from './commands/serve.js';
-export { parseRunRequest, runCommand } from './commands/run.js';
-export type { RunCommandArguments, RunCommandOptions } from './commands/run.js';
+
+/**
+ * `run` is **deliberately absent from this barrel too**, for the same reason `calibrate`
+ * is. `./commands/run.js` reaches `@personavision/swarm`, which reaches
+ * `@personavision/browser` and so Playwright: a module that launches Chromium has no
+ * business in a Vite dev server or a jsdom suite, and `apps/viewer` imports this file. The
+ * executable imports that module directly, and `../run/start.js` is where the swarm itself
+ * lives for anything that wants to drive a run from code.
+ */
 export { validateCommand } from './commands/validate.js';
 export type { ValidateCommandOptions } from './commands/validate.js';

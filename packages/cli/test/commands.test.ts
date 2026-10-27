@@ -1,5 +1,6 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises';
-import { runPaths } from '@personavision/contract';
+import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { runPaths, validate } from '@personavision/contract';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { personavision } from './cli-process.js';
 import { temporaryWorkspace } from './workspace.js';
@@ -11,9 +12,14 @@ import type { TestWorkspace } from './workspace.js';
  */
 
 /**
- * `--help` and `run` read no run directory — `run` only has to leave none behind — so they
- * share one empty workspace. The `validate` tests get a written artifact each, because one
- * of them breaks it on purpose.
+ * `--help` and the `run` arguments read no run directory — a test that was not started
+ * only has to leave none behind — so they share one empty workspace. The `validate` tests
+ * get a written artifact each, because one of them breaks it on purpose.
+ *
+ * What a run that *does* start produces is asserted in `run.test.ts` and
+ * `run-live.test.ts`: a swarm cannot be driven through this process runner, because `tsx`
+ * compiles the page callbacks the browser step evaluates with esbuild's name helpers, which
+ * do not exist inside the page.
  */
 let workspace: TestWorkspace;
 
@@ -41,10 +47,24 @@ describe('personavision --help', () => {
     const { code, stdout } = await personavision(['run', '--help'], workspace.dir);
 
     expect(code).toBe(0);
-    for (const flag of ['--url', '--task', '--personas', '--repeats', '--seed', '--engine']) {
+    for (const flag of [
+      '--url',
+      '--task',
+      '--audience',
+      '--personas',
+      '--repeats',
+      '--seed',
+      '--engine',
+      '--mode',
+      '--steps',
+    ]) {
       expect(stdout).toContain(flag);
     }
     expect(stdout).toContain('what counts as finishing');
+    // The two things a reader has to know before spending anything: which model `--mode`
+    // picks, and that the cheap one may be trained on.
+    expect(stdout).toContain('contributor');
+    expect(stdout).toContain('train its models');
   });
 
   it('names every flag of open and what it does', async () => {
@@ -180,42 +200,86 @@ describe('personavision run', () => {
     expect(stderr).toContain('--repeats "three" — Needs a whole number.');
   });
 
-  it('parses the invocation the product prints, then stops at the step that runs a test', async () => {
+  it('rejects an audience it cannot resolve, and writes no run directory', async () => {
     const before = await runsBefore();
 
-    const { code, stdout, stderr } = await personavision(
+    const { code, stderr } = await personavision(
       [
         'run',
         '--url',
         'http://localhost:4173/checkout-a',
-        '--url',
-        'http://localhost:4173/checkout-b',
         '--task',
         'Buy the boots',
-        '--personas',
-        'default',
-        '--repeats',
-        '3',
+        '--audience',
+        'nobody-in-particular',
       ],
       workspace.dir,
     );
 
     expect(code).not.toBe(0);
-    expect(stderr).toContain('#8');
+    expect(stderr).toContain('there is no audience "nobody-in-particular"');
     expect(stderr).toContain('no run directory was created');
-    const request = JSON.parse(stdout.slice(stdout.indexOf('{'))) as {
-      variants: { id: string; name: string; url: string }[];
-      audienceId: string;
-      repeats: number;
-      engineMode: string;
-    };
-    expect(request.variants).toEqual([
-      { id: 'A', name: 'Current checkout', url: 'http://localhost:4173/checkout-a' },
-      { id: 'B', name: 'Redesign candidate', url: 'http://localhost:4173/checkout-b' },
-    ]);
-    expect(request.audienceId).toBe('default');
-    expect(request.repeats).toBe(3);
-    expect(request.engineMode).toBe('offline');
     expect(await runsBefore()).toEqual(before);
+  });
+
+  it('still takes the audience under --personas, the name the surface publishes', async () => {
+    const before = await runsBefore();
+
+    const { code, stderr } = await personavision(
+      [
+        'run',
+        '--url',
+        'http://localhost:4173/checkout-a',
+        '--task',
+        'Buy the boots',
+        '--personas',
+        'nobody-in-particular',
+      ],
+      workspace.dir,
+    );
+
+    // The error names the audience that argument carried, which is how this test knows the
+    // argument reached the resolver under either of its two names.
+    expect(code).not.toBe(0);
+    expect(stderr).toContain('there is no audience "nobody-in-particular"');
+    expect(await runsBefore()).toEqual(before);
+  });
+
+  it('refuses the standard model with no key in the environment, and simulates nobody', async () => {
+    const { code, stderr } = await personavision(
+      [
+        'run',
+        '--url',
+        'http://localhost:4173/checkout-a',
+        '--task',
+        'Buy the boots',
+        '--mode',
+        'standard',
+      ],
+      workspace.dir,
+    );
+
+    expect(code).not.toBe(0);
+    // Naming the standard model is naming a paying customer's test: it is refused rather
+    // than run on the cheaper model or on the offline engine (#143, #144).
+    expect(stderr).toContain('Test failed to start');
+    expect(stderr).toContain('The standard model could not be used');
+    expect(stderr).toContain('Nobody was simulated and no result was saved.');
+    expect(stderr).not.toContain('contributor mode');
+    // The failure is on the record, with no session beside it.
+    const runs = await readdir(workspace.runsRoot);
+    expect(runs).toHaveLength(1);
+    const runDir = join(workspace.runsRoot, String(runs[0]));
+    expect(await validate(runDir)).toEqual([]);
+    const run = JSON.parse(await readFile(runPaths(runDir).run, 'utf8')) as {
+      status: string;
+      sessionIds: string[];
+      engine: { mode: string; modelMode?: string };
+    };
+    expect(run.status).toBe('failed');
+    expect(run.sessionIds).toEqual([]);
+    expect(run.engine.mode).toBe('model');
+    expect(run.engine.modelMode).toBe('standard');
+    await rm(runDir, { recursive: true, force: true });
   });
 });
