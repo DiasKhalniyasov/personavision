@@ -303,3 +303,42 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- The outcome card -------------------------------------------------- */
+
+/* The `.outcome-card` of the prototype. Its border, background and heading
+   colour are the outcome's own tokens and are set by the component from the
+   session vocabulary, because the prototype's card is written for one outcome
+   and this one is rendered for all four. */
+.outcome {
+  border: var(--border-width) solid;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.outcome h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.outcome p {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.kv dt {
+  color: var(--color-text-muted);
+}
+
+.kv dd {
+  margin: 0;
+}

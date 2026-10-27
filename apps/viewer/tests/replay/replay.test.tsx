@@ -52,7 +52,10 @@ describe('the header', () => {
     await ready();
     expect(pageHeading()).toBe('S-15 · Rushed buyer · Redesign candidate · seed 3');
 
-    const tags = [...container.querySelectorAll('.tag')].map((tag) => tag.textContent?.trim());
+    // The header's own tags: the outcome card below carries one of its own (#25).
+    const tags = [...container.querySelectorAll('.lede .tag')].map((tag) =>
+      tag.textContent?.trim(),
+    );
     expect(tags).toEqual(['B Redesign candidate', 'Abandoned at 0:38', 'Product at fault']);
 
     const lede = container.querySelectorAll('.lede');
@@ -491,8 +494,9 @@ describe('the screen as a whole', () => {
 
     const column = container.querySelector('#rp-timeline');
     expect(column).not.toBeNull();
-    // The three screen cards; #25 adds the outcome card that closes the column.
-    expect(column?.childElementCount).toBe(3);
+    // The three screen cards, and the outcome card that closes the column (#25).
+    expect(column?.childElementCount).toBe(4);
+    expect(column?.lastElementChild?.getAttribute('data-outcome')).toBe('abandoned');
   });
 
   it('passes axe at a scrubber position', async () => {
