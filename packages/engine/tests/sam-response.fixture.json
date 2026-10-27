@@ -1,0 +1,36 @@
+{
+  "id": "resp_sam_31_card_grid",
+  "status": "completed",
+  "model": "sam-3.1",
+  "output": [
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_segmentation",
+          "masks": [
+            { "label": "product card grid", "score": 0.97, "box": [16, 112, 464, 344] },
+            { "label": "product card grid", "score": 0.81, "box": [16.2, 111.8, 463.6, 344.4] },
+            { "label": "page heading", "score": 0.93, "box": [16, 24, 256, 50] },
+            { "label": "off-page banner", "score": 0.74, "box": [480, 400, 620, 520] },
+            { "label": "footer strip", "score": 0.66, "box": [-20, 330, 500, 420] },
+            {
+              "name": "promo tile",
+              "score": 0.58,
+              "polygon": [
+                [300, 60],
+                [420, 60],
+                [420, 100],
+                [300, 100]
+              ]
+            },
+            { "label": "ribbon", "score": 0.41, "rle": { "size": [360, 480], "counts": "Xk3a1" } },
+            { "label": "hairline", "score": 0.22, "box": [0, 0, 0, 0] }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": { "input_tokens": 1536, "output_tokens": 112 }
+}
