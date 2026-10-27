@@ -46,10 +46,11 @@ import {
   writeSession,
 } from '@personavision/contract';
 import { totalUsage } from '@personavision/provider';
+import { engineOnTheRecord, sameCalibration } from './calibration.js';
 import { decideOutcome } from './outcome.js';
 import { runSession } from './run-session.js';
 import type { Capture, CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
-import type { Persona, Run, RunUsage, Session } from '@personavision/contract';
+import type { Persona, Run, RunArtifact, RunUsage, Session } from '@personavision/contract';
 import type { Aoi, EngineConfigOverrides, Segmenter } from '@personavision/engine';
 import type {
   Decision,
@@ -606,7 +607,10 @@ const ourBreakage = (error: unknown, captures: readonly Capture[]): AutomationFa
 const runUsageOf = (usages: readonly DecisionUsage[], mode: ProviderMode): RunUsage =>
   totalUsage(mode === 'model' ? usages : []);
 
-/** The open run, read before anything is written, with the plan checked against it. */
+/**
+ * The open run, read before anything is written, with the plan checked against it and the
+ * engine put on the record.
+ */
 interface OpenedRun {
   readonly runId: string;
   readonly startedAt: string | undefined;
@@ -617,7 +621,8 @@ const openRun = async (
   planned: readonly SwarmSession[],
   mode: ProviderMode,
 ): Promise<OpenedRun> => {
-  const { run } = await readRun(runDir);
+  const artifact = await readRun(runDir);
+  const { run } = artifact;
   if (run.status !== 'open') {
     throw new Error(
       `${runDir}: this run's status is ${run.status === undefined ? 'absent' : `"${run.status}"`}, and a swarm runs into a run that is open`,
@@ -659,7 +664,45 @@ const openRun = async (
       );
     }
   }
+  await recordEngine(runDir, artifact);
   return { runId: run.runId, startedAt: run.startedAt };
+};
+
+/**
+ * Which engine ran, and what it scored, on the record before the first session runs (#92).
+ *
+ * Two fields, written together because they are one claim: `engine.version` names the engine
+ * and `calibration` carries the figures that engine was measured at, which is what the
+ * header badge states on every screen. They come from the engine this build imports, because
+ * nothing else knows which engine is about to walk the sessions — a creator can only guess at
+ * its version, and a stale figure beside a new engine is exactly the fabrication
+ * `docs/FLOW.md`'s badge must never show.
+ *
+ * It happens here, in the swarm's own turn at `run.json` and before any session has landed,
+ * so the value a reader sees while the run is open is the value the finished run carries: the
+ * badge does not change number mid-run. A run whose creator already wrote these two fields
+ * from `engineOnTheRecord` — which is how a run should be opened, and the only way a run that
+ * failed to start can carry them at all — is left exactly as it was written, so the common
+ * path costs no write at all.
+ *
+ * The write is the whole artifact, as `closeRun`'s is, because `run.json` has no writer of
+ * its own and `packages/contract` is not this ticket's to change. It is reached before the
+ * first session, where a run the swarm walks holds none.
+ */
+const recordEngine = async (runDir: string, artifact: RunArtifact): Promise<void> => {
+  const { run } = artifact;
+  const engine = engineOnTheRecord();
+  const agrees =
+    run.engine.version === engine.version && sameCalibration(run.calibration, engine.calibration);
+  if (agrees) return;
+  await writeRun(runDir, {
+    ...artifact,
+    run: {
+      ...run,
+      engine: { ...run.engine, version: engine.version },
+      calibration: engine.calibration,
+    },
+  });
 };
 
 /**

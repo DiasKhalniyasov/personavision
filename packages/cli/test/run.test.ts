@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runPaths, validate } from '@personavision/contract';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
+import { engineOnTheRecord } from '@personavision/swarm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CliError } from '../src/cli-error.js';
 import { runCommand } from '../src/commands/run.js';
@@ -106,6 +107,19 @@ describe('a run that goes through', () => {
     expect(run.engine.models).toBeNull();
     expect(run.usage?.calls).toBe(0);
     expect(run.usage?.estimatedCostUsd).toBe(0);
+  });
+
+  it('carries the engine’s calibration block and the version that earned it', async () => {
+    fixture = await runFixture({ size: 2 });
+
+    await runCommand(fixture.options());
+
+    const { run } = await theRun(fixture.runsRoot);
+    // The two fields the header badge reads, from the engine that actually ran (#92). The
+    // figures are not restated here: they are the engine's own, which is what makes them
+    // honest, and `packages/swarm` is where they are asserted against the committed fit.
+    expect(run.calibration).toEqual(engineOnTheRecord().calibration);
+    expect(run.engine.version).toBe(engineOnTheRecord().version);
   });
 
   it('names the task, the versions, the audience and the engine before anybody has finished', async () => {
@@ -263,6 +277,22 @@ describe('a run that cannot start', () => {
     expect(run.progress?.finishedSessions).toBe(0);
     expect(run.progress?.sessions).toEqual([]);
     await expect(readdir(runPaths(runDir).sessionsDir)).resolves.toEqual([]);
+  });
+
+  it('carries what the engine reported on a run nobody ran, and never a figure of its own', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options({ engine: 'model', mode: 'standard', env: {} });
+
+    await failing(async () => {
+      await runCommand(options);
+    });
+
+    // A failed run never reaches the loop, so this record is the command's last word on it:
+    // the engine's own block, so the Test failed screen's badge states the same figure every
+    // other screen does, and `null` there would say "not calibrated" about an engine that is.
+    const { run } = await theRun(fixture.runsRoot);
+    expect(run.calibration).toEqual(engineOnTheRecord().calibration);
+    expect(run.engine.version).toBe(engineOnTheRecord().version);
   });
 
   it('reports the model it was to run on, and sends nobody to check a URL', async () => {
