@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
 
 declare global {
   /** React flushes a render synchronously only inside `act`, and only when this is set. */
@@ -39,6 +39,31 @@ if (!('ResizeObserver' in globalThis)) {
     disconnect(): void {}
   } as unknown as typeof ResizeObserver;
 }
+
+/**
+ * jsdom implements no `matchMedia` either, and the shell asks it who has asked for reduced
+ * motion wherever a moment of `docs/FLOW.md` section 10 mounts (`src/shell/motion.tsx`,
+ * #125). The stub matches nothing, which is a reader who has set no preference; a suite that
+ * is *about* the preference stubs the global for itself, as `tests/motion.test.tsx` does.
+ */
+const matchesNothing = (query: string): MediaQueryList =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }) as unknown as MediaQueryList;
+
+// Per test, not once per file: a suite that stubs the global for itself has its stub taken
+// away again by `vi.unstubAllGlobals()` (`forgetRuns`), and the next test in that file would
+// otherwise mount a screen over nothing.
+beforeEach(() => {
+  if (typeof window.matchMedia !== 'function') window.matchMedia = matchesNothing;
+});
 
 afterEach(() => {
   document.head.replaceChildren();
