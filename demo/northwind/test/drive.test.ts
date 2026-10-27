@@ -22,12 +22,16 @@
  * The fold numbers asserted here are the ones `demo/README.md`'s fold arithmetic quotes.
  */
 
+/// <reference lib="dom" />
+// The callback that reads a control's box runs inside the page, not in Node: this file needs
+// the DOM types, and the reference travels with the file (see `packages/browser/src/act.ts`).
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { act, capture, closeSession, detectStep, openSession } from '@personavision/browser';
 import type {
+  Box,
   Capture,
   CaptureContext,
   CaptureElement,
@@ -48,14 +52,20 @@ const describeWithChromium = CHROMIUM_INSTALLED || process.env.CI ? describe : d
 const BROWSER_TIMEOUT_MS = 60_000;
 const DRIVE_TIMEOUT_MS = 240_000;
 
-/** The two devices of the mix, named by the personas that are on them. */
+/** The two devices of the mix, taken from the personas that are on them. */
 const MOBILE = NORTHWIND_DEVICE_MIX.rushed;
 const DESKTOP = NORTHWIND_DEVICE_MIX.careful;
+
+/** The step nothing advances from: the task's last. */
+const TERMINAL_STEP = NORTHWIND_TASK.steps.at(-1);
+if (TERMINAL_STEP === undefined) throw new Error('the demo task declares no steps');
 
 /** One screen of a drive: what the session saw, and whether it had to scroll to go on. */
 interface Screen {
   readonly capture: Capture;
   readonly primaryAction: CaptureElement;
+  /** Where the control the step declares actually is, read off the page itself. */
+  readonly declaredBox: Box;
   readonly scrolled: boolean;
 }
 
@@ -65,6 +75,23 @@ interface Drive {
   readonly finalUrl: string;
   readonly orderNumber: string;
 }
+
+/**
+ * The page-space box of the control a step declares, read out of the page. The capture's own
+ * reading is what is being checked, so this is taken independently of it.
+ */
+const declaredBoxOf = (handle: PageHandle, selector: string): Promise<Box> =>
+  handle.page.evaluate((chosen) => {
+    const node = document.querySelector(chosen);
+    if (node === null) throw new Error(`the shop has no ${chosen}`);
+    const rect = node.getBoundingClientRect();
+    return {
+      x: rect.x + window.scrollX,
+      y: rect.y + window.scrollY,
+      width: rect.width,
+      height: rect.height,
+    };
+  }, selector);
 
 const theOnlyPrimaryAction = (screen: Capture): CaptureElement => {
   const marked = screen.elements.filter((element) => element.isPrimaryAction);
@@ -103,28 +130,33 @@ describeWithChromium('driving the northwind task', () => {
         const screen = await capture(handle, ctx);
         const primaryAction = theOnlyPrimaryAction(screen);
         const target = { selector: step.primaryAction.selector };
+        const declaredBox = await declaredBoxOf(handle, target.selector);
 
         // The confirmation step is terminal: nothing advances from it.
-        if (step.id === NORTHWIND_TASK.steps[NORTHWIND_TASK.steps.length - 1].id) {
-          screens.push({ capture: screen, primaryAction, scrolled: false });
+        if (step.id === TERMINAL_STEP.id) {
+          screens.push({ capture: screen, primaryAction, declaredBox, scrolled: false });
           break;
         }
+
+        // A drive runs in `beforeAll`, so each check names where it was: a hook error that
+        // says only `false` would not say which variant on which device stopped advancing.
+        const where = `the ${step.id} step of variant ${variant.id} on ${device.name}`;
 
         const scrolled = primaryAction.belowFold;
         if (scrolled) {
           const scroll = await act(handle, { type: 'scroll', ...target }, ctx);
-          expect(scroll.ok).toBe(true);
-          expect(scroll.scrollY).toBeGreaterThan(0);
+          expect(scroll.ok, where).toBe(true);
+          expect(scroll.scrollY, `${where} scrolled to its primary action`).toBeGreaterThan(0);
         }
 
         const click = await act(handle, { type: 'click', ...target }, ctx);
-        expect(click.failure).toBeUndefined();
-        expect(click.ok).toBe(true);
-        screens.push({ capture: screen, primaryAction, scrolled });
+        expect(click.failure, where).toBeUndefined();
+        expect(click.ok, where).toBe(true);
+        screens.push({ capture: screen, primaryAction, declaredBox, scrolled });
       }
 
       const orderNumber = await handle.page
-        .locator(NORTHWIND_TASK.steps[NORTHWIND_TASK.steps.length - 1].primaryAction.selector)
+        .locator(TERMINAL_STEP.primaryAction.selector)
         .innerText();
       return { screens, finalUrl: handle.page.url(), orderNumber };
     } finally {
@@ -181,31 +213,22 @@ describeWithChromium('driving the northwind task', () => {
       'review',
       'confirm',
     ]);
-    expect(NORTHWIND_DEVICE_MIX).toEqual({
-      rushed: {
-        name: 'mobile',
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 3,
-        touch: true,
-      },
-      price: {
-        name: 'mobile',
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 3,
-        touch: true,
-      },
-      careful: {
-        name: 'desktop',
-        viewport: { width: 1440, height: 900 },
-        deviceScaleFactor: 2,
-        touch: false,
-      },
-      firsttime: {
-        name: 'desktop',
-        viewport: { width: 1440, height: 900 },
-        deviceScaleFactor: 2,
-        touch: false,
-      },
+    // The prototype's four personas, two to a device: the mix is checked by who shares a
+    // device with whom and by the two geometries, not by four copies of the same literal.
+    expect(Object.keys(NORTHWIND_DEVICE_MIX)).toEqual(['rushed', 'careful', 'firsttime', 'price']);
+    expect(NORTHWIND_DEVICE_MIX.price).toEqual(MOBILE);
+    expect(NORTHWIND_DEVICE_MIX.firsttime).toEqual(DESKTOP);
+    expect(MOBILE).toEqual({
+      name: 'iPhone 15',
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      touch: true,
+    });
+    expect(DESKTOP).toEqual({
+      name: 'MacBook Air 13',
+      viewport: { width: 1440, height: 900 },
+      deviceScaleFactor: 2,
+      touch: false,
     });
   });
 
@@ -226,11 +249,24 @@ describeWithChromium('driving the northwind task', () => {
 
       it(`resolves one primary action per step of variant ${variant} on ${device.name}`, () => {
         for (const screen of driven(variant, device).screens) {
+          const where = `the ${String(screen.capture.step)} step of variant ${variant}`;
+
           // `capture` would have raised `selector_not_found` rather than report a screen, so
           // reaching here is the declared selector resolving on every page of the drive.
-          expect(screen.capture.elements.filter((element) => element.isPrimaryAction)).toEqual([
-            screen.primaryAction,
-          ]);
+          expect(
+            screen.capture.elements.filter((element) => element.isPrimaryAction),
+            `${where} marks one primary action`,
+          ).toHaveLength(1);
+
+          // And the element marked is the control the step declares, not merely some element:
+          // its box is the one the page itself reports for the declared selector, to within
+          // the pixel of tolerance resolution itself allows for an extractor's rounding.
+          for (const edge of ['x', 'y', 'width', 'height'] as const) {
+            expect(
+              Math.abs(screen.primaryAction.bbox[edge] - screen.declaredBox[edge]),
+              `${where}: the marked element's ${edge}`,
+            ).toBeLessThanOrEqual(1);
+          }
         }
       });
     }

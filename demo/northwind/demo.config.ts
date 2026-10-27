@@ -28,18 +28,20 @@
 import type { Device, TaskDefinition, Variant } from '@personavision/browser';
 
 /**
- * The devices the audience runs on, with the geometry `demo/README.md`'s Viewports table
- * measures the shop at and the scale factors `@personavision/personas` runs its classes on.
+ * The devices the audience runs on: the geometry `demo/README.md`'s Viewports table measures
+ * the shop at, under the names `@personavision/personas` gives its mobile and desktop classes.
+ * The names matter because a session records the device it ran on, and a run driven off this
+ * mix should name the same device a generated persona carries.
  */
 const MOBILE: Device = {
-  name: 'mobile',
+  name: 'iPhone 15',
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 3,
   touch: true,
 };
 
 const DESKTOP: Device = {
-  name: 'desktop',
+  name: 'MacBook Air 13',
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 2,
   touch: false,

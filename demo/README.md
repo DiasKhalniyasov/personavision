@@ -361,7 +361,9 @@ sentence, verbatim: **"Buy the hiking boots and pay with the saved card."**
   whatever base `serveDemoShop()` reports.
 - `NORTHWIND_DEVICE_MIX` is which device each of the prototype's four personas is on: the
   rushed buyer and the price-sensitive scanner on mobile (`390 × 844`, touch), the careful
-  comparer and the first-time visitor on desktop (`1440 × 900`).
+  comparer and the first-time visitor on desktop (`1440 × 900`). The two devices carry the
+  names `@personavision/personas` gives those classes — `iPhone 15` and `MacBook Air 13` — so a
+  session driven off this mix records the device name a generated persona would carry.
 
 `test/drive.test.ts` is the proof: both variants driven from the cart URL to
 `/<variant>/confirmation.html` with the order number on screen, every screen labelled with
