@@ -251,7 +251,7 @@ const writeText = async (path: string, text: string): Promise<RecordedFile> => {
   return { path, bytes: Buffer.byteLength(text) };
 };
 
-/** The screenshot `writeScreenshot` took, moved from the temporary run directory into the set. */
+/** The screenshot `writeScreenshot` took, copied out of the run directory into the set. */
 const copyImage = async (from: string, to: string): Promise<RecordedFile> => {
   await mkdir(dirname(to), { recursive: true });
   await copyFile(from, to);

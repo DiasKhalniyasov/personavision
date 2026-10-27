@@ -134,7 +134,7 @@ describe('createFixtureSource', () => {
     const source = createFixtureSource(COMMITTED);
     const ctx = context(variant, device);
     const page = await source.openSession(
-      { id: variant, url: `https://shop.invalid/cart.html` },
+      { id: variant, url: 'https://shop.invalid/cart.html' },
       device,
     );
     try {
