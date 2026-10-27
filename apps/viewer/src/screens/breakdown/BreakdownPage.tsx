@@ -11,6 +11,7 @@ import { evidenceUrl } from '@/screens/verdict/evidenceLink';
 import type { FindingItem } from '@/screens/verdict/evidenceLink';
 import findingStyles from '@/screens/verdict/finding.module.css';
 import { ScoreCards } from './ScoreCards';
+import { SegmentsSection } from './SegmentsSection';
 import { Verdict } from './Verdict';
 import './BreakdownPage.css';
 
@@ -107,7 +108,7 @@ export function Breakdown({ run }: { run: Run }) {
         <ScoreCards run={run} />
         <Verdict run={run} />
         <AllFindings run={run} />
-        {/* #17 mounts its "Which part of your audience this came from" section here. */}
+        <SegmentsSection run={run} />
         <SimulatedDisclaimer />
         <p className="footnote">
           People whose session ended because our own automation broke are excluded from every figure
