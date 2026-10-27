@@ -1,5 +1,6 @@
 import type { Run } from '@personavision/contract';
 import { scoringConfig } from '@personavision/scoring';
+import { stepLabel } from '@/screens/replay/runWords';
 import { readScoreThreshold, scoreBand } from '@/tokens';
 import type { ScoreBand } from '@/tokens';
 
@@ -133,8 +134,17 @@ const percentOfWeight = (weight: number): string => `weight ${Math.round(weight 
 
 const figure = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
-/** `2 / 11`: two stored counts, printed side by side. */
-const outOf = (count: number, of: number): string => `${count} / ${of}`;
+/**
+ * `2 / 11`: the people a component is a share of, back from the component itself.
+ *
+ * The count is **not** taken from `outcomeCounts`, and the difference matters on one row:
+ * `taskFailureRate` is the sessions that failed *with the product at fault*
+ * (`packages/scoring/src/score.ts`), while `outcomeCounts.failed` also carries a failure
+ * our own automation caused. Reading the count off the component is what keeps the number
+ * beside a bar and the width of that bar the same claim. The outcome counts have their own
+ * line under the card, where they mean what they say.
+ */
+const outOf = (share: number, of: number): string => `${Math.round(share * of)} / ${of}`;
 
 /**
  * The time to the primary action, in the three shapes it comes in.
@@ -170,20 +180,20 @@ const revisitsReading = (component: number): string => {
  * stored as an id, and the run holds the label a reader sees.
  */
 export function componentRows(run: Run, score: VariantScore): ComponentRow[] {
-  const { components, outcomeCounts, scoredSessionCount } = score;
+  const { components, scoredSessionCount } = score;
   const { weights } = scoringConfig;
   const fixation = components.timeToFirstFixationPrimary;
-  const worstStep =
-    run.steps.find((step) => step.id === fixation.worstStep)?.label ?? fixation.worstStep;
 
   return [
     {
       key: 'taskFailureRate',
       label: 'Task failure rate',
       weight: percentOfWeight(weights.taskFailureRate),
-      note: null,
+      // Said on the row, because the card's outcome line counts failures of both kinds and
+      // the two numbers would otherwise read as a contradiction.
+      note: 'the product’s own failures',
       fill: components.taskFailureRate,
-      reading: outOf(outcomeCounts.failed, scoredSessionCount),
+      reading: outOf(components.taskFailureRate, scoredSessionCount),
       never: false,
     },
     {
@@ -192,14 +202,14 @@ export function componentRows(run: Run, score: VariantScore): ComponentRow[] {
       weight: percentOfWeight(weights.abandonment),
       note: null,
       fill: components.abandonment,
-      reading: outOf(outcomeCounts.abandoned, scoredSessionCount),
+      reading: outOf(components.abandonment, scoredSessionCount),
       never: false,
     },
     {
       key: 'timeToFirstFixationPrimary',
       label: 'Time before anyone looked at the main button',
       weight: percentOfWeight(weights.timeToFirstFixationPrimary),
-      note: `worst step: ${worstStep}`,
+      note: `worst step: ${stepLabel(run, fixation.worstStep)}`,
       fill: fixation.value,
       reading: fixationReading(fixation),
       never: fixation.medianSeconds === null,
@@ -214,4 +224,28 @@ export function componentRows(run: Run, score: VariantScore): ComponentRow[] {
       never: false,
     },
   ];
+}
+
+/** The scores of the run's own task: what the verdict line compared, or did not. */
+export const scoresOfTask = (run: Run): VariantScore[] =>
+  run.scores.filter((score) => score.taskId === run.task.id);
+
+/**
+ * How many seed groups the two versions could be compared in: the seeds every scored
+ * version has a figure for.
+ *
+ * The run stores how many groups **agreed** and not how many there were to agree, and a
+ * bare count reads as a result either way — `0` as a disagreement when there was nothing
+ * to compare, and `1` as unanimity when it was one of five. So the denominator is counted
+ * here, from the stored per-seed-group lists and by the same rule the pipeline counts the
+ * numerator with (`packages/scoring/src/verdict.ts`): only seeds both versions were run
+ * under can be compared. Nothing is re-scored; what is counted is how many figures there
+ * are, never what any of them says.
+ */
+export function comparableSeedGroups(run: Run): number {
+  const scored = scoresOfTask(run);
+  if (scored.length < 2) return 0;
+  const seedSets = scored.map((score) => new Set(score.perSeedGroup.map((group) => group.seed)));
+  const [first, ...rest] = seedSets as [Set<number>, ...Set<number>[]];
+  return [...first].filter((seed) => rest.every((seeds) => seeds.has(seed))).length;
 }

@@ -28,6 +28,12 @@ const cardFor = (name: string): HTMLElement =>
   cards().find((card) => card.querySelector('h2')?.textContent === name) as HTMLElement;
 
 const rowsOf = (card: HTMLElement) => [...card.querySelectorAll('.components li')];
+
+/** The committed run's score for the redesign, which the tests above move one field of. */
+const bScore = () =>
+  seedRun().scores.find((score) => score.variant === 'B') as ReturnType<
+    typeof seedRun
+  >['scores'][number];
 const textOf = (element: Element | null): string => element?.textContent ?? '';
 
 beforeEach(loadDesignTokens);
@@ -157,7 +163,7 @@ describe('the four weighted components', () => {
       textOf(row.querySelector('.what')),
     );
     expect(rows).toEqual([
-      `Task failure rate weight ${Math.round(weights.taskFailureRate * 100)}%`,
+      `Task failure rate weight ${Math.round(weights.taskFailureRate * 100)}% · the product’s own failures`,
       `Gave up weight ${Math.round(weights.abandonment * 100)}%`,
       'Time before anyone looked at the main button ' +
         `weight ${Math.round(weights.timeToFirstFixationPrimary * 100)}% · worst step: Review`,
@@ -173,6 +179,24 @@ describe('the four weighted components', () => {
     );
     // 0 of 11 failed, 2 of 11 gave up, 2.3 s to the button, and 0.3 × the cap of five.
     expect(readings).toEqual(['0 / 11', '2 / 11', '2.3 s', '1.5']);
+  });
+
+  it('counts the task failures the bar is drawn at, not every failed session', () => {
+    // `taskFailureRate` is the failures the **product** caused; `outcomeCounts.failed` also
+    // carries one our own automation caused. The number beside the bar is the bar's own, so
+    // the two cannot disagree — the outcome line under the card counts both kinds.
+    const run = withScore(seedRun(), 'B', {
+      components: { ...bScore().components, taskFailureRate: 2 / 11 },
+    });
+    show(<ScoreCards run={run} />);
+
+    const card = cardFor('Redesign candidate');
+    const rows = rowsOf(card);
+    expect(textOf(rows[0]?.querySelector('.val') ?? null)).toBe('2 / 11');
+    expect((rows[0]?.querySelector('.bar > span') as HTMLElement).style.width).toBe(
+      `${(2 / 11) * 100}%`,
+    );
+    expect(textOf(card.querySelector('.footnote'))).toContain('3 failed');
   });
 
   it('reads “never” for a control no session ever looked at', () => {
