@@ -188,6 +188,15 @@ export interface GenerateDemoRunOptions {
   readonly runsRoot: string;
   /** Every line the run reports; nothing it prints carries a credential. */
   readonly report?: (line: string) => void;
+  /**
+   * The shop to serve. The demo shop's own directory by default, which is what `pnpm
+   * demo:run` uses and what the committed artifact was produced from.
+   *
+   * It is an option so that the acceptance gate (#79) can run this same pipeline over a
+   * **copy** of the shop with one planted defect taken out, and so show that the gate bites
+   * rather than asserting that it would. Nothing else passes it.
+   */
+  readonly shopRoot?: string;
 }
 
 /** An artifact with no finding in it yet, which `findings.json` still has to parse as. */
@@ -326,9 +335,9 @@ const openRun = ({
 /**
  * The shop on its fixed port, or a refusal that says which port and why it matters.
  */
-const openShop = async (): Promise<DemoShop> => {
+const openShop = async (root: string | undefined): Promise<DemoShop> => {
   try {
-    return await serveDemoShop({ port: DEMO_SHOP_PORT });
+    return await serveDemoShop({ port: DEMO_SHOP_PORT, root });
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== 'EADDRINUSE') throw error;
@@ -347,7 +356,7 @@ export const generateDemoRun = async (
   const defects = declaredDefects();
   const personas = generatePersonas(OUTDOOR_GEAR_SHOPPERS, { seed: DEMO_AUDIENCE_SEED });
 
-  const shop = await openShop();
+  const shop = await openShop(options.shopRoot);
   report(`demo:run: the shop is on ${shop.url}`);
 
   try {

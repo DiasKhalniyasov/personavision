@@ -16,6 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:acceptance": "PERSONAVISION_ACCEPTANCE=1 vitest run tests/acceptance",
     "build": "pnpm -r build",
     "validate:example-run": "tsx --conditions=development packages/cli/src/cli.ts validate runs/2026-10-24-1402-northwind-demo",
     "dev": "pnpm -r --parallel --if-present dev",
