@@ -26,11 +26,11 @@ afterAll(async () => {
 });
 
 describe('personavision --help', () => {
-  it('lists the four subcommands, the product’s first', async () => {
+  it('lists every subcommand, the product’s first', async () => {
     const { code, stdout } = await personavision(['--help'], workspace.dir);
 
     expect(code).toBe(0);
-    for (const command of ['serve', 'validate', 'run', 'open']) {
+    for (const command of ['serve', 'validate', 'run', 'open', 'calibrate']) {
       expect(stdout).toContain(command);
     }
     // `serve` is the product; the other three are documented as internal tools.

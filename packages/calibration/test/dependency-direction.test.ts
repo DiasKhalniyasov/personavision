@@ -34,11 +34,22 @@ const imports = (text: string, specifier: string): boolean => {
   ).test(text);
 };
 
-/** Every TypeScript file under a workspace directory, with its text. */
+/**
+ * Every TypeScript file under a workspace directory, with its text.
+ *
+ * `node_modules` is not one of them. A workspace's dependencies are linked in there, so a
+ * package that reads this one would otherwise be reported as a file of every workspace that
+ * depends on it — which is a claim about the dependency graph, not about the workspace's own
+ * source, and is the opposite of what this file asserts. `packages/cli` reads calibration
+ * for `personavision calibrate` (#91) and is linked into `apps/viewer`; what matters is that
+ * the viewer's own code does not, and that the CLI keeps it out of the barrel the viewer
+ * imports.
+ */
 const sources = (workspacePath: string): readonly { path: string; text: string }[] => {
   const directory = join(ROOT, workspacePath);
   if (!existsSync(directory)) throw new Error(`${workspacePath} is not in this repository`);
   return readdirSync(directory, { recursive: true, encoding: 'utf8' })
+    .filter((entry) => !entry.split(/[/\\]/).includes('node_modules'))
     .filter((entry) => /\.(ts|tsx|mts|cts)$/.test(entry))
     .map((entry) => ({
       path: join(workspacePath, entry),

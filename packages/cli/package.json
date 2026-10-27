@@ -16,9 +16,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@personavision/calibration": "workspace:*",
     "@personavision/contract": "workspace:*",
     "@personavision/platform": "workspace:*",
     "commander": "^15.0.0",
