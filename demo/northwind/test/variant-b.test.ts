@@ -701,7 +701,14 @@ describe('the task can still be completed on variant B with JavaScript disabled'
 
   it('adds no third-party dependency to the shop', () => {
     const manifest = JSON.parse(read('demo/northwind/package.json')) as Record<string, unknown>;
-    expect(manifest.devDependencies).toBeUndefined();
+
+    // Relaxed by #77, which drives the shop in a real browser: `playwright` is how a test
+    // launches one, and the only third-party package this manifest is allowed to name. The
+    // pages still depend on nothing — no dev dependency is served, imported by `serve.ts` or
+    // reachable from a variant's markup.
+    expect(Object.keys((manifest.devDependencies ?? {}) as Record<string, string>)).toEqual([
+      'playwright',
+    ]);
 
     // Relaxed by #76, which declares the planted defects against the shape
     // `@personavision/scoring` exports and so makes the shop depend on one workspace
