@@ -36,11 +36,26 @@ export type { DetectStep, ResolvePrimaryAction } from './steps.js';
 export { act } from './act.js';
 export type { Act } from './act.js';
 
-export { SessionBudget } from './budget.js';
-export type { BudgetIntegrity, SessionBudgetLimits } from './budget.js';
+export { DEFAULT_SESSION_BUDGET, SessionBudget } from './budget.js';
+export type { BudgetIntegrity, SessionBudgetLimits, SessionIntegrity } from './budget.js';
 
-export { mapToAutomationFailure } from './failure-mapping.js';
-export type { MapToAutomationFailure } from './failure-mapping.js';
+export {
+  UNKNOWN_STEP,
+  frameFailure,
+  mapToAutomationFailure,
+  navigationFailure,
+  toAutomationFailure,
+  toAutomationFailureOutcome,
+  watchFrameFailures,
+} from './failure-mapping.js';
+export type {
+  AutomationFailureOutcome,
+  FailedFrameRequest,
+  FrameFailureWatch,
+  MapToAutomationFailure,
+  NavigationResponse,
+  ToAutomationFailure,
+} from './failure-mapping.js';
 
 export { withCache } from './cache.js';
 
