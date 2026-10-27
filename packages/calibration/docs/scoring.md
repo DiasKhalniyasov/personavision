@@ -14,6 +14,8 @@ const result = await score({
   corpus: committedCorpus(), // the four committed synthetic records (#82)
   seed: 1,
   onProgress: ({ message }) => console.log(message), // engine: 1 of 4 records — webpage-bright-hero
+  // The counts are per predictor, so a run with two baselines prints three sequences of 1 … 4.
+  // A printer that throws — a closed pipe — does not discard figures already measured.
 });
 ```
 
@@ -38,6 +40,18 @@ records it covers.
 **The web category is never folded away.** `webpage` is a category of its own at every level. Webpages are what
 this product is for, so a good average over desktop, mobile and poster records cannot hide a bad web result (#11,
 user story 8).
+
+**A declared kernel is checked against the map that came back.** A predictor states its normalisation up front —
+it is a property of its code, not of one answer — and `score()` compares that statement with every map it
+receives. A disagreement stops the run by name: KLD reads a map as a distribution and is not invariant to a
+rescaling, so a figure quoted with a kernel that misstates it would be wrong in a way no metric can see. More
+generally, a `ScoreError` from inside a sweep is the *run* being wrong and stops it; anything else is one record
+being wrong and lands in `failures`.
+
+**A margin is only taken between comparable figures.** Each side of a margin is re-averaged over the records
+**both** of them scored, and `records`, `predictorRecords` and `baselineRecords` travel with it; where the two
+share no record there is no margin at all, which is `null` rather than a difference between two means over
+different material.
 
 **A record that cannot be predicted is named.** `predict` raises rather than degrading on a failure (#68), so a
 record whose bytes will not decode, or whose prediction a metric refuses, lands in
@@ -138,18 +152,20 @@ A different seed moves what a seed decides: the random baseline's fixations, and
 
 | | |
 | --- | --- |
-| Full run: the engine and both baselines over the four committed records | **24 ms** (median of seven; 15 ms fastest, 159 ms on a process's first run, which pays `sharp`'s warm-up) |
-| One engine pass over the corpus, without the baselines | **20 ms** |
-| Machine | Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin 27) |
-| Asserted bound | `limitMs` 4 000 ms — about a hundred and sixty times the measurement |
+| Full run: the engine and both baselines over the four committed records | **41 ms** (median of fifteen on a loaded machine; 24 ms on a quiet one, 19 ms at the fastest, 282 ms on a process's first run, which pays `sharp`'s warm-up) |
+| One engine pass over the corpus, without the baselines | **34 ms** (18 ms at the fastest) |
+| Machine | Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin 27), with several other agent sessions running |
+| Asserted bound | `limitMs` 4 000 ms — about a hundred times the measurement |
 
-The bound is loose on purpose: the suite runs beside several others on a contended machine, and a tight figure
-would be a test about the machine. What it still catches is a change of a different order — an image decoded once
-per metric, or a predictor called once per human.
+The spread between 19 ms and 41 ms is machine load, not the code, which is why the bound is a hundred times the
+figure rather than twice it: the suite runs beside several others, and a tight figure would be a test about the
+machine. What it still catches is a change of a different order — an image decoded once per metric, or a predictor
+called once per human.
 
-**What this means for the fit.** A search of `n` candidates costs about `n × 20 ms` over this corpus, so two
-hundred candidates is about four seconds of scoring. Over the full downloaded dataset (1,980 screenshots) the same
-arithmetic puts one pass at about ten seconds, which is the figure #90 should plan its search against.
+**What this means for the fit.** A search of `n` candidates costs about `n × 34 ms` over this corpus, so two
+hundred candidates is about seven seconds of scoring. Over the full downloaded dataset (1,980 screenshots) the
+same arithmetic puts one pass in the tens of seconds, which is the order #90 should plan its search against —
+measured there rather than extrapolated, since a real screenshot is far larger than a 320 × 240 synthetic one.
 
 To repeat the measurement:
 

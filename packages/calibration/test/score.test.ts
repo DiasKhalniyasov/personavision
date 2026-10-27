@@ -196,6 +196,8 @@ describe('the figures against the baselines', () => {
     );
 
     expect(random?.overall?.records).toBe(4);
+    expect(random?.overall?.predictorRecords).toBe(4);
+    expect(random?.overall?.baselineRecords).toBe(4);
     expect(random?.overall?.saliency.cc).toBeGreaterThan(0);
     expect(random?.overall?.scanpath.scanMatch).toBeGreaterThan(0);
     /** And in the web category on its own, which is what this product is for. */
@@ -413,10 +415,26 @@ describe('a run a person can read, inside a budget', () => {
     expect(seen.map(({ predictorId }) => predictorId).slice(0, 4)).toEqual(
       Array.from({ length: 4 }, () => ENGINE_PREDICTOR_ID),
     );
-    expect(seen.slice(0, 4).map(({ predictionsDone }) => predictionsDone)).toEqual([1, 2, 3, 4]);
-    expect(seen[0]?.predictionsTotal).toBe(4);
+    expect(seen.slice(0, 4).map(({ recordsDone }) => recordsDone)).toEqual([1, 2, 3, 4]);
+    expect(seen[0]?.recordsTotal).toBe(4);
     expect(seen[0]?.message).toBe('engine: 1 of 4 records — webpage-bright-hero');
     expect(result.predictor.records).toHaveLength(4);
+  });
+
+  it('and a progress consumer that throws does not discard the figures', async () => {
+    const result = await score({
+      predictor: enginePredictor(),
+      corpus: committedCorpus(),
+      seed: SEED,
+      baselines: [],
+      onProgress: () => {
+        /** A printer whose pipe has closed: #91's CLI piped into `head`. */
+        throw new Error('EPIPE');
+      },
+    });
+
+    expect(result.predictor.overall?.records).toBe(4);
+    expect(result.predictor.failures).toEqual([]);
   });
 
   it('finishes a full run inside the documented budget', async () => {
@@ -546,6 +564,102 @@ describe('with no network and no API key', () => {
         expect(`${entry}: ${text}`, forbidden).not.toContain(forbidden);
       }
     }
+  });
+});
+
+describe('a margin is only taken between comparable figures', () => {
+  it('over the records both sides scored, and not at all where they share none', async () => {
+    const brittle: ScoredPredictor = {
+      ...enginePredictor(),
+      id: 'brittle',
+      predictor: (image, seed) => {
+        if (image.size.width === 320 && image.size.height === 240) {
+          throw new Error('this predictor cannot read a landscape image');
+        }
+        return enginePredictor().predictor(image, seed);
+      },
+    };
+
+    const result = await score({ predictor: brittle, corpus: committedCorpus(), seed: SEED });
+    const prior = result.margins.find(({ baselineId }) => baselineId === CENTRE_BIAS_PREDICTOR_ID);
+
+    /**
+     * The brittle predictor manages only the mobile record; both baselines manage all four.
+     * A difference between a mean over one record and a mean over four is not a margin, so
+     * the overall figure is taken over the one record they share and says so — and the three
+     * categories they share nothing in report no margin at all.
+     */
+    expect(prior?.overall?.records).toBe(1);
+    expect(prior?.overall?.predictorRecords).toBe(1);
+    expect(prior?.overall?.baselineRecords).toBe(4);
+    expect(prior?.categories.mobile?.records).toBe(1);
+    expect(prior?.categories.webpage).toBeNull();
+    expect(prior?.categories.poster).toBeNull();
+    /** And the shared-record margin is the per-record difference, not a four-record mean. */
+    const mobile = result.predictor.records[0];
+    const baselineMobile = result.baselines[0]?.records.find(
+      ({ recordId }) => recordId === mobile?.recordId,
+    );
+    expect(prior?.overall?.saliency.cc).toBeCloseTo(
+      (mobile?.saliency.cc ?? 0) - (baselineMobile?.saliency.cc ?? 0),
+      12,
+    );
+  });
+});
+
+describe('a predictor that misstates itself', () => {
+  it('stops the run rather than being reported once per record', async () => {
+    const engine = enginePredictor();
+    const liar: ScoredPredictor = {
+      ...engine,
+      provenance: {
+        ...engine.provenance,
+        /** The engine's maps are `sum-to-one`; this says otherwise. */
+        mapKernel: { ...engine.provenance.mapKernel, normalisation: 'peak-to-one' },
+      },
+    };
+
+    await expect(
+      score({ predictor: liar, corpus: committedCorpus(), seed: SEED, baselines: [] }),
+    ).rejects.toThrow(/says its maps are peak-to-one but returned a sum-to-one map/);
+  });
+
+  it('and two predictors cannot share one id, because a margin is found by it', async () => {
+    await expect(
+      score({
+        predictor: enginePredictor(),
+        corpus: committedCorpus(),
+        seed: SEED,
+        /** How #90 would score a candidate against the current engine, by accident. */
+        baselines: [enginePredictor()],
+      }),
+    ).rejects.toThrow(/share the id "engine"/);
+  });
+
+  it('and a baselines list that is not a list is refused', async () => {
+    await expect(
+      score({
+        predictor: enginePredictor(),
+        corpus: committedCorpus(),
+        seed: SEED,
+        baselines: {} as unknown as readonly ScoredPredictor[],
+      }),
+    ).rejects.toThrow(/not a list of predictors/);
+  });
+
+  it('and a kernel with no sigmaRelativeTo is refused, since a divergence is read from it', async () => {
+    const engine = enginePredictor();
+    const vague: ScoredPredictor = {
+      ...engine,
+      provenance: {
+        ...engine.provenance,
+        mapKernel: { ...engine.provenance.mapKernel, sigmaRelativeTo: '' as 'map-longer-side' },
+      },
+    };
+
+    await expect(
+      score({ predictor: vague, corpus: committedCorpus(), seed: SEED }),
+    ).rejects.toThrow(/has no sigmaRelativeTo/);
   });
 });
 

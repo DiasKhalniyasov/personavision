@@ -346,9 +346,17 @@ export interface PredictorFigures {
 
 /** A difference of figures: the predictor under test minus a baseline. */
 export interface MarginFigures {
-  /** How many records the predictor's side of the difference rests on. */
+  /**
+   * How many records the difference rests on — the records **both** sides scored.
+   *
+   * Normally every record of the scope, because both sides see the same corpus. When one
+   * side failed a record the other managed, the margin is taken over the records they share
+   * rather than between two means over different material, and this count says how many
+   * those were. `predictorRecords` and `baselineRecords` are what each side scored in the
+   * same scope, so a shortfall is visible rather than implied.
+   */
   readonly records: number;
-  /** And the baseline's, which is the same number unless one of them failed a record. */
+  readonly predictorRecords: number;
   readonly baselineRecords: number;
   /**
    * Predictor minus baseline, metric by metric. The direction a metric reads in is its own:
@@ -401,13 +409,26 @@ export interface ScoreProvenance {
   readonly mapKernelDivergences: readonly MapKernelDivergence[];
 }
 
-/** One step of a scoring run, for a reader watching it (#88: progress a person can read). */
+/**
+ * One step of a scoring run, for a reader watching it (#88: progress a person can read).
+ *
+ * The counts are **per predictor**: a run over four records with two baselines reports three
+ * sequences of 1 … 4, each naming the predictor it belongs to, because that is the unit a
+ * reader follows — the engine's pass, then each baseline's.
+ *
+ * A consumer that throws does not stop the run. A printer on a closed pipe is the likely
+ * one (#91's CLI passes a printer), and discarding figures already measured because the
+ * thing watching them went away would be the failure the per-record `failures` design
+ * exists to prevent.
+ */
 export interface ScoreProgress {
   readonly predictorId: string;
   readonly recordId: string;
-  readonly predictionsDone: number;
-  readonly predictionsTotal: number;
-  /** Ready to print: `engine: 2 of 12 — desktop-two-panels`. */
+  /** Records this predictor has been scored on, 1 … `recordsTotal`. */
+  readonly recordsDone: number;
+  /** Records in the corpus, which is this predictor's own total. */
+  readonly recordsTotal: number;
+  /** Ready to print: `engine: 2 of 4 records — desktop-two-panels`. */
   readonly message: string;
 }
 
@@ -447,18 +468,22 @@ export const SCORING_BUDGET = Object.freeze({
   records: 4,
   predictors: 3,
   /**
-   * Measured: 24 ms as the median of seven runs, 15 ms at the fastest and 159 ms on the
-   * first — the first run of a process pays for `sharp`'s warm-up. `docs/scoring.md` records
-   * the machine and the one command that repeats the measurement.
+   * A full run — the engine and both baselines over the four records — as the median of
+   * fifteen: **41 ms** on a loaded machine and 24 ms on a quiet one, with the *first* run of
+   * a process at 282 ms, because it pays for `sharp`'s warm-up. The spread is machine load
+   * (this was measured with several other agent sessions running), which is why the asserted
+   * bound below is a hundred times the figure and not twice it. `docs/scoring.md` records
+   * the one command that repeats the measurement.
    */
-  measuredMs: 24,
+  measuredMs: 41,
   /**
-   * One engine pass over the whole corpus, without the baselines: 20 ms. This is the unit a
-   * fit's cost is counted in — #90's search of `n` candidates is about `n` of these, so a
-   * two-hundred-candidate search over this corpus is about four seconds of scoring.
+   * One engine pass over the whole corpus, without the baselines: **34 ms** by the same
+   * method, 18 ms at the fastest. This is the unit a fit's cost is counted in — #90's search
+   * of `n` candidates is about `n` of these, so a two-hundred-candidate search over this
+   * corpus is about seven seconds of scoring.
    */
-  enginePassMs: 20,
-  machine: 'Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin 27)',
+  enginePassMs: 34,
+  machine: 'Apple M4 Pro, 14 cores, Node 22.20.0, macOS (Darwin 27), under parallel load',
   /**
    * The bound asserted by `test/score.test.ts`: about a hundred and sixty times the
    * measurement. Loose on purpose — the suite runs beside several others on a contended
@@ -532,10 +557,12 @@ const assertScoredPredictor = (candidate: ScoredPredictor, role: string): void =
   if (kernel.truncationSigmas !== 'whole-map' && !isFiniteNumber(kernel.truncationSigmas)) {
     throw new ScoreError(`predictor ${candidate.id}'s map kernel has no truncation`);
   }
-  if (typeof kernel.normalisation !== 'string' || typeof kernel.drawnFrom !== 'string') {
-    throw new ScoreError(
-      `predictor ${candidate.id}'s map kernel does not say how it was drawn or how it is normalised`,
-    );
+  for (const field of ['normalisation', 'drawnFrom', 'sigmaRelativeTo'] as const) {
+    if (typeof kernel[field] !== 'string' || kernel[field].length === 0) {
+      throw new ScoreError(
+        `predictor ${candidate.id}'s map kernel has no ${field}, and it is one of the fields a divergence is read from`,
+      );
+    }
   }
 };
 
@@ -597,20 +624,36 @@ const aggregateOf = (figures: readonly RecordFigures[]): Aggregate | null => {
 
 const byCategory = (figures: readonly RecordFigures[]): CategoryAggregates =>
   Object.fromEntries(
-    RECORD_CATEGORIES.map((category) => [
-      category,
-      aggregateOf(figures.filter((figure) => figure.category === category)),
-    ]),
+    RECORD_CATEGORIES.map((category) => [category, aggregateOf(ofCategory(figures, category))]),
   ) as CategoryAggregates;
 
+/**
+ * The predictor's margin over a baseline, taken over the records the two of them share.
+ *
+ * A difference between a mean over one set of records and a mean over another is not a
+ * margin, and the only reason the two sets can differ is that one side failed a record the
+ * other managed. So each side is re-averaged over the records both scored, and the count
+ * travels with the figure; with nothing in common there is no margin at all, which is
+ * `null` rather than a number nobody can read. #89 prints these, so an incomparable margin
+ * must not be able to reach a report as a plain figure.
+ */
 const marginOf = (
-  predictor: Aggregate | null,
-  baseline: Aggregate | null,
+  predictorFigures: readonly RecordFigures[],
+  baselineFigures: readonly RecordFigures[],
 ): MarginFigures | null => {
+  const scoredByBaseline = new Set(baselineFigures.map(({ recordId }) => recordId));
+  const scoredByPredictor = new Set(predictorFigures.map(({ recordId }) => recordId));
+  const predictor = aggregateOf(
+    predictorFigures.filter(({ recordId }) => scoredByBaseline.has(recordId)),
+  );
+  const baseline = aggregateOf(
+    baselineFigures.filter(({ recordId }) => scoredByPredictor.has(recordId)),
+  );
   if (predictor === null || baseline === null) return null;
   return {
     records: predictor.records,
-    baselineRecords: baseline.records,
+    predictorRecords: predictorFigures.length,
+    baselineRecords: baselineFigures.length,
     saliency: {
       cc: predictor.saliency.cc - baseline.saliency.cc,
       nss: predictor.saliency.nss - baseline.saliency.nss,
@@ -624,17 +667,22 @@ const marginOf = (
   };
 };
 
+const ofCategory = (
+  figures: readonly RecordFigures[],
+  category: RecordCategory,
+): readonly RecordFigures[] => figures.filter((figure) => figure.category === category);
+
 const marginsOver = (
   predictor: PredictorFigures,
   baselines: readonly PredictorFigures[],
 ): readonly Margin[] =>
   baselines.map((baseline) => ({
     baselineId: baseline.id,
-    overall: marginOf(predictor.overall, baseline.overall),
+    overall: marginOf(predictor.records, baseline.records),
     categories: Object.fromEntries(
       RECORD_CATEGORIES.map((category) => [
         category,
-        marginOf(predictor.categories[category], baseline.categories[category]),
+        marginOf(ofCategory(predictor.records, category), ofCategory(baseline.records, category)),
       ]),
     ) as Readonly<Record<RecordCategory, MarginFigures | null>>,
   }));
@@ -707,6 +755,19 @@ const scoreOnePredictor = async (
     const predictionStartedAt = performance.now();
     try {
       const prediction = await scored.predictor(imageOf(record), seed);
+      /**
+       * The provenance is checked against the prediction rather than taken on trust. A
+       * predictor declares its normalisation up front — it is a property of its code, not
+       * of one answer — and a declaration that disagrees with the map it returns would make
+       * every figure quoted with a kernel that misstates it, and `mapKernelDivergences`
+       * report no divergence where there is one. KLD reads a map as a distribution and is
+       * not invariant to a rescaling, so this is a figure-changing difference.
+       */
+      if (prediction.saliencyMap.normalisation !== scored.provenance.mapKernel.normalisation) {
+        throw new ScoreError(
+          `predictor ${scored.id} says its maps are ${scored.provenance.mapKernel.normalisation} but returned a ${prediction.saliencyMap.normalisation} map for record ${record.id}; a figure cannot be quoted with a kernel that misstates it`,
+        );
+      }
       const saliency = scoreSaliency(prediction.saliencyMap, record);
       const agreement = scoreScanpathAgainstHumans(prediction.scanpath, record);
       figures.push({
@@ -722,6 +783,12 @@ const scoreOnePredictor = async (
         elapsedMs: performance.now() - predictionStartedAt,
       });
     } catch (cause) {
+      /**
+       * A `ScoreError` is the run being wrong — a predictor that misstates its own
+       * provenance is wrong about every record — so it stops the run rather than being
+       * logged four times as a failed record.
+       */
+      if (cause instanceof ScoreError) throw cause;
       // One record that cannot be read, predicted or scored is a record with no figure,
       // not a sweep that stops: `predict` raises rather than degrading (#68), and a category
       // total that silently lost a record would be worse than one that says it did.
@@ -733,8 +800,8 @@ const scoreOnePredictor = async (
     }
     report({
       recordId: record.id,
-      predictionsDone: position + 1,
-      predictionsTotal: records.length,
+      recordsDone: position + 1,
+      recordsTotal: records.length,
     });
   }
 
@@ -772,26 +839,46 @@ export const score = async (options: ScoreOptions): Promise<ScoreResult> => {
     );
   }
   const baselines = options.baselines ?? defaultBaselines();
+  if (!Array.isArray(baselines)) {
+    throw new ScoreError('the baselines are not a list of predictors to score alongside');
+  }
   for (const baseline of baselines) assertScoredPredictor(baseline, `baseline ${baseline?.id}`);
+  /**
+   * Ids are how a figure, a margin and a kernel are found in the result, so two predictors
+   * sharing one would make a report ambiguous and silently drop a kernel from
+   * `mapKernels`. The realistic way in is #90 scoring a candidate engine against the
+   * current one: both are `enginePredictor()`, so one of them is given an id of its own.
+   */
+  const ids = [options.predictor.id, ...baselines.map(({ id }) => id)];
+  const repeated = ids.filter((id, position) => ids.indexOf(id) !== position);
+  if (repeated.length > 0) {
+    throw new ScoreError(
+      `two predictors of this run share the id ${JSON.stringify(repeated[0])}; a margin and a map kernel are found by id, so each one needs its own`,
+    );
+  }
 
   const records = options.corpus.records;
   const startedAt = performance.now();
   const onProgress = options.onProgress;
   const figuresFor = async (scored: ScoredPredictor): Promise<PredictorFigures> =>
-    scoreOnePredictor(
-      scored,
-      records,
-      options.seed,
-      ({ recordId, predictionsDone, predictionsTotal }) => {
-        onProgress?.({
+    scoreOnePredictor(scored, records, options.seed, ({ recordId, recordsDone, recordsTotal }) => {
+      if (onProgress === undefined) return;
+      try {
+        onProgress({
           predictorId: scored.id,
           recordId,
-          predictionsDone,
-          predictionsTotal,
-          message: `${scored.id}: ${String(predictionsDone)} of ${String(predictionsTotal)} records — ${recordId}`,
+          recordsDone,
+          recordsTotal,
+          message: `${scored.id}: ${String(recordsDone)} of ${String(recordsTotal)} records — ${recordId}`,
         });
-      },
-    );
+      } catch {
+        /**
+         * Progress is a side channel for a reader. A printer whose pipe has closed — #91's
+         * CLI piped into `head` — must not discard figures that have already been measured,
+         * and the caller's own exception is the caller's to see on its own side.
+         */
+      }
+    });
 
   const predictor = await figuresFor(options.predictor);
   const baselineFigures: PredictorFigures[] = [];
