@@ -1,0 +1,191 @@
+/* =============================================================================
+   The one piece of evidence on the Verdict screen: the `.mat` block of
+   `#screen-verdict` in `docs/design/prototype.html` — the `.mat`, its
+   `.mat-head`, `#vd-frame` with `#vd-page`, the overlay layers, the `.fold` and
+   the `.evidence-cap`.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies: the mat is `--color-surface-sunken` with
+   `--frame-mat-pad`, the scrim is `--screenshot-scrim`, and the outline of the
+   area nobody looked at is `--sev-critical`. The heat's own colours are the
+   `--heat-*` ramp and belong to #71's layer, which brings its stylesheet with it.
+
+   No animation of its own: `docs/FLOW.md` section 10 allows this screen the base
+   transition and nothing else, and the one animated moment this block has — the
+   heatmap warming up as the evidence appears — is #125's, mounted from outside.
+   What is written here is the settled end state, which is also what a
+   reduced-motion reader sees.
+
+   One stated refinement of the prototype, for the same reason #58 states two.
+   The prototype's `.frame` is a 16:10 window over a page it *draws* to fit; here
+   the content is a real full-page capture, often four times taller than it is
+   wide. On the Attention screen that frame became a scroll window. This screen
+   has no scroll and no zoom — it is one product shot, read in a glance — so the
+   frame takes **the capture's own aspect ratio** and shows the whole page,
+   scaled. A 16:10 crop would cut away exactly the part the caption is about: the
+   thing below the fold that nobody looked at. The frame's border, radius,
+   shadow, mat, scrim and fold label are the prototype's own.
+   ========================================================================== */
+
+/* ---- The mat: a screenshot is never flush against the layout ------------ */
+
+.mat {
+  padding: var(--frame-mat-pad);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-sunken);
+  /* A `figure`'s own margin would be a value this file does not own. */
+  margin: var(--space-0);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-bottom: var(--frame-mat-pad);
+  gap: var(--space-3);
+}
+
+/* The prototype's `.mat-head h3` type role, on the `h2` the document's heading
+   order asks for: the block sits between the screen's `h1` and the findings'
+   `h2`, so an `h3` here would be a skipped level. */
+.head h2 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- The frame, and the page inside it ---------------------------------- */
+
+/* The box is reserved from the artifact's own figures — its aspect ratio and the
+   width it was captured at are inline, computed from the capture — so the mat
+   holds its height before the screenshot decodes and nothing below it moves when
+   it arrives. A capture narrower than the mat is centred rather than blown up
+   past the size the audience saw it at. */
+.frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  margin-inline: auto;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Dimmed so the heat reads on top of the page — and only while something is
+   actually drawn over it, as the prototype dims `#vd-frame` only when there is
+   gaze to read. */
+.frame[data-dim] .page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--screenshot-scrim);
+}
+
+/* ---- The overlay layers ------------------------------------------------- */
+
+/* The prototype's `.layer`. #71's heatmap arrives with this rule already applied
+   from the stage's own module; a CSS module is scoped to its file, so the one
+   layer this block draws itself — the outline below — needs the rule here. */
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.layer svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: 100%;
+}
+
+/* The area nobody looked at. The prototype's `.aoibox.empty`: the critical
+   colour, solid rather than dashed, and nothing inside it — an outline with
+   nothing in it says the absence better than a sentence does. The hairline stays
+   device-sized at every frame width, which is what `non-scaling-stroke` is for. */
+.neverLooked {
+  fill: none;
+  stroke: var(--sev-critical);
+  stroke-width: var(--border-width-strong);
+}
+
+/* The area the verdict turns on that the audience did reach. The prototype's
+   `.aoibox.active`, in the teal the product uses for data rather than for an
+   action: it says *this is the box the verdict is about*, and makes no claim
+   about what anybody did inside it. The critical colour above is the only
+   outline on this screen that makes one. */
+.heroArea {
+  fill: none;
+  stroke: var(--gaze-aoi-active);
+  stroke-width: var(--border-width-strong);
+}
+
+/* ---- The fold ---------------------------------------------------------- */
+
+.fold {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  border-top: var(--border-width) dashed var(--color-border-strong);
+  pointer-events: none;
+}
+
+.fold span {
+  position: absolute;
+  right: var(--space-2);
+  padding-inline: var(--space-1);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* ---- What the frame says when it cannot say it in pixels ---------------- */
+
+/* Over the page rather than instead of it: the page the audience saw is still
+   true, and a frame holding a sentence is never the empty frame this block must
+   not render. Above the layers, because heat is area rather than a hairline and
+   the sentence has to stay readable through it. */
+.note {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* Said in place of the frame, where there is no page to put a sentence over at
+   all: the run names no moment for its verdict to turn on, holds no capture of
+   the one it names, or holds a capture of a page with no size. */
+.stated {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- The caption ------------------------------------------------------- */
+
+.cap {
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--frame-mat-pad);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
