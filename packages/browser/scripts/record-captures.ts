@@ -11,6 +11,14 @@
  * same elements from the DOM and the accessibility tree, the same stable ids, the same
  * image — and not a hand-written approximation of one.
  *
+ * Not through `walkTask`, which arrived with #53 and would do the loop for it. A recorder
+ * writes committed test material, so its loop is explicit and checked: one capture per step
+ * the task declares, in that order, and the step the page reports has to be the step
+ * expected at that point of the walk — a recorder that wrote whatever it found would quietly
+ * commit a set in which the payment page is recorded as the cart. `walkTask` cannot promise
+ * that: it captures up to eight screens per step and lets a caller's `decide` act on one
+ * screen more than once, which is right for a session and wrong for a recording.
+ *
  * **The run directory it captures into is a temporary one**, and the images it wrote there
  * are copied into the capture set. So a recorded `screenshot` field is still the path
  * `run.json` records and the bytes are still the ones `writeScreenshot` produced — while

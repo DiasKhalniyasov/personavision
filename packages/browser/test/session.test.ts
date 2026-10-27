@@ -327,7 +327,6 @@ describe('the seams that need no browser', () => {
   it('builds a fixture source over a directory without reading it', () => {
     expect(() => createFixtureSource('runs/x')).not.toThrow();
   });
-  });
 });
 
 describe('stable element ids', () => {

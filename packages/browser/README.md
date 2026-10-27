@@ -149,11 +149,10 @@ A seam that has not landed yet **exists, is exported and is typed**, and returns
 pass-through result instead of pretending to work — so a partly filled module still builds,
 tests and captures.
 
-| Seam                  | Until its ticket lands |
-| --------------------- | ---------------------- |
-| `createFixtureSource` | throws                 |
+**None are left.** `createFixtureSource` was the last one and #52 filled it, so every seam
+in the table above does its job. What follows is what it does.
 
-A capture with only these in place is real geometry, a real content hash, a real step label,
+A capture is real geometry, a real content hash, a real step label,
 a written screenshot and the page's elements, one of them marked as the step's primary
 action. A screen the task does not declare still has a `null` step and a `null` screenshot,
 because an unrecognised screen has no name to write an image under. It raises one thing: a
