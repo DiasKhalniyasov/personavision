@@ -7,8 +7,8 @@ import type { Run, Session } from '@personavision/contract';
 import { reachCounts } from './reachCounts';
 
 /**
- * The filmstrip's counts over the repository's own committed example run: 24 session files
- * on disk, two versions, one session per version lost to our own automation.
+ * The filmstrip's counts over the repository's own example-run fixture: 24 session files on
+ * disk, two versions, one session per version lost to our own automation.
  *
  * These are the numbers a designer reads above the heatmaps, so what they are worth is
  * whether they come from the right population — this version, scored only — and whether a
@@ -16,7 +16,16 @@ import { reachCounts } from './reachCounts';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../../runs');
+/**
+ * The hand-authored example run under `tests/fixtures/runs/`, not the committed artifact
+ * under `runs/`: same id, same schema, and numbers fixed by hand rather than whatever the
+ * engine measured over the demo shop on the day (#78). The counts below are a claim about
+ * this screen, so they need data that does not move when the shop or the engine does.
+ */
+const runsRoot = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../../tests/fixtures/runs',
+);
 const layout = runPaths('');
 
 const read = (file: string): unknown =>
