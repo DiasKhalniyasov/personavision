@@ -1,0 +1,93 @@
+/* =============================================================================
+   `/demo` — the committed example run's Verdict, public and read-only.
+
+   Almost nothing is styled here, and that is the point: the page is
+   `#screen-verdict` of `docs/design/prototype.html`, built from the Verdict
+   screen's own sections, so its layout is `src/screens/verdict/verdict.css` and
+   the shared primitives of `src/styles/` (`.appbar`, `.logo`, `.grow`, `.strip`,
+   `.strip-sm`, `.strip-tint`, `.wrap`, `.empty`, `.actions`, `.mono`). What this
+   file carries is the two replacements the screen contract names — the block
+   that stands where the four doors stand, and the shapes the sections reserve
+   while the run is being read — and nothing else.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which
+   the app imports and never copies. No colour, size, spacing step, radius or
+   duration is restated here, and nothing on this page animates: the moments the
+   visual direction gives it are #125's, inside the sections above.
+   ========================================================================== */
+
+/* ---- Where the four doors stand on the signed-in screen -----------------
+   One line and one action, in the place `.doors` occupies, with the same space
+   above it: a reader who knows the product finds the way on where the doors
+   were. */
+
+.behind {
+  display: grid;
+  justify-items: start;
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-10);
+  gap: var(--space-4);
+}
+
+.behindLine {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  /* The action is a full-width row at phone width rather than a button whose
+     label wraps mid-word. */
+  .behind > :last-child {
+    justify-self: stretch;
+  }
+}
+
+/* ---- While the run is being read ---------------------------------------
+   Each block is the height of the section it stands in for, taken from the same
+   tokens that set that section's type, so the page is the same height before and
+   after the read and nothing moves when the artifact arrives. */
+
+.waitingAudience {
+  block-size: var(--text-md);
+  max-width: var(--layout-max-narrow);
+  margin-bottom: var(--space-6);
+}
+
+/* The headline sentence and the task line under it: the display size the
+   Verdict screen's `h1` is set at, plus its subtitle. */
+.waitingHeadline {
+  block-size: calc(var(--text-display) + var(--text-md));
+  max-width: var(--layout-max-narrow);
+}
+
+.waitingFigures {
+  display: flex;
+  margin-top: var(--space-8);
+  gap: var(--space-12);
+}
+
+/* A figure is the number, the version's name and its population: three lines,
+   so the row the figures arrive into is already their own height. */
+.waitingFigure {
+  flex: 1 1 0;
+  block-size: calc(var(--text-figure) + var(--text-md) + var(--text-sm));
+}
+
+/* The mat the heatmap arrives on, carrying the values `docs/FLOW.md` section 10
+   gives a screenshot frame: a page screenshot is never flush against the
+   layout. */
+.waitingMat {
+  padding: var(--frame-mat-pad);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-sunken);
+}
+
+.waitingShot {
+  aspect-ratio: var(--frame-ratio-desktop);
+  border-radius: var(--radius-lg);
+}
+
+/* The findings section: its heading, its lede and three findings. */
+.waitingFindings {
+  block-size: calc(var(--text-xl) + var(--text-md) + (3 * var(--text-figure)));
+}

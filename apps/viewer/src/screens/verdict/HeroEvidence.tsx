@@ -211,7 +211,9 @@ export function HeroEvidence({ run }: { run: Run }) {
   const variant = hero?.variant ?? '';
   const step = hero?.step ?? '';
 
-  const sessions = useAttentionStepSessions(variant, step);
+  // The run is handed down rather than read from the route, because this block is mounted
+  // on the two public pages as well (#123, #124) and their routes name no test.
+  const sessions = useAttentionStepSessions(variant, step, run);
   const areas = useMemo(() => attentionAreas(run, variant, step).areas, [run, variant, step]);
   const stage = useAttentionStage({
     run,

@@ -2,7 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from './setup';
-import { forgetRuns, mountApp, serveRunData } from './app';
+import { forgetRuns, mountApp, readRunFile, serveRunData } from './app';
 import { NEXT_PARAM, paths, patterns } from '../src/shell/paths';
 import type { SessionState } from '../src/shell/useSession';
 
@@ -14,6 +14,11 @@ import type { SessionState } from '../src/shell/useSession';
  */
 
 const SIGNED_OUT = { status: 'signed-out' } as const;
+
+/** One run's own headline sentence, which is the heading of both `/` and `/demo`. */
+const sentenceOf = (runId: string): string =>
+  (readRunFile(runId) as unknown as { verdict: { audienceSentence: string } }).verdict
+    .audienceSentence;
 
 beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
@@ -67,10 +72,14 @@ describe('a signed-out visitor', () => {
   });
 
   it('reads /demo with no session at all', async () => {
-    await serveRunData();
+    const { runIds } = await serveRunData();
     const { router } = mountApp(paths.demo, { session: SIGNED_OUT });
 
-    expect(await screen.findByRole('heading', { name: 'Demo' })).toBeTruthy();
+    // The demo is the committed example run's Verdict, so its heading is that run's own
+    // sentence (#124). `DemoPage.test.tsx` is where the page itself is asserted.
+    expect(
+      await screen.findByRole('heading', { name: sentenceOf(runIds[0] as string) }),
+    ).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.demo);
     // No signed-in chrome on a public page: there is no workspace to name.
     expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
@@ -136,7 +145,8 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
     // reader is redirected away from `/signin`, so that route is checked signed out.
     const expected: [string, string | RegExp, SessionState?][] = [
       [paths.signIn, 'Sign in', { status: 'signed-out' }],
-      [paths.demo, 'Demo'],
+      // The demo is the example run's Verdict, so its heading is that run's sentence.
+      [paths.demo, sentenceOf(runId)],
       // The audience screens are named for what they ask, not for the route (#109).
       [paths.audiences, 'Who does your business serve?'],
       [paths.newAudience, 'Describe your audience'],
