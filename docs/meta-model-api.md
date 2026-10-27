@@ -5,6 +5,10 @@ of a response, the exact path of every usage figure, what caching really does, a
 `packages/provider/src/` (#43) is built against this document, and the trajectory log (#139) stores the request and
 response bodies described here verbatim.
 
+**Scope: the text models the decision loop calls.** SAM 3.1 segmentation is a different endpoint on the same
+credential and is written down by the ticket that built it, in `packages/engine/docs/sam-segmenter.md`. Muse Wonder and
+Muse Image are not called by anything in this project, and are documented when a ticket needs them.
+
 Everything below was either read on the vendor's documentation or **observed live**. The two are labelled separately
 throughout, because they disagree in three places and the observed answer is the one the code has to be written
 against. The live calls were made on **2026-10-27** from the owner's machine (#133).
