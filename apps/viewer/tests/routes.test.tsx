@@ -32,7 +32,9 @@ describe('/ — the answer, with no clicks', () => {
     await serveRunData();
     const { router } = mountApp(paths.home, { session: SIGNED_OUT });
 
-    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('PersonaVision');
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      'Know which version your customers can actually use',
+    );
     expect(router.state.location.pathname).toBe(paths.home);
   });
 
