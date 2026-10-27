@@ -13,6 +13,7 @@
  */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
+import type { ActOptions } from './act.js';
 
 /** A variant under test: its id in the run artifact, and the URL a session opens. */
 export interface Variant {
@@ -173,6 +174,18 @@ export interface PageHandle {
 export interface CaptureSource {
   openSession(variant: Variant, device: Device): Promise<PageHandle>;
   capture(page: PageHandle, ctx: CaptureContext): Promise<Capture>;
-  act(page: PageHandle, action: Action, ctx: CaptureContext): Promise<ActResult>;
+  /**
+   * `options` is the fourth parameter `act.ts` left to the ticket that fills the walk: it
+   * carries the capture an `elementId` was chosen against, so that an action lands on the
+   * element a decision layer chose rather than on whatever carries that id once the page has
+   * been read again. It is optional, so an implementation written against the three
+   * parameters above still satisfies this.
+   */
+  act(
+    page: PageHandle,
+    action: Action,
+    ctx: CaptureContext,
+    options?: ActOptions,
+  ): Promise<ActResult>;
   close(page: PageHandle): Promise<void>;
 }
