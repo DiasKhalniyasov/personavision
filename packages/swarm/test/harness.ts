@@ -321,8 +321,21 @@ export const writeOpenRun = async (
     seedGroups: number[];
     /** Offline unless a test is about what a model run cost. */
     engine?: Run['engine'];
+    /**
+     * The task and its steps, when the run is over a task other than this harness's — the
+     * behaviour suite's fixtures declare their own (`fixtures.ts`), and a run's `steps` have
+     * to be the steps its sessions report or the directory does not validate.
+     */
+    task?: Run['task'];
+    steps?: Run['steps'];
+    /** The device the run's people are on, which is the one its capture set was recorded at. */
+    device?: Device;
+    /** The audience the run's people were generated from, when it is not this harness's. */
+    audienceId?: string;
   },
 ): Promise<Run> => {
+  const steps = plan.steps ?? STEPS;
+  const device = plan.device ?? MOBILE;
   const total = plan.personas.length * plan.seedGroups.length;
   const run: Run = {
     schemaVersion: SCHEMA_VERSION,
@@ -341,11 +354,15 @@ export const writeOpenRun = async (
       sessions: [],
     },
     usage: { ...ZERO_USAGE },
-    task: { id: TASK.id, prompt: TASK.prompt },
+    task: plan.task ?? { id: TASK.id, prompt: TASK.prompt },
     variants: [...plan.variants],
-    steps: STEPS,
+    steps: [...steps],
     stepCaptions: [],
-    audience: audienceOf(plan.personas.length),
+    audience: {
+      ...audienceOf(plan.personas.length),
+      ...(plan.audienceId === undefined ? {} : { id: plan.audienceId }),
+      devices: [{ ...device, share: 1 }],
+    },
     personas: [...plan.personas],
     seedGroups: plan.seedGroups,
     engine: plan.engine ?? {
@@ -359,11 +376,11 @@ export const writeOpenRun = async (
     screenshots: [
       {
         variant: plan.variants[0]?.id ?? 'A',
-        step: STEPS[0]?.id ?? 'cart',
-        path: runPaths('').screenshot(plan.variants[0]?.id ?? 'A', STEPS[0]?.id ?? 'cart'),
-        viewport: MOBILE.viewport,
+        step: steps[0]?.id ?? 'cart',
+        path: runPaths('').screenshot(plan.variants[0]?.id ?? 'A', steps[0]?.id ?? 'cart'),
+        viewport: device.viewport,
         pageHeight: 1400,
-        foldY: MOBILE.viewport.height,
+        foldY: device.viewport.height,
       },
     ],
     aois: [],
@@ -381,7 +398,7 @@ export const writeOpenRun = async (
       headlineFindingIds: [],
       heroEvidence: {
         variant: plan.variants[0]?.id ?? 'A',
-        step: STEPS[0]?.id ?? 'cart',
+        step: steps[0]?.id ?? 'cart',
         aoiId: null,
       },
     },

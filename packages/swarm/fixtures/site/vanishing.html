@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checkout - behaviour fixture</title>
+    <link rel="stylesheet" href="behaviour.css" />
+  </head>
+  <body class="page-vanishing">
+    <h1 id="vanishing-heading" style="left: 16px; top: 24px; width: 358px; height: 40px">
+      Checkout
+    </h1>
+    <p id="vanishing-step-note" style="left: 16px; top: 72px; width: 358px; height: 56px">
+      Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven
+      with no network at all.
+    </p>
+    <a
+      id="order-submit"
+      class="control-loud"
+      href="done.html"
+      style="left: 16px; top: 140px; width: 358px; height: 48px"
+      >Place the order</a
+    >
+    <section
+      id="order-panel"
+      aria-label="Items"
+      style="left: 16px; top: 212px; width: 358px; height: 120px"
+    >
+      <span id="vanishing-line-one" style="left: 12px; top: 12px; width: 240px; height: 20px"
+        >One item, in natural</span
+      >
+      <button
+        id="vanishing-remove-one"
+        type="button"
+        style="left: 12px; top: 40px; width: 120px; height: 32px"
+      >
+        Remove
+      </button>
+    </section>
+    <p id="vanishing-note" style="left: 16px; top: 356px; width: 358px; height: 96px">
+      The control above takes itself out of the document the moment a pointer goes down on it, which
+      is what a remount under an agent's hands looks like: the element the agent looked at is gone
+      by the time the click lands, and the selector never resolves.
+    </p>
+    <div
+      id="vanishing-banner"
+      class="region-banner"
+      style="left: 16px; top: 476px; width: 358px; height: 72px"
+    ></div>
+    <p id="vanishing-footnote" style="left: 16px; top: 572px; width: 358px; height: 40px">
+      Fixture site. Every id on this page is recorded in the README beside it.
+    </p>
+    <script>
+      // The defect this page is: the control unmounts under the pointer, so the click that
+      // follows has nothing to land on. A capture taken before any interaction records it,
+      // which is exactly what a session sees before it acts.
+      document.getElementById('order-submit').addEventListener('pointerdown', (event) => {
+        event.currentTarget.remove();
+      });
+    </script>
+  </body>
+</html>

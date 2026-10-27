@@ -1,0 +1,67 @@
+{
+  "formatVersion": 1,
+  "variants": [
+    {
+      "id": "tedious",
+      "device": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 1,
+        "touch": true
+      },
+      "steps": [
+        {
+          "step": "list",
+          "path": "/tedious.html"
+        },
+        {
+          "step": "done",
+          "path": "/done.html"
+        }
+      ]
+    },
+    {
+      "id": "mislabelled",
+      "device": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 1,
+        "touch": true
+      },
+      "steps": [
+        {
+          "step": "list",
+          "path": "/mislabelled.html"
+        },
+        {
+          "step": "done",
+          "path": "/done.html"
+        }
+      ]
+    },
+    {
+      "id": "vanishing",
+      "device": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 1,
+        "touch": true
+      },
+      "steps": [
+        {
+          "step": "list",
+          "path": "/vanishing.html"
+        }
+      ]
+    }
+  ]
+}

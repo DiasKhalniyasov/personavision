@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "record:fixtures": "tsc -p tsconfig.record.json && node dist/record/test/record-fixtures.js"
   },
   "dependencies": {
     "@personavision/browser": "workspace:*",

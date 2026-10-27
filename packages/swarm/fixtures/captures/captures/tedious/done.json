@@ -1,0 +1,238 @@
+{
+  "variant": "tedious",
+  "step": "done",
+  "screenshot": "screenshots/tedious/done.png",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageHeight": 1000,
+  "foldY": 844,
+  "elements": [
+    {
+      "id": "e-a1bf1f30b5ae",
+      "source": "dom",
+      "role": "heading",
+      "name": "Order placed",
+      "text": "Order placed",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-heading"
+    },
+    {
+      "id": "e-a10a8fc12eef",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 88,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-receipt"
+    },
+    {
+      "id": "e-201951742846",
+      "source": "dom",
+      "role": "generic",
+      "name": "Reference FX-1042",
+      "text": "Reference FX-1042",
+      "bbox": {
+        "x": 28,
+        "y": 100,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-reference"
+    },
+    {
+      "id": "e-06dd5d6f64aa",
+      "source": "dom",
+      "role": "generic",
+      "name": "Total 38.00",
+      "text": "Total 38.00",
+      "bbox": {
+        "x": 28,
+        "y": 136,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-total"
+    },
+    {
+      "id": "e-5d2c5fa8d022",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "This is the last step of the fixture task. Nothing was bought and nobody was charged.",
+      "text": "This is the last step of the fixture task. Nothing was bought and nobody was charged.",
+      "bbox": {
+        "x": 16,
+        "y": 272,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-note"
+    },
+    {
+      "id": "e-57f47785f22f",
+      "source": "dom",
+      "role": "link",
+      "name": "Back to the start",
+      "text": "Back to the start",
+      "bbox": {
+        "x": 16,
+        "y": 368,
+        "width": 180,
+        "height": 28
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#done-home"
+    },
+    {
+      "id": "e-7e862758805d",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 428,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-banner"
+    },
+    {
+      "id": "e-9572ed0f83dd",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Order placed",
+      "text": "Order placed",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-heading"
+    },
+    {
+      "id": "e-164b12f1b75a",
+      "source": "a11y",
+      "role": "region",
+      "name": "Receipt",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 88,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-receipt"
+    },
+    {
+      "id": "e-5c3ce440f95f",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "This is the last step of the fixture task. Nothing was bought and nobody was charged.",
+      "bbox": {
+        "x": 16,
+        "y": 272,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-note"
+    },
+    {
+      "id": "e-d98a88068f7a",
+      "source": "a11y",
+      "role": "link",
+      "name": "Back to the start",
+      "text": "Back to the start",
+      "bbox": {
+        "x": 16,
+        "y": 368,
+        "width": 180,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-home"
+    },
+    {
+      "id": "e-aac6df6cf018",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 428,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-banner"
+    },
+    {
+      "id": "e-41fb59caa080",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Reference FX-1042",
+      "bbox": {
+        "x": 28,
+        "y": 100,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-reference"
+    },
+    {
+      "id": "e-0382acc2c57a",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Total 38.00",
+      "bbox": {
+        "x": 28,
+        "y": 136,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#done-total"
+    }
+  ],
+  "contentHash": "0e5f59628e4ba3e1"
+}
