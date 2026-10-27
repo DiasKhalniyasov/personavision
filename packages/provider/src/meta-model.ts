@@ -19,6 +19,7 @@ import type {
   DecisionContext,
   DecisionProvider,
   DecisionSessionIdentity,
+  DecisionSessionScope,
   DecisionUsage,
 } from './types.js';
 
@@ -116,11 +117,16 @@ export type TrajectoryRecord =
     });
 
 /**
- * Where the trajectory goes. Injected, because the file, its format and its replay belong to
- * #139; what this provider owes them is every request and every response, in order,
- * including on a failure path, with the redaction already done.
+ * A sink in this protocol's own terms: it is handed a {@link TrajectoryRecord} and nothing
+ * else, so a caller can read `body.input` off what it was given without narrowing.
+ *
+ * The interface's `TrajectorySink` is the wider one — it takes any provider's record — and
+ * one of those satisfies this, which is how the file the run opens per session arrives here
+ * through `beginSession`'s scope (#139). What this provider owes either of them is every
+ * request and every response, in order, including on a failure path, with the redaction
+ * already done.
  */
-export type TrajectorySink = (record: TrajectoryRecord) => void | Promise<void>;
+export type MetaTrajectorySink = (record: TrajectoryRecord) => void | Promise<void>;
 
 /** Every way a model call can fail us. Each one is the simulation's fault, never the product's. */
 export const MODEL_FAILURE_KINDS = [
@@ -240,7 +246,7 @@ export interface MetaModelApiProviderOptions {
   /** How the request is sent. Defaults to `fetch`. */
   readonly transport?: ModelTransport;
   /** Where every request and response is recorded (#139). Absent records nothing. */
-  readonly trajectory?: TrajectorySink;
+  readonly trajectory?: MetaTrajectorySink;
   readonly timeoutMs?: number;
 }
 
@@ -251,6 +257,11 @@ export interface MetaModelApiProviderOptions {
  */
 interface Conversation {
   readonly promptCacheKey: string;
+  /**
+   * This session's trajectory, as `beginSession`'s scope lent it — one file per session, so
+   * the sink cannot be a field of the provider that every session would share (#139).
+   */
+  readonly trajectory?: MetaTrajectorySink;
   prefix?: readonly ResponsesMessage[];
   readonly turns: ResponsesMessage[];
   calls: number;
@@ -311,7 +322,7 @@ export const createMetaModelApiProvider = (
      */
     const record = async (entry: TrajectoryRecord): Promise<void> => {
       try {
-        await options.trajectory?.(entry);
+        await conversation.trajectory?.(entry);
       } catch (thrown) {
         throw error('trajectory', redact(messageOf(thrown), apiKey));
       }
@@ -463,17 +474,22 @@ export const createMetaModelApiProvider = (
     decide: (context) => {
       const conversation: Conversation = {
         promptCacheKey: anonymousCacheKey(buildPrefix(context)),
+        ...(options.trajectory === undefined ? {} : { trajectory: options.trajectory }),
         turns: [],
         calls: 0,
         queue: Promise.resolve(),
       };
       return decideOn({ personaId: 'anonymous', seed: 0 }, conversation, context);
     },
-    beginSession: (identity) => {
-      // One conversation and one cache key per handle, so two sessions share neither — and
-      // the provider's own mode is inherited rather than passed in per session.
+    beginSession: (identity, scope?: DecisionSessionScope) => {
+      // One conversation, one cache key and one trajectory per handle, so two sessions share
+      // none of the three — and the provider's own mode is inherited rather than passed in
+      // per session. The run's sink wins over the provider's, because only the run knows
+      // which session id this handle is writing as.
+      const trajectory = scope?.trajectory ?? options.trajectory;
       const conversation: Conversation = {
         promptCacheKey: promptCacheKey(identity),
+        ...(trajectory === undefined ? {} : { trajectory }),
         turns: [],
         calls: 0,
         queue: Promise.resolve(),

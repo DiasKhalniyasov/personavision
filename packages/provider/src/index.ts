@@ -7,7 +7,11 @@
  * new provider inherits. The suite is a separate entry point,
  * `@personavision/provider/testing`, so that nothing in a run imports a test framework.
  *
- * `docs/FLOW.md` sections 1 and 8; step #8; tickets #33 and #138.
+ * The trajectory file is here too: the append-only `trajectories/S-NN.jsonl` one session
+ * writes, the replay that re-runs that session from it with no key and no network, and the
+ * audit that reads its tokens and its cost back out (#139).
+ *
+ * `docs/FLOW.md` sections 1 and 8; step #8; tickets #33, #138 and #139.
  */
 
 export { DECISION_ACTION_KINDS } from './types.js';
@@ -21,6 +25,7 @@ export type {
   DecisionScreenshot,
   DecisionSession,
   DecisionSessionIdentity,
+  DecisionSessionScope,
   DecisionStep,
   DecisionUsage,
   FixatedElement,
@@ -29,6 +34,8 @@ export type {
   PersonaTraits,
   ProviderMode,
   RelevanceHints,
+  TrajectoryEntry,
+  TrajectorySink,
 } from './types.js';
 
 export { FREE_USAGE, totalUsage, validateDecision } from './decision.js';
@@ -62,14 +69,34 @@ export {
 } from './meta-model.js';
 export type {
   MetaModelApiProviderOptions,
+  MetaTrajectorySink,
   ModelFailureKind,
   ModelHttpRequest,
   ModelHttpResponse,
   ModelTransport,
   TrajectoryCall,
   TrajectoryRecord,
-  TrajectorySink,
 } from './meta-model.js';
+
+export {
+  auditRunTrajectories,
+  auditTrajectory,
+  createTrajectoryReplayProvider,
+  openTrajectoryFile,
+  readTrajectory,
+  REPLAY_API_KEY,
+  replayTrajectory,
+  sessionIdFromTrajectoryFileName,
+  TrajectoryMismatchError,
+  trajectoryPath,
+  TrajectoryReadError,
+} from './trajectory.js';
+export type {
+  TrajectoryAudit,
+  TrajectoryFile,
+  TrajectoryLine,
+  TrajectoryTurn,
+} from './trajectory.js';
 
 export {
   estimateCostUsd,

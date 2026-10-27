@@ -14,6 +14,10 @@
  *    what the agent has looked at; and
  * 4. **executes the one action it decided** through the driver, recording whether it worked.
  *
+ * **Every model call of the session is written down as it happens.** The decision layer is
+ * handed an append-only `trajectories/S-NN.jsonl` under the run directory for the length of
+ * the session, so a run is auditable and replayable from its own files (#139).
+ *
  * **One decision per screen, not one per fixation.** A session therefore costs a handful of
  * model calls rather than hundreds, which is the whole reason the loop is shaped this way
  * (step #8). A screen looked at twice — scroll, then click — is two screens of the session
@@ -40,7 +44,7 @@
 import { SessionBudget, taskStep, toAutomationFailure } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeSession } from '@personavision/contract';
 import { buildAois, noSegmenter, sampleFixations } from '@personavision/engine';
-import { validateDecision } from '@personavision/provider';
+import { openTrajectoryFile, validateDecision } from '@personavision/provider';
 import { decideOutcome } from './outcome.js';
 import type {
   ActResult,
@@ -397,7 +401,15 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   /** Targets the driver reported it could not resolve, which it answers with rather than throws. */
   let reportedSelectorFailures = 0;
 
-  const decider = provider.beginSession({ personaId: persona.id, seed });
+  // The session's trajectory: opened here because the file is named from the session id,
+  // which belongs to the run and not to the provider, and closed in the `finally` below once
+  // the handle has let go of its last turn. Nothing is created until a record arrives, so a
+  // session on the offline provider — which makes no model call — leaves no file at all (#139).
+  const trajectory = openTrajectoryFile({ runDir: input.runDir, sessionId: input.sessionId });
+  const decider = provider.beginSession(
+    { personaId: persona.id, seed },
+    { trajectory: trajectory.sink },
+  );
   const stepNow = (): string => screens.at(-1)?.step ?? NO_SCREEN_STEP;
 
   /** One action of the agent's, in the contract's closed vocabulary. */
@@ -596,6 +608,11 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     }
   } finally {
     await decider.close().catch(() => undefined);
+    // After the handle, never before it: `close` waits for a turn still in flight, so the
+    // trajectory is shut once its last line has been written rather than under it. It is
+    // write-through, so this flushes what is already on its way and nothing more — a line
+    // that could not be written came back to the provider as a typed failure at the time.
+    await trajectory.close();
     // A browser that will not close is a leaked process, not a session that did not happen:
     // the session has its answer, and throwing here would throw that answer away.
     if (page.handle !== null) await input.source.close(page.handle).catch(() => undefined);
