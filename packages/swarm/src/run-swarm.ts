@@ -36,14 +36,28 @@ import {
   toAutomationFailure,
   toScreenshotEntries,
 } from '@personavision/browser';
-import { appendFinishedSession, readRun, SCHEMA_VERSION, writeRun } from '@personavision/contract';
+import { rm } from 'node:fs/promises';
+import {
+  appendFinishedSession,
+  readRun,
+  runPaths,
+  SCHEMA_VERSION,
+  writeRun,
+  writeSession,
+} from '@personavision/contract';
 import { totalUsage } from '@personavision/provider';
 import { decideOutcome } from './outcome.js';
 import { runSession } from './run-session.js';
 import type { Capture, CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
 import type { Persona, Run, RunUsage, Session } from '@personavision/contract';
 import type { Aoi, EngineConfigOverrides, Segmenter } from '@personavision/engine';
-import type { DecisionUsage, ProviderMode } from '@personavision/provider';
+import type {
+  Decision,
+  DecisionContext,
+  DecisionProvider,
+  DecisionUsage,
+  ProviderMode,
+} from '@personavision/provider';
 import type { AutomationFailure, OutcomePolicy, SessionOutcome } from './outcome.js';
 import type { SessionProviders } from './run-session.js';
 
@@ -55,6 +69,28 @@ import type { SessionProviders } from './run-session.js';
  * laptop where twenty-four would swap. A replaying run can afford far more and says so.
  */
 export const DEFAULT_CONCURRENCY = 4;
+
+/**
+ * How long a session is given, after every cap inside it has fired, to write itself up.
+ *
+ * The caps inside a session are the ones that produce a good record: its budget ends an
+ * overrun page operation and its decision deadline ends a reply that never came, and either
+ * way the session itself writes a file that says so. The race around the whole of it is the
+ * backstop for a session that cannot even do that, and it waits this much longer so that it
+ * is never the one that fires first.
+ */
+const WRITE_UP_GRACE_MS = 500;
+
+/**
+ * A cap, made usable, as `packages/browser`'s budget makes its own: floored to a whole
+ * number of milliseconds, at least one, and anything unreadable — a `NaN` from a mistyped
+ * flag — falling back to the default rather than to no cap at all. `Math.max(1, NaN)` is
+ * `NaN`, and a `NaN` pool size is a swarm that silently runs nobody.
+ */
+const capOf = (given: number | undefined, fallback: number): number => {
+  if (given === undefined || !Number.isFinite(given)) return fallback;
+  return Math.max(1, Math.floor(given));
+};
 
 /** `S-01`, `S-02` … `S-NN`: a session's id, and the name of its file under `sessions/`. */
 const sessionIdAt = (position: number): string => `S-${String(position).padStart(2, '0')}`;
@@ -153,12 +189,19 @@ export interface RunSwarmInput extends SwarmPlanInput {
   /** How many sessions may be in flight at once. Defaults to `DEFAULT_CONCURRENCY`. */
   readonly concurrency?: number;
   /**
-   * How long one session may take, in wall-clock milliseconds.
+   * How long one session may take, in wall-clock milliseconds. One deadline, held three
+   * ways, because what matters is not only that an overrun ends but that it ends with a
+   * record of itself:
    *
-   * It is both the session's own budget and a cap around the whole of it: the budget ends a
-   * page operation that overran with a typed failure naming the cap, and the outer race is
-   * the backstop for a session that hung somewhere the budget never sees — a decision that
-   * never came back. A session the race ends is still written, as an automation failure.
+   * 1. the session's own `SessionBudget`, which ends an overrun **page operation** with a
+   *    typed failure naming the cap;
+   * 2. a deadline on each **decision**, which is the one call of the loop that goes through
+   *    no budget and the one most likely to hang in model mode — a reply that does not
+   *    arrive in the time the session has left is a failure the session itself records,
+   *    with the screens and areas it had reached;
+   * 3. a race around the whole of it, a grace period later, for a session that cannot even
+   *    write itself up. That one is written by the swarm, as an automation failure, because
+   *    there is nothing left to ask.
    */
   readonly sessionTimeoutMs?: number;
   readonly segmenter?: Segmenter;
@@ -198,11 +241,8 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   }
 
   const clock = input.now ?? ((): Date => new Date());
-  const concurrency = Math.max(1, Math.floor(input.concurrency ?? DEFAULT_CONCURRENCY));
-  const timeoutMs = Math.max(
-    1,
-    Math.floor(input.sessionTimeoutMs ?? DEFAULT_SESSION_BUDGET.wallClockMs),
-  );
+  const concurrency = capOf(input.concurrency, DEFAULT_CONCURRENCY);
+  const timeoutMs = capOf(input.sessionTimeoutMs, DEFAULT_SESSION_BUDGET.wallClockMs);
 
   const opened = await openRun(input.runDir, planned);
   const startedAt = opened.startedAt ?? clock().toISOString();
@@ -229,12 +269,24 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
     // `run.json` is one file every session of the swarm would have to queue at, so they do:
     // the append is a read, a change and a write, and two at once would lose one of them.
     await takeTurn(async () => {
-      await appendFinishedSession(input.runDir, walked.session, {
-        personaName: plan.persona.name,
-        usage: walked.usage,
-        aois: walked.aois,
-        screenshots: walked.screenshots,
-      });
+      try {
+        await appendFinishedSession(input.runDir, walked.session, {
+          personaName: plan.persona.name,
+          usage: walked.usage,
+          aois: walked.aois,
+          screenshots: walked.screenshots,
+        });
+      } catch (error) {
+        // The session's own file is already on disk — `runSession` writes it, and the
+        // appending writer parses before it writes anything — so a failed append would
+        // leave a session `run.json` does not list, which makes the whole directory
+        // unreadable. That is the one state writing a session at a time exists to avoid,
+        // so the file goes with the write that failed, and the failure is still thrown.
+        await rm(runPaths(input.runDir).session(plan.sessionId), { force: true }).catch(
+          () => undefined,
+        );
+        throw error;
+      }
       finishedSessions += 1;
       await input.onProgress?.({
         kind: 'session-finished',
@@ -257,28 +309,29 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
    * A session that breaks is recorded as an automation failure and the run goes on; a
    * `run.json` that cannot be written is a run nobody can read, so the swarm stops taking
    * sessions. It stops rather than abandons: the sessions already in flight finish and land
-   * first, because a run left with a session file its index does not list is exactly the
-   * half-written directory this writes one session at a time to avoid.
+   * first, and the one whose write failed is swept, so that what is left on disk is a run
+   * that still reads — which is the whole point of writing a session at a time.
    */
-  let broken = false;
+  const stoppedBy: unknown[] = [];
   const workers = Array.from({ length: Math.min(concurrency, planned.length) }, async () => {
     // One cursor, taken a session at a time: a worker that finishes early takes the next
     // session rather than waiting for a batch, and no more than `concurrency` are ever in
     // flight because there are no more workers than that.
-    while (!broken && next < planned.length) {
+    while (stoppedBy.length === 0 && next < planned.length) {
       const position = next;
       next += 1;
       try {
         await walk(planned[position] as SwarmSession, position);
       } catch (error) {
-        broken = true;
+        stoppedBy.push(error);
         throw error;
       }
     }
   });
-  const settled = await Promise.allSettled(workers);
-  const failed = settled.find((worker) => worker.status === 'rejected');
-  if (failed !== undefined && failed.status === 'rejected') throw failed.reason;
+  // Every worker is waited for, and what the swarm throws is the failure that stopped it —
+  // the first one in time, and not whichever worker a later knock-on rejection belongs to.
+  await Promise.allSettled(workers);
+  if (stoppedBy.length > 0) throw stoppedBy[0];
 
   return { sessions, run: await closeRun(input.runDir, planned, startedAt, clock) };
 };
@@ -305,9 +358,13 @@ const walkOne = async (
 
   const startedAt = clock().toISOString();
   const startedMs = clock().getTime();
+  /** What is left of this session's own deadline, which is what a decision gets. */
+  const remainingMs = (): number => Math.max(1, startedMs + timeoutMs - clock().getTime());
   const spent = (): WalkedSession['usage'] => runUsageOf(usages, provider.mode);
+  // Copied, not handed over: a session the race gave up on goes on capturing screens, and
+  // what the run declares has to be what it was told at the time.
   const seen = (): Pick<WalkedSession, 'aois' | 'screenshots' | 'elapsedMs'> => ({
-    aois,
+    aois: [...aois],
     screenshots: toScreenshotEntries(captures),
     elapsedMs: Math.max(0, clock().getTime() - startedMs),
   });
@@ -321,7 +378,7 @@ const walkOne = async (
     seed: plan.seed,
     task: input.task,
     source: input.source,
-    providers: input.providers,
+    providers: { decision: answersWithin(provider, remainingMs) },
     segmenter: input.segmenter,
     budget: new SessionBudget({ wallClockMs: timeoutMs }),
     maxScreens: input.maxScreens,
@@ -343,20 +400,21 @@ const walkOne = async (
     (error: unknown) => ({ kind: 'error', error }) as const,
   );
 
-  const finished = await withinTimeout(settled, timeoutMs);
+  const finished = await withinTimeout(settled, timeoutMs + WRITE_UP_GRACE_MS);
   if (finished === EXPIRED) {
-    // The session is not cancelled — nothing here can cancel a page operation, and the
-    // budget's own cap is the one that usually ends an overrun first. What this stops is
-    // waiting for it: the run records the session as our breakage and moves on.
-    return {
-      session: brokenSession(input, runId, plan, startedAt, {
-        kind: 'wall_clock_timeout',
-        detail: `the session passed its ${timeoutMs / 1000} s cap with no answer`,
-        step: stepNamed(captures),
-      }),
-      usage: spent(),
-      ...seen(),
-    };
+    // Every cap inside the session fired a grace period ago and it has still not written
+    // itself up, so the run writes it up instead. The session is not cancelled — nothing
+    // here can cancel a page operation — so if it ever does land, `runSession` writes its
+    // own file over the one the run has just recorded. The run's index, its progress entry
+    // and its declared areas are this session's, so the file has to be this one too: the
+    // last word on disk is the record the rest of the artifact agrees with.
+    const ours = brokenSession(input, runId, plan, startedAt, {
+      kind: 'wall_clock_timeout',
+      detail: `the session passed its ${timeoutMs / 1000} s cap with no answer`,
+      step: stepNamed(captures),
+    });
+    void settled.then(() => writeSession(input.runDir, ours)).catch(() => undefined);
+    return { session: ours, usage: spent(), ...seen() };
   }
   if (finished.kind === 'error') {
     return {
@@ -366,6 +424,51 @@ const walkOne = async (
     };
   }
   return { session: finished.session, usage: spent(), ...seen() };
+};
+
+/**
+ * The decision layer, with the session's deadline on every call.
+ *
+ * `runSession` asks the decision layer for one decision per screen and awaits it under no
+ * budget: the budget caps page operations, and a model call is not one. So a provider that
+ * never answers would hold a session open for as long as it liked, which is the failure the
+ * swarm's own race exists for — but a race the swarm wins abandons a session that has
+ * screens, fixations and actions worth keeping, and writes a session with none.
+ *
+ * Capped here instead, the same overrun is a failure the session records itself, on the
+ * screen it happened on, with everything it had reached: `runSession` catches a decision
+ * that throws and ends the session as our breakage, which is what a reply that never came
+ * is. The race stays, a grace period further out, for a session that hangs somewhere else.
+ *
+ * The stateless `decide` is capped with it, so a provider reached either way answers within
+ * one session's deadline or not at all.
+ */
+const answersWithin = (provider: DecisionProvider, remainingMs: () => number): DecisionProvider => {
+  const within =
+    (decide: (context: DecisionContext) => Promise<Decision>) =>
+    async (context: DecisionContext): Promise<Decision> => {
+      const withinMs = remainingMs();
+      const answer = await withinTimeout(
+        decide(context).then(
+          (decision) => ({ kind: 'value', decision }) as const,
+          (error: unknown) => ({ kind: 'error', error }) as const,
+        ),
+        withinMs,
+      );
+      if (answer === EXPIRED) {
+        throw new Error(`no answer in the ${withinMs} ms this session had left`);
+      }
+      if (answer.kind === 'error') throw answer.error;
+      return answer.decision;
+    };
+  return {
+    ...provider,
+    decide: within((context) => provider.decide(context)),
+    beginSession: (identity) => {
+      const session = provider.beginSession(identity);
+      return { ...session, decide: within((context) => session.decide(context)) };
+    },
+  };
 };
 
 /**

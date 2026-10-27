@@ -88,6 +88,13 @@ const GIVES_UP: Decision = {
 /** A reply that never comes: the one failure a session's own budget never sees. */
 const NEVER_ANSWERS = new Promise<never>(() => undefined) as unknown as Decision;
 
+/** A reply that comes, eventually — after the session that asked for it has given up. */
+const answeredIn = (ms: number): Decision =>
+  new Promise<Decision>((resolve) => {
+    // Unreferenced, so a reply nobody is waiting for does not hold the test runner open.
+    setTimeout(() => resolve(GIVES_UP), ms).unref();
+  }) as unknown as Decision;
+
 describe('planSwarm', () => {
   it('numbers the sessions S-01 … S-NN, variant then person then seed', () => {
     const planned = planSwarm({ variants: VARIANTS, personas: FOUR_PEOPLE, seedGroups: [1, 2, 3] });
@@ -233,7 +240,7 @@ describe('runSwarm', () => {
     expect(await validate(runDir)).toEqual([]);
   });
 
-  it('records a session that passes its timeout as an automation failure', async () => {
+  it('records a decision that never arrives as that session\u2019s automation failure', async () => {
     await open({ personas: [TWO_PEOPLE[0] as Persona], seedGroups: [11] });
     let asked = 0;
     const stalls = providerThat(() => {
@@ -247,7 +254,7 @@ describe('runSwarm', () => {
         seedGroups: [11],
         concurrency: 1,
         providers: { decision: stalls },
-        sessionTimeoutMs: 1_000,
+        sessionTimeoutMs: 500,
       }),
     );
 
@@ -257,9 +264,75 @@ describe('runSwarm', () => {
       attribution: 'automation',
       excludedFromScores: true,
     });
-    expect(sessions[0]?.outcome.reason).toContain('cap');
-    // The session that came after the one that hung still ran, and is still in the run.
+    expect(sessions[0]?.outcome.reason).toContain('never arrived');
+    // Capped inside the session, so what it had reached is kept rather than thrown away.
+    expect(sessions[0]?.screens).toHaveLength(1);
+    expect(sessions[0]?.fixations.length).toBeGreaterThan(0);
+    // The session that came after it still ran, and is still in the run.
     expect(sessions[1]?.outcome.status).toBe('abandoned');
+    expect(run.sessionIds).toEqual(['S-01', 'S-02']);
+    expect(await validate(runDir)).toEqual([]);
+  });
+
+  it('keeps the record when a decision arrives after the session\u2019s deadline', async () => {
+    await open({ personas: [TWO_PEOPLE[0] as Persona], seedGroups: [11] });
+    let asked = 0;
+    const lateByTwoSeconds = providerThat(() => {
+      asked += 1;
+      return asked === 1 ? answeredIn(2_000) : GIVES_UP;
+    });
+
+    const { sessions } = await runSwarm(
+      swarmOver({
+        personas: [TWO_PEOPLE[0] as Persona],
+        seedGroups: [11],
+        concurrency: 1,
+        providers: { decision: lateByTwoSeconds },
+        sessionTimeoutMs: 500,
+      }),
+    );
+
+    expect(sessions[0]?.outcome.status).toBe('automation_failure');
+    // The late answer cannot overwrite the session the run recorded, because the session
+    // itself recorded it: nothing was abandoned, so nothing lands behind the run's back.
+    expect(await validate(runDir)).toEqual([]);
+    const { sessions: onDisk } = await readRun(runDir);
+    expect(onDisk.map((session) => session.outcome.status)).toEqual([
+      'automation_failure',
+      'abandoned',
+    ]);
+  });
+
+  it('writes up a session that hangs where no cap inside it reaches', async () => {
+    await open({ personas: [TWO_PEOPLE[0] as Persona], seedGroups: [11] });
+    // Closing the page is the one call of a session that goes through no budget: a source
+    // that never returns from it hangs the session after its own caps have had their say.
+    let closes = 0;
+    const neverCloses: CaptureSource = {
+      ...source,
+      close: async (page) => {
+        closes += 1;
+        return closes === 1 ? new Promise<void>(() => undefined) : source.close(page);
+      },
+    };
+
+    const { sessions, run } = await runSwarm(
+      swarmOver({
+        personas: [TWO_PEOPLE[0] as Persona],
+        seedGroups: [11],
+        concurrency: 1,
+        source: neverCloses,
+        sessionTimeoutMs: 200,
+      }),
+    );
+
+    expect(sessions[0]?.outcome).toMatchObject({
+      status: 'automation_failure',
+      attribution: 'automation',
+      excludedFromScores: true,
+    });
+    expect(sessions[0]?.outcome.reason).toContain('cap');
+    expect(sessions[1]?.outcome.status).not.toBe('automation_failure');
     expect(run.sessionIds).toEqual(['S-01', 'S-02']);
     expect(await validate(runDir)).toEqual([]);
   });
@@ -435,9 +508,10 @@ describe('runSwarm', () => {
     );
 
     await expect(swarm).rejects.toThrow(/run\.json/);
-    // The three that ran are on disk, and the swarm stopped rather than walking the rest
-    // into a run it could not index.
-    expect(await landed()).toEqual(['S-01', 'S-02', 'S-03']);
+    // The swarm stopped rather than walking the rest into a run it could not index, and the
+    // session whose write failed was swept: a session file `run.json` does not list would
+    // make the whole directory unreadable, which is what writing one at a time avoids.
+    expect(await landed()).toEqual(['S-01', 'S-02']);
   });
 
   it('refuses a swarm with nobody in it', async () => {
