@@ -50,7 +50,11 @@ const outlineToggle = () => screen.getByRole('button', { name: /Areas of interes
 
 const layerIn = (container: HTMLElement) => container.querySelector('[data-overlay-layer="heat"]');
 const keyIn = (container: HTMLElement) => container.querySelector('[data-heat-key]');
-const blobsIn = (container: HTMLElement) => [...container.querySelectorAll('circle')];
+// This layer's own blobs: the scanpath (#72) draws its numbered fixations as circles over
+// the same page, and what this suite is about is the heat.
+const blobsIn = (container: HTMLElement) => [
+  ...container.querySelectorAll('[data-overlay-layer="heat"] circle'),
+];
 
 /**
  * The stage once the whole audience is in.
@@ -209,6 +213,10 @@ describe('on the screen', () => {
     await ready();
     decoded(container);
     await screen.findByText(/No fixation landed anywhere on this version of this step/);
+    // The scanpath (#72) is drawn from the run's own medians rather than from the sessions
+    // this test emptied, so it is still on the page: the claim below is about a stage with
+    // nothing drawn over it at all.
+    await userEvent.click(screen.getByRole('button', { name: /Scanpath/ }));
 
     // The scrim is there so that what is drawn over the screenshot reads on top of it. A
     // page washed out for a layer that drew nothing is a treatment with nothing to serve.
