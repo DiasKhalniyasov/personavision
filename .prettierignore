@@ -9,6 +9,13 @@ docs
 # Run directories are generated artifacts.
 runs
 
+# The browser module's capture set is recorded data: `pnpm -F @personavision/browser
+# record:captures` writes it and `packages/browser/test/determinism.test.ts` asserts a
+# re-recording is byte-identical, so formatting it here would make the two disagree. Its
+# README is prose, and is formatted.
+packages/browser/test/fixtures/captures/capture-set.json
+packages/browser/test/fixtures/captures/captures
+
 # The calibration corpus is generated data: `pnpm -F @personavision/calibration corpus` writes
 # it and `packages/calibration/test/corpus.test.ts` asserts the committed bytes are that
 # generator's output, so formatting it here would make the two disagree.

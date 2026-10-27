@@ -1,0 +1,462 @@
+{
+  "variant": "B",
+  "step": "cart",
+  "screenshot": "screenshots/B/cart.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "pageHeight": 1400,
+  "foldY": 900,
+  "elements": [
+    {
+      "id": "e-f3ed24a9e9a0",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-banner"
+    },
+    {
+      "id": "e-26714c32e469",
+      "source": "dom",
+      "role": "heading",
+      "name": "Your cart",
+      "text": "Your cart",
+      "bbox": {
+        "x": 16,
+        "y": 80,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-heading"
+    },
+    {
+      "id": "e-02826d5fa21a",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Two items are in this cart. Nothing here is a real shop: these pages exist so that the browser module can be driven with no network.",
+      "text": "Two items are in this cart. Nothing here is a real shop: these pages exist so that the browser module can be driven with no network.",
+      "bbox": {
+        "x": 16,
+        "y": 128,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-intro"
+    },
+    {
+      "id": "e-e8f39ac51d9e",
+      "source": "dom",
+      "role": "img",
+      "name": "Canvas tote bag, natural",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 200,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-product-image"
+    },
+    {
+      "id": "e-2a5ad1a25820",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 336,
+        "width": 358,
+        "height": 240
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-items"
+    },
+    {
+      "id": "e-404ce7fb330e",
+      "source": "dom",
+      "role": "generic",
+      "name": "Canvas tote bag",
+      "text": "Canvas tote bag",
+      "bbox": {
+        "x": 28,
+        "y": 348,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-item-tote-name"
+    },
+    {
+      "id": "e-1da2dee7ca3d",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 376,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-remove-tote"
+    },
+    {
+      "id": "e-9f4b2d0a9764",
+      "source": "dom",
+      "role": "button",
+      "name": "Save",
+      "text": "Save",
+      "bbox": {
+        "x": 156,
+        "y": 376,
+        "width": 206,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-save-tote"
+    },
+    {
+      "id": "e-6a962fe0c5b8",
+      "source": "dom",
+      "role": "generic",
+      "name": "Enamel mug",
+      "text": "Enamel mug",
+      "bbox": {
+        "x": 28,
+        "y": 432,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-item-mug-name"
+    },
+    {
+      "id": "e-4cf8b7947508",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 460,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-remove-mug"
+    },
+    {
+      "id": "e-8580fbf6cf4a",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 600,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-upsell-card"
+    },
+    {
+      "id": "e-6c781456f04d",
+      "source": "dom",
+      "role": "link",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 784,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#cart-checkout"
+    },
+    {
+      "id": "e-08656bbc37a0",
+      "source": "dom",
+      "role": "button",
+      "name": "Apply a promo code",
+      "text": "Apply a promo code",
+      "bbox": {
+        "x": 16,
+        "y": 862,
+        "width": 358,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-promo-apply"
+    },
+    {
+      "id": "e-8177a93eda40",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1200,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#cart-footer-note"
+    },
+    {
+      "id": "e-1c8083685098",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-banner"
+    },
+    {
+      "id": "e-4ad8e593cf2d",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Your cart",
+      "text": "Your cart",
+      "bbox": {
+        "x": 16,
+        "y": 80,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-heading"
+    },
+    {
+      "id": "e-dff873556df3",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Two items are in this cart. Nothing here is a real shop: these pages exist so that the browser module can be driven with no network.",
+      "bbox": {
+        "x": 16,
+        "y": 128,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-intro"
+    },
+    {
+      "id": "e-bca9d1afcfa1",
+      "source": "a11y",
+      "role": "img",
+      "name": "Canvas tote bag, natural",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 200,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-product-image"
+    },
+    {
+      "id": "e-1cfdf5492577",
+      "source": "a11y",
+      "role": "region",
+      "name": "Cart items",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 336,
+        "width": 358,
+        "height": 240
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-items"
+    },
+    {
+      "id": "e-d93ae8de9ba5",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 600,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-upsell-card"
+    },
+    {
+      "id": "e-160034628568",
+      "source": "a11y",
+      "role": "link",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 784,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-checkout"
+    },
+    {
+      "id": "e-9fe7be3e54bf",
+      "source": "a11y",
+      "role": "button",
+      "name": "Apply a promo code",
+      "text": "Apply a promo code",
+      "bbox": {
+        "x": 16,
+        "y": 862,
+        "width": 358,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-promo-apply"
+    },
+    {
+      "id": "e-3251e9ec3bc9",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1200,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#cart-footer-note"
+    },
+    {
+      "id": "e-56e2de4ab096",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Canvas tote bag",
+      "bbox": {
+        "x": 28,
+        "y": 348,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-item-tote-name"
+    },
+    {
+      "id": "e-4200fcebc761",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 376,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-remove-tote"
+    },
+    {
+      "id": "e-467967ef8923",
+      "source": "a11y",
+      "role": "button",
+      "name": "Save the canvas tote for later",
+      "text": "Save",
+      "bbox": {
+        "x": 156,
+        "y": 376,
+        "width": 206,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-save-tote"
+    },
+    {
+      "id": "e-17d8a0a828c8",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Enamel mug",
+      "bbox": {
+        "x": 28,
+        "y": 432,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-item-mug-name"
+    },
+    {
+      "id": "e-2a1ce6da33a0",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 460,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#cart-remove-mug"
+    }
+  ],
+  "contentHash": "da30d4ae323810aa"
+}

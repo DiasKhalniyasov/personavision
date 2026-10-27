@@ -1,0 +1,238 @@
+{
+  "variant": "B",
+  "step": "confirmation",
+  "screenshot": "screenshots/B/confirmation.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "pageHeight": 1000,
+  "foldY": 900,
+  "elements": [
+    {
+      "id": "e-33d7c58fbe61",
+      "source": "dom",
+      "role": "heading",
+      "name": "Order confirmed",
+      "text": "Order confirmed",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-heading"
+    },
+    {
+      "id": "e-f9327cb1e287",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The task ends here. The control below returns to the first step, so a session can be driven around the four pages more than once.",
+      "text": "The task ends here. The control below returns to the first step, so a session can be driven around the four pages more than once.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-intro"
+    },
+    {
+      "id": "e-e4193e88bf79",
+      "source": "dom",
+      "role": "img",
+      "name": "A printed receipt",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-receipt-image"
+    },
+    {
+      "id": "e-7aa3a46e6271",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-receipt"
+    },
+    {
+      "id": "e-ddc7715c4707",
+      "source": "dom",
+      "role": "generic",
+      "name": "Order FIX-1001",
+      "text": "Order FIX-1001",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 334,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-order-number"
+    },
+    {
+      "id": "e-2c910b3b0e27",
+      "source": "dom",
+      "role": "link",
+      "name": "Continue shopping",
+      "text": "Continue shopping",
+      "bbox": {
+        "x": 16,
+        "y": 480,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#confirmation-continue-shopping"
+    },
+    {
+      "id": "e-c768a538fdd8",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 940,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#confirmation-footer-note"
+    },
+    {
+      "id": "e-c1c76c89d2d7",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Order confirmed",
+      "text": "Order confirmed",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-heading"
+    },
+    {
+      "id": "e-99ba26e11290",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The task ends here. The control below returns to the first step, so a session can be driven around the four pages more than once.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-intro"
+    },
+    {
+      "id": "e-772a2cd0a6dc",
+      "source": "a11y",
+      "role": "img",
+      "name": "A printed receipt",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-receipt-image"
+    },
+    {
+      "id": "e-f2fdf5338f07",
+      "source": "a11y",
+      "role": "region",
+      "name": "Receipt",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-receipt"
+    },
+    {
+      "id": "e-18ec0a2818f3",
+      "source": "a11y",
+      "role": "link",
+      "name": "Continue shopping",
+      "text": "Continue shopping",
+      "bbox": {
+        "x": 16,
+        "y": 480,
+        "width": 358,
+        "height": 44
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-continue-shopping"
+    },
+    {
+      "id": "e-36b0c72c1797",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 940,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#confirmation-footer-note"
+    },
+    {
+      "id": "e-37adef8d7a9a",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Order FIX-1001",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 334,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#confirmation-order-number"
+    }
+  ],
+  "contentHash": "3cfb5f4f76af5248"
+}

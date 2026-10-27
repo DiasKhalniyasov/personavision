@@ -1,0 +1,334 @@
+{
+  "variant": "A",
+  "step": "payment",
+  "screenshot": "screenshots/A/payment.png",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageHeight": 1200,
+  "foldY": 844,
+  "elements": [
+    {
+      "id": "e-fa6bda1eeec5",
+      "source": "dom",
+      "role": "heading",
+      "name": "Payment",
+      "text": "Payment",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-heading"
+    },
+    {
+      "id": "e-941fff7327d7",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Card details for the fixture order. No value typed here leaves the machine: the form submits to the next page of this site.",
+      "text": "Card details for the fixture order. No value typed here leaves the machine: the form submits to the next page of this site.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-intro"
+    },
+    {
+      "id": "e-bf1d08f358d3",
+      "source": "dom",
+      "role": "img",
+      "name": "A payment card",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-card-image"
+    },
+    {
+      "id": "e-a0ea6b03d44e",
+      "source": "dom",
+      "role": "form",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 300
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-form"
+    },
+    {
+      "id": "e-5b246ca28724",
+      "source": "dom",
+      "role": "generic",
+      "name": "Card number",
+      "text": "Card number",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 73.59375,
+        "height": 16.796875
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "html > body:nth-child(2) > form:nth-child(4) > label:nth-child(1)"
+    },
+    {
+      "id": "e-f708e5bdf7e0",
+      "source": "dom",
+      "role": "textbox",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 28,
+        "y": 324,
+        "width": 334,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-card-number"
+    },
+    {
+      "id": "e-1dcc6cbdeff5",
+      "source": "dom",
+      "role": "generic",
+      "name": "Expiry month",
+      "text": "Expiry month",
+      "bbox": {
+        "x": 28,
+        "y": 372,
+        "width": 74.203125,
+        "height": 16.796875
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "html > body:nth-child(2) > form:nth-child(4) > label:nth-child(3)"
+    },
+    {
+      "id": "e-73daa2bd599c",
+      "source": "dom",
+      "role": "combobox",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 28,
+        "y": 396,
+        "width": 334,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-expiry-month"
+    },
+    {
+      "id": "e-8a82e044e350",
+      "source": "dom",
+      "role": "button",
+      "name": "Review order",
+      "text": "Review order",
+      "bbox": {
+        "x": 28,
+        "y": 468,
+        "width": 200,
+        "height": 44
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#payment-submit"
+    },
+    {
+      "id": "e-e7031eb39f91",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1000,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#payment-footer-note"
+    },
+    {
+      "id": "e-3a765b011070",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Payment",
+      "text": "Payment",
+      "bbox": {
+        "x": 16,
+        "y": 16,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-heading"
+    },
+    {
+      "id": "e-a82df34ba3b3",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Card details for the fixture order. No value typed here leaves the machine: the form submits to the next page of this site.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-intro"
+    },
+    {
+      "id": "e-ba533dc268ba",
+      "source": "a11y",
+      "role": "img",
+      "name": "A payment card",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 144,
+        "width": 120,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-card-image"
+    },
+    {
+      "id": "e-dfdd2a42013f",
+      "source": "a11y",
+      "role": "form",
+      "name": "Payment details",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 288,
+        "width": 358,
+        "height": 300
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-form"
+    },
+    {
+      "id": "e-e1d2e9f7e5e8",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in LANDMARKS.md beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 1000,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#payment-footer-note"
+    },
+    {
+      "id": "e-bb4c09fcdbcd",
+      "source": "a11y",
+      "role": "LabelText",
+      "name": null,
+      "text": "Card number",
+      "bbox": {
+        "x": 28,
+        "y": 300,
+        "width": 73.59375,
+        "height": 16.796875
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "html > body:nth-child(2) > form:nth-child(4) > label:nth-child(1)"
+    },
+    {
+      "id": "e-09986853081e",
+      "source": "a11y",
+      "role": "textbox",
+      "name": "Card number",
+      "text": null,
+      "bbox": {
+        "x": 28,
+        "y": 324,
+        "width": 334,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-card-number"
+    },
+    {
+      "id": "e-0527c170b2c7",
+      "source": "a11y",
+      "role": "LabelText",
+      "name": null,
+      "text": "Expiry month",
+      "bbox": {
+        "x": 28,
+        "y": 372,
+        "width": 74.203125,
+        "height": 16.796875
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "html > body:nth-child(2) > form:nth-child(4) > label:nth-child(3)"
+    },
+    {
+      "id": "e-2d1cc6d82423",
+      "source": "a11y",
+      "role": "combobox",
+      "name": "Expiry month",
+      "text": null,
+      "bbox": {
+        "x": 28,
+        "y": 396,
+        "width": 334,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-expiry-month"
+    },
+    {
+      "id": "e-907a8e131ee9",
+      "source": "a11y",
+      "role": "button",
+      "name": "Review order",
+      "text": "Review order",
+      "bbox": {
+        "x": 28,
+        "y": 468,
+        "width": 200,
+        "height": 44
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#payment-submit"
+    }
+  ],
+  "contentHash": "20c54356f7e7c152"
+}

@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "record:captures": "tsc -p tsconfig.record.json && node dist/record/scripts/record-captures.js",
     "test": "vitest run"
   },
   "dependencies": {

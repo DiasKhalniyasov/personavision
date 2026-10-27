@@ -320,10 +320,13 @@ describe('the seams that need no browser', () => {
     expect(budget.sessionIntegrity()).toEqual({ selectorFailures: 0, retries: 0 });
   });
 
-  // The live source and the walk above it are filled and driven in
-  // `test/integration/live-source.test.ts`; the fixture source is still a neutral seam.
-  it('has no fixture source yet', () => {
-    expect(() => createFixtureSource('runs/x')).toThrow('fixture source: not implemented');
+  // Filled by #52 and asserted in `fixture-source.test.ts` and `determinism.test.ts`: a
+  // fixture source is built without reaching a disk — its index is read when a session is
+  // opened — so pointing one at a directory that is not there is not yet an error, and the
+  // engine's offline mode can hold one before it has a run to replay into.
+  it('builds a fixture source over a directory without reading it', () => {
+    expect(() => createFixtureSource('runs/x')).not.toThrow();
+  });
   });
 });
 
