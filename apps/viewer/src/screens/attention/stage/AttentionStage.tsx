@@ -125,8 +125,10 @@ export function useAttentionStage({
       areas,
       isolatedAoiId: aoi,
       transform,
+      // Every layer that aggregates the sessions has to know they are still arriving (#71).
+      loading: sessions.status === 'loading',
     }),
-    [sessions.fixations, sessions.saccades, areas, aoi, transform],
+    [sessions.fixations, sessions.saccades, sessions.status, areas, aoi, transform],
   );
 
   const { layers, setShown }: OverlayLayerState = useOverlayLayers(layerProps);
@@ -171,7 +173,8 @@ export function AttentionStage({ stage }: { stage: AttentionStageView }) {
   // decoding the frame is holding its box open; with no capture at all there are no page
   // coordinates to register to, and overlays over a sentence would be a drawing of
   // nowhere — the sentence in the frame is what says why they are not there.
-  const drawn = state === 'loading' || state === 'missing' ? [] : layers.filter((one) => one.drawn);
+  const drawn =
+    state === 'shown' || state === 'unreadable' ? layers.filter((one) => one.drawn) : [];
 
   return (
     <div className={styles.stage}>

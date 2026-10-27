@@ -23,35 +23,49 @@ export function OverlayTogglesPanel({ layers, setShown }: OverlayLayerState) {
   const reasonId = (layerId: string) => `${panelId}-${layerId}-reason`;
 
   return (
-    <div className={styles.toggles}>
-      {layers.map(({ layer, on, unavailable }) => (
-        <div key={layer.id}>
-          <Toggle
-            className={styles.toggle}
-            data-overlay-toggle={layer.id}
-            pressed={on}
-            // `aria-disabled`, not `disabled`: a native disabled button is skipped by
-            // keyboard and by a screen reader's focus mode, so the sentence saying why the
-            // layer is unavailable would never reach the reader it was written for. The
-            // control stays reachable and announces itself unavailable, and presses on it
-            // do nothing.
-            aria-disabled={unavailable === null ? undefined : true}
-            aria-describedby={unavailable === null ? undefined : reasonId(layer.id)}
-            onPressedChange={(next) => {
-              if (unavailable !== null) return;
-              setShown(layer.id, next);
-            }}
-          >
-            {layer.label}
-            {layer.hint === undefined ? null : <span className="faint">{layer.hint}</span>}
-          </Toggle>
-          {unavailable === null ? null : (
-            <p className="footnote" id={reasonId(layer.id)} data-overlay-unavailable={layer.id}>
-              {unavailable}
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
+    <>
+      <div className={styles.toggles}>
+        {layers.map(({ layer, on, unavailable }) => (
+          <div key={layer.id}>
+            <Toggle
+              className={styles.toggle}
+              data-overlay-toggle={layer.id}
+              pressed={on}
+              // `aria-disabled`, not `disabled`: a native disabled button is skipped by
+              // keyboard and by a screen reader's focus mode, so the sentence saying why the
+              // layer is unavailable would never reach the reader it was written for. The
+              // control stays reachable and announces itself unavailable, and presses on it
+              // do nothing.
+              aria-disabled={unavailable === null ? undefined : true}
+              aria-describedby={unavailable === null ? undefined : reasonId(layer.id)}
+              onPressedChange={(next) => {
+                if (unavailable !== null) return;
+                setShown(layer.id, next);
+              }}
+            >
+              {layer.label}
+              {layer.hint === undefined ? null : <span className="faint">{layer.hint}</span>}
+            </Toggle>
+            {unavailable === null ? null : (
+              <p className="footnote" id={reasonId(layer.id)} data-overlay-unavailable={layer.id}>
+                {unavailable}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* A layer that needs a legend to be read has one, under the switches, where the
+          prototype puts the heat key. It is the layer's own (`Legend`), it is mounted only
+          while that layer is actually being drawn — a legend for something not on the page
+          would be a reading of nothing — and a layer without one adds nothing here. */}
+      {layers.map(({ layer, drawn, props }) =>
+        !drawn || layer.Legend === undefined || props === undefined ? null : (
+          <div key={layer.id} data-overlay-legend={layer.id}>
+            <layer.Legend {...props} />
+          </div>
+        ),
+      )}
+    </>
   );
 }

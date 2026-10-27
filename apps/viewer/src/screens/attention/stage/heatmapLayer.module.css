@@ -1,0 +1,59 @@
+/* ---- The attention heatmap ---------------------------------------------
+   The prototype's `.layer.heat`, and the `.heatkey` ramp beside its switch.
+
+   Every colour here is one of the five `--heat-*` tokens, and the layer's
+   overall strength is `--heat-opacity`: the ramp is the direction's own, and a
+   blob's colour is the step `heatAccumulation.ts` put it in. Nothing in this
+   file declares a value — the heat key's height, radius and type are the
+   spacing, radius and type tokens, and the only numbers the heatmap has are
+   the artifact's, computed in the module and set on the elements themselves.
+
+   No transition and no animation: the layer is a pure renderer, so that the
+   Verdict screen's warming-up heatmap (#125) can animate the same pixels from
+   outside it and get what this screen draws. */
+
+.heat {
+  opacity: var(--heat-opacity);
+}
+
+/* One gradient per ramp step, cool core through to the hot one. A blob at step
+   3 has a lime core and fades out through teal to nothing; only a blob at the
+   top of the ramp has the red of `--heat-5` in it at all, which is what makes
+   the colour on the page a reading of dwell rather than of overlap. */
+.step1 {
+  stop-color: var(--heat-1);
+}
+
+.step2 {
+  stop-color: var(--heat-2);
+}
+
+.step3 {
+  stop-color: var(--heat-3);
+}
+
+.step4 {
+  stop-color: var(--heat-4);
+}
+
+.step5 {
+  stop-color: var(--heat-5);
+}
+
+/* ---- The heat key -------------------------------------------------------
+   `.heatkey` and `.scale-legend` from the prototype's Overlays panel: the ramp
+   the page's colours are read against, under the switch it belongs to. */
+
+.ramp {
+  height: var(--space-2);
+  margin-block: var(--space-2) var(--space-1);
+  border-radius: var(--radius-full);
+  background: linear-gradient(to right, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5));
+}
+
+.scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
