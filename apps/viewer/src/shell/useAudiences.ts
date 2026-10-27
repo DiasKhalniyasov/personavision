@@ -1,32 +1,34 @@
 import { createContext, use } from 'react';
-import type { Audience } from '@personavision/contract';
-import { useLatestRun, useOptionalRun } from './useRun';
+import { useAudienceList } from '@/screens/audience/useAudienceList';
+import type { AudienceRecord } from '@/screens/audience/store';
 
 /**
  * The audiences this workspace has. A test cannot be run without one, so `/new` asks for
  * an audience before it offers a form (`docs/FLOW.md` section 2).
  *
- * It is a stub, like `useSession`: until **#102** stores audiences, the only audience the
- * viewer can see is the one a finished test froze into its own artifact — so a workspace
- * with a test has that audience, and a workspace with no test has none. #102 and #109
- * replace the body; no screen asks for an audience any other way.
+ * It reads **#102's store** — `GET /audiences`, which answers with each audience and the
+ * people it generates — through the one module that talks to it, so the shell and the
+ * Audiences screen cannot disagree about what the workspace has. A finished test's
+ * audience is never read from here: that comes from `run.json`'s frozen copy, so editing
+ * an audience cannot restate an old result.
+ *
+ * A test — and #124's public demo page — supplies its own answer with `AudiencesContext`.
  */
 
 export type AudiencesState =
   | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly audiences: readonly Audience[] };
+  | { readonly status: 'ready'; readonly audiences: readonly AudienceRecord[] };
 
-/** Overrides the stub, for #102's store, for #124's public demo and for tests. */
+/** Overrides the store, for #124's public demo and for tests. */
 export const AudiencesContext = createContext<AudiencesState | null>(null);
 
 export function useAudiences(): AudiencesState {
   const override = use(AudiencesContext);
-  const latest = useLatestRun();
-  const run = useOptionalRun(latest.status === 'ready' ? latest.runId : null);
+  const list = useAudienceList();
 
   if (override !== null) return override;
-  if (latest.status === 'loading') return { status: 'loading' };
-  if (latest.status !== 'ready') return { status: 'ready', audiences: [] };
-  if (run === null || run.status === 'loading') return { status: 'loading' };
-  return { status: 'ready', audiences: run.status === 'ready' ? [run.run.audience] : [] };
+  if (list.status === 'loading') return { status: 'loading' };
+  // A store that cannot be read is a workspace with no audience we can offer a test for:
+  // the screen that reads it says what went wrong, and this answer never guesses at one.
+  return { status: 'ready', audiences: list.status === 'ready' ? list.records : [] };
 }

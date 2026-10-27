@@ -1,0 +1,232 @@
+/* =============================================================================
+   The three audience screens of `docs/design/prototype.html`: `#screen-audiences`,
+   `#screen-audience` and `#screen-no-audience`.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies. No colour, size, spacing step, radius or duration
+   is restated here, and nothing on these screens animates: the direction gives the
+   three animated moments to #125, #123 and #124.
+
+   The rules are scoped to this module rather than written as the prototype's own
+   global class names, because the prototype's `Forms` block — `.form`,
+   `.field-group`, `.chips`, `.inline2` — is shared with screens other tickets own.
+   What is reproduced is the layout it draws, not the selector it draws it with;
+   the shared primitives these screens sit inside (`.strip`, `.wrap`, `.card`,
+   `.empty`, `.lede`, `.footnote`, `.microlabel`, `.faint`) are the app's own, in
+   `src/styles/base.css`.
+   ========================================================================== */
+
+/* ---- The audiences, as cards ------------------------------------------- */
+
+/* The prototype fills the row with cards of at least 280px, which at `--layout-max`
+   comes to three; the tokens name no card width, so the count is stated and the two
+   breakpoints below take it down rather than a length being restated here. */
+.audGrid {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.audCard {
+  display: grid;
+  align-content: start;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.audCard:hover {
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+}
+
+/* The prototype sets a card's name at `h3`; on the screen it is the one heading under the
+   page's own, so it is marked up as `h2` and takes the prototype's type role. */
+.audCard h2 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+/* The audience the latest test ran for is the one the reader came back to. */
+.audCard[aria-current='true'] {
+  border-color: var(--color-accent);
+}
+
+/* The prototype sets the blurb on the "describe a new audience" card a step down. */
+.audBlurb {
+  font-size: var(--text-sm);
+}
+
+.audFacts {
+  display: grid;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+}
+
+.audFacts b {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- The form ----------------------------------------------------------- */
+
+/* One column, and `minmax(0, …)` on every track on these screens: a grid track sized
+   `auto` grows to its widest item, so a long hint or a row of chips would push the form
+   past the card it sits in rather than wrapping inside it. */
+.form {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* `min-inline-size` as well as `min-width`: a `fieldset` refuses to shrink below its
+   own min-content without it, and these groups are fieldsets. */
+.fieldGroup {
+  display: grid;
+  min-inline-size: 0;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.fieldGroup > label,
+.groupLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.err {
+  color: var(--sev-critical);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.inline2 {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inline3 {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The chip is the registry's toggle, carrying the direction's one shape rule: every
+   button, chip and tag in this product is fully rounded. */
+.chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+}
+
+/* Adding a role or a region: the row the "+ Add" chip opens. */
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The field this row was opened for fills it; a share field nested in it keeps the width
+   its own control gives it. */
+.addRow > input {
+  max-width: var(--layout-max-narrow);
+  flex: 1;
+}
+
+/* ---- How they behave ---------------------------------------------------- */
+
+.meters {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Label, track, value — the prototype's 1fr / 120px / auto as a ratio, so the track is
+   about the width it draws at `--layout-max-narrow` without a length of its own. */
+.meter {
+  display: grid;
+  align-items: center;
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 4fr) minmax(0, 1fr) auto;
+}
+
+.meter .val {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The people this generates ------------------------------------------ */
+
+/* Three to a row inside the form's own width, as the prototype's 210px minimum comes to
+   there; narrower windows take it down with the rows below. */
+.personagrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.personachip {
+  display: grid;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+}
+
+.personachip b {
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- Saving -------------------------------------------------------------- */
+
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  gap: var(--space-4);
+}
+
+/* ---- Narrow windows -----------------------------------------------------
+   The prototype's own breakpoint for these two rows: the paired age fields and
+   the devices-beside-regions row stack rather than squashing. */
+
+@media (max-width: 1000px) {
+  .inline2,
+  .inline3 {
+    grid-template-columns: 1fr;
+  }
+
+  .audGrid,
+  .personagrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .audGrid,
+  .personagrid,
+  .meter {
+    grid-template-columns: 1fr;
+  }
+}

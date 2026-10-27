@@ -84,13 +84,13 @@ describe('a signed-out visitor', () => {
 
 describe('a test cannot be run without an audience', () => {
   it('sends /new to the audience screen when the workspace has none', async () => {
-    await serveRunData({ runIds: [] });
+    await serveRunData({ runIds: [], audiences: [] });
     const { router } = mountApp(paths.newTest, {
       audiences: { status: 'ready', audiences: [] },
     });
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe(paths.newAudience);
+      expect(router.state.location.pathname).toBe(paths.audiences);
     });
   });
 
@@ -135,9 +135,10 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
     const expected: [string, string | RegExp, SessionState?][] = [
       [paths.signIn, 'Sign in', { status: 'signed-out' }],
       [paths.demo, 'Demo'],
-      [paths.audiences, 'Audiences'],
-      [paths.newAudience, 'Audience'],
-      [paths.audience('outdoor-gear-shoppers'), 'Audience'],
+      // The audience screens are named for what they ask, not for the route (#109).
+      [paths.audiences, 'Who does your business serve?'],
+      [paths.newAudience, 'Describe your audience'],
+      [paths.audience('aud-outdoor-gear-shoppers'), 'Outdoor-gear shoppers'],
       [paths.newTest, 'New test'],
       [paths.breakdown(runId), 'How sure is this, and what drove it'],
       [paths.attention(runId, 'B', 'review'), 'Attention'],

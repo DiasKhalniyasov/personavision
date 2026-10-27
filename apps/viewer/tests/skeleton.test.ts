@@ -190,17 +190,20 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
     }
   });
 
-  it('reads a run in one place, and a session in one place, which every screen goes through', () => {
-    // No screen fetches or parses a run file itself: `useRun` is the one module that asks
-    // the server for run data, and it parses what comes back with the contract's schemas.
-    // `useSession` (#103) is the one module that asks it who is signed in, over the three
-    // routes `packages/platform` mounts. Those two are the whole of this app's network.
+  it('reads a run, a session and the audience store each in one place', () => {
+    // No screen fetches or parses anything itself. There are three things to ask a server
+    // for and one module each: `useRun` reads a **run**, over the documented read-only
+    // paths; `useSession` (#103) asks who is signed in, over the three routes
+    // `packages/platform` mounts; and the audience screens' `store` (#109) reads and
+    // writes the **audience store**, over #102's four routes. Each parses what comes back
+    // with the contract's schemas, and together they are the whole of this app's network.
     const asking = appSource()
       .filter((path) => /\bfetch\s*\(/.test(read(path).replace(/\/\*[\s\S]*?\*\//g, '')))
       .map((path) => relative(appDir, path))
       .sort();
 
     expect(asking).toEqual([
+      join('src', 'screens', 'audience', 'store.ts'),
       join('src', 'shell', 'useRun.ts'),
       join('src', 'shell', 'useSession.ts'),
     ]);
