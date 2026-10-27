@@ -212,6 +212,15 @@ describe('what the report carries', () => {
     }
   }, 60_000);
 
+  it('says what the gate cannot catch, rather than leaving a reader to assume it catches all', async () => {
+    const text = renderReport({ result: await freshRun(), history: loadHistory() });
+
+    expect(text).toContain(
+      '**What this gate holds, and what it does not — measured, not assumed.**',
+    );
+    expect(text).toContain('pass it untouched');
+  }, 60_000);
+
   it('prints one history table row per recorded measurement', async () => {
     const history = loadHistory();
 

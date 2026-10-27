@@ -84,10 +84,10 @@ saying what produced it.
 ## What the product’s badge quotes
 
 **The web category’s CC.** The header badge of every screen reads
-`Simulated audience · gaze similarity 0.9` from the run artifact’s `calibration.cc`, which the run
-loop writes from the engine’s own committed configuration. That is the **0.8965** in the `webpage` row
-of the table below, over 1 record. The badge’s longer form names CC, NSS and ScanMatch, all of that same
-category.
+`Simulated audience · gaze similarity 0.9` from the run artifact’s `calibration.cc`, which the
+run loop writes from the engine’s own committed configuration. That is the **0.8965** in the
+`webpage` row of the table below, over 1 record. The badge’s longer form names CC, NSS and
+ScanMatch, all of that same category.
 
 The web category is what this product is for (#11, user story 8) and is never folded into the overall mean: the
 overall figures below cover four kinds of UI and are **not** what the badge is about. A run produced by an
@@ -199,20 +199,30 @@ that could only print a win would be decoration.
 
 ## The regression gate
 
-`pnpm --filter @personavision/calibration run gate` holds every figure above to the floor the measurement of **2026-10-27** recorded, which
-is the last row of the history below. A figure that falls past its floor by more than its tolerance fails the
-gate; a figure that rises past it is a result, not a failure, and is recorded by appending a row rather than by
-moving an earlier one.
+`pnpm --filter @personavision/calibration run gate`
+holds every figure above to the floor the measurement of **2026-10-27** recorded, which is the last row of
+the history below. A figure that falls past its floor by more than its tolerance fails the gate; a figure that
+rises past it is a result, not a failure, and is recorded by appending a row rather than by moving an earlier
+one.
 
 The tolerances exist for one reason: the figures are deterministic on one machine — `test/score.test.ts`
 asserts two runs and two processes agree character for character — and the gate runs on another. CI is Linux on
 x64 and these floors were measured on macOS on arm64, and the image decode and the sums after it are not
 bit-identical across them. Each tolerance is at most a hundredth of the range its metric covers on this corpus,
 which is orders of magnitude above that drift and far below the smallest regression worth catching: the
-engine’s own defaults score 0.18 on web ScanMatch against the fitted 0.41, so a fit silently reverting would
-be an eighteen-tolerance fall.
-`packages/calibration/src/report/render.ts` carries the same argument beside the numbers, and a worker widening
-one has to replace it.
+engine’s own defaults score 0.18 on web ScanMatch against the fitted 0.41, so a fit silently reverting would be
+an eighteen-tolerance fall. `packages/calibration/src/report/render.ts` carries the same argument beside the
+numbers, and a worker widening one has to replace it.
+
+**What this gate holds, and what it does not — measured, not assumed.** Handing the fit back to the engine’s
+defaults breaks floors in every scope, the web category’s ScanMatch among them by eighteen tolerances. So does
+`gamma` at 0, which switches inhibition of return off, and `alpha` at 3, which makes the engine fixate the
+single most salient area. Two searched parameters pass it untouched: `beta` at 0, because `predict` has no goal
+and relevance is neutral there — which is what #90’s search space already says about that term — and `alpha` at
+0.2, where the weight on salience is cut fivefold and no floor moves. That is the corpus’s limit and not the
+tolerance’s: four records, one per category, so every per-category figure rests on a single record. The gate
+will widen with the corpus rather than with an argument, and `test/regression.test.ts` pins each of these
+sentences to a run.
 
 | Metric | Tolerance | Read as |
 | --- | --- | --- |

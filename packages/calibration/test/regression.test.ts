@@ -161,6 +161,43 @@ describe('the gate on a knowingly worsened configuration', () => {
   }, 60_000);
 });
 
+describe('what the gate holds, and what it does not', () => {
+  /**
+   * The sentences the report prints beside the floors, each pinned to a run.
+   *
+   * They are measurements and not wishes: a corpus that grows, or an engine whose parameters
+   * start mattering differently over it, makes one of these fail and asks for the report's
+   * paragraph back rather than letting it rot into a false claim.
+   */
+  it('breaks floors in every scope when the fit is handed back', async () => {
+    const breaches = breachesOf(await run(DE_FITTED), floors());
+
+    expect([...new Set(breaches.map(({ scope }) => scope))].sort()).toEqual([...SCOPES].sort());
+  }, 60_000);
+
+  it('breaks floors when inhibition of return is switched off, and when salience runs away', async () => {
+    const noInhibition = breachesOf(await run({ weights: { gamma: 0 } }), floors());
+    const allSalience = breachesOf(await run({ weights: { alpha: 3 } }), floors());
+
+    expect(noInhibition).not.toEqual([]);
+    expect(allSalience).not.toEqual([]);
+  }, 60_000);
+
+  it('and does not see relevance at all, because predict has no goal to be relevant to', async () => {
+    // #90's search space says the same of `beta` in its own reason for that parameter's
+    // bounds: an inert parameter is a measured fact rather than an assumption.
+    const breaches = breachesOf(await run({ weights: { beta: 0 } }), floors());
+
+    expect(breaches.map(describeBreach)).toEqual([]);
+  }, 60_000);
+
+  it('and does not see the weight on salience cut fivefold over four records', async () => {
+    const breaches = breachesOf(await run({ weights: { alpha: 0.2 } }), floors());
+
+    expect(breaches.map(describeBreach)).toEqual([]);
+  }, 60_000);
+});
+
 describe('a metric is read in its own direction', () => {
   it('a higher-is-better figure fails by falling, and passes inside the tolerance', async () => {
     const result = await run();
