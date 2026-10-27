@@ -211,8 +211,8 @@ export function SegmentsSection({ run }: { run: Run }) {
 }
 
 /**
- * While the sessions are read: one placeholder per session file, so the legend and the
- * footnote under it do not travel up the page as the counts arrive.
+ * While the sessions are read: one placeholder per row the list will have, each a row's own
+ * height, so the legend under it does not travel up the page as the counts arrive.
  *
  * The rows are held back until every session has settled rather than filled one at a time,
  * because a stacked bar drawn from half a segment is not a smaller reading of it — it is a
