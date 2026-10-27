@@ -136,3 +136,5 @@ export type {
   Goal,
   Viewport,
 } from './types.js';
+
+export { ENGINE_VERSION } from './version.js';
