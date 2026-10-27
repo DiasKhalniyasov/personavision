@@ -166,8 +166,17 @@
 
 /* The isolated area, in the teal that is this screen's word for "this is the one
    you asked about" — data, never the action colour. */
-.aoibox.isolated {
+.aoibox.active {
   stroke: var(--gaze-aoi-active);
+  stroke-width: var(--border-width-strong);
+  stroke-dasharray: none;
+}
+
+/* The isolated area that no fixation ever landed in. The box is the whole mark
+   on the page — there is nothing inside it to draw — so it is the critical
+   colour, the same one the table's `never` and the caption's sentence carry. */
+.aoibox.empty {
+  stroke: var(--sev-critical);
   stroke-width: var(--border-width-strong);
   stroke-dasharray: none;
 }

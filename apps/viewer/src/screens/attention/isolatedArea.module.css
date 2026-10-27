@@ -1,0 +1,50 @@
+/* =============================================================================
+   Isolating one area of interest — `#att-caption` and its `.nofix`, and the
+   areas table's selected row, from `docs/design/prototype.html`.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. The caption's own box is the global `.footnote`;
+   what is here is only what isolation adds to it.
+
+   The outline over the page is the stage's (`attentionStage.module.css`), and
+   the rest of the table is the table's (`aoiMetricsTable.module.css`): this
+   file is imported by both the caption and the table because a selected row and
+   the sentence under the stage are one state said in two places.
+   ========================================================================== */
+
+/* The prototype's `.nofix`. An area nobody ever fixated is a finding, not a
+   missing figure, so the sentence that says so carries the critical colour —
+   the same one the table's `never` cell carries, for the same reason. */
+.nofix {
+  color: var(--sev-critical);
+  font-weight: var(--weight-semibold);
+}
+
+/* The prototype's `tbody tr[data-click]`: a row that isolates is a row to
+   click, and the one being isolated stays marked while it is. */
+.row {
+  cursor: pointer;
+}
+
+.row[aria-selected='true'] {
+  background: var(--color-accent-soft);
+}
+
+/* The area's own name is the control that isolates it, so that isolating is
+   reachable with a keyboard rather than being a handler on a cell. It is drawn
+   as the text it replaces — the row is what shows the state — and keeps a focus
+   ring, which is the one thing a bare button must not lose. */
+.isolate {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.isolate:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: var(--border-width-strong);
+}

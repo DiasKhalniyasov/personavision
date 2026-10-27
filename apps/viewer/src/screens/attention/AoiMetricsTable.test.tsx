@@ -430,9 +430,11 @@ describe('accessibility', () => {
     expect(document.activeElement).toBe(region);
 
     await userEvent.tab();
+    // The area's own name, which is the button that isolates its row (#73), and so the
+    // first thing in the table a keyboard reaches.
     const first = seedRun().aois.find((aoi) => aoi.variant === 'B' && aoi.step === 'review');
     expect(document.activeElement).toBe(
-      within(rowFor(container, (first as Run['aois'][number]).id)).getByRole('link'),
+      within(rowFor(container, (first as Run['aois'][number]).id)).getByRole('button'),
     );
   });
 });

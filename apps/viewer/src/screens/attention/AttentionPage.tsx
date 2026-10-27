@@ -12,6 +12,7 @@ import { AttentionStage, stageIsShown, useAttentionStage } from './stage/Attenti
 import type { AttentionStageView } from './stage/AttentionStage';
 import { OverlayTogglesPanel } from './stage/OverlayTogglesPanel';
 import { AoiMetricsTable } from './AoiMetricsTable';
+import { IsolatedAreaCaption } from './IsolatedAreaCaption';
 import { useAttentionAreas } from './useAttentionAreas';
 import { useAttentionSelection } from './useAttentionSelection';
 import type { AttentionSelection } from './useAttentionSelection';
@@ -110,7 +111,12 @@ export function AttentionScreen({ run }: { run: Run }) {
         <div className={styles.stage}>
           <div>
             <StagePlace run={run} selection={selection} sessions={sessions} stage={stage} />
-            {/* #73 mounts the isolated-area caption here. */}
+            <IsolatedAreaCaption
+              runId={run.runId}
+              variant={selection.variant}
+              isolated={isolated}
+              sessions={sessions}
+            />
           </div>
           <SideColumn>
             {/* Beside the stage, and only beside the stage: when the screen is showing a
