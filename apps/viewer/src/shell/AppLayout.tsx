@@ -18,8 +18,10 @@ import { useSession } from './useSession';
  *   `/`, `/signin` and `/demo` are public and are not under it.
  * - `AppLayout` — the chrome, naming the test the route is about, or the workspace's most
  *   recent one on a route that is about no test.
- * - `RequireAudience` — a test cannot be run without an audience, so `/new` asks for one
- *   first rather than rendering a form that cannot be submitted.
+ * - `RequireAudience` — a test cannot be run without an audience, so `/new` sends a
+ *   workspace that has none to `/audiences`, which is the No-audience screen while there
+ *   is nothing to list: the screen that asks who the customers are and offers the example
+ *   test, rather than a form that cannot be submitted (#109).
  */
 
 export function ChromeShell({ run, children }: { run: RunState | null; children?: ReactNode }) {
@@ -57,6 +59,6 @@ export function RequireAudience() {
   const audiences = useAudiences();
 
   if (audiences.status === 'loading') return null;
-  if (audiences.audiences.length === 0) return <Navigate to={paths.newAudience} replace />;
+  if (audiences.audiences.length === 0) return <Navigate to={paths.audiences} replace />;
   return <Outlet />;
 }

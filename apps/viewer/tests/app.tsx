@@ -17,6 +17,8 @@ import { listRunDirs, runPaths } from '@personavision/contract';
 import { readRunIndex } from '@personavision/cli';
 import { App } from '../src/app';
 import { routes } from '../src/routes';
+import { clearAudienceCache } from '../src/screens/audience/useAudienceList';
+import type { AudienceRecord } from '../src/screens/audience/store';
 import { AudiencesContext } from '../src/shell/useAudiences';
 import type { AudiencesState } from '../src/shell/useAudiences';
 import { clearRunCache } from '../src/shell/useRun';
@@ -54,7 +56,39 @@ export interface ServedRunData {
   runIds: string[];
   /** What a request asked for, in order: the shell must not read a run twice. */
   requests: string[];
+  /** The audiences the store answers with, as #102's routes shape them. */
+  audiences: AudienceRecord[];
 }
+
+/** The run whose audience the seeded demo workspace has described (`packages/platform`). */
+const SEED_RUN_ID = '2026-10-24-1402-northwind-demo';
+
+/**
+ * The workspace's one audience, as `GET /audiences` answers with it.
+ *
+ * It is built from the committed example run's own audience block and its personas, so a
+ * test reads the audience a reader reads and the people that run really went out with —
+ * the store generates them with `@personavision/personas`, which does not reach a browser.
+ */
+export function demoAudienceRecord(): AudienceRecord {
+  const run = readRunFile(SEED_RUN_ID) as unknown as {
+    createdAt: string;
+    audience: AudienceRecord['audience'];
+    personas: AudienceRecord['people'];
+  };
+  return {
+    id: 'aud-outdoor-gear-shoppers',
+    audience: run.audience,
+    people: run.personas,
+    createdAt: run.createdAt,
+    updatedAt: run.createdAt,
+    deletedAt: null,
+    issues: [],
+  };
+}
+
+/** `/audiences` and `/audiences/<record id>`, the two reads the screens make. */
+const AUDIENCE_PATH = /^\/audiences\/([^/]+)$/;
 
 /**
  * Serve the repository's run directories over a stubbed `fetch`, at the URLs of
@@ -64,17 +98,37 @@ export interface ServedRunData {
  * can also be replaced with text of its own, to test a file the viewer cannot read.
  */
 export async function serveRunData(
-  options: { runIds?: string[]; files?: Record<string, string> } = {},
+  options: {
+    runIds?: string[];
+    files?: Record<string, string>;
+    /** The workspace's audiences. The default is the one the demo workspace is seeded with. */
+    audiences?: AudienceRecord[];
+  } = {},
 ): Promise<ServedRunData> {
   const available = await listRunDirs(runsRoot);
   const runIds = options.runIds ?? available;
   const index = await readRunIndex(runsRoot, runIds);
   const overrides = options.files ?? {};
+  const audiences = options.audiences ?? [demoAudienceRecord()];
   const requests: string[] = [];
 
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     requests.push(pathname);
+
+    if (pathname === '/audiences') return Promise.resolve(json({ audiences }));
+    const audiencePath = AUDIENCE_PATH.exec(pathname);
+    if (audiencePath !== null) {
+      const record = audiences.find((candidate) => candidate.id === audiencePath[1]);
+      return Promise.resolve(
+        record === undefined
+          ? new Response(JSON.stringify({ error: 'There is no such audience.' }), {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            })
+          : json(record),
+      );
+    }
 
     const override = overrides[pathname];
     if (override !== undefined) {
@@ -96,7 +150,7 @@ export async function serveRunData(
     }
   });
 
-  return { runIds, requests };
+  return { runIds, requests, audiences };
 }
 
 /**
@@ -140,8 +194,9 @@ export function mountApp(path: string, options: MountOptions = {}) {
   return { router, ...render(tree) };
 }
 
-/** Every run read so far is forgotten, so one test cannot see another's. */
+/** Every run and audience read so far is forgotten, so one test cannot see another's. */
 export const forgetRuns = (): void => {
   clearRunCache();
+  clearAudienceCache();
   vi.unstubAllGlobals();
 };
