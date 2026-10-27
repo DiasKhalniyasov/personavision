@@ -39,8 +39,18 @@ export type { DecisionSessionOptions } from './session.js';
 export { createOfflineDeterministicProvider, OFFLINE_PROVIDER_NAME } from './offline.js';
 export type { OfflineProviderOptions } from './offline.js';
 
-export { MODEL_API_KEY_ENV, ModelModeUnavailableError, selectDecisionProvider } from './select.js';
-export type { SelectDecisionProviderOptions, SelectedDecisionProvider } from './select.js';
+export {
+  DEFAULT_MODEL_MODE,
+  MODEL_API_KEY_ENV,
+  ModelModeUnavailableError,
+  selectDecisionProvider,
+} from './select.js';
+export type {
+  ProviderModeRequest,
+  RequestedProviderMode,
+  SelectDecisionProviderOptions,
+  SelectedDecisionProvider,
+} from './select.js';
 
 export {
   createMetaModelApiProvider,

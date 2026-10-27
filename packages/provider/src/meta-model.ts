@@ -454,6 +454,7 @@ export const createMetaModelApiProvider = (
     name: META_MODEL_PROVIDER_NAME,
     mode: 'model',
     readsImages: spec.acceptsImages,
+    modelId,
     /**
      * A decision belonging to no session: one request, one conversation of one turn, and a
      * cache key derived from the prefix rather than from a persona and a seed it has not
