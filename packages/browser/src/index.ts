@@ -58,6 +58,7 @@ export type {
 } from './failure-mapping.js';
 
 export { withCache } from './cache.js';
+export type { CaptureCacheOptions } from './cache.js';
 
 export { createFixtureSource } from './fixture-source.js';
 export type { CreateFixtureSource } from './fixture-source.js';

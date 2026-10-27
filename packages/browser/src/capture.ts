@@ -85,7 +85,9 @@ export const capture = async (
       contentHash,
     });
 
-    return withCache(key, async () => {
+    // The work a cache hit skips: everything that produces bytes. Named rather than
+    // inline so that the run directory the cache lives in reads beside the key.
+    const screen = async (): Promise<Capture> => {
       const screenshot = await writeScreenshot(page, {
         runDir: ctx.runDir,
         variant: ctx.variant,
@@ -106,5 +108,7 @@ export const capture = async (
         elements,
         contentHash,
       };
-    });
+    };
+
+    return withCache(key, screen, { runDir: ctx.runDir });
   });

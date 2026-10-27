@@ -93,7 +93,6 @@ tests and captures.
 
 | Seam                                     | Until its ticket lands |
 | ---------------------------------------- | ---------------------- |
-| `withCache`                              | always a miss          |
 | `createFixtureSource` `createLiveSource` | throw                  |
 
 A capture with only these in place is real geometry, a real content hash, a real step label,
@@ -114,6 +113,20 @@ page that will not answer cannot hold a swarm of twenty-four sessions up.
 
 That composition lives in `src/capture.ts` and **no later ticket of the step edits it**. One
 that finds it has to says so on its own issue rather than quietly widening its reach.
+
+## The cache is a directory inside the run
+
+`withCache` stores one entry per `(variant URL, step, device, content hash)` under
+`.capture-cache/` in the run directory, so the cache travels with the run it belongs to and a
+fresh run starts cold. A hit returns the whole capture the first session produced — its
+geometry, its element ids and the path of the screenshot that session wrote — so twelve
+sessions over one variant take one picture of each screen rather than twelve.
+
+It is the one path inside a run directory the contract does not spell. `runPaths` declares what
+a run **publishes**, over HTTP as well as on disk; this one is private to this module, dotted so
+that nothing globbing a run mistakes it for artifact data, and read by `cache.ts` alone. Nothing
+it does can fail a session either: a truncated entry, an entry belonging to another key and a
+run directory that cannot be written to are each a miss.
 
 ## Two seams outlive this step
 
@@ -146,6 +159,11 @@ serves it from disk, with no dependency of its own):
   and `broken-frame.html`'s frame that never arrives. Each has to be produced **inside the cap
   its operation was given** rather than by hanging, and each outcome is parsed against the
   contract's session schema.
+- `test/cache.test.ts` — that a second session over one screen is answered from the first
+  session's capture and takes no second picture, that a changed page and a second device are
+  not, and that a damaged entry or an unwritable run directory is a miss and never a failed
+  session. The screenshot is deleted between two captures, because that is the one thing a hit
+  and a miss leave differently on disk.
 - `test/budget.test.ts` — the retry and wall-clock caps and the integrity counters. No browser.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
