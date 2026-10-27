@@ -617,6 +617,74 @@ describe('createFixtureSource', () => {
       );
     });
 
+    it('looks for the recorded image even when there is nothing to copy', async () => {
+      await write(join(dir, 'capture-set.json'), index());
+      await write(
+        join(dir, 'captures', 'A', 'cart.json'),
+        capture({ screenshot: runPaths('').screenshot('A', 'cart') }),
+      );
+      const { source, page } = await open();
+
+      // The run directory *is* the capture set, which is how the recorder verifies what it
+      // just wrote: nothing is copied, and a missing image still has to be a failure.
+      await expect(source.capture(page, { ...context('A', MOBILE), runDir: dir })).rejects.toThrow(
+        /looked for the screenshot of variant "A" step "cart"/,
+      );
+    });
+
+    it('refuses a variant or a step that is a path rather than a name', async () => {
+      await write(
+        join(dir, 'capture-set.json'),
+        index({
+          variants: [
+            { id: '../../escaped', device: MOBILE, steps: [{ step: 'cart', path: '/cart.html' }] },
+          ],
+        }),
+      );
+      const escaping = createFixtureSource(dir);
+
+      await expect(
+        escaping.openSession({ id: '../../escaped', url: 'https://shop.invalid/' }, MOBILE),
+      ).rejects.toThrow(/variants\[0\].id should be one path segment/);
+
+      await write(
+        join(dir, 'capture-set.json'),
+        index({
+          variants: [
+            { id: 'A', device: MOBILE, steps: [{ step: '../../etc', path: '/cart.html' }] },
+          ],
+        }),
+      );
+      const stepping = createFixtureSource(dir);
+
+      await expect(
+        stepping.openSession({ id: 'A', url: 'https://shop.invalid/' }, MOBILE),
+      ).rejects.toThrow(/variants\[0\].steps\[0\].step should be one path segment/);
+    });
+
+    it('refuses a capture whose geometry is not the device its variant is recorded at', async () => {
+      await write(join(dir, 'capture-set.json'), index());
+      await write(
+        join(dir, 'captures', 'A', 'cart.json'),
+        capture({ viewport: { width: 1440, height: 900 }, foldY: 900 }),
+      );
+      const { source, page } = await open();
+
+      await expect(source.capture(page, { ...context('A', MOBILE), runDir })).rejects.toThrow(
+        /records a 1440x900 screen, and variant "A" is recorded at 390x844/,
+      );
+    });
+
+    it('refuses a capture whose fold is not its viewport bottom edge', async () => {
+      await write(join(dir, 'capture-set.json'), index());
+      await write(join(dir, 'captures', 'A', 'cart.json'), capture({ foldY: 600 }));
+      const { source, page } = await open();
+
+      await expect(source.capture(page, { ...context('A', MOBILE), runDir })).rejects.toThrow(
+        /records its fold at 600, and the fold of a 844-tall viewport is at 844/,
+      );
+    });
+
     it('refuses an index that records a variant with no steps', async () => {
       await write(
         join(dir, 'capture-set.json'),

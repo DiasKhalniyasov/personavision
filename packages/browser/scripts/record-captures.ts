@@ -57,6 +57,7 @@ import {
 } from '../src/fixture-source.js';
 import type { CaptureSet, RecordedStep, RecordedVariant } from '../src/fixture-source.js';
 import { serveFixtureSite } from '../test/helpers/static-site.js';
+import type { FixtureSite } from '../test/helpers/static-site.js';
 
 /**
  * This package's own directory: the nearest ancestor of this file holding a `package.json`.
@@ -400,11 +401,14 @@ export const recordCaptures = async (
 
   await mkdir(dir, { recursive: true });
   const runDir = await mkdtemp(join(tmpdir(), 'personavision-recording-'));
-  const site = await serveFixtureSite({ root: FIXTURE_SITE_DIR });
   const files: RecordedFile[] = [];
   let set: CaptureSet;
 
+  // The server is started inside the block that cleans up, so a site that cannot listen
+  // leaves no temporary run directory behind.
+  let site: FixtureSite | undefined;
   try {
+    site = await serveFixtureSite({ root: FIXTURE_SITE_DIR });
     const variants: RecordedVariant[] = [];
     for (const walk of walks) {
       const recorded = await recordWalk(dir, runDir, task, walk, site.url);
@@ -413,7 +417,7 @@ export const recordCaptures = async (
     }
     set = { formatVersion: CAPTURE_SET_FORMAT_VERSION, variants };
   } finally {
-    await site.close();
+    await site?.close();
     await rm(runDir, { recursive: true, force: true });
   }
 

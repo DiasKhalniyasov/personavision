@@ -63,10 +63,11 @@
  * guessed would put a number nobody recorded into every metric downstream.
  */
 
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { runPaths } from '@personavision/contract';
 import type { Browser, BrowserContext, Page } from 'playwright';
+import { isOneSegment } from './screenshot.js';
 import type {
   ActResult,
   Action,
@@ -202,6 +203,20 @@ const closed = (
   }
 };
 
+/**
+ * A variant id or a step id, as read from a file.
+ *
+ * These two strings address a capture in this directory **and** name a screenshot's path
+ * under a run directory, so they are held to `screenshot.ts`'s rule: one path segment, which
+ * is where an id that is not a name is refused. Without it a capture set naming
+ * `../../escaped` would have a replay create a directory and an image outside the run
+ * directory, and record a path into `run.json` that the viewer would resolve.
+ */
+const asAddress = (value: unknown, source: string, at: string): string => {
+  const name = asString(value, source, at);
+  return isOneSegment(name) ? name : fail(source, at, 'one path segment', name);
+};
+
 const parseViewport = (value: unknown, source: string, at: string): Viewport => {
   const object = asObject(value, source, at);
   closed(object, ['width', 'height'], source, at);
@@ -290,8 +305,8 @@ export const parseCapture = (value: unknown, source: string): RecordedCapture =>
   }
 
   return {
-    variant: asString(object.variant, source, 'variant'),
-    step: asString(object.step, source, 'step'),
+    variant: asAddress(object.variant, source, 'variant'),
+    step: asAddress(object.step, source, 'step'),
     screenshot: asNullableString(object.screenshot, source, 'screenshot'),
     viewport: parseViewport(object.viewport, source, 'viewport'),
     pageHeight: asNumber(object.pageHeight, source, 'pageHeight'),
@@ -308,7 +323,7 @@ const parseRecordedStep = (value: unknown, source: string, at: string): Recorded
   if (!path.startsWith('/')) {
     fail(source, `${at}.path`, 'a path beginning with "/", resolved against the variant URL', path);
   }
-  return { step: asString(object.step, source, `${at}.step`), path };
+  return { step: asAddress(object.step, source, `${at}.step`), path };
 };
 
 const parseRecordedVariant = (value: unknown, source: string, at: string): RecordedVariant => {
@@ -330,7 +345,7 @@ const parseRecordedVariant = (value: unknown, source: string, at: string): Recor
     seen.add(step.step);
   }
   return {
-    id: asString(object.id, source, `${at}.id`),
+    id: asAddress(object.id, source, `${at}.id`),
     device: parseDevice(object.device, source, `${at}.device`),
     steps,
   };
@@ -489,23 +504,42 @@ export const createFixtureSource: CreateFixtureSource = (dir) => {
   /** One capture per variant and step, read once and handed out as copies. */
   const loaded = new Map<string, Promise<RecordedCapture>>();
 
-  const loadCapture = (variant: string, step: string): Promise<RecordedCapture> => {
-    const key = `${variant}\u0000${step}`;
+  const loadCapture = (variant: RecordedVariant, step: string): Promise<RecordedCapture> => {
+    const key = `${variant.id}\u0000${step}`;
     const already = loaded.get(key);
     if (already !== undefined) return already;
 
-    const source = paths.capture(variant, step);
+    const source = paths.capture(variant.id, step);
     const reading = readJson(source).then((value) => {
       const capture = parseCapture(value, source);
-      if (capture.variant !== variant || capture.step !== step) {
+      if (capture.variant !== variant.id || capture.step !== step) {
         throw new Error(
-          `${source} records variant "${capture.variant}" step "${capture.step}", and a capture set addresses it as variant "${variant}" step "${step}"`,
+          `${source} records variant "${capture.variant}" step "${capture.step}", and a capture set addresses it as variant "${variant.id}" step "${step}"`,
+        );
+      }
+
+      // The same reason `openSession` refuses a device the variant was not recorded under:
+      // a capture's geometry is one viewport's, and every `belowFold` in it was computed
+      // from the fold that viewport makes. The check there is against the index; this is
+      // the other half of it, because the index is not what the numbers come from.
+      const { viewport } = variant.device;
+      if (
+        capture.viewport.width !== viewport.width ||
+        capture.viewport.height !== viewport.height
+      ) {
+        throw new Error(
+          `${source} records a ${capture.viewport.width}x${capture.viewport.height} screen, and variant "${variant.id}" is recorded at ${viewport.width}x${viewport.height}`,
+        );
+      }
+      if (capture.foldY !== viewport.height) {
+        throw new Error(
+          `${source} records its fold at ${capture.foldY}, and the fold of a ${viewport.height}-tall viewport is at ${viewport.height}`,
         );
       }
       // The only path this source ever joins to the directory is the contract's own
       // spelling for this variant and step, so a recorded `screenshot` field can name no
       // file but the one beside it.
-      const expected = runPaths('').screenshot(variant, step);
+      const expected = runPaths('').screenshot(variant.id, step);
       if (capture.screenshot !== null && capture.screenshot !== expected) {
         throw new Error(
           `${source} records its screenshot at "${capture.screenshot}", and a recorded screenshot is at "${expected}"`,
@@ -556,7 +590,7 @@ export const createFixtureSource: CreateFixtureSource = (dir) => {
         `the fixture session over variant "${session.variant.id}" is at step ${session.at} of ${session.variant.steps.length} recorded ones`,
       );
     }
-    return { session, step, capture: await loadCapture(session.variant.id, step.step) };
+    return { session, step, capture: await loadCapture(session.variant, step.step) };
   };
 
   /**
@@ -575,16 +609,20 @@ export const createFixtureSource: CreateFixtureSource = (dir) => {
 
     const from = paths.screenshot(capture.variant, capture.step);
     const to = runPaths(runDir).screenshot(capture.variant, capture.step);
-    if (from !== to) {
-      await mkdir(dirname(to), { recursive: true });
-      try {
+    try {
+      // Looked for even when there is nothing to copy — a run directory that *is* the
+      // capture set, which is how the recorder verifies what it just wrote. A path handed
+      // back for a file that is not there would be a `run.json` row the screens cannot draw.
+      await access(from);
+      if (from !== to) {
+        await mkdir(dirname(to), { recursive: true });
         await copyFile(from, to);
-      } catch (cause) {
-        throw new Error(
-          `the fixture capture source looked for the screenshot of variant "${capture.variant}" step "${capture.step}" at ${from}, and could not read it`,
-          { cause },
-        );
       }
+    } catch (cause) {
+      throw new Error(
+        `the fixture capture source looked for the screenshot of variant "${capture.variant}" step "${capture.step}" at ${from}, and could not read it`,
+        { cause },
+      );
     }
     return runPaths('').screenshot(capture.variant, capture.step);
   };
@@ -687,6 +725,14 @@ export const createFixtureSource: CreateFixtureSource = (dir) => {
       }
 
       if (action.type === 'type') return report();
+
+      if (action.type !== 'click') {
+        // A new member of `Action['type']` lands here as a compile error rather than as a
+        // step along the recording that the live source would not have taken: `act.ts`
+        // ends its own switch the same way.
+        const unsupported: never = action.type;
+        throw new Error(`the fixture capture source cannot replay ${String(unsupported)}`);
+      }
 
       // A recorded walk is the walk the primary actions make. Both candidates for one
       // control — the DOM's and the accessibility tree's — carry its selector while only
