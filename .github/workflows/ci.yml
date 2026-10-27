@@ -73,3 +73,60 @@ jobs:
         run: |
           pnpm --filter @personavision/calibration run gate
           pnpm --filter @personavision/calibration run report --check
+
+  # The project's gate (#79): the whole pipeline regenerated from scratch over the demo shop
+  # and held to `docs/FLOW.md` section 5's table, to the completion figures the product leads
+  # with, to determinism, and to planted-defect precision and recall against
+  # `demo/northwind/defects.json`. A regression in any subsystem — browser, attention, swarm,
+  # scoring — fails here even when every unit test passes, and a red gate fails the build.
+  #
+  # Its own job, after `check`, because it is slow and because its failure is its own: three
+  # browser runs of about twenty seconds each, which is why `pnpm test` does not run it. The
+  # tag `pnpm test:acceptance` sets is what turns it on.
+  #
+  # It needs no credential and no network beyond the package registry and the loopback port
+  # the demo shop binds: no secret is passed to this job, the run it regenerates is offline
+  # and names no model, and `tests/workspace.test.ts` is what holds the whole tree to reading
+  # a credential nowhere but in `packages/provider`. It writes nothing into
+  # `runs/2026-10-24-1402-northwind-demo/` — every regeneration goes to a temporary directory
+  # and the committed one's contents are compared before and after.
+  acceptance:
+    name: acceptance gate
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: playwright-version
+        run: |
+          version="$(pnpm --filter @personavision/browser exec playwright --version | awk '{ print $NF }')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @personavision/browser exec playwright install --with-deps chromium
+
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @personavision/browser exec playwright install-deps chromium
+
+      # After the build, as the ticket asks: the suite drives built packages the way
+      # `pnpm demo:run` does, so a package that compiles but does not build fails before the
+      # gate rather than inside it.
+      - run: pnpm build
+
+      - run: pnpm test:acceptance

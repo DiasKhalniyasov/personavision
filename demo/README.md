@@ -71,6 +71,29 @@ What the committed run reads as, and the numbers behind it, are on issues #78 an
 `tests/demo-run.test.ts` holds it to the shape, the size budget and the acceptance table of
 `docs/FLOW.md` section 5.
 
+### The acceptance gate
+
+`tests/acceptance/pipeline.test.ts` is the project's gate: it runs `pnpm demo:run`'s own
+script again, into a **temporary** directory, and holds the result to the table above, to the
+completion figures, to determinism and to planted-defect precision and recall against
+`defects.json`. It is tagged, because it is three browser runs long, so the ordinary
+`pnpm test` collects it and runs nothing in it. The command that does run it:
+
+```sh
+pnpm build && pnpm test:acceptance
+```
+
+CI runs the same two commands as a job of its own after `check`. The suite writes nothing
+into `runs/2026-10-24-1402-northwind-demo/` — it fingerprints that directory before the first
+regeneration and compares it after the last one — and the run it produces is offline, names
+no model and costs nothing, which it asserts off the artifact.
+
+One of its tests is the gate's own proof: it copies the three served directories of this
+shop, deletes the `pushdown` spacer that plants [defect 1](#variant-b-the-three-planted-defects)
+from the copy's `b/review.html`, runs the pipeline over that, and requires recall to fall
+through the floor the gate asserts. A gate that could not tell a defective shop from a
+repaired one would be worth nothing.
+
 ## Variants
 
 | Variant | Where               | What it is                                                                                                                                                |
