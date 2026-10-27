@@ -9,6 +9,7 @@ import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
 import { ReplayFrame } from './ReplayFrame';
 import { ReplayHeader } from './ReplayHeader';
+import { ScreenTimeline } from './ScreenTimeline';
 import { Scrubber } from './Scrubber';
 import { SessionNotFound } from './SessionNotFound';
 import { useReplaySession } from './useReplaySession';
@@ -26,8 +27,10 @@ import { captureFor, stepLabel, variantName } from './runWords';
  * three cannot drift apart, and `?fix=` is the whole of the screen's state — a colleague
  * handed the link sees the same moment.
  *
- * The right-hand column is mounted empty on purpose: **#24** fills it with the screen
- * intent and the event log, and **#25** with the outcome card.
+ * The right-hand column is the same session in words: **#24**'s screen cards carry the
+ * intent the agent stated and the transcript of what it did, and **#25** closes the column
+ * with the outcome card. The cards read the same moment the frame does, and clicking a row
+ * of the log moves the scrubber, so reading and navigating are the same thing.
  */
 export function ReplayPage() {
   const { runId = '', sessionId = '' } = useParams();
@@ -162,8 +165,16 @@ function Replay({
             />
           </div>
 
-          {/* #24 fills this with the screen intent and the event log, #25 with the outcome card. */}
-          <div className={styles.timeline} id="rp-timeline" />
+          {/* #25 closes this column with the outcome card. */}
+          <div className={styles.timeline} id="rp-timeline">
+            <ScreenTimeline
+              run={run}
+              session={session}
+              timeline={timeline}
+              moment={moment}
+              onGoTo={goTo}
+            />
+          </div>
         </div>
 
         <SimulatedDisclaimer />

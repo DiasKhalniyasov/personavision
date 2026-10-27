@@ -318,15 +318,168 @@ describe('a session with no fixations', () => {
   });
 });
 
+/** The cards in the right-hand column, by the order they are rendered in. */
+const cards = (container: HTMLElement): HTMLElement[] => [
+  ...container.querySelectorAll<HTMLElement>('#rp-timeline [data-screen-card]'),
+];
+
+/** One card's event rows, as `timestamp | the rest of the row`. */
+const rows = (container: HTMLElement, card: number): string[] =>
+  [...(cards(container)[card]?.querySelectorAll('[data-event]') ?? [])].map((row) =>
+    [...row.children].map((part) => part.textContent?.trim()).join(' | '),
+  );
+
+describe('the agent’s intent and the event log', () => {
+  it('opens one card per screen, naming the step, the fixations and the stretch of clock', async () => {
+    await serveRunData();
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    expect(cards(container).map((card) => card.querySelector('h2')?.textContent)).toEqual([
+      'Screen 1 of 3 · Cart',
+      'Screen 2 of 3 · Payment',
+      'Screen 3 of 3 · Review',
+    ]);
+    expect(cards(container)[1]?.textContent).toContain('fixations 8–19 · 0:10–0:29');
+  });
+
+  it('prints the sentence the agent stated for each screen, in its own words', async () => {
+    await serveRunData();
+    mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    // Word for word what the session file records. The quotation marks are the
+    // stylesheet's, so the sentence itself is on the page unaltered.
+    expect(
+      screen.getByText('See what the boots cost in total before I put a card in.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Pay as fast as possible, the card is saved.')).toBeTruthy();
+    expect(
+      screen.getByText('I thought I had paid. Why is the total higher than it was?'),
+    ).toBeTruthy();
+  });
+
+  it('lists that screen’s events in time order, with the kind and what each was aimed at', async () => {
+    await serveRunData();
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    const payment = rows(container, 1);
+    expect(payment).toHaveLength(16);
+    expect(payment[0]).toBe('0:10 | read · Promo banner · 497 ms held');
+    expect(payment[3]).toBe('0:14 | type · Card number · autofilled');
+    expect(payment).toContain('0:23 | hesitate · 1.9 s with no action');
+    expect(payment).toContain('0:26 | click · Place order · $129.00');
+    expect(payment).toContain('0:28 | scroll · window · to 696 px');
+    // The planted defect, on the screen where this person found it.
+    expect(rows(container, 2)[1]).toBe(
+      '0:31 | read · Service fee row — planted defect · 631 ms held',
+    );
+  });
+
+  it('marks the card the scrubber is on, in a word as well as in colour', async () => {
+    await serveRunData();
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    expect(cards(container).map((card) => card.getAttribute('data-active'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+    expect(cards(container)[1]?.getAttribute('aria-current')).toBe('true');
+    expect(cards(container)[1]?.textContent).toContain('showing now');
+    expect(cards(container)[0]?.textContent).not.toContain('showing now');
+  });
+
+  it('highlights the row the session model reports for that moment, and follows the scrubber', async () => {
+    await serveRunData();
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    const current = (): string[] =>
+      [...container.querySelectorAll('[data-event][aria-current="true"]')].map((row) =>
+        [...row.children].map((part) => part.textContent?.trim()).join(' | '),
+      );
+
+    expect(current()).toEqual(['0:15 | read · Expiry field · 202 ms held']);
+
+    await userEvent.click(screen.getByRole('button', { name: /Next fixation/ }));
+    await waitFor(() => {
+      expect(current()).toEqual(['0:17 | read · CVC field · 181 ms held']);
+    });
+  });
+
+  it('moves the scrubber to a row’s own moment when it is clicked, and the frame follows', async () => {
+    await serveRunData();
+    const { container, router } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    const abandon = cards(container)[2]?.querySelector(
+      '[data-event="action:5"]',
+    ) as HTMLButtonElement;
+    expect(abandon.textContent).toContain('abandon');
+    await userEvent.click(abandon);
+
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('?fix=23');
+    });
+    expect(container.querySelector('#rp-fixlabel')?.textContent).toBe('fixation 23 of 23');
+    expect(container.querySelector('#rp-page img')?.getAttribute('src')).toContain(
+      '/screenshots/B/review.png',
+    );
+    expect(cards(container)[2]?.getAttribute('data-active')).toBe('true');
+  });
+
+  it('is navigable from the keyboard: every row is a control that moves the scrubber', async () => {
+    await serveRunData();
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    const row = cards(container)[0]?.querySelector('[data-event="read:0"]') as HTMLButtonElement;
+    row.focus();
+    expect(document.activeElement).toBe(row);
+
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => {
+      expect(container.querySelector('#rp-fixlabel')?.textContent).toBe('fixation 1 of 23');
+    });
+    expect(cards(container)[0]?.getAttribute('data-active')).toBe('true');
+  });
+
+  it('states a screen that recorded nothing rather than leaving an empty list', async () => {
+    const session = readSeedSession('S-15');
+    const screens = session.screens as Record<string, unknown>[];
+    await serveRunData({
+      files: {
+        [sessionPath('S-15')]: JSON.stringify({
+          ...session,
+          // A fourth screen this person reached and did nothing on.
+          screens: [...screens, { ...screens[2], index: 3, step: 'confirm' }],
+        }),
+      },
+    });
+    const { container } = mountApp(replay('S-15', '?fix=12'));
+    await ready();
+
+    const last = cards(container)[3] as HTMLElement;
+    expect(last.querySelector('h2')?.textContent).toBe('Screen 4 of 4 · Confirmation');
+    expect(last.textContent).toContain('no fixations · no time on the clock');
+    expect(last.textContent).toContain('no actions recorded on this screen');
+    expect(last.querySelectorAll('[data-event]')).toHaveLength(0);
+  });
+});
+
 describe('the screen as a whole', () => {
-  it('mounts the right-hand column empty, for the event log and the outcome card', async () => {
+  it('leaves the rest of the column to the outcome card', async () => {
     await serveRunData();
     const { container } = mountApp(replay('S-15'));
     await ready();
 
     const column = container.querySelector('#rp-timeline');
     expect(column).not.toBeNull();
-    expect(column?.childElementCount).toBe(0);
+    // The three screen cards; #25 adds the outcome card that closes the column.
+    expect(column?.childElementCount).toBe(3);
   });
 
   it('passes axe at a scrubber position', async () => {
