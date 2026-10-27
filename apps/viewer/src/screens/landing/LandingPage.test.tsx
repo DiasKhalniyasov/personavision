@@ -12,10 +12,14 @@ import { EXAMPLE_RUN_ID } from './LandingPage';
 /**
  * `/` for a visitor with no session, over the repository's own committed example run.
  *
- * What is asserted is what a reader sees and where a click lands — never a class name or a
- * component's internals. The point of most of it is that **no figure on this page is
- * written into the page**: the sentence and the figures are read from the run, so the
- * tests that matter most here change a field in the fixture and expect the page to follow.
+ * What is asserted is what a reader sees and where a click lands. The point of most of it
+ * is that **no figure on this page is written into the page**: the sentence and the figures
+ * are read from the run, so the tests that matter most here change a field in the fixture
+ * and expect the page to follow.
+ *
+ * Three assertions reach for a `data-section`, which is how a section of a screen is
+ * addressed across this app's suites: a page cannot be asked whether a *section* is on it
+ * through its words alone, and two of these are about a section that is **absent**.
  */
 
 const SIGNED_OUT = { status: 'signed-out' } as const;
@@ -167,13 +171,19 @@ describe('the evidence, and it is real', () => {
     expect(figures.textContent).not.toContain('9 of 11 people completed the task');
   });
 
-  it('frames the heatmap on the same mat the Verdict screen does', async () => {
+  it('gives the heatmap its place, in the one tinted band', async () => {
     await serveRunData();
     const { container } = landing();
 
-    await waitFor(() => {
-      expect(container.querySelector('[data-section="hero-evidence"]')).not.toBeNull();
+    // The Verdict screen's own component, imported rather than drawn again, so the mat,
+    // the device label and the caption arrive with #108 and this page changes nothing.
+    const evidence = await waitFor(() => {
+      const found = container.querySelector('[data-section="hero-evidence"]');
+      if (found === null) throw new Error('the heatmap has no place on the page');
+      return found;
     });
+
+    expect(evidence.closest('.strip-tint')).not.toBeNull();
   });
 });
 
@@ -204,7 +214,8 @@ describe('when the example run cannot be read', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(HEADLINE);
     expect(screen.getAllByRole('link', { name: 'See the demo' }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/people completed the task/)).toBeNull();
-    expect(container.querySelector('.mat')).toBeNull();
+    expect(container.querySelector('[data-section="landing-evidence"]')).toBeNull();
+    expect(container.querySelector('[data-section="hero-evidence"]')).toBeNull();
   });
 });
 

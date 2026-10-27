@@ -30,7 +30,7 @@ const calibrationSentence = (calibration: Run['calibration']): string =>
  * hand it here, so the sentence names that run's audience rather than no audience at all.
  * Every signed-in screen leaves it out and the route answers for it, as before.
  */
-export function SimulatedDisclaimer({ run: given }: { run?: Run | null } = {}) {
+export function SimulatedDisclaimer({ run: given }: { run?: Run | null }) {
   // The run the route is about, and no other: on a route about no test this names no
   // audience rather than the workspace's most recent one.
   const state = useOptionalRun(useCurrentRunId());

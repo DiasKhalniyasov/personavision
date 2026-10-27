@@ -5,15 +5,21 @@
    product — so what is reproduced here is the step's own language: a stack of
    strips, one tinted band, one dark fir band, and whitespace rather than rules
    between them. The shared primitives it sits inside (`.strip`, `.strip-tint`,
-   `.strip-dark`, `.wrap`, `.lede`, `.card`, `.microlabel`, `.footnote`,
-   `.appbar`, `.logo`, `.mat`) are the app's own, in `src/styles/base.css` and
+   `.strip-dark`, `.wrap`, `.lede`, `.microlabel`, `.footnote`, `.appbar`,
+   `.logo`, `.grow`) are the app's own, in `src/styles/base.css` and
    `src/styles/chrome.css`, and the controls are the shadcn primitives of
    `src/components/ui/`.
+
+   `.mat` is **not** among them: `docs/design/prototype.html` draws it but no app
+   stylesheet declares it yet, so the waiting placeholder below carries the mat's
+   own values rather than a class that styles nothing. The mat around the heatmap
+   itself, with its device label and its caption, belongs to #108.
 
    Every value below is a custom property from `docs/design/tokens.css`, which
    the app imports and never copies. No colour, size, spacing step, radius or
    duration is restated here, and nothing on this page animates: the direction
-   gives this page's moments to #125's components, which are imported.
+   gives this page's moments to #125, whose components this page will import
+   once they exist.
    ========================================================================== */
 
 /* ---- The bar ------------------------------------------------------------
@@ -77,13 +83,6 @@
   line-height: var(--leading-snug);
 }
 
-/* The figures are the Verdict screen's own component, which sets its rhythm for
-   a full-width screen; in this panel the row closes up by one step. */
-.evidence :global(.figures) {
-  margin-top: var(--space-2);
-  gap: var(--space-8);
-}
-
 /* While the run is being read. Each block is the height of the line it stands
    in for, so the panel is the same height before and after the read. */
 .waiting {
@@ -95,12 +94,24 @@
   block-size: var(--text-lg);
 }
 
+/* A figure is the number, the version's name and its population: three lines,
+   so the row the figures arrive into is already their own height. */
 .waitingFigure {
-  block-size: var(--text-figure);
+  block-size: calc(var(--text-figure) + var(--text-md) + var(--text-sm));
 }
 
+/* The mat the heatmap arrives on, carrying the values `docs/FLOW.md` section 10
+   gives a screenshot frame: a page screenshot is never flush against the layout.
+   #108 brings the real one, with the device label and the caption. */
 .waitingMat {
-  block-size: var(--text-figure);
+  padding: var(--frame-mat-pad);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-sunken);
+}
+
+.waitingShot {
+  aspect-ratio: var(--frame-ratio-desktop);
+  border-radius: var(--radius-lg);
 }
 
 /* The example run could not be read. One quiet line, and never a broken frame. */

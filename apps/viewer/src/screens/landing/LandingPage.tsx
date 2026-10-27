@@ -61,13 +61,13 @@ const STEPS: readonly { readonly name: string; readonly body: string }[] = [
 ];
 
 /** *See the demo* and *Sign in*: the page's only two actions, wherever they appear. */
-function Actions({ size }: { size: 'default' | 'lg' }) {
+function Actions() {
   return (
     <div className={styles.actions}>
-      <Button size={size} asChild>
+      <Button size="lg" asChild>
         <Link to={paths.demo}>See the demo</Link>
       </Button>
-      <Button size={size} variant="outline" asChild>
+      <Button size="lg" variant="outline" asChild>
         <Link to={paths.signIn}>Sign in</Link>
       </Button>
     </div>
@@ -100,8 +100,8 @@ function Bar() {
 function Unavailable() {
   return (
     <p className={styles.unavailable}>
-      The example test could not be read just now, so its figures are not on this page. Nothing has
-      been put in their place: every number here is a test&rsquo;s own or it is not shown.
+      The example test could not be read just now, so its figures are not on this page &mdash; every
+      number here is a test&rsquo;s own or it is not shown.
     </p>
   );
 }
@@ -151,7 +151,7 @@ export function LandingPage() {
                 where they give up, and names the version they finish &mdash; without a week of real
                 traffic and real customers.
               </p>
-              <Actions size="lg" />
+              <Actions />
               {unreadable ? <Unavailable /> : null}
             </div>
             {run !== null ? <Evidence run={run} /> : null}
@@ -164,8 +164,8 @@ export function LandingPage() {
           <div className="strip strip-tint">
             <div className="wrap">
               {run === null ? (
-                <div className="mat">
-                  <Skeleton className={styles.waitingMat} />
+                <div className={styles.waitingMat} aria-busy="true">
+                  <Skeleton className={styles.waitingShot} />
                 </div>
               ) : (
                 <HeroEvidence run={run} />
@@ -192,7 +192,7 @@ export function LandingPage() {
         <div className={`strip strip-lg strip-dark ${styles.closingBand}`}>
           <div className={`wrap ${styles.closing}`}>
             <p className={styles.closingHeadline}>{HEADLINE}</p>
-            <Actions size="lg" />
+            <Actions />
           </div>
         </div>
       </main>
