@@ -27,6 +27,50 @@ renaming one here silently breaks three other tickets. A test asserts that the i
 pages are exactly the variant-A ids the prototype declares, and that they are the ids this
 file claims.
 
+## The committed example run
+
+One command regenerates `runs/2026-10-24-1402-northwind-demo/` — the example run this
+repository ships, and the one every screen opens on a fresh clone:
+
+```sh
+pnpm demo:run
+```
+
+It serves this shop on **port 4173**, drives twenty-four sessions through Chromium and writes
+the whole run directory through `@personavision/contract`. Nothing is written by hand.
+
+|                |                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Command        | `pnpm demo:run`                                                                                                              |
+| Seeds          | `20261051`, `20261052`, `20261053` — three seed groups, four generated people, two versions                                  |
+| People         | `generatePersonas(OUTDOOR_GEAR_SHOPPERS, { seed: 20261024 })`, the audience's own seed                                       |
+| Engine         | `@personavision/engine` 0.0.0, offline deterministic, calibration `null`                                                     |
+| Decision layer | `offline-deterministic`; no API key is read and nothing but loopback is reached                                              |
+| Wall clock     | about **20 seconds** for the swarm on a laptop, plus the workspace build the command runs first — call it a minute from cold |
+| Port           | 4173, and the run stops rather than writing an artifact served from somewhere else                                           |
+
+Two things worth knowing before running it:
+
+- **It builds first.** The script is `pnpm -r build && tsx scripts/generate-demo-run.ts`, with
+  no `--conditions=development`. Under that condition the workspace resolves to its
+  TypeScript sources and esbuild's `keepNames` injects a `__name` helper into the functions
+  the browser step hands to `page.evaluate` — which are serialised into the page, where no
+  such helper exists. Every session then comes back as `ReferenceError: __name is not defined`
+  and an automation failure.
+- **Two runs leave the directory byte-identical.** Every draw is seeded and the artifact's
+  timestamps are the run's own rather than the host clock's, so a re-commit is a reviewable
+  diff. To check:
+
+  ```sh
+  pnpm demo:run && find runs/2026-10-24-1402-northwind-demo -type f | sort | xargs shasum > /tmp/a
+  pnpm demo:run && find runs/2026-10-24-1402-northwind-demo -type f | sort | xargs shasum > /tmp/b
+  diff /tmp/a /tmp/b
+  ```
+
+What the committed run reads as, and the numbers behind it, are on issues #78 and #10;
+`tests/demo-run.test.ts` holds it to the shape, the size budget and the acceptance table of
+`docs/FLOW.md` section 5.
+
 ## Variants
 
 | Variant | Where               | What it is                                                                                                                                                |
@@ -176,11 +220,11 @@ that file and that section applies to one variant and not the other.
 flow, and an agent who scrolls can buy the boots. A broken flow would be a bug rather than a
 usability defect, and would make the A/B comparison meaningless.
 
-| #     | Defect                               | Step and page                                                                 | Region                                          | What it does                                                                                                                                                                                                                                             |
-| ----- | ------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | The completing action nobody sees    | Review, `/b/review.html`                                                      | `complete`                                      | Reads "Confirm purchase · $147.95", sits below a 676 px spacer that puts it under the fold at both viewports, and wears the shop's weaker button treatment — the same control as variant A's "Place order", demoted. Nothing above it advances the task. |
-| **2** | The fee that arrives after the card  | Review, `/b/review.html`; begins on `/b/cart.html`                            | `fee-row`, with `cart-total` and `shipping-row` | A $9.95 service fee appears for the first time **after** payment details are entered. The cart and payment totals read $129.00 with shipping "calculated later" and "calculated at next step"; the review total reads $147.95.                           |
-| **3** | The banner that takes the first look | Cart, payment and review: `/b/cart.html`, `/b/payment.html`, `/b/review.html` | `promo`                                         | A "SPRING SALE −20% · code SPRING20 · today only" banner sits above the content, so it is first in the reading order and competes with the primary action for the first fixation. It is absent from the confirmation step.                               |
+| #     | Defect                               | Step and page                                                                 | Region                                          | What it does                                                                                                                                                                                                                                                                   |
+| ----- | ------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | The completing action nobody sees    | Review, `/b/review.html`                                                      | `complete`                                      | Reads "Confirm purchase · $147.95", sits below a 1400 px spacer that puts it more than one scroll under the fold at both viewports, and wears the shop's weaker button treatment — the same control as variant A's "Place order", demoted. Nothing above it advances the task. |
+| **2** | The fee that arrives after the card  | Review, `/b/review.html`; begins on `/b/cart.html`                            | `fee-row`, with `cart-total` and `shipping-row` | A $9.95 service fee appears for the first time **after** payment details are entered. The cart and payment totals read $129.00 with shipping "calculated later" and "calculated at next step"; the review total reads $147.95.                                                 |
+| **3** | The banner that takes the first look | Cart, payment and review: `/b/cart.html`, `/b/payment.html`, `/b/review.html` | `promo`                                         | A "SPRING SALE −20% · code SPRING20 · today only" banner sits above the content, so it is first in the reading order and competes with the primary action for the first fixation. It is absent from the confirmation step.                                                     |
 
 ### Also carried over, and deliberately not a declared defect
 
@@ -243,9 +287,17 @@ completing action" is as unambiguous for a driver and for a finding as it is on 
 
 ### The spacer, and the fold arithmetic
 
-`.pushdown` in `shared/shop.css` is **676 px**. The value is measured, not guessed: the
+`.pushdown` in `shared/shop.css` is **1400 px**. The value is measured, not guessed: the
 prototype's own `.pushdown` is `height: 150px`, but it is sized for a 9 px thumbnail of a page
 and does not transfer to a real browser.
+
+It was 676 px until the first real run (#78). That put the control's top edge 180 px below the
+mobile fold, which is below the fold and not out of sight: an agent that scrolls once —
+0.75 of a viewport, which is what the decision loop's scroll does — brings it into view, looks
+at it, and clicks it. Two of the three sessions that reached variant B's review step fixated
+it, so the defect the demo leads with was not planted at all. The spacer now puts the control
+past **one** scroll at both viewports: 1748 px against a band that ends at 1477 px on mobile
+and 1575 px on desktop. Nobody who reaches the step sees it, which is the claim.
 
 Measured in headless Chromium at both device-emulated viewports, on the top edge of
 `[data-aoi="complete"]`:
@@ -253,31 +305,33 @@ Measured in headless Chromium at both device-emulated viewports, on the top edge
 | Measurement                                        | px   |
 | -------------------------------------------------- | ---- |
 | Top edge of the completing action, less the spacer | 348  |
-| The .pushdown spacer                               | 676  |
-| Top edge of the completing action, as served       | 1024 |
+| The .pushdown spacer                               | 1400 |
+| Top edge of the completing action, as served       | 1748 |
 | The fold at 390 x 844                              | 844  |
-| Below the mobile fold                              | 180  |
+| Below the mobile fold                              | 904  |
 | The fold at 1440 x 900                             | 900  |
-| Below the desktop fold                             | 124  |
+| Below the desktop fold                             | 848  |
 
-348 + 676 = 1024, so the control's top edge is 180 px below the fold at `390 × 844` and 124 px
+348 + 1400 = 1748, so the control's top edge is 904 px below the fold at `390 × 844` and 848 px
 below it at `1440 × 900`. The first row is arithmetic, not a separate measurement: _deleting_
 the spacer puts the top edge at 340 px rather than 348 px, because the button's 8 px top
 margin then collapses with the field's 12 px bottom margin instead of stacking after the
-spacer. 1024 px and 676 px are the measured numbers; 348 is the difference between them. 180 px is what the prototype's first finding claims — _"'Confirm
-purchase' sits about 180 px below the fold on the review step"_ — and the desktop viewport is
-the binding check on the other side: a spacer small enough to leave the control visible at
-`1440 × 900` would not plant the defect at all. The page's `scrollHeight` is 1333 px at
-`390 × 844`, so the control is one scroll away rather than unreachable.
+spacer. 1748 px and 1400 px are the measured numbers; 348 is the difference between them.
 
-Those three numbers — 1024 px, and 180 px and 124 px below the two folds — are asserted
+The binding check is **one scroll**, not the fold: the decision loop scrolls by 0.75 of a
+viewport, so after one scroll the page is visible to 1477 px on mobile and 1575 px on desktop,
+and a control above either of those is found and clicked. 1748 px is past both. The page's
+`scrollHeight` is 2057 px at `390 × 844` and 1873 px at `1440 × 900`, so the control is
+reachable — two scrolls, or one keyboard End — rather than unreachable.
+
+Those three numbers — 1748 px, and 904 px and 848 px below the two folds — are asserted
 against a live browser in `test/drive.test.ts`, off the `belowFold` and `bbox` a capture of
 the review step reports. The same test requires variant A's completing action to be above the
 fold at both viewports.
 
 One consequence of the figures being the same at both viewports is worth knowing before a run
 is scored: at `390 × 844` the one-column stack puts the order summary **after** the completing action, so
-the newly revealed fee row is at 1188 px — also below the fold, and below the button. At
+the newly revealed fee row is at 1912 px — also below the fold, and below the button. At
 `1440 × 900` the summary is in the right column with the fee row at 246 px, above the fold,
 and only the completing action is below it. Defect 2 is therefore the one a desktop agent
 meets first and a mobile agent meets second.

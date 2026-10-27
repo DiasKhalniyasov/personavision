@@ -20,7 +20,7 @@ export { mountApp, serveRunData } from '../app';
 export const SEED_RUN = '2026-10-24-1402-northwind-demo';
 
 // Under the jsdom environment `new URL(…, import.meta.url)` throws, as `tests/app.tsx` notes.
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../runs');
+const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../tests/fixtures/runs');
 
 const layout = runPaths('');
 

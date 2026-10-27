@@ -292,11 +292,21 @@ describeWithChromium('driving the northwind task', () => {
       expect(screen.scrolled).toBe(true);
     }
 
-    // `demo/README.md`'s fold arithmetic, measured: a top edge at 1024 px against the two
-    // folds, so 180 px below the mobile fold and 124 px below the desktop one.
-    expect(Math.round(mobile.primaryAction.bbox.y)).toBe(1024);
-    expect(Math.round(mobile.primaryAction.bbox.y - mobile.capture.foldY)).toBe(180);
-    expect(Math.round(desktop.primaryAction.bbox.y - desktop.capture.foldY)).toBe(124);
+    // `demo/README.md`'s fold arithmetic, measured: a top edge at 1748 px against the two
+    // folds, so 904 px below the mobile fold and 848 px below the desktop one. The spacer
+    // grew from 676 px in #78: at 676 the control was one 0.75-viewport scroll away, which
+    // the swarm found and clicked, and a control the swarm finds is not planted defect 1.
+    expect(Math.round(mobile.primaryAction.bbox.y)).toBe(1748);
+    expect(Math.round(mobile.primaryAction.bbox.y - mobile.capture.foldY)).toBe(904);
+    expect(Math.round(desktop.primaryAction.bbox.y - desktop.capture.foldY)).toBe(848);
+    // Past one scroll of the decision loop's own 0.75 of a viewport, at both viewports:
+    // this is what makes it a control nobody sees rather than one nobody sees at first.
+    for (const screen of [mobile, desktop]) {
+      const oneScroll = Math.round(screen.capture.viewport.height * 0.75);
+      expect(screen.primaryAction.bbox.y).toBeGreaterThan(
+        oneScroll + screen.capture.viewport.height,
+      );
+    }
   });
 
   it(

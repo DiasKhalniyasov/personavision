@@ -27,7 +27,18 @@ import type { SessionState } from '../src/shell/useSession';
 
 // Under the jsdom environment `new URL(…, import.meta.url)` throws, so the path comes from
 // the string form, as `setup.ts` does.
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../runs');
+/**
+ * The runs root the screens' suites read: the hand-authored example run under
+ * `tests/fixtures/runs/`, not the committed artifact under `runs/`.
+ *
+ * They are the same run id and the same schema. The difference is what they promise: the
+ * fixture's numbers are fixed by hand and by `docs/design/prototype.html`, which is what a
+ * screen test needs to be able to say "S-15 is the rushed buyer who gave up on the review
+ * step"; the artifact's are whatever the engine measured over the demo shop on the day
+ * (#78), so a screen test written against them would change meaning whenever the shop or
+ * the engine did. `tests/demo-run.test.ts` is what reads the artifact.
+ */
+const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../tests/fixtures/runs');
 
 const json = (body: unknown): Response =>
   new Response(JSON.stringify(body), {

@@ -1,5 +1,6 @@
 /**
- * Generates the committed seed example run at `runs/2026-10-24-1402-northwind-demo/`.
+ * Generates the hand-authored example run at
+ * `tests/fixtures/runs/2026-10-24-1402-northwind-demo/`.
  *
  * The data is not invented. It is the representative run written into
  * `docs/design/prototype.html` — that file's `STEPS`, `PAGES`, `FIX`, `AOI_METRICS`,
@@ -12,9 +13,15 @@
  * exactly what this script produces. Nothing here reaches the network or reads a
  * credential.
  *
- * The fixture is temporary in character and permanent in location: the offline engine's
- * genuine artifact replaces it in place, at this path and under this schema, so nothing
- * here says "this is fake" beyond `engine.version: "seed-fixture"`.
+ * **It moved out of `runs/` in #78**, which generated the genuine artifact from the demo shop
+ * and put it at `runs/2026-10-24-1402-northwind-demo/` as planned. This run keeps the same
+ * id and the same schema and now lives under `tests/fixtures/runs/`, because what it is for
+ * survived the replacement: every screen's own suite is written against *known* data — that
+ * S-15 is the rushed buyer who gave up on the review step, that `B-review-complete` is the
+ * area nobody looked at — and the committed artifact's numbers are, by design, whatever the
+ * engine measured on the day. A screen test that read them would change its meaning every
+ * time the shop or the engine did. So the screens read this, and `tests/demo-run.test.ts`
+ * reads the artifact.
  *
  * The per-area numbers in `run.aoiMetrics` are not transcribed: they are computed from
  * this run's own session files by `@personavision/engine`'s `aggregate`, the one place in
@@ -1695,7 +1702,9 @@ export const writeSeedRun = async (runsRoot: string): Promise<string> => {
 };
 
 const main = async (): Promise<void> => {
-  const runsRoot = resolve(process.argv[2] ?? fileURLToPath(new URL('../runs', import.meta.url)));
+  const runsRoot = resolve(
+    process.argv[2] ?? fileURLToPath(new URL('../tests/fixtures/runs', import.meta.url)),
+  );
   const runDir = await writeSeedRun(runsRoot);
   process.stdout.write(`seed:example-run: wrote ${runDir}\n`);
 };

@@ -54,6 +54,16 @@ export const DESKTOP: Device = {
 };
 
 /** The fixture site's checkout, as `packages/browser`'s own integration suite declares it. */
+/**
+ * The four-step task the fixture pages declare, with a goal per step.
+ *
+ * The step goals are not decoration (#78): the prompt is the errand and a step's `goal` is
+ * what the person wants on that screen, and both the attention engine and the decision
+ * policy read whichever they are given lexically. "Buy the canvas tote bag: check out, pay
+ * and place the order" shares no word with "Checkout" — `checkout` is one token and `check`
+ * is another — so a session handed only the prompt ranks the cart's own copy above the
+ * control beside it and never leaves the first step.
+ */
 export const TASK: TaskDefinition = {
   id: 'checkout',
   prompt: 'Buy the canvas tote bag: check out, pay and place the order.',
@@ -63,24 +73,28 @@ export const TASK: TaskDefinition = {
       label: 'Cart',
       match: { urlPattern: '/cart\\.html', requiredSelector: '#cart-items' },
       primaryAction: { selector: '#cart-checkout' },
+      goal: 'Go to checkout.',
     },
     {
       id: 'payment',
       label: 'Payment',
       match: { urlPattern: '/payment\\.html', requiredSelector: '#payment-form' },
       primaryAction: { selector: '#payment-submit' },
+      goal: 'Pay, and review the order.',
     },
     {
       id: 'review',
       label: 'Review',
       match: { urlPattern: '/review\\.html', requiredSelector: '#review-summary' },
       primaryAction: { selector: '#review-place-order' },
+      goal: 'Place the order.',
     },
     {
       id: 'confirmation',
       label: 'Confirmation',
       match: { urlPattern: '/confirmation\\.html', requiredSelector: '#confirmation-receipt' },
       primaryAction: { selector: '#confirmation-continue-shopping' },
+      goal: 'Continue shopping.',
     },
   ],
 };

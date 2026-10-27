@@ -72,6 +72,7 @@ import type {
   DecisionContext,
   DecisionProvider,
   FixatedElement,
+  Goal,
   PastAction,
 } from '@personavision/provider';
 import type { AutomationFailure, OutcomePolicy, SessionTrace } from './outcome.js';
@@ -265,6 +266,10 @@ const asEngineCapture = (capture: Capture, step: string, screenshot: string): En
     isPrimaryAction: element.isPrimaryAction,
     belowFold: element.belowFold,
     selector: element.selector,
+    // The page's own name for this region, where it declared one: it is what the engine
+    // mints an area's id from, so dropping it here would hand the engine a capture that
+    // looks uninstrumented and split one control's dwell across the two viewports.
+    region: element.region ?? null,
   })),
 });
 
@@ -363,6 +368,28 @@ const gotSomewhere = (acted: ActResult, step: string, scrollY: number): boolean 
 const wentBackFromTheStart = (kind: DecisionActionKind, acted: ActResult, depth: number): boolean =>
   kind === 'backtrack' && acted.failure === 'navigation_error' && depth === 0;
 
+/**
+ * The areas of a screen the agent could actually see: those whose box overlaps the band the
+ * viewport shows at this scroll offset.
+ *
+ * Overlap rather than containment — an area straddling the bottom edge is partly on screen
+ * and can be looked at — and the band is in page space, as every box in a capture is.
+ *
+ * A screen where that leaves nothing falls back to the whole screen: a screen with no
+ * fixations at all would claim the agent never looked, which is a stranger thing to record
+ * than a page whose boxes disagree with its own scroll offset.
+ */
+const onScreen = (
+  aois: readonly Aoi[],
+  scrollY: number,
+  viewportHeight: number,
+): readonly Aoi[] => {
+  const visible = aois.filter(
+    (area) => area.bbox.y + area.bbox.height > scrollY && area.bbox.y < scrollY + viewportHeight,
+  );
+  return visible.length > 0 ? visible : aois;
+};
+
 /** A failure of our own, in the shape `decideOutcome` reads it. */
 const ourBreakage = (error: unknown, attempting: string, step: string): AutomationFailure => {
   const failure = toAutomationFailure(error, attempting);
@@ -377,7 +404,20 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   const budget = input.budget ?? new SessionBudget();
   const maxScreens = input.maxScreens ?? SCREENS_PER_STEP * Math.max(1, task.steps.length);
   const finalStepId = task.steps.at(-1)?.id ?? null;
-  const goal = { text: task.prompt };
+  /**
+   * What the agent is trying to do on the screen it is on: the step's own goal where the
+   * task declares one, and the whole prompt where it does not.
+   *
+   * Both the attention engine and the decision layer read it lexically, so handing the
+   * whole errand to every screen makes a conventional next-step control — "Checkout",
+   * which shares no word with "Buy the hiking boots and pay with the saved card" — rank
+   * below the page's copy, and no session gets past the first step (#78). The step goal
+   * names no element and no selector: it narrows what the person wants here, not what the
+   * page offers.
+   */
+  const goalOn = (stepId: string): Goal => ({
+    text: taskStep(task, stepId)?.goal ?? task.prompt,
+  });
   const ctx: CaptureContext = {
     variant: variant.id,
     device: persona.device,
@@ -458,13 +498,25 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       const step = capture.step;
       const screenshot = capture.screenshot ?? runPaths('').screenshot(variant.id, step);
 
+      const goal = goalOn(step);
       const aois = await buildAois({
         capture: asEngineCapture(capture, step, screenshot),
         variant: variant.id,
         segmenter: input.segmenter ?? noSegmenter,
       });
       const scan = sampleFixations({
-        aois,
+        // Only what is on the agent's screen. The sampler draws over the areas it is handed
+        // and takes no viewport, so this is where the page's own extent becomes a limit on
+        // where a look can land: handed every area of the page it puts fixations on content
+        // three screens down, and a control below the fold is then "looked at" without
+        // anybody having scrolled to it — which makes the defect the demo leads with
+        // undiscoverable (#78; `docs/FLOW.md` section 8: a control below the fold is a
+        // finding waiting to happen).
+        //
+        // The run's own `aois` stay the whole screen's, so an area nobody could see is still
+        // declared and still carries its honest zero in `aoiMetrics` rather than going
+        // missing from the artifact.
+        aois: onScreen(aois, scrollY, capture.viewport.height),
         goal,
         persona: persona.traits,
         history: fixations,

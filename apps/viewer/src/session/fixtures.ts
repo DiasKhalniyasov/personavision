@@ -10,8 +10,12 @@ import { readFile } from 'node:fs/promises';
 
 export const EXAMPLE_RUN_ID = '2026-10-24-1402-northwind-demo';
 
-/** The repository root, from this file. */
-const REPOSITORY = new URL('../../../../', import.meta.url);
+/**
+ * Where the URL space's `/runs/…` is rooted for these tests: the hand-authored example run
+ * under `tests/fixtures/runs/`, which is fixed by hand, rather than the committed artifact
+ * under `runs/`, whose numbers are whatever the engine measured (#78).
+ */
+const REPOSITORY = new URL('../../../../tests/fixtures/', import.meta.url);
 
 /** Where the run data sits in the URL space `personavision open` serves. */
 export const EXAMPLE_RUN_BASE = new URL(`/runs/${EXAMPLE_RUN_ID}/`, 'http://run-data.test/');

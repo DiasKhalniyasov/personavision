@@ -1,0 +1,434 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "S-23",
+  "runId": "2026-10-24-1402-northwind-demo",
+  "variant": "B",
+  "taskId": "buy-boots",
+  "kind": "simulated",
+  "persona": {
+    "id": "price",
+    "traits": {
+      "persistence": 0.6,
+      "scanningVsReading": 0.8,
+      "detailOrientation": 0.7,
+      "interfaceFamiliarity": 0.5,
+      "patience": 0.4,
+      "riskTolerance": 0.3
+    },
+    "device": {
+      "name": "iPhone 15",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 3,
+      "touch": true
+    }
+  },
+  "participant": null,
+  "seed": 2,
+  "startedAt": "2026-10-24T14:18:30.000Z",
+  "durationMs": 15600,
+  "screens": [
+    {
+      "index": 0,
+      "step": "cart",
+      "screenshot": "screenshots/B/cart.png",
+      "scrollY": 0,
+      "intent": "See the real total with shipping before anything else.",
+      "decidedAction": "clicked \"Checkout\""
+    },
+    {
+      "index": 1,
+      "step": "payment",
+      "screenshot": "screenshots/B/payment.png",
+      "scrollY": 0,
+      "intent": "Check nothing has been added to the price.",
+      "decidedAction": "automation failure: the card number field never resolved"
+    }
+  ],
+  "fixations": [
+    {
+      "index": 0,
+      "screenIndex": 0,
+      "tMs": 570,
+      "durationMs": 509,
+      "x": 192.2,
+      "y": 94.2,
+      "pageX": 192.2,
+      "pageY": 94.2,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 1,
+      "screenIndex": 0,
+      "tMs": 1338,
+      "durationMs": 268,
+      "x": 199.9,
+      "y": 115.6,
+      "pageX": 199.9,
+      "pageY": 115.6,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 2,
+      "screenIndex": 0,
+      "tMs": 2111,
+      "durationMs": 262,
+      "x": 125.1,
+      "y": 226,
+      "pageX": 125.1,
+      "pageY": 226,
+      "aoiId": "B-cart-cart-line"
+    },
+    {
+      "index": 3,
+      "screenIndex": 0,
+      "tMs": 2721,
+      "durationMs": 318,
+      "x": 298.9,
+      "y": 338.2,
+      "pageX": 298.9,
+      "pageY": 338.2,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 4,
+      "screenIndex": 0,
+      "tMs": 3338,
+      "durationMs": 359,
+      "x": 307.1,
+      "y": 378.8,
+      "pageX": 307.1,
+      "pageY": 378.8,
+      "aoiId": "B-cart-cart-total"
+    },
+    {
+      "index": 5,
+      "screenIndex": 0,
+      "tMs": 3861,
+      "durationMs": 218,
+      "x": 189.8,
+      "y": 99.9,
+      "pageX": 189.8,
+      "pageY": 99.9,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 6,
+      "screenIndex": 0,
+      "tMs": 4615,
+      "durationMs": 405,
+      "x": 198.9,
+      "y": 439.5,
+      "pageX": 198.9,
+      "pageY": 439.5,
+      "aoiId": "B-cart-cart-checkout"
+    },
+    {
+      "index": 7,
+      "screenIndex": 0,
+      "tMs": 5331,
+      "durationMs": 499,
+      "x": 192.1,
+      "y": 93,
+      "pageX": 192.1,
+      "pageY": 93,
+      "aoiId": "B-cart-promo"
+    },
+    {
+      "index": 8,
+      "screenIndex": 1,
+      "tMs": 6574,
+      "durationMs": 551,
+      "x": 190.5,
+      "y": 95.4,
+      "pageX": 190.5,
+      "pageY": 95.4,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 9,
+      "screenIndex": 1,
+      "tMs": 7190,
+      "durationMs": 265,
+      "x": 206.2,
+      "y": 125.4,
+      "pageX": 206.2,
+      "pageY": 125.4,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 10,
+      "screenIndex": 1,
+      "tMs": 8066,
+      "durationMs": 213,
+      "x": 122.4,
+      "y": 225.7,
+      "pageX": 122.4,
+      "pageY": 225.7,
+      "aoiId": "B-payment-email"
+    },
+    {
+      "index": 11,
+      "screenIndex": 1,
+      "tMs": 8626,
+      "durationMs": 468,
+      "x": 156,
+      "y": 290.7,
+      "pageX": 156,
+      "pageY": 290.7,
+      "aoiId": "B-payment-card"
+    },
+    {
+      "index": 12,
+      "screenIndex": 1,
+      "tMs": 9422,
+      "durationMs": 210,
+      "x": 98.1,
+      "y": 357.1,
+      "pageX": 98.1,
+      "pageY": 357.1,
+      "aoiId": "B-payment-expiry"
+    },
+    {
+      "index": 13,
+      "screenIndex": 1,
+      "tMs": 10080,
+      "durationMs": 195,
+      "x": 295.9,
+      "y": 348,
+      "pageX": 295.9,
+      "pageY": 348,
+      "aoiId": "B-payment-cvc"
+    },
+    {
+      "index": 14,
+      "screenIndex": 1,
+      "tMs": 10825,
+      "durationMs": 279,
+      "x": 210.4,
+      "y": 536.7,
+      "pageX": 210.4,
+      "pageY": 536.7,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 15,
+      "screenIndex": 1,
+      "tMs": 11545,
+      "durationMs": 348,
+      "x": 125,
+      "y": 560.6,
+      "pageX": 125,
+      "pageY": 560.6,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 16,
+      "screenIndex": 1,
+      "tMs": 12044,
+      "durationMs": 464,
+      "x": 298.7,
+      "y": 633.1,
+      "pageX": 298.7,
+      "pageY": 633.1,
+      "aoiId": "B-payment-summary"
+    },
+    {
+      "index": 17,
+      "screenIndex": 1,
+      "tMs": 12767,
+      "durationMs": 368,
+      "x": 289.7,
+      "y": 564.5,
+      "pageX": 289.7,
+      "pageY": 564.5,
+      "aoiId": "B-payment-shipping-row"
+    },
+    {
+      "index": 18,
+      "screenIndex": 1,
+      "tMs": 13419,
+      "durationMs": 252,
+      "x": 195.5,
+      "y": 97.5,
+      "pageX": 195.5,
+      "pageY": 97.5,
+      "aoiId": "B-payment-promo"
+    },
+    {
+      "index": 19,
+      "screenIndex": 1,
+      "tMs": 14146,
+      "durationMs": 441,
+      "x": 193.2,
+      "y": 417.1,
+      "pageX": 193.2,
+      "pageY": 417.1,
+      "aoiId": "B-payment-primary"
+    },
+    {
+      "index": 20,
+      "screenIndex": 1,
+      "tMs": 14789,
+      "durationMs": 218,
+      "x": 202.1,
+      "y": 699.8,
+      "pageX": 202.1,
+      "pageY": 699.8,
+      "aoiId": "B-payment-trust"
+    }
+  ],
+  "saccades": [
+    {
+      "fromFixation": 0,
+      "toFixation": 1,
+      "amplitudePx": 22.7,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 1,
+      "toFixation": 2,
+      "amplitudePx": 133.4,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 2,
+      "toFixation": 3,
+      "amplitudePx": 206.9,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 3,
+      "toFixation": 4,
+      "amplitudePx": 41.4,
+      "durationMs": 20
+    },
+    {
+      "fromFixation": 4,
+      "toFixation": 5,
+      "amplitudePx": 302.6,
+      "durationMs": 30
+    },
+    {
+      "fromFixation": 5,
+      "toFixation": 6,
+      "amplitudePx": 339.7,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 6,
+      "toFixation": 7,
+      "amplitudePx": 346.6,
+      "durationMs": 32
+    },
+    {
+      "fromFixation": 7,
+      "toFixation": 8,
+      "amplitudePx": 2.9,
+      "durationMs": 18
+    },
+    {
+      "fromFixation": 8,
+      "toFixation": 9,
+      "amplitudePx": 33.9,
+      "durationMs": 19
+    },
+    {
+      "fromFixation": 9,
+      "toFixation": 10,
+      "amplitudePx": 130.7,
+      "durationMs": 23
+    },
+    {
+      "fromFixation": 10,
+      "toFixation": 11,
+      "amplitudePx": 73.2,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 11,
+      "toFixation": 12,
+      "amplitudePx": 88.1,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 12,
+      "toFixation": 13,
+      "amplitudePx": 198,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 13,
+      "toFixation": 14,
+      "amplitudePx": 207.2,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 14,
+      "toFixation": 15,
+      "amplitudePx": 88.7,
+      "durationMs": 22
+    },
+    {
+      "fromFixation": 15,
+      "toFixation": 16,
+      "amplitudePx": 188.2,
+      "durationMs": 26
+    },
+    {
+      "fromFixation": 16,
+      "toFixation": 17,
+      "amplitudePx": 69.2,
+      "durationMs": 21
+    },
+    {
+      "fromFixation": 17,
+      "toFixation": 18,
+      "amplitudePx": 476.4,
+      "durationMs": 37
+    },
+    {
+      "fromFixation": 18,
+      "toFixation": 19,
+      "amplitudePx": 319.6,
+      "durationMs": 31
+    },
+    {
+      "fromFixation": 19,
+      "toFixation": 20,
+      "amplitudePx": 282.8,
+      "durationMs": 29
+    }
+  ],
+  "actions": [
+    {
+      "tMs": 5743,
+      "type": "click",
+      "target": "Checkout",
+      "aoiId": "B-cart-cart-checkout",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 10772,
+      "type": "type",
+      "target": "Card number",
+      "aoiId": "B-payment-card",
+      "value": null,
+      "ok": false
+    }
+  ],
+  "outcome": {
+    "status": "automation_failure",
+    "step": "payment",
+    "reason": "Payment — selector timeout on the card iframe",
+    "attribution": "automation",
+    "excludedFromScores": true
+  },
+  "integrity": {
+    "selectorFailures": 1,
+    "retries": 1
+  }
+}

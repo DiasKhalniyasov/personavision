@@ -16,7 +16,7 @@ import { eventLog, NOTHING_RECORDED } from '../../src/screens/replay/eventLog';
  * which one the scrubber is on — so the whole file is the rendering of these answers.
  */
 
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../runs');
+const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../tests/fixtures/runs');
 const SEED_RUN = '2026-10-24-1402-northwind-demo';
 const layout = runPaths('');
 

@@ -89,6 +89,25 @@ const POLICY = {
   /** Failures and pauses on one screen before it gives up early: 2 at no persistence, 8 at full. */
   frustrationBase: 2,
   frustrationPerPersistence: 6,
+  /**
+   * How many screenfuls further down a page the agent is willing to look before it judges
+   * the page on what it has seen — **one**, and a second only at the very top of the
+   * persistence scale, because the figure is whole screens and `Math.floor` is what turns a
+   * trait into one.
+   *
+   * It was unconditionally one until #78, where the swarm began to see only what is on its
+   * screen: before that the agent's gaze could land anywhere on a page, so how far it had
+   * scrolled decided nothing and one scroll per screen was free. It is not free now — a
+   * control more than one screenful below the fold is a control that does not exist for an
+   * agent that may only scroll once — and the two populations this repository tests show why
+   * the curve belongs here: `packages/swarm`'s dogged person, at persistence 1, reads a long
+   * fixture page to the end and finds a control two and a half screens down, while the demo
+   * shop's most persistent generated shopper, at 0.759, stops after one screenful and never
+   * sees the control variant B buries (`demo/northwind/defects.json`, defect 1). Both of
+   * those are claims about people, and this is where the project says how far a person looks.
+   */
+  scrollsBase: 1,
+  scrollsPerPersistence: 1,
 } as const;
 
 /** Roles a person acts on, roles a person reads, and what everything else is worth. */
@@ -288,6 +307,8 @@ const budgets = (traits: PersonaTraits) => ({
   ),
   /** Failures and pauses on this screen before giving up early. */
   frustration: POLICY.frustrationBase + POLICY.frustrationPerPersistence * traits.persistence,
+  /** Screenfuls further down the page it will look before judging the page on what it saw. */
+  scrolls: Math.floor(POLICY.scrollsBase + POLICY.scrollsPerPersistence * traits.persistence),
 });
 
 /** How much the agent has done since the last click that actually got it somewhere. */
@@ -302,12 +323,15 @@ const fruitlessEffort = (history: readonly PastAction[]): number => {
 /** What the agent has already done on this screen. */
 const screenHistory = (context: DecisionContext) => {
   const here = context.history.filter((action) => action.step === context.step.id);
+  const scrolls = here.filter((action) => action.kind === 'scroll');
   return {
     attempts: here.length,
     failures: here.filter((action) => !action.ok).length,
     hesitations: here.filter((action) => action.kind === 'hesitate').length,
     backtracked: here.some((action) => action.kind === 'backtrack'),
-    scrolled: here.some((action) => action.kind === 'scroll'),
+    scrolls: scrolls.length,
+    /** A scroll the page did not answer: there is nothing further down to look at. */
+    scrolledInVain: scrolls.some((action) => !action.ok),
     readIds: new Set(
       here.filter((action) => action.kind === 'read').map((action) => action.targetElementId),
     ),
@@ -397,8 +421,9 @@ const intentFor = (
  * 3. **hesitate** — attempts on this screen have passed what its patience and its
  *    familiarity with interfaces allow. Once per screen, so that a pause is followed by an
  *    attempt rather than by another pause.
- * 4. **scroll** — nothing it has looked at is worth acting on, and it has not looked
- *    further down this screen yet.
+ * 4. **scroll** — nothing it has looked at is worth acting on, it has screenfuls of this
+ *    page left to spend (one, and two at the top of the persistence scale), and the last
+ *    scroll it tried actually moved the page.
  * 5. **read** — there is text it has not read, and it is enough of a reader to read it.
  * 6. **click** — the best candidate, sampled with seeded noise whose spread its risk
  *    tolerance sets, so that a near-tie is decided differently from seed to seed.
@@ -424,7 +449,11 @@ const decideAction = (
 
   const best = candidates[0];
   if (best === undefined || best.score < POLICY.scrollThreshold) {
-    if (!here.scrolled) return { action: { kind: 'scroll', targetElementId: null } };
+    // Further down the page, while it has screenfuls left to spend and the page is still
+    // answering: a scroll that moved nothing has told the agent there is no more page.
+    if (here.scrolls < limits.scrolls && !here.scrolledInVain) {
+      return { action: { kind: 'scroll', targetElementId: null } };
+    }
     if (best === undefined) return { action: { kind: 'hesitate', targetElementId: null } };
   }
 

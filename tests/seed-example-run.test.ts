@@ -11,14 +11,19 @@ import type { Findings, Run, Session } from '@personavision/contract';
 import { RUN_ID, writeSeedRun } from '../scripts/seed-example-run.js';
 
 /**
- * The committed seed example run, read from disk as a screen would read it, and asserted
- * against the two documents that are binding on it: `docs/design/prototype.html`'s
+ * The committed hand-authored example run, read from disk as a screen would read it, and
+ * asserted against the two documents that are binding on it: `docs/design/prototype.html`'s
  * representative run and the required reading of `docs/FLOW.md` section 5. Every number
  * restated here is restated on purpose — that is the assertion.
+ *
+ * It lives under `tests/fixtures/runs/` since #78, which put the genuine artifact at
+ * `runs/2026-10-24-1402-northwind-demo/`. This file still says what it always said: it is
+ * the suite for the run the screens' own suites are written against. `tests/demo-run.test.ts`
+ * is the one that reads the artifact.
  */
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
-const committedDir = join(repoRoot, 'runs', RUN_ID);
+const committedDir = join(repoRoot, 'tests', 'fixtures', 'runs', RUN_ID);
 const paths = runPaths(committedDir);
 
 const readJson = <Parsed>(file: string): Parsed => JSON.parse(readFileSync(file, 'utf8')) as Parsed;

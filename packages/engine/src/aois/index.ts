@@ -10,7 +10,7 @@
  * additive and nothing here requires it — see `../../docs/sam-segmenter.md`.
  */
 
-export { aoiId } from './aoi-id.js';
+export { aoiId, aoiRegionId } from './aoi-id.js';
 export type { AoiIdentity } from './aoi-id.js';
 
 export { buildAois } from './build-aois.js';
