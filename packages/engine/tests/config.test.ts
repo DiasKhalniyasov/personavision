@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { defaultEngineConfig, resolveEngineConfig } from '../src/config.js';
+import { defaultEngineConfig, resolveEngineConfig, resolveFrom } from '../src/config.js';
 import type { EngineConfigOverrides } from '../src/config.js';
 
 /** Every leaf of the configuration object, as `group.subgroup.key`, sorted. */
@@ -185,20 +185,74 @@ describe('resolveEngineConfig', () => {
     expect(Object.getPrototypeOf(config)).toBe(Object.prototype);
   });
 
-  it('answers the defaults, uncalibrated, when no overrides are given', () => {
-    const resolved = resolveEngineConfig();
+  it('answers the defaults with no record and no overrides at all', () => {
+    // Since #90 committed `config/calibrated.json`, `resolveEngineConfig()` answers the
+    // fitted layer; the uncalibrated answer is what this one is about, and the calibrated
+    // seam below has the other half.
+    const resolved = resolveFrom(null);
 
     expect(resolved.config).toEqual(defaultEngineConfig);
     expect(resolved.calibrated).toBe(false);
+    expect(resolved.metrics).toBeNull();
   });
 });
 
 describe('the calibrated-configuration seam', () => {
-  const configDir = new URL('../config/', import.meta.url);
+  const recordPath = new URL('../config/calibrated.json', import.meta.url);
+  const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
+    weights: EngineConfigOverrides;
+    metrics: Record<string, unknown>;
+  };
 
-  it('has no calibrated.json yet, so the defaults stand and calibrated is false', () => {
-    expect(existsSync(new URL('calibrated.json', configDir))).toBe(false);
-    expect(resolveEngineConfig().calibrated).toBe(false);
+  it('holds the fitted values the calibration step committed (#90)', () => {
+    expect(existsSync(recordPath)).toBe(true);
+    expect(Object.keys(record.weights).length).toBeGreaterThan(0);
+  });
+
+  it('layers them over the defaults and reports the configuration as calibrated', () => {
+    const resolved = resolveEngineConfig();
+
+    expect(resolved.calibrated).toBe(true);
+    expect(resolved.config.fixationDuration.medianMs).toBe(
+      record.weights.fixationDuration?.medianMs,
+    );
+    // A leaf the fit did not move is still the engine's own default, key by key.
+    expect(resolved.config.saccade.amplitude.medianPx).toBe(
+      defaultEngineConfig.saccade.amplitude.medianPx,
+    );
+  });
+
+  it('surfaces the figures those values were measured at, so a run loop reads no file', () => {
+    const { metrics } = resolveEngineConfig();
+
+    // The run artifact's calibration block (#92) is written from this and nothing else, and
+    // `packages/contract` admits one benchmark name.
+    expect(metrics?.benchmark).toBe('UEyes');
+    expect(metrics).toEqual({ benchmark: 'UEyes', ...record.metrics });
+    for (const figure of ['cc', 'nss', 'scanMatch'] as const) {
+      expect(typeof metrics?.[figure], figure).toBe('number');
+    }
+    // A figure measured over generated records is not a published benchmark score, and the
+    // surface says so rather than leaving the badge to imply otherwise.
+    expect(metrics?.corpus.synthetic).toBe(true);
+    expect(metrics?.scope).toBe('webpage');
+  });
+
+  it('and a run’s own weights still win over the fitted ones', () => {
+    const resolved = resolveEngineConfig({ fixationDuration: { medianMs: 211 } });
+
+    expect(resolved.config.fixationDuration.medianMs).toBe(211);
+    expect(resolved.calibrated).toBe(true);
+  });
+
+  it('with no record at all: the defaults stand, calibrated is false and there are no metrics', () => {
+    // The committed file is a build-time import and cannot be made to disappear from one,
+    // so the branch behind the badge's "not calibrated" state is exercised here (#90).
+    const resolved = resolveFrom(null);
+
+    expect(resolved.config).toEqual(defaultEngineConfig);
+    expect(resolved.calibrated).toBe(false);
+    expect(resolved.metrics).toBeNull();
   });
 });
 

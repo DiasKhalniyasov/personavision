@@ -20,7 +20,10 @@
  * scoring: the engine reached through its own published `predict`, scored beside both
  * baselines per record, per category and overall, with the provenance a figure is quoted
  * with — which is why this package declares `@personavision/engine` as a dependency from
- * that ticket on. The fit arrives as a later ticket and exports from here.
+ * that ticket on. #90 is the fit: a seeded, bounded search over the engine's configuration
+ * object, maximising the web category's CC plus ScanMatch, with the result committed as data
+ * at `packages/engine/config/calibrated.json` and the engine reporting the figures it was
+ * measured at. `docs/fitting.md` records the space, the objective, the seed and the cost.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and, from
  * #88, the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -238,3 +241,38 @@ export type {
   RawRecord,
   RawScanpath,
 } from './convert/index.js';
+
+// The fit (#90): the engine's configuration searched, seeded and bounded, against the
+// objective #88 measures — and committed as data at `packages/engine/config/calibrated.json`,
+// which the engine imports at build time.
+export {
+  CALIBRATED_SCHEMA_VERSION,
+  FIT_DEFAULTS,
+  FitError,
+  OBJECTIVE,
+  SEARCH_COST,
+  SEARCH_KIND,
+  SEARCH_SPACE,
+  calibratedRecordOf,
+  comparableFit,
+  defaultAt,
+  fit,
+  gridCandidates,
+  objectiveOf,
+} from './fit/index.js';
+export type {
+  BoundReached,
+  CalibratedFileRecord,
+  Candidate,
+  CorpusFigures,
+  FitOptions,
+  FitProgress,
+  FitResult,
+  Objective,
+  ObjectiveMetricId,
+  ObjectiveTerm,
+  ObjectiveTermValue,
+  ObjectiveValue,
+  ScoredCandidate,
+  SearchParameter,
+} from './fit/index.js';

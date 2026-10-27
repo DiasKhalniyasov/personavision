@@ -108,13 +108,14 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers, the download, the conversion and the scoring, and nothing else', () => {
+  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers, the download, the conversion, the scoring and the fit, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
       'BASELINE_SCANPATH',
       'BaselineError',
       'CACHE_ENV_VAR',
+      'CALIBRATED_SCHEMA_VERSION',
       'CENTRE_BIAS_PREDICTOR_ID',
       'CENTRE_BIAS_PRIOR',
       'COMMITTED_CORPUS_ID',
@@ -126,9 +127,12 @@ describe('the public entry point', () => {
       'DEFAULT_CHECKSUM_ALGORITHM',
       'DatasetFetchError',
       'ENGINE_PREDICTOR_ID',
+      'FIT_DEFAULTS',
+      'FitError',
       'MANIFEST_SCHEMA_VERSION',
       'MAP_RENDERING',
       'ManifestError',
+      'OBJECTIVE',
       'RANDOM_FIXATION_PREDICTOR_ID',
       'RANDOM_FIXATION_UNIFORMITY',
       'RECORD_CATEGORIES',
@@ -141,6 +145,9 @@ describe('the public entry point', () => {
       'SCANPATH_METRIC_PARAMETERS',
       'SCANPATH_REGION_COUNT',
       'SCORING_BUDGET',
+      'SEARCH_COST',
+      'SEARCH_KIND',
+      'SEARCH_SPACE',
       'SaliencyMetricError',
       'ScanpathMetricError',
       'ScoreError',
@@ -148,6 +155,7 @@ describe('the public entry point', () => {
       'VerificationError',
       'aucJudd',
       'cacheRoot',
+      'calibratedRecordOf',
       'cc',
       'centreBiasBaseline',
       'centreBiasPeakCell',
@@ -155,13 +163,17 @@ describe('the public entry point', () => {
       'centreBiasPrior',
       'committedCorpus',
       'comparableFigures',
+      'comparableFit',
       'convertRecord',
       'convertRecords',
       'datasetCachePaths',
+      'defaultAt',
       'defaultBaselines',
       'describeChecksum',
       'enginePredictor',
       'fetchDataset',
+      'fit',
+      'gridCandidates',
       'hashFile',
       'isContainedRelativePath',
       'isDatasetId',
@@ -173,6 +185,7 @@ describe('the public entry point', () => {
       'mapResolution',
       'needlemanWunsch',
       'nss',
+      'objectiveOf',
       'parseManifest',
       'poolFixations',
       'randomFixationBaseline',

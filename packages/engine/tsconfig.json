@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    // The calibrated configuration (#90) is committed data imported as a module, so the
+    // fitted values reach the engine at build time and it still reads no file at run time.
+    "resolveJsonModule": true
   },
   "include": ["src"]
 }

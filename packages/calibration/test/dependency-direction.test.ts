@@ -108,8 +108,14 @@ describe('the engine is read from one module and no other', () => {
       ...sources('packages/calibration/test'),
     ].filter(({ text }) => imports(text, '@personavision/engine'));
 
+    // #90 is the second such ticket: the fit searches `EngineConfig` and writes
+    // `packages/engine/config/calibrated.json`, so it reads the engine's own configuration
+    // object and its override type. Named here deliberately, as #88 was, and recorded on #90
+    // and #11. The metrics and the baselines still import nothing from the engine.
     expect(importers.map(({ path }) => path).sort()).toEqual([
+      'packages/calibration/src/fit/search.ts',
       'packages/calibration/src/score/score.ts',
+      'packages/calibration/test/fit.test.ts',
       'packages/calibration/test/score.test.ts',
     ]);
   });

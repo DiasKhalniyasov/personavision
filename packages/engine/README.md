@@ -50,12 +50,13 @@ published ranges where one exists, and not claimed to be fitted.
 
 `resolveEngineConfig(overrides)` layers the calibrated values and then the overrides over
 the defaults — later layers win key by key, to any depth — and answers
-`{ config, calibrated }`. It is pure: the same overrides always produce a deeply equal
-result, neither the overrides nor the defaults are mutated, and no sub-object of the answer
-is the module-level default itself, so a caller may hand in `run.engine.weights` directly.
+`{ config, calibrated, metrics }`. It is pure: the same overrides always produce a deeply
+equal result, neither the overrides nor the defaults are mutated, and no sub-object of the
+answer is the module-level default itself, so a caller may hand in `run.engine.weights`
+directly.
 
 ```ts
-const { config, calibrated } = resolveEngineConfig(run.engine.weights);
+const { config, calibrated, metrics } = resolveEngineConfig(run.engine.weights);
 ```
 
 A **run artifact carries `alpha`, `beta` and `gamma` only**: `runSchema.engine.weights` in
@@ -66,13 +67,24 @@ is a change to the contract's schema, to be asked for on #7.
 
 ### The calibrated configuration
 
-`packages/engine/config/calibrated.json` is the path the calibration step commits its
-fitted values to. It is imported as a static data module when present and becomes the
-default layer; `calibrated` then reports `true`. While the file is absent, the resolved
-configuration is the defaults and `calibrated` is `false` — never a fabricated number. The
-import lives in one place, at the `calibratedOverrides` seam in `src/config.ts`, which
-names the two lines the calibration step replaces. It is a build-time import and never a
-run-time read: see _The engine is pure_ above.
+`packages/engine/config/calibrated.json` is the path the calibration step committed its
+fitted values to (#90). It is imported as a static data module and is the default layer;
+`calibrated` reports `true`, and `metrics` carries the figures those values were measured
+at — the benchmark, the scope, the corpus (and whether its records are synthetic), the
+seed, CC, NSS, KLD, AUC-Judd, ScanMatch, the sequence score and the objective's value. The
+run loop writes the run artifact's calibration block from that surface, so nothing
+downstream reads a file of its own.
+
+With no such record the resolved configuration is the defaults, `calibrated` is `false` and
+`metrics` is `null` — never a fabricated number, which is the honest source for
+`docs/FLOW.md`'s "not calibrated" badge state. The import lives in one place, at the top of
+`src/config.ts`, and `resolveFrom(record, overrides)` is the same layering with the record
+given, which is how that branch is tested while the file is committed. It is a build-time
+import and never a run-time read: see _The engine is pure_ above.
+
+The file also carries the search that produced it — the space with every bound, step and
+default, the seed, the objective with its weights, what the defaults scored and the one
+command that repeats the fit. `packages/calibration/docs/fitting.md` reads it.
 
 ## The persona-trait table
 
