@@ -568,7 +568,7 @@ const withFinishedSession = (
  * directory validates before, during and after.
  *
  * The log entry is derived from the session and the run — the persona's name comes from
- * the run's `personas` unless it is passed, for a real session that has no participant — so
+ * the run's `personas` unless it is passed, for a real session that has no persona — so
  * that nothing is stated twice and the artifact stores no display text. Returns the run as
  * it now stands, and throws with every violation rather than writing one.
  *

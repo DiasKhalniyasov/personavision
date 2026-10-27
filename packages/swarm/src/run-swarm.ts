@@ -172,11 +172,12 @@ export interface RunSwarmInput extends SwarmPlanInput {
    */
   readonly now?: () => Date;
   /**
-   * Called as each session starts and lands, in order, inside the run's own turn at
-   * `run.json` — so a handler that reads the artifact reads the run exactly as this session
-   * left it. It is awaited, so a caller that writes somewhere of its own is not racing the
-   * next session; a handler that throws stops the run, because a caller that has lost track
-   * of a run is not one to carry on reporting to.
+   * Called as each session starts and as it lands, in order. The landing is reported from
+   * inside the run's own turn at `run.json`, so a handler that reads the artifact reads the
+   * run exactly as this session left it — and it is awaited, so a handler that writes
+   * somewhere of its own is not racing the next session. A handler that throws stops the
+   * run, because a caller that has lost track of a run is not one to carry on reporting to:
+   * a caller whose printing can fail guards it itself.
    */
   readonly onProgress?: (event: SwarmProgress) => void | Promise<void>;
 }
@@ -259,18 +260,18 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
    * first, because a run left with a session file its index does not list is exactly the
    * half-written directory this writes one session at a time to avoid.
    */
-  let broken: unknown = null;
+  let broken = false;
   const workers = Array.from({ length: Math.min(concurrency, planned.length) }, async () => {
     // One cursor, taken a session at a time: a worker that finishes early takes the next
     // session rather than waiting for a batch, and no more than `concurrency` are ever in
     // flight because there are no more workers than that.
-    while (broken === null && next < planned.length) {
+    while (!broken && next < planned.length) {
       const position = next;
       next += 1;
       try {
         await walk(planned[position] as SwarmSession, position);
       } catch (error) {
-        broken ??= error;
+        broken = true;
         throw error;
       }
     }

@@ -8,7 +8,7 @@
  * provider.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { createFixtureSource } from '@personavision/browser';
 import { readRun, runPaths, validate } from '@personavision/contract';
 import { createOfflineDeterministicProvider, FREE_USAGE } from '@personavision/provider';
@@ -419,6 +419,27 @@ describe('runSwarm', () => {
     await expect(runSwarm(swarmOver())).rejects.toThrow(/"finished".+run that is open/);
   });
 
+  it('stops taking sessions when the run index cannot be written', async () => {
+    await open();
+
+    const swarm = runSwarm(
+      swarmOver({
+        concurrency: 1,
+        onProgress: async (event) => {
+          // The run's index, gone from under it: the next append has nothing to append to.
+          if (event.kind === 'session-finished' && event.finishedSessions === 2) {
+            await rm(runPaths(runDir).run);
+          }
+        },
+      }),
+    );
+
+    await expect(swarm).rejects.toThrow(/run\.json/);
+    // The three that ran are on disk, and the swarm stopped rather than walking the rest
+    // into a run it could not index.
+    expect(await landed()).toEqual(['S-01', 'S-02', 'S-03']);
+  });
+
   it('refuses a swarm with nobody in it', async () => {
     await open();
 
@@ -446,6 +467,10 @@ describe('runSwarm', () => {
     expect(written.usage).toMatchObject({ calls: 0, estimatedCostUsd: 0 });
   });
 });
+
+/** The session files in the run directory, whatever `run.json` says about them. */
+const landed = async (): Promise<string[]> =>
+  (await readdir(runPaths(runDir).sessionsDir)).map((file) => file.replace(/\.json$/, '')).sort();
 
 /** The peak number of sessions in flight at once, counted off the events. */
 const watchFlight = (): { record: (event: SwarmProgress) => void; peak: number } => {
