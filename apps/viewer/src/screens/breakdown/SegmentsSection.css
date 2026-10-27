@@ -124,6 +124,12 @@
   border-radius: calc(var(--radius-xs) / 2);
 }
 
+/* The line saying what a row's figure is out of belongs to the legend above it,
+   not to the page, so it sits closer than a page footnote would. */
+.segments-note {
+  margin-top: var(--space-3);
+}
+
 /* ---- While the sessions are read ---------------------------------------- */
 
 .segments-reserve {

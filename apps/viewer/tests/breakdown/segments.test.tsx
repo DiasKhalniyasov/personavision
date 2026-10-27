@@ -212,6 +212,23 @@ describe('one row per generated person, per version', () => {
     expect(stray.variant).toBe('C');
     expect(stray.personaName).toBe(persona.name);
     expect(stray.total).toBe(1);
+    // It says what put it at the foot, rather than looking like any other row.
+    expect(stray.unplaced).toBe('on a version this test does not list');
+    // And it borrows no segment label, so a segment's own block stays the only place that
+    // label appears — the grouping below could not otherwise hold.
+    expect(stray.segment).toBeNull();
+  });
+
+  it('keeps one unbroken block per segment even when a row sits at the foot', () => {
+    const run = seedRun();
+    const session = sessionFile('S-01');
+    const stray = sessionRow(run, { ...session, variant: 'C', persona: session.persona });
+
+    const segments = segmentBars(run, [stray]).map((bar) => bar.segment);
+    const blocks = segments.filter((segment, index) => segment !== segments[index - 1]);
+
+    // Four segments, then the one foot row, which carries no segment at all.
+    expect(blocks).toEqual([...run.personas.map((persona) => persona.segment), null]);
   });
 
   it('keeps a row for a person who ran on neither version, rather than dropping them', () => {
@@ -308,6 +325,30 @@ describe('the counts, as the sessions store them', () => {
         ]);
       }
     }
+  });
+});
+
+describe('the two completion figures on this page', () => {
+  it('says what a row’s figure is out of, since it is not what the completion rate is out of', async () => {
+    await serveRunData();
+    mountApp(paths.breakdown(SEED_RUN_ID));
+
+    const run = seedRun();
+    const found = await rows(run.personas.length * run.variants.length);
+
+    // The bar has to account for everyone who ran in its segment or its four widths would
+    // not fill it, so an excluded person is in the denominator here. The stored
+    // `completionRate` on the cards above divides by the scored sessions, which leave them
+    // out — 2 / 3 here against 2 / 2 there, on the same people.
+    const excluded = rowFor(found, personaNamed(run, 'firsttime'), variantNamed(run, 'A'));
+    expect(line(excluded)).toContain('2 / 3 completed');
+    expect(line(excluded)).toContain('1 excluded');
+
+    const sec = await section();
+    const note = sec.querySelector('[data-section="segments-denominator"]') as HTMLElement;
+    expect(note).not.toBeNull();
+    expect(line(note)).toContain('the people our automation broke on included');
+    expect(line(note)).toContain('the completion rate above');
   });
 });
 

@@ -45,9 +45,18 @@ export interface SegmentBar {
   readonly variantName: string;
   /** `null` on the row the sessions with no person in this test's audience land in. */
   readonly personaName: string | null;
-  /** The persona's `segment` label, as the artifact carries it. */
+  /**
+   * The persona's `segment` label, as the artifact carries it. `null` on a row at the foot
+   * of the list: those are exceptions to the grid and not parts of the audience, so a
+   * segment's label never appears outside that segment's own unbroken block.
+   */
   readonly segment: string | null;
   readonly deviceName: string | null;
+  /**
+   * Why this row is at the foot rather than in the grid — a person the test does not list,
+   * a version it does not list, or both. `null` for a row of the grid itself.
+   */
+  readonly unplaced: string | null;
   readonly counts: OutcomeCounts;
   /** Every session in this segment, the excluded included: the bar's denominator. */
   readonly total: number;
@@ -127,6 +136,7 @@ export function segmentBars(run: Run, rows: readonly SessionRow[]): readonly Seg
         personaName: persona.name,
         segment: persona.segment,
         deviceName: persona.device.name,
+        unplaced: null,
         counts: countsAt(key),
         total: totalOf(countsAt(key)),
       };
@@ -145,13 +155,20 @@ export function segmentBars(run: Run, rows: readonly SessionRow[]): readonly Seg
       // An unknown-person key carries no id, and no persona has the empty name.
       const persona = run.personas.find((candidate) => candidate.id === personaId);
       const named = run.variants.find((candidate) => candidate.id === variant);
+      const why = [
+        persona === undefined ? 'not one of this test’s people' : null,
+        named === undefined ? 'on a version this test does not list' : null,
+      ].flatMap((part) => (part === null ? [] : [part]));
       return {
         key,
         variant,
         variantName: named?.name ?? variant,
         personaName: persona?.name ?? null,
-        segment: persona?.segment ?? null,
+        // A foot row is an exception and not a part of the audience, so it borrows no
+        // segment label: a segment's own block stays the only place that label appears.
+        segment: null,
         deviceName: persona?.device.name ?? null,
+        unplaced: why.join(' · '),
         counts: countsAt(key),
         total: totalOf(countsAt(key)),
       };
@@ -203,6 +220,7 @@ export function SegmentsSection({ run }: { run: Run }) {
               <Bars bars={segmentBars(run, read)} unreadable={unreadable} />
             )}
             <Legend />
+            <Denominator />
           </>
         )}
       </div>
@@ -265,7 +283,7 @@ function Bars({ bars, unreadable }: { bars: readonly SegmentBar[]; unreadable: n
  * row to three lines for a fact the chip already carries.
  */
 const detailOf = (bar: SegmentBar): string => {
-  const parts = [bar.segment ?? 'not one of this test’s people', bar.deviceName];
+  const parts = [bar.unplaced ?? bar.segment, bar.deviceName];
   return parts.flatMap((part) => (part === null ? [] : [part])).join(' · ');
 };
 
@@ -330,6 +348,26 @@ function Legend() {
           <i aria-hidden="true" className={band.className} /> {band.legend}
         </span>
       ))}
+    </p>
+  );
+}
+
+/**
+ * What a row's figure is **out of**, which is not what the completion rate above it is out
+ * of, and the page would otherwise hold two completion figures a reader cannot reconcile.
+ *
+ * A bar has to account for everyone who ran in its segment or its four widths would not
+ * fill it, so the denominator here is every session — the people our automation broke on
+ * included. The stored `completionRate` on the cards above divides by the **scored**
+ * sessions, which leave them out. Both are honest; only saying so makes them readable
+ * together.
+ */
+function Denominator() {
+  return (
+    <p className="footnote segments-note" data-section="segments-denominator">
+      Each bar accounts for everyone who ran in that segment, the people our automation broke on
+      included, so a row&rsquo;s figure is out of a larger number than the completion rate above
+      &mdash; that one leaves them out.
     </p>
   );
 }
