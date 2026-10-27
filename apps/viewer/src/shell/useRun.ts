@@ -34,8 +34,15 @@ const RUNS = '/runs';
 const indexUrl = `${RUNS}/index.json`;
 /** The file names inside a run are the contract's layout, never restated here. */
 const layout = runPaths('');
-const runFile = (runId: string, file: string): string =>
-  `${RUNS}/${encodeURIComponent(runId)}/${file}`;
+
+/**
+ * One run's directory as the mount serves it, ending in a slash: what a path stored inside
+ * the artifact resolves against. A screen that reads a file this module does not — a
+ * session, a screenshot — hands this to `src/session/` rather than spelling `/runs` itself.
+ */
+export const runDataBase = (runId: string): string => `${RUNS}/${encodeURIComponent(runId)}/`;
+
+const runFile = (runId: string, file: string): string => `${runDataBase(runId)}${file}`;
 const runUrl = (runId: string): string => runFile(runId, layout.run);
 const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
 const sessionUrl = (runId: string, sessionId: string): string =>

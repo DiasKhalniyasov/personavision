@@ -71,7 +71,17 @@ async function read<Parsed>(
   url: URL,
   parse: (value: unknown) => Parsed,
 ): Promise<Parsed> {
-  const response = await from(url);
+  let response: Response;
+  try {
+    response = await from(url);
+  } catch (cause) {
+    // A rejected fetch — the server gone, the tab offline, the request abandoned mid
+    // navigation — says only "Failed to fetch", which names no file. A screen printing
+    // that against two dozen rows would tell the reader nothing about what went wrong.
+    throw new Error(`${url.pathname} could not be fetched: ${(cause as Error).message}`, {
+      cause,
+    });
+  }
   if (!response.ok) {
     throw new Error(`${url.pathname} could not be read: HTTP ${response.status}`);
   }
@@ -89,6 +99,20 @@ export async function openRun(source: RunSource): Promise<RunSessions> {
   const base = runBase(source.baseUrl);
   const from = source.fetch ?? globalThis.fetch;
   const run = await read(from, new URL(LAYOUT.run, base), (value) => runSchema.parse(value));
+  return runSessions(run, source);
+}
+
+/**
+ * The same, for a run already in hand: `openRun` is this plus the read of `run.json`.
+ *
+ * The viewer reads a run in exactly one place (`src/shell/useRun.ts`), so a screen that
+ * has the run from there asks for its sessions through this rather than through `openRun`,
+ * which would fetch `run.json` a second time. Nothing else differs: the manifest, the
+ * per-session caching and the paths are the ones above.
+ */
+export function runSessions(run: Run, source: RunSource): RunSessions {
+  const base = runBase(source.baseUrl);
+  const from = source.fetch ?? globalThis.fetch;
 
   const sessions = new Map<string, Promise<Session>>();
   let findings: Promise<Findings> | undefined;

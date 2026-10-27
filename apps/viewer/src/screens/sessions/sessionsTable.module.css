@@ -1,0 +1,94 @@
+/* =============================================================================
+   The table of `#screen-sessions` — the `.tablewrap`, `table`, `th` and `td`
+   rules of `docs/design/prototype.html`, as this screen's own.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies.
+
+   The rows are the shadcn `table` primitive, whose registry file carries
+   Tailwind defaults this design does not use: a cell that never wraps, a 2.5rem
+   head, 8px cells, and — the one that shows — `border-b` with no colour, which
+   leaves every rule painting in `currentColor`, the dark body text, where the
+   prototype draws `--color-border`. Those four are answered here, once, rather
+   than in an override string on each of nine cells.
+   ========================================================================== */
+
+.tablewrap {
+  overflow-x: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* The primitive wraps itself in a second scrolling box. Two nested scrollers
+   means the inner one moves while the outer one — the box a reader can focus
+   and scroll with the keyboard — never does, so the inner one is opened out and
+   `.tablewrap` is the single scroll region. */
+.tablewrap [data-slot='table-container'] {
+  overflow: visible;
+}
+
+.tablewrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.tablewrap th {
+  height: auto;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The prototype draws its rules on the cells; the primitive draws them on the row,
+   uncoloured, so the row's own border is taken off and only the cells' remain. */
+.tablewrap tr {
+  border-bottom: 0;
+}
+
+.tablewrap td {
+  padding: var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  vertical-align: middle;
+  /* Stated, rather than left to the default, because the primitive's cell sets
+     `nowrap`: nine columns of unbreakable text push the table past the page and
+     the reason a session ended goes under the scroll. */
+  white-space: normal;
+}
+
+.tablewrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tablewrap tbody tr:hover {
+  background: var(--color-accent-soft);
+}
+
+/* A figure is compared down its column, so it is right-aligned, its digits line
+   up, and it never wraps: `22.4 s` is one reading rather than two lines. */
+.tablewrap td.figure,
+.tablewrap th.figure {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The session id and its version chip are short and self-contained. */
+.tablewrap td.tight {
+  white-space: nowrap;
+}
+
+.where {
+  color: var(--color-text-muted);
+}
+
+.row {
+  cursor: pointer;
+}
