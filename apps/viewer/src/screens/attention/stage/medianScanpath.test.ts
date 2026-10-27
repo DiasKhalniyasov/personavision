@@ -53,6 +53,15 @@ const area = (id: string, given: Given = {}): AttentionArea => {
 /** An area the run holds no `aoiMetrics` row for at all: a gap, not a result. */
 const unmeasured = (id: string): AttentionArea => ({ ...area(id), metric: null });
 
+/**
+ * An area whose figures disagree with themselves about whether anybody looked: a first
+ * fixation recorded, and nobody reported as having looked at it.
+ */
+const contradicts = (id: string): AttentionArea => {
+  const row = area(id);
+  return { ...row, metric: { ...row.metric!, lookedAtShare: 0 } };
+};
+
 const numbersOf = (marks: readonly { number: number; aoiId: string }[]) =>
   marks.map((mark) => [mark.number, mark.aoiId]);
 
@@ -117,6 +126,38 @@ describe('the order attention moved in', () => {
     const { marks } = medianScanpath([unmeasured('promo'), area('summary')], PAGE);
 
     expect(marks.map((mark) => mark.aoiId)).toEqual(['summary']);
+  });
+
+  it('leaves an area off the path when its own figures disagree about it, and counts it', () => {
+    const { ordered, marks, contradicting } = medianScanpath(
+      [area('summary', { ttffMs: 1000 }), contradicts('fee-row')],
+      PAGE,
+    );
+
+    // The areas table prints a fault for that row and no figures. A numbered mark over it
+    // would be this screen asserting attention in the same breath as refusing to report it.
+    expect(marks.map((mark) => mark.aoiId)).toEqual(['summary']);
+    expect(ordered.map((mark) => mark.aoiId)).toEqual(['summary']);
+    expect(contradicting).toBe(1);
+  });
+
+  it('counts the other disagreement too, rather than dropping the area in silence', () => {
+    const row = area('fee-row', { ttffMs: null });
+    const { ordered, contradicting } = medianScanpath(
+      // Never fixated, yet most of the audience is reported as having looked at it.
+      [{ ...row, metric: { ...row.metric!, lookedAtShare: 0.6 } }],
+      PAGE,
+    );
+
+    expect(ordered).toEqual([]);
+    expect(contradicting).toBe(1);
+  });
+
+  it('counts only the isolated area’s disagreement when the screen is isolated', () => {
+    const step = [area('summary', { ttffMs: 1000 }), contradicts('fee-row')];
+
+    expect(medianScanpath(step, PAGE, 'summary').contradicting).toBe(0);
+    expect(medianScanpath(step, PAGE, 'fee-row').contradicting).toBe(1);
   });
 
   it('is empty on a step where nothing was fixated at all', () => {

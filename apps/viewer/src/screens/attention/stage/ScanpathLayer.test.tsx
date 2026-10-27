@@ -117,6 +117,12 @@ const area = (id: string, given: Given = {}): AttentionArea => {
   };
 };
 
+/** An area whose figures disagree about whether anybody looked at it. */
+const contradicts = (id: string): AttentionArea => {
+  const row = area(id);
+  return { ...row, metric: { ...row.metric!, lookedAtShare: 0 } };
+};
+
 const given = (over: Partial<OverlayLayerProps> = {}): OverlayLayerProps => ({
   // The sessions' own records. Nothing in this ticket may read them — this is a median
   // scanpath over areas, not one session's trace — and the assertions below would notice.
@@ -349,8 +355,20 @@ describe('what it draws', () => {
       transform: { pageWidth: 0, pageHeight: 0 },
     });
 
+    // What the panel says about it is the screenshot's fault and not the areas' — below.
     expect(render(<ScanpathLayer {...nowhere} />).container.querySelector('circle')).toBeNull();
-    expect(SCANPATH_LAYER.unavailable?.(nowhere)).toContain(
+  });
+
+  it('draws only the marks the capture can hold, and says how many it could not', () => {
+    const areas = [
+      area('summary', { ttffMs: 1000 }),
+      // 5000 pixels down a page the capture says is 4000 tall.
+      area('ghost', { ttffMs: 2000, y: 5000 }),
+    ];
+    const { container } = render(<ScanpathLayer {...given({ areas })} />);
+
+    expect(marksIn(container).map((mark) => mark.aoiId)).toEqual(['summary']);
+    expect(SCANPATH_LAYER.unavailable?.(given({ areas: [areas[1] as AttentionArea] }))).toContain(
       'sits outside the page this screenshot recorded',
     );
   });
@@ -358,6 +376,70 @@ describe('what it draws', () => {
   it('says there is no scanpath where the test marked no area of interest', () => {
     expect(SCANPATH_LAYER.unavailable?.(given())).toBe(
       'This test marked no area of interest on this version of this step, so there is no scanpath to draw.',
+    );
+  });
+});
+
+/**
+ * Three ways the artifact can be wrong rather than the audience quiet. Each of them is a
+ * different sentence, because "nobody looked" is the one thing this screen must not say
+ * about a page it simply could not read.
+ */
+describe('when the test is at fault rather than the audience', () => {
+  it('blames the missing screenshot, not the areas’ boxes', () => {
+    const noPage = given({
+      areas: [area('summary')],
+      transform: { pageWidth: 0, pageHeight: 0 },
+    });
+
+    expect(SCANPATH_LAYER.unavailable?.(noPage)).toBe(
+      'This test holds no usable screenshot of this version of this step, so there is nowhere to place the scanpath.',
+    );
+  });
+
+  it('says a row whose figures disagree is off the path, and points at the table', () => {
+    const sentence = SCANPATH_LAYER.unavailable?.(given({ areas: [contradicts('fee-row')] }));
+
+    expect(sentence).toBe(
+      'One area’s figures disagree about whether anybody looked there, so it is not on the path. The areas table names it.',
+    );
+  });
+
+  it('names the isolated area whose figures disagree', () => {
+    const sentence = SCANPATH_LAYER.unavailable?.(
+      given({
+        areas: [area('summary', { ttffMs: 1000 }), contradicts('fee-row')],
+        isolatedAoiId: 'fee-row',
+      }),
+    );
+
+    expect(sentence).toBe(
+      'The figures for “The fee-row area” disagree about whether anybody looked there, so it is not on the path. The areas table says how.',
+    );
+  });
+
+  it('states the rows it left off a path it did draw, rather than quietly drawing fewer', () => {
+    const { container } = render(
+      <ScanpathKey
+        {...given({ areas: [area('summary', { ttffMs: 1000 }), contradicts('fee-row')] })}
+      />,
+    );
+
+    expect(container.querySelector('[data-scan-contradicting]')?.textContent).toContain(
+      'disagree about whether anybody looked there',
+    );
+  });
+
+  it('says nothing is known rather than that nobody looked, where the run holds no figures', () => {
+    const unmeasured: AttentionArea = { ...area('summary'), metric: null };
+
+    expect(SCANPATH_LAYER.unavailable?.(given({ areas: [unmeasured] }))).toBe(
+      'This test recorded no figures for any area on this version of this step, so there is no order to read. That is a gap in the test, not an audience who looked nowhere.',
+    );
+    expect(
+      SCANPATH_LAYER.unavailable?.(given({ areas: [unmeasured], isolatedAoiId: 'summary' })),
+    ).toBe(
+      'This test recorded no figures for “The summary area”, so it has no place in the order. That is a gap in the test, not an area nobody looked at.',
     );
   });
 });

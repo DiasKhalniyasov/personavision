@@ -38,6 +38,36 @@ const NOTHING_MARKED =
   'This test marked no area of interest on this version of this step, so there is no scanpath to draw.';
 
 /**
+ * There is a page in the run but none to draw on: no capture of this version's step, or
+ * one of no size.
+ *
+ * Said about the screenshot, because that is what is wrong. Every mark is then unplaceable,
+ * and without this the panel would blame the areas' own boxes for a page that is not there.
+ * The stage says the same thing in the frame, at more length and with the figures.
+ */
+const NO_CAPTURE =
+  'This test holds no usable screenshot of this version of this step, so there is nowhere to place the scanpath.';
+
+/**
+ * Nothing is known about any of these areas — which is a gap in the artifact, and the one
+ * thing that must never be printed as "nobody looked".
+ *
+ * `useAttentionAreas` keeps an area with no `aoiMetrics` row rather than dropping it, and
+ * the table says so row by row (`noFiguresRecorded`). This is the same statement about a
+ * whole step's worth of them.
+ */
+const noFigures = (area: string | null): string =>
+  area === null
+    ? 'This test recorded no figures for any area on this version of this step, so there is no order to read. That is a gap in the test, not an audience who looked nowhere.'
+    : `This test recorded no figures for “${area}”, so it has no place in the order. That is a gap in the test, not an area nobody looked at.`;
+
+/** The figures disagreeing with themselves about whether anybody looked. */
+const contradicting = (count: number, area: string | null): string =>
+  area === null
+    ? `${count === 1 ? 'One area’s figures' : `${count} areas’ figures`} disagree about whether anybody looked there, so ${count === 1 ? 'it is' : 'they are'} not on the path. The areas table names ${count === 1 ? 'it' : 'them'}.`
+    : `The figures for “${area}” disagree about whether anybody looked there, so it is not on the path. The areas table says how.`;
+
+/**
  * What it says when nobody looked — which is a result, not a gap.
  *
  * Deliberately not the never-fixated finding's own sentence: those exact words are written
@@ -170,7 +200,7 @@ export function ScanpathLayer(props: OverlayLayerProps) {
  * the panel mounts it only while they are actually being drawn (`overlayLayers.ts`).
  */
 export function ScanpathKey(props: OverlayLayerProps) {
-  const { unanchored } = medianScanpath(props.areas, props.transform, props.isolatedAoiId);
+  const scanpath = medianScanpath(props.areas, props.transform, props.isolatedAoiId);
 
   return (
     <div data-scan-key="sizes">
@@ -183,9 +213,16 @@ export function ScanpathKey(props: OverlayLayerProps) {
         <span>brief</span>
         <span>long dwell</span>
       </div>
-      {unanchored === 0 ? null : (
-        <p className="footnote" data-scan-withheld={unanchored}>
-          {withheld(unanchored)}
+      {/* What is on the path is drawn above; what was left off it is said here, so that a
+          page with marks on it is never quietly fewer marks than the step has. */}
+      {scanpath.unanchored === 0 ? null : (
+        <p className="footnote" data-scan-withheld={scanpath.unanchored}>
+          {withheld(scanpath.unanchored)}
+        </p>
+      )}
+      {scanpath.contradicting === 0 ? null : (
+        <p className="footnote" data-scan-contradicting={scanpath.contradicting}>
+          {contradicting(scanpath.contradicting, isolatedLabel(props))}
         </p>
       )}
     </div>
@@ -199,18 +236,25 @@ export const SCANPATH_LAYER: OverlayLayer = {
   hint: 'numbered fixations',
   defaultOn: true,
   unavailable: (props) => {
-    const { ordered, marks, unanchored } = medianScanpath(
-      props.areas,
-      props.transform,
-      props.isolatedAoiId,
-    );
-    if (marks.length > 0) return null;
-    if (props.areas.length === 0) return NOTHING_MARKED;
-    if (unanchored > 0) return offTheCapture(unanchored);
-    // Nothing drawn, and nothing withheld: either nobody looked anywhere on this step, or
+    const { areas, transform, isolatedAoiId } = props;
+    const scanpath = medianScanpath(areas, transform, isolatedAoiId);
+    if (scanpath.marks.length > 0) return null;
+    if (areas.length === 0) return NOTHING_MARKED;
+    // The page before the marks: with no capture, or one of no size, every mark is
+    // unplaceable and none of that is the areas' doing.
+    if (transform.pageWidth <= 0 || transform.pageHeight <= 0) return NO_CAPTURE;
+    if (scanpath.contradicting > 0) {
+      return contradicting(scanpath.contradicting, isolatedLabel(props));
+    }
+    if (scanpath.unanchored > 0) return offTheCapture(scanpath.unanchored);
+    // Nothing known is not nobody looking: an area the run carries no figures for is a gap
+    // the table keeps a row for, and a whole step of them is a gap too.
+    const inView = areas.filter((area) => isolatedAoiId === null || area.aoi.id === isolatedAoiId);
+    if (inView.every((area) => area.metric === null)) return noFigures(isolatedLabel(props));
+    // Nothing drawn and nothing withheld: either nobody looked anywhere on this step, or
     // the one area the screen is isolated to was never looked at. The second is the moment
     // this product exists for, and it is said about that area by name.
-    return nothingFixated(ordered.length === 0 ? null : isolatedLabel(props));
+    return nothingFixated(scanpath.ordered.length === 0 ? null : isolatedLabel(props));
   },
   Component: ScanpathLayer,
   Legend: ScanpathKey,

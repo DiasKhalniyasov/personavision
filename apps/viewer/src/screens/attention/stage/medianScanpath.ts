@@ -1,3 +1,4 @@
+import { neverFixatedProblem } from '../attentionWording';
 import type { AttentionArea } from '../useAttentionAreas';
 import { OVERLAY_SPAN, boxToOverlay, overlaySpanY } from './overlayTransform';
 import type { OverlayPoint, Transform } from './overlayTransform';
@@ -86,9 +87,20 @@ export interface Scanpath {
    * the screenshot's edge would be a claim about page that is not there.
    */
   readonly unanchored: number;
+  /**
+   * How many areas of this view were left off the path because their figures disagree
+   * about whether anybody looked at all (`neverFixatedProblem`).
+   *
+   * A row saying a first fixation was recorded *and* that nobody looked is not a reading
+   * this layer can draw either way: a numbered mark would assert attention the areas table
+   * is refusing to report in the same breath, and dropping it silently would let the panel
+   * say nobody looked anywhere on the strength of a row that says the opposite of itself.
+   * The table names each one (`useAttentionAreas`); the stage states the count.
+   */
+  readonly contradicting: number;
 }
 
-const EMPTY: Scanpath = { ordered: [], marks: [], unanchored: 0 };
+const EMPTY: Scanpath = { ordered: [], marks: [], unanchored: 0, contradicting: 0 };
 
 /** Whether a mark's centre falls on the page this capture recorded. */
 const anchors = (point: OverlayPoint, transform: Transform): boolean =>
@@ -121,12 +133,16 @@ export const markRadius = (dwellMs: number, longestDwellMs: number): number =>
 /**
  * The scanpath of one version's step, and the part of it this view draws.
  *
- * An area is on the path when its `aoiMetrics` row records a `timeToFirstFixationMs`: a
- * `null` there is the pipeline saying no fixation ever landed, which is a result and not a
- * gap (`attentionWording.ts`), and it gets no mark and no number at all — which is what
- * makes its absence visible against the outline the isolate view draws over it. An area the
- * run carries no metrics row for gets none either, for the same reason it reads as a gap in
- * the table: nothing is known about it, so nothing is drawn.
+ * An area is on the path when its `aoiMetrics` row records a `timeToFirstFixationMs` and
+ * that row agrees with itself. A `null` time is the pipeline saying no fixation ever
+ * landed, which is a result and not a gap (`attentionWording.ts`), and the area gets no
+ * mark and no number at all — which is what makes its absence visible against the outline
+ * the isolate view draws over it. An area the run carries no metrics row for gets none
+ * either, for the same reason it reads as a gap in the table: nothing is known about it, so
+ * nothing is drawn. And a row whose fields contradict each other about whether anybody
+ * looked goes through the same check the table puts it through, `neverFixatedProblem`, so
+ * that one screen cannot draw a numbered mark over a row it is simultaneously refusing to
+ * print figures for.
  *
  * `isolatedAoiId` narrows what is drawn and **not** what is numbered or how large a mark
  * is: both are read off the whole step, so isolating an area neither renumbers the path nor
@@ -137,9 +153,21 @@ export function medianScanpath(
   transform: Transform,
   isolatedAoiId: string | null = null,
 ): Scanpath {
+  const inView = areas.filter((area) => isolatedAoiId === null || area.aoi.id === isolatedAoiId);
+  // A row whose own fields disagree about whether anybody looked is not on the path in
+  // either direction, and is counted rather than dropped.
+  const contradicting = inView.filter(
+    (area) => area.metric !== null && neverFixatedProblem(area.metric) !== null,
+  ).length;
+
   const fixated = areas
     .map((area, index) => ({ area, index }))
-    .filter(({ area }) => area.metric !== null && area.metric.timeToFirstFixationMs !== null)
+    .filter(
+      ({ area }) =>
+        area.metric !== null &&
+        area.metric.timeToFirstFixationMs !== null &&
+        neverFixatedProblem(area.metric) === null,
+    )
     // Ascending time to first fixation, which is the order attention moved in. Two areas
     // the audience reached at the same median are left in the artifact's own order, so the
     // numbering is the run's and not this sort's.
@@ -149,7 +177,7 @@ export function medianScanpath(
           (other.area.metric?.timeToFirstFixationMs ?? 0) || one.index - other.index,
     );
 
-  if (fixated.length === 0) return EMPTY;
+  if (fixated.length === 0) return { ...EMPTY, contradicting };
 
   const longestDwellMs = Math.max(...fixated.map(({ area }) => area.metric?.totalDwellMs ?? 0));
 
@@ -171,9 +199,9 @@ export function medianScanpath(
     };
   });
 
-  const inView =
+  const drawable =
     isolatedAoiId === null ? ordered : ordered.filter((mark) => mark.aoiId === isolatedAoiId);
-  const marks = inView.filter((mark) => anchors(mark, transform));
+  const marks = drawable.filter((mark) => anchors(mark, transform));
 
-  return { ordered, marks, unanchored: inView.length - marks.length };
+  return { ordered, marks, unanchored: drawable.length - marks.length, contradicting };
 }
