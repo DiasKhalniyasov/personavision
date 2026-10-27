@@ -2,9 +2,16 @@
 
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FIT_DEFAULTS } from '@personavision/calibration';
 import { DEFAULT_PORT as DEFAULT_SERVE_PORT } from '@personavision/platform';
 import { Command } from 'commander';
 import { CliError } from './cli-error.js';
+import {
+  EXIT_CODE_HELP,
+  calibrateFetchCommand,
+  calibrateFitCommand,
+  calibrateScoreCommand,
+} from './commands/calibrate.js';
 import { openCommand } from './commands/open.js';
 import { runCommand } from './commands/run.js';
 import { serveCommand } from './commands/serve.js';
@@ -15,8 +22,9 @@ import { DEFAULT_PORT } from './server.js';
  * The `personavision` executable.
  *
  * `serve` starts the product: the platform server, a signed-in workspace and the run data
- * scoped to it. `validate`, `run` and `open` are **internal tools** — how the team
- * regenerates fixtures, runs the pipeline in CI and debugs an artifact.
+ * scoped to it. `validate`, `run`, `open` and `calibrate` are **internal tools** — how the
+ * team regenerates fixtures, runs the pipeline in CI, debugs an artifact and measures how
+ * human-like the engine currently is.
  */
 
 /** `packages/cli/`, whether this file is running from `src/` or from `dist/`. */
@@ -27,6 +35,8 @@ const defaultViewerDist = join(repoRoot, 'apps', 'viewer', 'dist');
 const runsRoot = (): string => resolve(process.cwd(), 'runs');
 /** Accounts, workspaces, audiences and sessions. Never committed: see `.gitignore`. */
 const DEFAULT_DATA_DIR = './.personavision';
+/** Where `calibrate fit --write` writes, and the engine imports at build time. */
+const defaultCalibratedConfig = join(repoRoot, 'packages', 'engine', 'config', 'calibrated.json');
 
 const collect = (value: string, previous: string[]): string[] => [...previous, value];
 
@@ -45,7 +55,7 @@ program
   .description(
     [
       '`serve` starts PersonaVision: sign in, and read the tests your workspace owns.',
-      'validate, run and open are internal tools over a run directory.',
+      'validate, run and open are internal tools over a run directory, and calibrate is how the engine is scored against human eye tracking.',
     ].join('\n'),
   )
   .showHelpAfterError();
@@ -164,6 +174,121 @@ program
       port: options.port,
       build: options.build,
       openBrowser: options.open,
+    });
+  });
+
+const integer = (flag: string, value: string): number => {
+  // Digits only, as `--port` is: `Number` would take `1e3` and `0x10`, and a seed nobody
+  // typed makes a figure nobody can reproduce.
+  if (!/^\d+$/.test(value)) {
+    throw new CliError(`${flag} ${value} is not a whole number.`);
+  }
+  return Number(value);
+};
+
+const calibrate = program
+  .command('calibrate')
+  .description(
+    [
+      'Measure and fit how human-like the attention engine is, against the UEyes eye-tracking benchmark (CHI 2023).',
+      'fetch brings the dataset onto this machine and converts it; score prints the figures; fit searches the engine’s weights.',
+      'Every figure is printed with the record count behind it, and the web category is named rather than folded into the average.',
+    ].join('\n'),
+  )
+  .addHelpText('after', `\n${EXIT_CODE_HELP}\n`);
+
+calibrate
+  .command('fetch')
+  .description(
+    'Download and verify UEyes into a cache outside this repository, then convert it into the project’s session shape. It prints the licence before it fetches a byte, resumes an interrupted transfer, does nothing twice, and names every record it rejects.',
+  )
+  .option(
+    '--cache <dir>',
+    `the cache root to use, instead of $${'PERSONAVISION_CALIBRATION_CACHE'} and the operating system’s cache directory`,
+  )
+  .option(
+    '--manifest <file>',
+    'a dataset manifest other than the committed one — a corrected layout or a staged copy. It is held to the same rules: an https download location and a recorded checksum per file',
+  )
+  .option(
+    '--record-checksums',
+    'hash a fresh download and write the result into the manifest as a reviewable change, instead of refusing a file the manifest cannot verify',
+  )
+  .option('--convert-only', 'skip the download and convert what is already unpacked in the cache')
+  .addHelpText('after', `\n${EXIT_CODE_HELP}\n`)
+  .action(
+    async (options: {
+      cache?: string;
+      manifest?: string;
+      recordChecksums?: boolean;
+      convertOnly?: boolean;
+    }) => {
+      await calibrateFetchCommand({
+        cache: options.cache,
+        manifest: options.manifest,
+        recordChecksums: options.recordChecksums ?? false,
+        convertOnly: options.convertOnly ?? false,
+      });
+    },
+  );
+
+calibrate
+  .command('score')
+  .description(
+    'Score the engine over the committed synthetic corpus, or over the converted dataset with --dataset: per category, overall, and against the centre-bias prior and random fixations. No figure is printed without the record count behind it, and an empty corpus prints a sentence rather than a number.',
+  )
+  .option(
+    '--dataset',
+    'score the converted UEyes dataset in the cache instead of the committed synthetic corpus; without one, this names the command that produces it and exits 4',
+  )
+  .option(
+    '--cache <dir>',
+    `the cache root --dataset reads, instead of $${'PERSONAVISION_CALIBRATION_CACHE'} and the operating system’s cache directory`,
+  )
+  .option(
+    '--seed <integer>',
+    'the seed every prediction is made at; the same seed reproduces the figures exactly',
+    (value: string) => integer('--seed', value),
+    1,
+  )
+  .addHelpText('after', `\n${EXIT_CODE_HELP}\n`)
+  .action(async (options: { dataset?: boolean; cache?: string; seed: number }) => {
+    await calibrateScoreCommand({
+      dataset: options.dataset ?? false,
+      cache: options.cache,
+      seed: options.seed,
+    });
+  });
+
+calibrate
+  .command('fit')
+  .description(
+    'Search the engine’s configuration against the benchmark, seeded and bounded, and print the best one with its objective. Nothing is written without --write: the change it would make is printed instead.',
+  )
+  .option(
+    '--write',
+    'write the fitted configuration; without it nothing is written and the change it would make is printed',
+  )
+  .option('--out <file>', 'where --write writes it', defaultCalibratedConfig)
+  .option(
+    '--seed <integer>',
+    'the candidate draw and the prediction seed in one number',
+    (value: string) => integer('--seed', value),
+    FIT_DEFAULTS.seed,
+  )
+  .option(
+    '--candidates <integer>',
+    'candidates drawn beside the engine’s defaults, which are always scored first',
+    (value: string) => integer('--candidates', value),
+    FIT_DEFAULTS.candidates,
+  )
+  .addHelpText('after', `\n${EXIT_CODE_HELP}\n`)
+  .action(async (options: { write?: boolean; out: string; seed: number; candidates: number }) => {
+    await calibrateFitCommand({
+      write: options.write ?? false,
+      out: resolve(options.out),
+      seed: options.seed,
+      candidates: options.candidates,
     });
   });
 

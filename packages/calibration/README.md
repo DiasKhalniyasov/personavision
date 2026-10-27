@@ -130,8 +130,8 @@ request, where it is meant to be noticed.
 
 ## Downloading the dataset
 
-One command brings the benchmark onto the machine. Its code is `src/dataset/fetch.ts`; the command-line wrapper
-arrives with the CLI (#91), and until then the entry point is the function:
+One command brings the benchmark onto the machine: `personavision calibrate fetch`, which the next section
+documents. Its code is `src/dataset/fetch.ts`, and the same thing is one function call from a script:
 
 ```ts
 import { fetchDataset } from '@personavision/calibration';
@@ -171,6 +171,51 @@ A hostile archive cannot write outside the cache: every member path goes through
 Every member's CRC-32 is checked as it lands. The transfer stays on HTTPS the whole way: redirects are followed by
 hand and each hop is held to the same rule as the manifest's own URL, so a publisher's HTTPS link cannot land the
 download on a plain-HTTP host.
+
+## `personavision calibrate`
+
+Everything above is reachable from one command (#91), whose code is `packages/cli/src/commands/calibrate.ts`. Three
+subcommands, one per thing this package does:
+
+```sh
+personavision calibrate fetch     # download, verify and unpack UEyes, then convert it into sessions
+personavision calibrate score     # how human-like the engine is: per category, overall, against the baselines
+personavision calibrate fit       # search the engine's configuration and print the best one
+personavision calibrate --help    # every subcommand, every flag and every exit code
+```
+
+| Subcommand | Flags                                                                        | What it does                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch`    | `--cache <dir>`, `--manifest <file>`, `--record-checksums`, `--convert-only` | Runs `fetchDataset` — the licence first, then the resumable, verified download and the layout-checked unpacking — and then converts the unpacked tree into sessions, writing them and the ground truth into `converted/` in the cache. It reports what it fetched, what was already present and verified, and every record it rejected with the reason. |
+| `score`    | `--dataset`, `--cache <dir>`, `--seed <integer>`                             | Scores the engine over the committed synthetic corpus, or over the converted dataset with `--dataset`. Per category — the web category on its own line, never folded into the average — and overall, each figure with the record count behind it and both baselines' margins under it.                                                                  |
+| `fit`      | `--write`, `--out <file>`, `--seed <integer>`, `--candidates <integer>`      | Runs the seeded, bounded search and prints the best configuration with its objective. **Nothing is written without `--write`**: the change it would make to `packages/engine/config/calibrated.json` is printed instead. `pnpm --filter @personavision/calibration run fit` remains the one command that reproduces the committed fit byte for byte.    |
+
+**Exit codes**, which `--help` prints under every subcommand and `packages/cli/test/calibrate.test.ts` asserts
+against a real process:
+
+| Code | Meaning                                                                        |
+| ---- | ------------------------------------------------------------------------------ |
+| `0`  | done                                                                           |
+| `1`  | a flag or a value the command cannot accept                                    |
+| `2`  | the dataset could not be fetched — the failure names every file and why        |
+| `3`  | the dataset in the cache could not be converted into sessions                  |
+| `4`  | `score --dataset` was asked for and there is no converted dataset in the cache |
+| `5`  | `fit --write` could not write the calibrated configuration                     |
+
+**No figure is printed without the record count behind it**, and an empty corpus prints a sentence rather than a
+zero. The committed corpus says in its own heading that its records are synthetic, so a figure from
+`calibrate score` is never mistaken for a published UEyes score — only `calibrate score --dataset`, over the real
+downloaded data, produces one of those.
+
+**The conversion is waiting on one function.** `calibrate fetch` fetches, verifies and unpacks today, and then says
+plainly that it cannot read the dataset's own file formats and exits non-zero. #86 declared `RawRecord` as this
+project's name for what a reader of those files hands over, and nobody has opened the archive: `manifest.json`
+still records `layout.verifiedAgainstArchive: false`, so there are no column names for `info.csv` and no format for
+`eyetracker_logs/` that have been read rather than guessed, and guessing them would fabricate ground truth. The
+command's message names the three steps — open the archive, correct `layout` in a reviewed change, then map the
+real columns onto `RawRecord` and `GroundTruthRecord` in `readDatasetRecords`. Everything downstream is finished:
+the conversion is called from there, the sessions and `converted/corpus.json` are written, and every rejected
+record is printed with its reason.
 
 ## The vocabulary
 
@@ -214,6 +259,7 @@ lives. Until it does, a divergence would show up as a failing score rather than 
 
 ```sh
 pnpm -F @personavision/calibration test   # the package's own suite
+pnpm -F @personavision/cli test           # the `personavision calibrate` command, run as a process
 pnpm typecheck                            # builds every workspace package, then the root
 pnpm lint
 ```

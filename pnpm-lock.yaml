@@ -183,6 +183,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@personavision/calibration':
+        specifier: workspace:*
+        version: link:../calibration
       '@personavision/contract':
         specifier: workspace:*
         version: link:../contract
