@@ -129,6 +129,22 @@ describe('signing out', () => {
     expect(document.querySelector('[data-shell="account-menu"]')).toBeNull();
   });
 
+  it('says so when the server never answered, rather than implying the session is closed', async () => {
+    const platform = await servePlatform({ signedIn: true, signoutFails: true });
+    mountApp(paths.run(platform.runIds[0] as string), { session: null });
+    await screen.findByRole('button', { name: /Signed in as/ });
+    const { menu } = await openMenu();
+
+    await userEvent.setup().click(menu.getByRole('menuitem', { name: 'Sign out' }));
+
+    // Signed out here, and told plainly that the server did not confirm it: the cookie is
+    // still alive, which matters on a machine that is not theirs.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/may still be open/i);
+    expect(screen.queryByRole('button', { name: /Signed in as/ })).toBeNull();
+    expect(platform.signedIn()).toBe(true);
+  });
+
   it('takes the chrome with it: no workspace name once nobody is signed in', async () => {
     const { platform } = await mountSignedIn();
     const { menu } = await openMenu();

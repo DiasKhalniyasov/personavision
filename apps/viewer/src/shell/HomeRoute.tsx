@@ -23,7 +23,11 @@ export function HomeRoute() {
   const latest = useLatestRun();
 
   if (session.status === 'signed-out') return <LandingPage />;
-  if (session.status === 'loading') return <ChromeShell run={{ status: 'loading' }} />;
+  // `/` is the one route that is public *and* protected, so until the session resolves we
+  // do not know whether the chrome belongs over it at all. A quiet full-height placeholder
+  // holds the page instead of the signed-in bar, which a visitor who turns out to be
+  // signed out must never be shown (#103).
+  if (session.status === 'loading') return <div className="boot" aria-busy="true" />;
 
   switch (latest.status) {
     case 'ready':

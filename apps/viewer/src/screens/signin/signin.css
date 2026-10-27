@@ -14,14 +14,17 @@
 
 /* ---- The band and the card on it --------------------------------------- */
 
-/* No chrome stands above this screen, so the band is the whole page. */
+/* No chrome stands above this screen, so the band is the whole page. The band is the
+   grid rather than the screen inside it: a percentage height against a band whose own
+   height is `auto` resolves to nothing, and the card would sit at the top of the page
+   instead of in the middle of it. */
 .signin-band {
+  display: grid;
   min-block-size: 100dvh;
 }
 
 .signin {
   display: grid;
-  min-block-size: 100%;
   padding: var(--space-16) var(--layout-gutter);
   place-items: center;
 }

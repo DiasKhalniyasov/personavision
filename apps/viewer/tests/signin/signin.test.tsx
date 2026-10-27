@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,13 +140,20 @@ describe('signing in', () => {
     });
   });
 
-  it('refuses to be turned into an open redirect by ?next=', async () => {
+  it.each([
+    'https://elsewhere.example/phish',
+    '//elsewhere.example/phish',
+    '/\\elsewhere.example/phish',
+    // This screen itself: signing in must not land back on the form it was done from.
+    '/signin',
+  ])('refuses to be turned into an open redirect by ?next=%s', async (next) => {
     await servePlatform();
-    const { router } = mountSignIn(`${paths.signIn}?next=https://elsewhere.example/phish`);
+    const { router } = mountSignIn(`${paths.signIn}?${new URLSearchParams({ next }).toString()}`);
 
     await signInWith(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
 
-    // Not a path of this site, so it is not where the sign-in goes.
+    // Not a path of this site — or this screen — so it is not where the sign-in goes: `/`
+    // is, and `/` carries on to the workspace's latest test.
     await waitFor(() => {
       expect(router.state.location.pathname.startsWith('/runs/')).toBe(true);
     });
@@ -255,6 +262,32 @@ describe('a server that cannot be reached', () => {
   });
 });
 
+describe('a server that answered, but not with a session', () => {
+  it('does not report a bad password when the server itself had the problem', async () => {
+    // A proxy's 502, with no sentence of its own: the credentials were never tested, so
+    // saying they are wrong would be a guess about somebody's password.
+    await servePlatform({ signinAnswers: { status: 502, body: { signedIn: false } } });
+    mountSignIn();
+    await signInWith(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).not.toContain(SIGNIN_FAILED);
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+
+  it('does not report a bad password when a 200 carries a session it cannot read', async () => {
+    // The cookie is set by now: the only thing wrong is the body, so the reader is offered
+    // the same form again rather than told their password is wrong.
+    await servePlatform({ signinAnswers: { status: 200, body: { signedIn: true } } });
+    mountSignIn();
+    await signInWith(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).not.toContain(SIGNIN_FAILED);
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
 describe('the two redirects', () => {
   it('sends a signed-out visit to a protected route to /signin, carrying the path', async () => {
     const platform = await servePlatform();
@@ -302,6 +335,33 @@ describe('the two redirects', () => {
     });
   });
 
+  it('is not undone by a session read that answers after the sign-in', async () => {
+    // The server was not there when the app started, so the reader was sent here and the
+    // next screen to mount asked again — and that read is still in flight while they sign
+    // in. Its answer is older than the sign-in and must not sign them back out.
+    const platform = await servePlatform({ unreachableSession: 1, holdSession: true });
+    const { router } = mountApp(paths.run(platform.runIds[0] as string), { session: null });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.signIn);
+    });
+
+    await signInWith(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
+    await waitFor(() => {
+      expect(router.state.location.pathname.startsWith('/runs/')).toBe(true);
+    });
+
+    // Inside `act`, so whatever the late answer schedules is flushed before it is read.
+    platform.release();
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+
+    expect(router.state.location.pathname.startsWith('/runs/')).toBe(true);
+    expect(screen.queryByLabelText('Work email')).toBeNull();
+  });
+
   it('does not flash the sign-in card on a protected route while the session is unresolved', async () => {
     const platform = await servePlatform({ holdSession: true });
     mountApp(paths.run(platform.runIds[0] as string), { session: null });
@@ -310,6 +370,24 @@ describe('the two redirects', () => {
     // #12's chrome holds its shape instead, which is what `RequireSession` renders.
     expect(document.querySelector('[data-shell="chrome"]')).toBeTruthy();
     platform.release();
+  });
+});
+
+describe('the front door while the session is unresolved', () => {
+  it('shows a signed-out visitor no signed-in chrome at /', async () => {
+    const platform = await servePlatform({ holdSession: true });
+    mountApp(paths.home, { session: null });
+
+    // `/` is public and protected at once: until the answer arrives neither page is drawn,
+    // and above all not the bar of a product the visitor may not be signed in to.
+    expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
+    expect(document.querySelector('[data-shell="tabbar"]')).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
+
+    platform.release();
+    await waitFor(() => {
+      expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
+    });
   });
 });
 

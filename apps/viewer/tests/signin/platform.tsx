@@ -52,6 +52,12 @@ export async function servePlatform(
     account?: typeof DEMO_ACCOUNT;
     /** Hold `GET /auth/session` unanswered until `release` is called. */
     holdSession?: boolean;
+    /** The first N reads of `GET /auth/session` fail as a server that is not there. */
+    unreachableSession?: number;
+    /** What `POST /auth/signin` answers with instead of testing the credentials. */
+    signinAnswers?: { status: number; body?: unknown };
+    /** `POST /auth/signout` fails, as a server that is not there does. */
+    signoutFails?: boolean;
   } = {},
 ): Promise<ServedPlatform> {
   const account = options.account ?? DEMO_ACCOUNT;
@@ -61,6 +67,7 @@ export async function servePlatform(
   const runData = globalThis.fetch;
 
   let cookie = options.signedIn === true;
+  let sessionReads = 0;
   const requests: string[] = [];
   const attempts: { email: string; sentPassword: boolean }[] = [];
 
@@ -87,10 +94,17 @@ export async function servePlatform(
     if (options.unreachable === true) throw new TypeError('Failed to fetch');
 
     if (pathname === '/auth/session') {
+      sessionReads += 1;
+      if (sessionReads <= (options.unreachableSession ?? 0)) throw new TypeError('Failed to fetch');
+      // The answer is what this request is worth when it is made, as a server's is: a read
+      // held open is an answer already in flight, and signing in afterwards does not
+      // rewrite it.
+      const answer = cookie ? json(200, signedInBody()) : json(200, { signedIn: false });
       if (held !== null) await held;
-      return cookie ? json(200, signedInBody()) : json(200, { signedIn: false });
+      return answer;
     }
     if (pathname === '/auth/signout') {
+      if (options.signoutFails === true) return json(502, { error: 'no' });
       cookie = false;
       return json(200, { signedIn: false });
     }
@@ -100,6 +114,8 @@ export async function servePlatform(
         email: String(body.email ?? ''),
         sentPassword: typeof body.password === 'string' && body.password !== '',
       });
+      const answer = options.signinAnswers;
+      if (answer !== undefined) return json(answer.status, answer.body ?? {});
       if (body.email !== account.email || body.password !== account.password) {
         return json(401, { signedIn: false, error: SIGNIN_FAILED });
       }

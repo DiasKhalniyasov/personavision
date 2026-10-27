@@ -87,8 +87,15 @@ const sessionOf = (body: AuthBody): AccountSession | null => {
 let state: SessionState = { status: 'loading' };
 const listeners = new Set<() => void>();
 let reading: Promise<void> | null = null;
+/**
+ * How many answers the store has had. A read that started before a newer one landed is
+ * stale by the time it comes back, and a stale answer is dropped rather than published:
+ * otherwise a slow `GET /auth/session` could sign a reader out moments after they signed in.
+ */
+let answered = 0;
 
 const publish = (next: SessionState): void => {
+  answered += 1;
   state = next;
   for (const listener of [...listeners]) listener();
 };
@@ -126,18 +133,25 @@ const signedOut = (): SessionState => ({ status: 'signed-out' });
  */
 const readSession = (): Promise<void> => {
   reading ??= (async () => {
+    // Whoever signs in or out while this request is in flight has the newer answer, and
+    // this one is thrown away rather than published over theirs.
+    const asked = answered;
+    const stale = (): boolean => answered !== asked;
     try {
       const response = await fetch(absolute(SESSION_URL), { credentials: 'same-origin' });
+      if (stale()) return;
       if (!response.ok) {
         reading = null;
         publish(signedOut());
         return;
       }
       const session = sessionOf(await readBody(response));
+      if (stale()) return;
       publish(session === null ? signedOut() : { status: 'signed-in', session });
     } catch {
       // A server that cannot be reached is not a session: the visitor is signed out, which
       // sends a protected route to `/signin`, where the failure can be acted on.
+      if (stale()) return;
       reading = null;
       publish(signedOut());
     }
@@ -145,13 +159,19 @@ const readSession = (): Promise<void> => {
   return reading;
 };
 
-/** What a sign-in attempt came back with. `error` is the one sentence the screen renders. */
+/**
+ * What a sign-in attempt came back with. `error` is the one sentence the screen renders,
+ * and `retryable` says the credentials were never tested — the server was not there, or
+ * answered something this app could not read — so the same form is worth submitting again.
+ */
 export type SignInResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly error: string; readonly unreachable: boolean };
+  | { readonly ok: false; readonly error: string; readonly retryable: boolean };
 
 /** The sentence a server that cannot be reached reports. */
 const UNREACHABLE = 'The server could not be reached. Check that it is running, then try again.';
+/** The sentence a server that answered something unusable reports. */
+const UNREADABLE = 'The server answered in a way this app could not read. Try again.';
 /** The sentence a refusal with no sentence of its own reports. */
 const REFUSED = 'That email and password do not match an account.';
 
@@ -175,13 +195,29 @@ export const signIn = async (credentials: {
       body: JSON.stringify({ email: credentials.email, password: credentials.password }),
     });
   } catch {
-    return { ok: false, error: UNREACHABLE, unreachable: true };
+    return { ok: false, error: UNREACHABLE, retryable: true };
   }
 
   const body = await readBody(response);
-  const session = response.ok ? sessionOf(body) : null;
+  if (!response.ok) {
+    // 401 is the refusal, and the one sentence it carries is deliberately the same for a
+    // wrong password and for an address nobody has. Every other status is the server
+    // having a problem, and saying *that* is not a hint about the credentials: it is the
+    // truth that they were never tested.
+    const refused = response.status === 401 || response.status === 400;
+    return {
+      ok: false,
+      error: text(body.error) ?? (refused ? REFUSED : UNREADABLE),
+      retryable: !refused,
+    };
+  }
+
+  const session = sessionOf(body);
   if (session === null) {
-    return { ok: false, error: text(body.error) ?? REFUSED, unreachable: false };
+    // A 200 the app cannot read: the server has signed them in — the cookie is set — and
+    // only this answer is unusable, so the honest thing is to let them try again rather
+    // than to tell them their password is wrong.
+    return { ok: false, error: UNREADABLE, retryable: true };
   }
 
   clearRunCache();
@@ -196,19 +232,29 @@ export const signIn = async (credentials: {
  * the session and every run it read under it — so a reload does not get back in, and the
  * next sign-in reads its own workspace's tests rather than the last one's.
  *
- * The visitor is signed out here whatever the server answered. A request that never arrived
- * leaves the cookie in place and the next protected route finds that out; what must not
- * happen is a chrome still naming a workspace the user has asked to leave.
+ * The visitor is signed out here whatever the server answered, because a chrome still
+ * naming a workspace somebody asked to leave is the one unacceptable outcome. What this
+ * answers is whether the **server** ended it: a sign-out that never arrived leaves the
+ * cookie alive, and `false` is what the sign-in screen tells them so, rather than letting
+ * them walk away from a shared machine believing a session is closed.
  */
-export const signOut = async (): Promise<void> => {
+export const signOut = async (): Promise<boolean> => {
+  let ended = false;
   try {
-    await fetch(absolute(SIGNOUT_URL), { method: 'POST', credentials: 'same-origin' });
+    const response = await fetch(absolute(SIGNOUT_URL), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    ended = response.ok;
   } catch {
     // Nothing to tell the user here: they are leaving either way.
   }
   clearRunCache();
+  // This app's own answer, either way: nothing is read again until the page is loaded
+  // afresh, which is when a cookie the server still honours would sign them back in.
   reading = Promise.resolve();
   publish(signedOut());
+  return ended;
 };
 
 /** Ask the server again on the next render. For tests, and for a screen that has to retry. */
@@ -230,9 +276,12 @@ export function useSession(): SessionState {
   const override = use(SessionContext);
   const live = useSyncExternalStore(subscribe, snapshot, snapshot);
 
+  // Whenever the live answer is `loading` and nothing overrides it, somebody has to ask:
+  // on the first mount, and again after `forgetSession` drops what was known. `readSession`
+  // holds one read, so every consumer asking is still one request.
   useEffect(() => {
-    if (override === null) void readSession();
-  }, [override]);
+    if (override === null && live.status === 'loading') void readSession();
+  }, [override, live.status]);
 
   return override ?? live;
 }

@@ -49,9 +49,14 @@ export function AccountMenu() {
         <DropdownMenuItem
           onSelect={() => {
             // The server ends the session first; only then is the reader moved, so the
-            // chrome is never left naming a workspace they have asked to leave.
-            void signOut().then(() => {
-              void navigate(paths.signIn, { replace: true });
+            // chrome is never left naming a workspace they have asked to leave. A sign-out
+            // the server never answered travels with them, because the sign-in screen is
+            // where it can be said — the session may still be open.
+            void signOut().then((ended) => {
+              void navigate(paths.signIn, {
+                replace: true,
+                state: ended ? null : { signOutFailed: true },
+              });
             });
           }}
         >

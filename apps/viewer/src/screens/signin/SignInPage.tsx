@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { ComponentProps, FormEvent } from 'react';
-import { Navigate, useSearchParams } from 'react-router';
+import { Navigate, useLocation, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,17 +26,23 @@ import './signin.css';
  */
 
 /**
- * Where a completed sign-in goes. Only a path of this site, so a crafted
- * `?next=https://elsewhere.example` cannot turn the sign-in form into an open redirect —
- * the rule `safeNextPath` applies in `packages/platform`, applied again on this side.
+ * Where a completed sign-in goes: only a path of this site, and never this screen.
+ *
+ * `//elsewhere.example` and `/\elsewhere.example` are both a URL somewhere else to a
+ * browser, so a crafted `?next=` cannot turn the sign-in form into an open redirect. It is
+ * the rule `safeNextPath` applies in `packages/platform`, applied again on this side —
+ * whoever wrote the link does not get to choose where signing in lands.
  */
-const safeNext = (next: string | null): string =>
-  next !== null && next.startsWith('/') && !next.startsWith('//') ? next : paths.home;
+const safeNext = (next: string | null): string => {
+  if (next === null || !next.startsWith('/')) return paths.home;
+  if (next.startsWith('//') || next.startsWith('/\\')) return paths.home;
+  return next === paths.signIn || next.startsWith(`${paths.signIn}?`) ? paths.home : next;
+};
 
 /** What the screen is reporting, and whether the visitor can simply try the same form again. */
 interface Failure {
   readonly message: string;
-  /** A server that could not be reached: the credentials were never tested. */
+  /** The credentials were never tested — the server was not there, or answered unusably. */
   readonly retryable: boolean;
 }
 
@@ -84,10 +90,18 @@ function Field({
   );
 }
 
+/** What a sign-out that the server never answered leaves behind for this screen to say. */
+const SIGN_OUT_FAILED =
+  'You are signed out here, but the server did not answer, so the session may still be open. Close this browser if you are not on your own machine.';
+
 export function SignInPage() {
   const state = useSession();
   const [search] = useSearchParams();
-  const [failure, setFailure] = useState<Failure | null>(null);
+  const { state: arrivedWith } = useLocation();
+  const signOutFailed = (arrivedWith as { signOutFailed?: boolean } | null)?.signOutFailed === true;
+  const [failure, setFailure] = useState<Failure | null>(
+    signOutFailed ? { message: SIGN_OUT_FAILED, retryable: false } : null,
+  );
   const [sending, setSending] = useState(false);
   const errorId = useId();
   const emailId = useId();
@@ -120,7 +134,7 @@ export function SignInPage() {
       setSending(false);
       // What was typed is still in the form: nothing here clears or rebuilds the fields, so
       // a wrong password is one correction rather than a form filled in again.
-      if (!result.ok) setFailure({ message: result.error, retryable: result.unreachable });
+      if (!result.ok) setFailure({ message: result.error, retryable: result.retryable });
     });
   };
 
