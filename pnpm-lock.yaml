@@ -138,9 +138,16 @@ importers:
 
   demo/northwind:
     dependencies:
+      '@personavision/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
       '@personavision/scoring':
         specifier: workspace:*
         version: link:../../packages/scoring
+    devDependencies:
+      playwright:
+        specifier: ^1.64.1
+        version: 1.64.1
 
   packages/browser:
     dependencies:

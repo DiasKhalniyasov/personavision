@@ -5,9 +5,12 @@ part of the product: it is what the agents browse, and it appears inside Persona
 as a screenshot.
 
 Plain HTML and CSS. No framework, no build step, no JavaScript, and no third-party
-dependency — the one dependency is `@personavision/scoring`, for the shape
-[the ground truth](#the-planted-defect-ground-truth) is typed against, and a `workspace:*`
-range installs nothing. The whole task — cart to confirmation — can be completed in a
+dependency — the pages depend on nothing at all. The package depends on two workspace
+siblings, and a `workspace:*` range installs nothing: `@personavision/scoring`, for the shape
+[the ground truth](#the-planted-defect-ground-truth) is typed against, and
+`@personavision/browser`, for the type [the task](#democonfigts-the-task-and-the-step-rules)
+is declared with. Driving the shop in a real browser is a test-only concern, so `playwright`
+is a dev dependency. The whole task — cart to confirmation — can be completed in a
 browser with **JavaScript disabled**, because every step advances by an ordinary link or an
 ordinary `GET` form submit.
 
@@ -267,9 +270,13 @@ the binding check on the other side: a spacer small enough to leave the control 
 `1440 × 900` would not plant the defect at all. The page's `scrollHeight` is 1333 px at
 `390 × 844`, so the control is one scroll away rather than unreachable.
 
-The figures are the same at both viewports, because the column that carries the action is
-first either way. One consequence of that is worth knowing before a run is scored: at
-`390 × 844` the one-column stack puts the order summary **after** the completing action, so
+Those three numbers — 1024 px, and 180 px and 124 px below the two folds — are asserted
+against a live browser in `test/drive.test.ts`, off the `belowFold` and `bbox` a capture of
+the review step reports. The same test requires variant A's completing action to be above the
+fold at both viewports.
+
+One consequence of the figures being the same at both viewports is worth knowing before a run
+is scored: at `390 × 844` the one-column stack puts the order summary **after** the completing action, so
 the newly revealed fee row is at 1188 px — also below the fold, and below the button. At
 `1440 × 900` the summary is in the right column with the fee row at 246 px, above the fold,
 and only the completing action is below it. Defect 2 is therefore the one a desktop agent
@@ -310,6 +317,57 @@ artifact.
 
 It costs nothing else: the server keeps answering every other request while a stalled one is
 open, and `close()` destroys open connections, so a stalled request cannot keep the port.
+
+## `demo.config.ts`: the task and the step rules
+
+```ts
+import {
+  NORTHWIND_DEVICE_MIX,
+  NORTHWIND_TASK,
+  northwindVariants,
+} from '@personavision/northwind-demo/demo.config.ts';
+
+const [variantA, variantB] = northwindVariants(shop.url);
+// variantA.url -> "http://127.0.0.1:53412/a/cart.html"
+```
+
+`NORTHWIND_TASK` is one `TaskDefinition` of `@personavision/browser`'s own type — the
+declaration its step detection and primary-action resolution consume. Its prompt is the task
+sentence, verbatim: **"Buy the hiking boots and pay with the saved card."**
+
+| Step id   | URL pattern                | Required element            | Primary action               |
+| --------- | -------------------------- | --------------------------- | ---------------------------- |
+| `cart`    | `/[ab]/cart\.html`         | `[data-aoi="cart-line"]`    | `[data-aoi="cart-checkout"]` |
+| `payment` | `/[ab]/payment\.html`      | `[data-aoi="card"]`         | `[data-aoi="primary"]`       |
+| `review`  | `/[ab]/review\.html`       | `[data-aoi="pay-with"]`     | `[data-aoi="complete"]`      |
+| `confirm` | `/[ab]/confirmation\.html` | `[data-aoi="order-number"]` | `[data-aoi="order-number"]`  |
+
+- **The ids are the prototype's `STEPS`.** `docs/FLOW.md` section 8 writes the fourth step as
+  _confirmation_ and the page file keeps its ordinary name `confirmation.html`, but the **id**
+  is `confirm`, because `@personavision/contract` leaves a step a free name and the prototype
+  then decides. Recorded on #10, so the run artifact, the Attention filmstrip and the
+  screenshot paths agree with the shop.
+- **One task drives both variants.** The patterns match `/a/…` and `/b/…`, and the selectors
+  are regions both variants carry. They match on the **path**: steps 3 and 4 are reached by a
+  `GET` form submit, so the URL arrives carrying a query string.
+- **The confirmation step is terminal and still names an element.** Nothing advances from it,
+  so its "primary action" is the order number — what tells the person the task is done, and
+  what attention on that screen is attributed to. A step naming nothing would raise
+  `selector_not_found` on every session's last screen and exclude the run.
+- **A page off the task carries no step label**, and no label is ever read from a page's
+  words: `shared/help.html` shows the `Cart (1)` badge and `shared/card-frame.html` says
+  "Card number", and both come back unlabelled.
+- **Nothing hard-codes a port.** `northwindVariants(baseUrl)` derives both start URLs from
+  whatever base `serveDemoShop()` reports.
+- `NORTHWIND_DEVICE_MIX` is which device each of the prototype's four personas is on: the
+  rushed buyer and the price-sensitive scanner on mobile (`390 × 844`, touch), the careful
+  comparer and the first-time visitor on desktop (`1440 × 900`).
+
+`test/drive.test.ts` is the proof: both variants driven from the cart URL to
+`/<variant>/confirmation.html` with the order number on screen, every screen labelled with
+its own step id, exactly one element per screen carrying `isPrimaryAction`, and the completing
+action on variant B scrolled to because it is below the fold. It starts the shop on a free
+port, needs no key and reaches nothing but loopback.
 
 ## `serveDemoShop()`
 
