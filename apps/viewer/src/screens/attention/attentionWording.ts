@@ -10,11 +10,12 @@ import type { Aoi, AoiMetric } from './useAttentionAreas';
  * The table, the isolate caption and a finding all say it the same way because they all say
  * it from here.
  *
- * The other half of the rule is that the two halves of "never" have to agree. The pipeline
- * writes `timeToFirstFixationMs: null` and `lookedAtShare: 0` together — no first fixation
- * and nobody who looked are one fact recorded twice. A row where only one of them holds is
- * a fault in the artifact, and the honest answer is to say so and print no figure, because
- * either figure would be a claim the run does not support.
+ * The other half of the rule is that every field saying "never" has to agree with the
+ * others. The pipeline writes `timeToFirstFixationMs: null`, `firstFixationDurationMs:
+ * null` and `lookedAtShare: 0` together — no first fixation, no first look to time, and
+ * nobody who looked are one fact recorded three times. A row where they disagree is a fault
+ * in the artifact, and the honest answer is to say so and print no figure, because either
+ * figure would be a claim the run does not support.
  *
  * Nothing here computes anything. Every number is the pipeline's own, formatted.
  */
@@ -108,27 +109,44 @@ export const neverFixatedSentence = ({
   `0 of ${reachedCount} people in your audience who reached this step looked at it. ` +
   'Nothing is missing from the data: the area was simply never seen.';
 
+const disagree = (aoiId: string, about: string): string =>
+  `These figures disagree about ${aoiId}: ${about}. No number is shown, because either one would be a claim this test did not make.`;
+
 /**
- * What is wrong with a metrics row whose two halves of "never" disagree, or `null` for one
+ * What is wrong with a metrics row whose fields disagree about "never", or `null` for one
  * that holds together.
  *
- * Both directions are faults and both are named, because they mislead in opposite ways: a
- * `null` first fixation beside a share above zero would print `never` for an area people
- * looked at, and a recorded first fixation beside a zero share would print a time for an
- * area nobody ever saw.
+ * Three ways to disagree, and each misleads differently. A `null` first fixation beside a
+ * share above zero would print `never` for an area people looked at. A recorded first
+ * fixation beside a zero share would print a time for an area nobody ever saw. And a
+ * `null` time to first fixation beside a recorded *duration* would print `never` and
+ * `480 ms` in one row — the two readings this module exists to keep apart, side by side.
+ *
+ * The one asymmetry is deliberate: a recorded fixation whose duration the run does not
+ * carry is a missing figure, not a contradiction, and an em dash says so honestly.
  */
 export function neverFixatedProblem(metric: AoiMetric): string | null {
   const noFixation = metric.timeToFirstFixationMs === null;
   const nobodyLooked = metric.lookedAtShare === 0;
-  if (noFixation === nobodyLooked) return null;
 
-  const disagreement = noFixation
-    ? `no fixation was ever recorded there, yet ${lookedAtShare(metric.lookedAtShare)} of the audience is reported as having looked at it`
-    : 'a first fixation is recorded there, yet nobody is reported as having looked at it';
-  return `These figures disagree about ${metric.aoiId}: ${disagreement}. No number is shown, because either one would be a claim this test did not make.`;
+  if (noFixation !== nobodyLooked) {
+    return disagree(
+      metric.aoiId,
+      noFixation
+        ? `no fixation was ever recorded there, yet ${lookedAtShare(metric.lookedAtShare)} of the audience is reported as having looked at it`
+        : 'a first fixation is recorded there, yet nobody is reported as having looked at it',
+    );
+  }
+  if (noFixation && metric.firstFixationDurationMs !== null) {
+    return disagree(
+      metric.aoiId,
+      `no fixation was ever recorded there, yet a first fixation is said to have lasted ${firstFixationDuration(metric.firstFixationDurationMs)}`,
+    );
+  }
+  return null;
 }
 
-/** The same check for a caller that cannot render a row: `null` ttff ⟺ `lookedAtShare === 0`. */
+/** The same check for a caller that cannot render a row: every "never" field, or none. */
 export function assertNeverFixatedConsistent(metric: AoiMetric): void {
   const problem = neverFixatedProblem(metric);
   if (problem !== null) throw new Error(problem);

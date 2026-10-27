@@ -39,6 +39,18 @@ const COLUMNS = [
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
+/** One `aoiMetrics` row naming an area this run has no entry for. */
+const orphanMetric = (aoiId: string): Run['aoiMetrics'][number] => ({
+  aoiId,
+  timeToFirstFixationMs: 900,
+  firstFixationDurationMs: 300,
+  totalDwellMs: 1200,
+  fixationCount: 2,
+  revisits: 1,
+  lookedAtShare: 0.5,
+  sessionCount: 9,
+});
+
 /** The committed run with something changed in it, served in its place. */
 const serveChangedRun = async (change: (run: Run) => Run) => {
   const changed = change(seedRun());
@@ -293,19 +305,7 @@ describe('a run artifact that disagrees with itself', () => {
   it('states figures that name no area of this test rather than dropping them', async () => {
     await serveChangedRun((run) => ({
       ...run,
-      aoiMetrics: [
-        ...run.aoiMetrics,
-        {
-          aoiId: 'a-box-that-is-not-here',
-          timeToFirstFixationMs: 900,
-          firstFixationDurationMs: 300,
-          totalDwellMs: 1200,
-          fixationCount: 2,
-          revisits: 1,
-          lookedAtShare: 0.5,
-          sessionCount: 9,
-        },
-      ],
+      aoiMetrics: [...run.aoiMetrics, orphanMetric('a-box-that-is-not-here')],
     }));
     const { container } = attention('B', 'review');
     await settled();
@@ -314,6 +314,39 @@ describe('a run artifact that disagrees with itself', () => {
     expect(fault).not.toBeNull();
     expect(fault.textContent).toContain('a-box-that-is-not-here');
     expect(fault.textContent).toContain('not an area of this test');
+  });
+
+  it('states the fault when nothing was fixated but a first fixation is timed', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      aoiMetrics: run.aoiMetrics.map((metric) =>
+        metric.aoiId === 'B-review-complete' ? { ...metric, firstFixationDurationMs: 480 } : metric,
+      ),
+    }));
+    const { container } = attention('B', 'review');
+    await settled();
+
+    const row = rowFor(container, 'B-review-complete');
+    expect(row.getAttribute('data-area-fault')).toBe('inconsistent');
+    const stated = cellsOf(row).join(' ');
+    expect(stated).toContain('B-review-complete');
+    expect(stated).toContain('480 ms');
+    expect(stated).not.toContain('never');
+  });
+
+  it('states one row per unknown area, however many rows of figures name it', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      aoiMetrics: [
+        ...run.aoiMetrics,
+        orphanMetric('a-box-that-is-not-here'),
+        { ...orphanMetric('a-box-that-is-not-here'), fixationCount: 5 },
+      ],
+    }));
+    const { container } = attention('B', 'review');
+    await settled();
+
+    expect(container.querySelectorAll('tr[data-area-fault="unknown-area"]').length).toBe(1);
   });
 
   it('keeps the rest of the areas readable while one of them is a fault', async () => {
@@ -345,16 +378,23 @@ describe('a step with no areas of interest', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('shows the headers over a pending region while the people are still being read', async () => {
-    await withBareStep();
+  it('still says so when the artifact also carries figures naming no area at all', async () => {
+    // The two are different statements about different things, so one never silences the
+    // other: this step holds nothing, and the run is wrong somewhere else.
+    await serveChangedRun((run) => ({
+      ...run,
+      steps: [...run.steps, { id: 'delivery', label: 'Delivery' }],
+      aoiMetrics: [...run.aoiMetrics, orphanMetric('a-box-that-is-not-here')],
+    }));
     const { container } = attention('B', 'delivery');
-    await screen.findByRole('heading', { level: 1, name: HEADING });
+    await settled();
 
-    const headers = within(screen.getByRole('table'))
-      .getAllByRole('columnheader')
-      .map((header) => header.textContent?.trim());
-    expect(headers).toEqual([...COLUMNS, 'The people who looked at it']);
-    expect(within(section(container)).queryByText(/marked no areas of interest/)).toBeNull();
+    expect(
+      within(section(container)).getByText(/marked no areas of interest on this step of variant B/),
+    ).toBeDefined();
+    expect(
+      (container.querySelector('tr[data-area-fault="unknown-area"]') as HTMLElement).textContent,
+    ).toContain('a-box-that-is-not-here');
   });
 });
 

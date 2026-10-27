@@ -134,12 +134,7 @@ export function AttentionScreen({ run }: { run: Run }) {
           </SideColumn>
         </div>
 
-        <AoiMetricsTable
-          runId={run.runId}
-          variant={selection.variant}
-          areas={areaRows}
-          loading={sessions.status === 'loading'}
-        />
+        <AoiMetricsTable runId={run.runId} variant={selection.variant} areas={areaRows} />
 
         <SimulatedDisclaimer />
       </div>

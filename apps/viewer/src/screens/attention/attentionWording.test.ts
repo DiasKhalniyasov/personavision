@@ -139,6 +139,21 @@ describe('the two halves of “never” have to agree', () => {
     expect(problem).toContain('nobody is reported as having looked at it');
   });
 
+  it('names the area when nothing was fixated but a first fixation is said to have lasted', () => {
+    const problem = neverFixatedProblem(
+      metric({ timeToFirstFixationMs: null, lookedAtShare: 0, firstFixationDurationMs: 480 }),
+    );
+
+    expect(problem).toContain('B-review-complete');
+    expect(problem).toContain('480 ms');
+    expect(problem).toContain('no fixation was ever recorded');
+  });
+
+  it('leaves a recorded fixation whose duration the run does not carry alone', () => {
+    // A missing figure, not a contradiction: the em dash says so, and no row is withheld.
+    expect(neverFixatedProblem(metric({ firstFixationDurationMs: null }))).toBeNull();
+  });
+
   it('throws for a caller that has no row to state it in', () => {
     expect(() => {
       assertNeverFixatedConsistent(metric({ lookedAtShare: 0 }));

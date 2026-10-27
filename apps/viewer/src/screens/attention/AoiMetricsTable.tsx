@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
 import type { ReactNode } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -52,6 +51,11 @@ import styles from './aoiMetricsTable.module.css';
  * The row click and the `aria-selected` row belong to the isolate ticket; what is here is
  * the rows and the link out of each of them. A reader with a keyboard reaches a row through
  * that link, which is a real anchor rather than a cell with a handler on it.
+ *
+ * There is no loading state here, and none to invent: every figure the table draws is the
+ * run's own, and `AttentionPage` renders nothing at all until the run has been read. So the
+ * section is never mounted without its figures, the headers never stand over a region that
+ * is waiting for one, and nothing on it moves when an unrelated read settles.
  */
 
 /** The nine columns, in the order the prototype's `thead` draws them. */
@@ -81,18 +85,18 @@ export interface AoiMetricsTableProps {
   readonly variant: string;
   /** The areas of this version's step, joined to their figures by `useAttentionAreas`. */
   readonly areas: AttentionAreas;
-  /**
-   * Whether the run and its people are still being read. It only ever shows while there is
-   * nothing to show: a pending region stands in for rows that have not arrived, never over
-   * a figure that is already here, and the headers are drawn either way so that the rows
-   * landing moves nothing on the page.
-   */
-  readonly loading?: boolean;
 }
 
-export function AoiMetricsTable({ runId, variant, areas, loading = false }: AoiMetricsTableProps) {
-  const rowCount =
-    areas.areas.length + areas.presentOnOtherVariantOnly.length + areas.unknownMetricAoiIds.length;
+export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps) {
+  // What this step holds, and what the artifact is wrong about, are counted apart.
+  //
+  // Figures naming no area have no step to belong to, so they are stated wherever the
+  // reader happens to be. Folding them into this step's own count would mean a step that
+  // really has nothing of its own stopped saying so — the honest sentence replaced by a
+  // nine-column table holding one upstream fault. Both are true here, and both are said.
+  // One row per id, however many `aoiMetrics` rows carry it.
+  const onThisStep = areas.areas.length + areas.presentOnOtherVariantOnly.length;
+  const orphans = [...new Set(areas.unknownMetricAoiIds)];
 
   return (
     <div className="section" data-section="areas-of-interest">
@@ -103,12 +107,14 @@ export function AoiMetricsTable({ runId, variant, areas, loading = false }: AoiM
         segmentation where it does not.
       </p>
 
-      {rowCount === 0 && !loading ? (
+      {onThisStep === 0 ? (
         <p className="notice" role="status" data-section="no-areas">
           This test marked no areas of interest on this step of variant {variant}, so there are no
           figures to show for it.
         </p>
-      ) : (
+      ) : null}
+
+      {onThisStep + orphans.length === 0 ? null : (
         // The one scroll region of this section, and a reader with no pointer has to be able
         // to reach it: nine columns do not fit a phone, and the column that goes off the
         // edge is the share of the audience who looked at the area at all.
@@ -142,20 +148,16 @@ export function AoiMetricsTable({ runId, variant, areas, loading = false }: AoiM
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody aria-busy={loading && rowCount === 0 ? true : undefined}>
-              {rowCount === 0
-                ? PENDING.map((key) => <PendingRow key={key} />)
-                : [
-                    ...areas.areas.map((area) => (
-                      <AreaRow key={area.aoi.id} runId={runId} area={area} />
-                    )),
-                    ...areas.presentOnOtherVariantOnly.map((aoi) => (
-                      <NotHereRow key={`elsewhere-${aoi.id}`} aoi={aoi} variant={variant} />
-                    )),
-                    ...areas.unknownMetricAoiIds.map((aoiId) => (
-                      <UnknownAreaRow key={`unknown-${aoiId}`} aoiId={aoiId} />
-                    )),
-                  ]}
+            <TableBody>
+              {areas.areas.map((area) => (
+                <AreaRow key={area.aoi.id} runId={runId} area={area} />
+              ))}
+              {areas.presentOnOtherVariantOnly.map((aoi) => (
+                <NotHereRow key={`elsewhere-${aoi.id}`} aoi={aoi} variant={variant} />
+              ))}
+              {orphans.map((aoiId) => (
+                <UnknownAreaRow key={`unknown-${aoiId}`} aoiId={aoiId} />
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -163,21 +165,6 @@ export function AoiMetricsTable({ runId, variant, areas, loading = false }: AoiM
 
       <p className="footnote">{medianCaveat()}</p>
     </div>
-  );
-}
-
-/** Three rows' worth of space, so the figures landing does not push the footnote down. */
-const PENDING = ['one', 'two', 'three'] as const;
-
-function PendingRow() {
-  return (
-    <TableRow>
-      {[...COLUMNS, 'door'].map((column) => (
-        <TableCell key={column}>
-          <Skeleton className="h-4 w-full" />
-        </TableCell>
-      ))}
-    </TableRow>
   );
 }
 
