@@ -116,17 +116,30 @@ that finds it has to says so on its own issue rather than quietly widening its r
 
 ## The cache is a directory inside the run
 
-`withCache` stores one entry per `(variant URL, step, device, content hash)` under
-`.capture-cache/` in the run directory, so the cache travels with the run it belongs to and a
-fresh run starts cold. A hit returns the whole capture the first session produced — its
-geometry, its element ids and the path of the screenshot that session wrote — so twelve
-sessions over one variant take one picture of each screen rather than twelve.
+`withCache` keeps its entries under `.capture-cache/` in the run directory, so the cache
+travels with the run it belongs to and a fresh run starts cold. A hit returns the whole capture
+the first session produced — its geometry, its element ids and the path of the screenshot that
+session wrote — so sessions over one variant take one picture of each screen rather than one
+each. Sessions that reach a screen before the first has finished it all miss and all capture
+it: this is a cache over a directory, not a lock over a screen.
+
+**One entry per screen, keyed on `(variant URL, step, device, content hash)`.** The key is what
+makes it content-addressed: a screen that rendered differently, or the same markup at another
+device, is a different key and a miss. The entry nonetheless lives at the _screen_ and carries
+the key it was captured under, because `screenshots/<variant>/<step>.png` is one image per
+screen of one variant, whichever device took it and however the page rendered. An entry per key
+would answer a desktop session, after a mobile one had overwritten that image, with the first
+capture's geometry over the second's picture — the one thing `run-projection.ts` says must not
+happen, since the last capture of a screen is the one `run.json` records _because it is the one
+on disk_. An entry per screen cannot: the entry and the image are written by the same work.
 
 It is the one path inside a run directory the contract does not spell. `runPaths` declares what
-a run **publishes**, over HTTP as well as on disk; this one is private to this module, dotted so
-that nothing globbing a run mistakes it for artifact data, and read by `cache.ts` alone. Nothing
-it does can fail a session either: a truncated entry, an entry belonging to another key and a
-run directory that cannot be written to are each a miss.
+a run publishes; this is the module's own working state, dotted so that nothing globbing a run
+mistakes it for artifact data, and read by `cache.ts` alone. The static mount in `packages/cli`
+serves any file inside a run directory, so an entry is fetchable by a client that knows to ask —
+it holds the capture `run.json`'s own `aois` are projected from, so that exposes nothing the
+artifact does not. Nothing the cache does can fail a session either: a truncated entry, an entry
+belonging to another key and a run directory that cannot be written to are each a miss.
 
 ## Two seams outlive this step
 
@@ -161,9 +174,11 @@ serves it from disk, with no dependency of its own):
   contract's session schema.
 - `test/cache.test.ts` — that a second session over one screen is answered from the first
   session's capture and takes no second picture, that a changed page and a second device are
-  not, and that a damaged entry or an unwritable run directory is a miss and never a failed
-  session. The screenshot is deleted between two captures, because that is the one thing a hit
-  and a miss leave differently on disk.
+  not, that a capture is never answered from an entry whose image another device has
+  overwritten, and that a damaged entry or an unwritable run directory is a miss and never a
+  failed session. The screenshot is deleted between two captures, because that is the one thing
+  a hit and a miss leave differently on disk; where a hit would be wrong, the image's own
+  pixel dimensions are read instead.
 - `test/budget.test.ts` — the retry and wall-clock caps and the integrity counters. No browser.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions

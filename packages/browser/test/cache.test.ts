@@ -1,12 +1,13 @@
 /**
  * The capture cache, asserted as files in a run directory.
  *
- * Two things are held here. First, that a hit is indistinguishable from a miss: a second
+ * Three things are held here. First, that a hit is indistinguishable from a miss: a second
  * session over the same variant, step and device gets the first session's geometry, element
- * ids and screenshot path back, and no second picture is taken. Second, that the cache can
- * only ever cost a run a screenshot — a truncated entry, an entry belonging to another key
- * and a run directory that cannot be written to are each a miss rather than a failed
- * session.
+ * ids and screenshot path back, and no second picture is taken. Second, that a hit never
+ * describes a picture that is no longer there — an entry belongs to a screen, and whatever
+ * overwrites that screen's image overwrites its entry. Third, that the cache can only ever
+ * cost a run a screenshot: a truncated entry, an entry belonging to another key and a run
+ * directory that cannot be written to are each a miss rather than a failed session.
  *
  * A cache hit is otherwise invisible: `writeScreenshot` writes one file per screen, so two
  * writes to one path leave the same single file a cached capture does. The tests below
@@ -54,6 +55,18 @@ const DESKTOP: Device = {
 
 const BROWSER_TIMEOUT_MS = 60_000;
 
+/**
+ * A PNG's pixel dimensions, read out of the IHDR chunk its first bytes are: the 8-byte
+ * signature, a length, the type, then the width and the height as big-endian 32-bit
+ * integers. `screenshot.test.ts` holds the written image to its format; here these two
+ * numbers are what tells one device's render of a screen from the other's. An image that is
+ * not a readable PNG fails the read, which is the right answer either way.
+ */
+const pngSize = (bytes: Buffer): { width: number; height: number } => ({
+  width: bytes.readUInt32BE(16),
+  height: bytes.readUInt32BE(20),
+});
+
 /** Every file under a directory, by its relative path: a listing, not a name. */
 const filesUnder = async (dir: string): Promise<string[]> => {
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
@@ -82,12 +95,12 @@ describe('the capture cache', () => {
     };
   };
 
-  /** The one file the cache has written, which a test then damages. */
+  /** The one file the cache has written for a screen, which a test then damages. */
   const soleEntry = async (dir: string): Promise<string> => {
     const files = await filesUnder(dir);
     if (files.length !== 1) {
       throw new Error(
-        `the cache writes one file per key, and this run directory holds ${files.length}`,
+        `the cache writes one file per screen, and this run directory holds ${files.length}`,
       );
     }
     return join(dir, files[0]);
@@ -138,6 +151,42 @@ describe('the capture cache', () => {
     await withCache('another screen', work, { runDir });
 
     expect(calls()).toBe(2);
+  });
+
+  it('answers a screen that has not changed from its entry', async () => {
+    const { calls, work } = counted();
+    const screen = 'A|cart';
+
+    const first = await withCache('as it rendered', work, { runDir, screen });
+    const again = await withCache('as it rendered', work, { runDir, screen });
+
+    expect(calls()).toBe(1);
+    expect(again).toEqual(first);
+  });
+
+  it('answers only what was last written to a screen', async () => {
+    const { calls, work } = counted();
+    const screen = 'A|cart';
+
+    await withCache('as it first rendered', work, { runDir, screen });
+    await withCache('as it rendered later', work, { runDir, screen });
+    // The first content again. Its entry was overwritten by the second, so this is a miss —
+    // which is what keeps a capture from naming an image that has since been replaced.
+    await withCache('as it first rendered', work, { runDir, screen });
+
+    expect(calls()).toBe(3);
+    expect(await filesUnder(runDir)).toHaveLength(1);
+  });
+
+  it('keeps two screens apart, whatever they were captured at', async () => {
+    const { calls, work } = counted();
+
+    await withCache('one render', work, { runDir, screen: 'A|cart' });
+    await withCache('one render', work, { runDir, screen: 'A|payment' });
+    await withCache('one render', work, { runDir, screen: 'A|cart' });
+
+    expect(calls()).toBe(2);
+    expect(await filesUnder(runDir)).toHaveLength(2);
   });
 
   it('remembers nothing about work that threw', async () => {
@@ -373,6 +422,35 @@ describeWithChromium('a capture in a run directory', () => {
       expect(second.viewport).toEqual(MOBILE.viewport);
       expect(second.foldY).toBe(MOBILE.viewport.height);
       expect(existsSync(image)).toBe(true);
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'does not answer a session with a capture whose picture has been overwritten',
+    async () => {
+      const desktop = await capture(await session(DESKTOP), contextFor(DESKTOP));
+      const image = join(runDir, screenshotOf(desktop));
+
+      // A mobile session's picture of that screen lands on the same path: one image per
+      // screen of one variant, whichever device took it.
+      const mobile = await capture(await session(MOBILE), contextFor(MOBILE));
+      expect(screenshotOf(mobile)).toBe(screenshotOf(desktop));
+      expect(pngSize(await readFile(image)).width).toBe(
+        MOBILE.viewport.width * MOBILE.deviceScaleFactor,
+      );
+
+      const again = await capture(await session(DESKTOP), contextFor(DESKTOP));
+
+      // A hit here would hand this session the first capture's geometry and element boxes
+      // over the mobile render. `run-projection.ts` records the last capture of a screen
+      // because it is the one on disk, so the two have to agree — and a miss answers the
+      // same as the hit would have, which is the point of the whole seam.
+      expect(again).toEqual(desktop);
+      expect(pngSize(await readFile(image))).toEqual({
+        width: again.viewport.width * DESKTOP.deviceScaleFactor,
+        height: again.pageHeight * DESKTOP.deviceScaleFactor,
+      });
     },
     BROWSER_TIMEOUT_MS,
   );

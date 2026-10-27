@@ -7,21 +7,33 @@
  * and the page's content hash (`captureCacheKey` in `capture.ts`), so two pages that differ
  * by a single byte of markup are two captures and the same page at two devices is two more.
  *
- * **It lives in the run directory.** One entry per key under `.capture-cache/`, so the
- * cache travels with the run it belongs to, a fresh run starts cold, and nothing is written
- * anywhere else. The directory is dotted because it is not artifact data: `run.json`
- * records no path into it, the viewer never fetches it, and only this file reads it. For
- * the same reason it is the one run-directory path not spelt by the contract's `runPaths` —
- * those are the paths a run *publishes*, over HTTP as well as on disk, and this one is
- * private to this module and local to a file system.
+ * **One entry per screen, holding the key it was captured under.** A capture writes one
+ * image per screen of one variant — `screenshots/<variant>/<step>.png` — and not one per
+ * device or per content hash, so a cache that kept an entry per key would answer a session
+ * with a capture whose picture something else has since overwritten. The entry therefore
+ * lives at the screen and is a hit only when the key in it is the key being looked up:
+ * whatever rewrites the image rewrites the entry beside it. `CaptureCacheOptions.screen`
+ * says what that is worth.
+ *
+ * **It lives in the run directory.** One entry under `.capture-cache/`, so the cache travels
+ * with the run it belongs to, a fresh run starts cold, and nothing is written anywhere else.
+ * The directory is dotted because it is not artifact data: `run.json` records no path into
+ * it, nothing in the viewer asks for a path inside it, and `cache.ts` is its only reader. It
+ * is for the same reason the one path inside a run directory the contract does not spell —
+ * `runPaths` declares what a run publishes, and this is the module's own working state. The
+ * static mount in `packages/cli` serves any file inside a run directory, so an entry is
+ * fetchable by a client that knows to ask; what it holds is the capture the artifact's own
+ * `aois` are projected from, so that exposes nothing `run.json` does not.
  *
  * **A hit is indistinguishable from a miss** except in speed and in the number of files on
  * disk. The stored value is the whole `Capture` the work produced — its geometry, its
  * element ids and the path of the screenshot the first capture wrote — so a hit returns
- * that same screenshot path rather than taking a second picture of the same screen.
+ * that same screenshot path rather than taking a second picture of the same screen. Sessions
+ * that reach one screen at the same moment all miss and all capture it: this is a cache over
+ * a directory, not a lock over a screen.
  *
  * **Nothing the cache does can fail a session.** An entry that is truncated, half-written,
- * from an older format or hashed onto another key's file is a miss; a run directory that
+ * from an older format or hashed onto another screen's file is a miss; a run directory that
  * cannot be written to is a capture that is merely slow next time. Losing a cache entry
  * costs one screenshot. Reading one wrong, or throwing out of a lookup, would cost the run.
  */
@@ -43,7 +55,7 @@ const ENTRY_VERSION = 1;
 
 interface CacheEntry<T> {
   version: number;
-  /** The key this entry answers, written down so that a hit can be checked against it. */
+  /** The key this entry answers. Compared on the way out, so a screen that changed misses. */
   key: string;
   value: T;
 }
@@ -54,14 +66,31 @@ export interface CaptureCacheOptions {
    * every lookup is a miss and the work simply runs — correct, and merely repeated.
    */
   readonly runDir?: string;
+  /**
+   * What the work writes, named however the caller names it: the cache keeps **one entry
+   * per name**, so a hit can only ever be the last thing written there.
+   *
+   * A capture's name is its screen, because `screenshots/<variant>/<step>.png` is one image
+   * per screen of one variant. A swarm sends mobile and desktop sessions over that one
+   * screen, and the second device's picture overwrites the first's. An entry per key would
+   * then answer the third session — desktop again — with the first session's geometry and
+   * element boxes while the image at the path it names is the mobile render, which is the
+   * one thing `run-projection.ts` says must not happen: the last capture of a screen is the
+   * one `run.json` records, because it is the one on disk. An entry per screen cannot do
+   * that, because the entry and the image are written by the same work. Captures of a screen
+   * that has not changed still hit, which is what the cache is for.
+   *
+   * Defaults to the key, which is right for work that writes nothing it shares.
+   */
+  readonly screen?: string;
 }
 
 /**
- * The file one key is stored in: the key's digest, because a key holds a URL and a URL is
- * not a file name.
+ * The file one screen's entry is stored in: a digest of its name, because a name holds a
+ * URL or a path and neither is a file name.
  */
-const entryFile = (runDir: string, key: string): string => {
-  const digest = createHash('sha256').update(key, 'utf8').digest('hex');
+const entryFile = (runDir: string, screen: string): string => {
+  const digest = createHash('sha256').update(screen, 'utf8').digest('hex');
   return join(runDir, CACHE_DIR, `${digest}${ENTRY_EXTENSION}`);
 };
 
@@ -69,9 +98,10 @@ const entryFile = (runDir: string, key: string): string => {
  * The value stored for `key`, wrapped so that a stored `null` is a hit and an unreadable
  * entry is not.
  *
- * The key is compared and not assumed: a file is addressed by a digest of the key, and an
- * entry that names a different one — a digest collision, or a file somebody else left
- * there — is a miss rather than another screen's capture served as this one's.
+ * The key is compared and not assumed. It is what makes this cache content-addressed —
+ * a screen captured at different content is a different key and a miss — and it is also
+ * what keeps a digest collision, or a file somebody else left there, from being served as
+ * this screen's capture.
  */
 const readEntry = async <T>(file: string, key: string): Promise<{ value: T } | null> => {
   let body: string;
@@ -98,23 +128,25 @@ const readEntry = async <T>(file: string, key: string): Promise<{ value: T } | n
 };
 
 /**
- * Stores `value` for `key`.
+ * Stores `value` for `key`, as this screen's one entry.
  *
  * Written beside the entry and renamed over it — `platform`'s file store does the same —
  * so a crash mid-write, or two sessions finishing the same screen at once, leaves one whole
- * entry rather than half of one.
+ * entry rather than half of one. A process killed between the two leaves its `.tmp` file
+ * behind; nothing reads one, the next capture of the screen still renames over the entry,
+ * and the run directory it sits in is the run's to throw away.
  */
 const writeEntry = async <T>(file: string, key: string, value: T): Promise<void> => {
   const body = JSON.stringify({ version: ENTRY_VERSION, key, value } satisfies CacheEntry<T>);
   await mkdir(dirname(file), { recursive: true });
-  const temporary = `${file}.${randomUUID()}${ENTRY_EXTENSION}.tmp`;
+  const temporary = `${file}.${randomUUID()}.tmp`;
   await writeFile(temporary, body, 'utf8');
   await rename(temporary, file);
 };
 
 /**
- * Runs `fn` unless this key has already been answered in this run directory, in which case
- * it returns what it answered then.
+ * Runs `fn` unless this screen's entry already answers this key, in which case it returns
+ * what it answered then.
  *
  * The value has to be JSON data, because the cache outlives the process that filled it: a
  * hit returns a value equal to the first one, not the same object. Captures are JSON data —
@@ -128,7 +160,7 @@ export const withCache = async <T>(
   const runDir = options.runDir ?? '';
   if (runDir === '') return fn();
 
-  const file = entryFile(runDir, key);
+  const file = entryFile(runDir, options.screen ?? key);
   const hit = await readEntry<T>(file, key);
   if (hit !== null) return hit.value;
 

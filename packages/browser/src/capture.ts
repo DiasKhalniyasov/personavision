@@ -86,8 +86,8 @@ export const capture = async (
     });
 
     // The work a cache hit skips: everything that produces bytes. Named rather than
-    // inline so that the run directory the cache lives in reads beside the key.
-    const screen = async (): Promise<Capture> => {
+    // inline so that what it is cached under reads beside it.
+    const work = async (): Promise<Capture> => {
       const screenshot = await writeScreenshot(page, {
         runDir: ctx.runDir,
         variant: ctx.variant,
@@ -110,5 +110,10 @@ export const capture = async (
       };
     };
 
-    return withCache(key, screen, { runDir: ctx.runDir });
+    // One cache entry per screen rather than per key: a screen is one image file, and a
+    // hit must not answer with a capture whose image another device or another render has
+    // since overwritten (`cache.ts`). A page on no step writes no image.
+    const screen = step === null ? ctx.variant : `${ctx.variant}|${step}`;
+
+    return withCache(key, work, { runDir: ctx.runDir, screen });
   });
