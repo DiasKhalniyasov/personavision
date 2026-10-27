@@ -177,13 +177,30 @@ program
     });
   });
 
+/**
+ * The upper bound on a seed and a candidate count: what a 32-bit seeded generator can tell
+ * apart.
+ *
+ * Past it a seed stops being a seed. The engine's generator reduces one modulo 2³², so
+ * `--seed 4294967297` would be measured at seed 1 while the output said otherwise — a
+ * figure quoted with a number that does not reproduce it, which is the one thing a seed
+ * exists to prevent.
+ */
+const MAX_SEED = 4_294_967_295;
+
 const integer = (flag: string, value: string): number => {
   // Digits only, as `--port` is: `Number` would take `1e3` and `0x10`, and a seed nobody
   // typed makes a figure nobody can reproduce.
   if (!/^\d+$/.test(value)) {
     throw new CliError(`${flag} ${value} is not a whole number.`);
   }
-  return Number(value);
+  const parsed = Number(value);
+  if (parsed > MAX_SEED) {
+    throw new CliError(
+      `${flag} ${value} is above ${String(MAX_SEED)}, the largest number a seeded run can tell from another: pass 0..${String(MAX_SEED)}.`,
+    );
+  }
+  return parsed;
 };
 
 const calibrate = program

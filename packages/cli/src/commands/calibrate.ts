@@ -25,7 +25,9 @@
  * because a publisher's link can carry a token.
  */
 
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import {
   CACHE_ENV_VAR,
@@ -79,6 +81,8 @@ export const CALIBRATE_EXIT_CODES = Object.freeze({
   noConvertedDataset: 4,
   /** `fit --write` could not write the calibrated configuration. */
   notWritten: 5,
+  /** The corpus held records and not one of them could be scored. */
+  nothingScored: 6,
 });
 
 /** The lines `--help` prints under every subcommand, so one table answers for all three. */
@@ -90,6 +94,7 @@ export const EXIT_CODE_HELP = [
   '  3  the dataset in the cache could not be converted into sessions (fetch)',
   '  4  there is no converted dataset in the cache (score --dataset)',
   '  5  the calibrated configuration could not be written (fit --write)',
+  '  6  the corpus held records and not one of them could be scored (score)',
 ].join('\n');
 
 /** Where the converted dataset is written, inside the dataset's own cache directory. */
@@ -173,6 +178,25 @@ export interface CalibrateFetchOptions {
 }
 
 /**
+ * The committed manifest's own file — the one `--record-checksums` rewrites.
+ *
+ * `COMMITTED_MANIFEST_PATH` resolves beside the module that defines it, which is
+ * `dist/dataset/manifest.json` when the shipped `bin` runs: a gitignored build output, so a
+ * checksum recorded there would be unreviewable, uncommittable and gone at the next build.
+ * #85 said as much — a caller not running from `src/` passes `manifestPath` itself. The
+ * package's root is resolved through the declared dependency rather than by a path across
+ * the repository, exactly as `packages/calibration/scripts/fit.ts` resolves the engine's,
+ * so this writes the manifest of the package that was actually imported.
+ */
+const committedManifestFile = (): string => {
+  const entry = createRequire(import.meta.url).resolve('@personavision/calibration');
+  // Two directories inside the package today: `src/index.ts` under the development
+  // condition, `dist/index.js` otherwise.
+  const source = join(dirname(dirname(entry)), 'src', 'dataset', 'manifest.json');
+  return existsSync(source) ? source : COMMITTED_MANIFEST_PATH;
+};
+
+/**
  * The manifest this run reads: the committed one, or the file `--manifest` names.
  *
  * A manifest from a file goes through `parseManifest`, which holds it to exactly the rules
@@ -183,7 +207,7 @@ export interface CalibrateFetchOptions {
 const manifestFor = async (
   path: string | undefined,
 ): Promise<{ readonly manifest: DatasetManifest; readonly path: string }> => {
-  if (path === undefined) return { manifest: loadManifest(), path: COMMITTED_MANIFEST_PATH };
+  if (path === undefined) return { manifest: loadManifest(), path: committedManifestFile() };
   const absolute = resolve(path);
   let text: string;
   try {
@@ -292,6 +316,12 @@ const writeConverted = async (
   records: readonly GroundTruthRecord[],
 ): Promise<void> => {
   const sessionsDir = join(convertedDir, SESSIONS_DIRECTORY);
+  // The sessions of an earlier, longer conversion go first: ids are ordinals within the
+  // batch, so writing `S-01` … `S-07` over `S-01` … `S-12` would otherwise leave five
+  // sessions of the previous dataset in a directory that claims to be this one. A run that
+  // converts nothing does not reach here at all — it exits non-zero with the previous
+  // conversion intact, because a failed read is no reason to destroy what worked.
+  await rm(sessionsDir, { recursive: true, force: true });
   await mkdir(sessionsDir, { recursive: true });
   await Promise.all(
     sessions.map((converted, position) =>
@@ -332,6 +362,10 @@ export const calibrateFetchCommand = async ({
   const { manifest, path: resolvedManifestPath } = await manifestFor(manifestPath);
   const environment = cacheEnvironment(cache);
   const paths = datasetCachePaths(manifest.dataset.id, environment);
+
+  // Which manifest this run read, because `--record-checksums` writes back into it and a
+  // recorded checksum is a committed claim about the bytes.
+  log(`reading the dataset manifest at ${resolvedManifestPath}`);
 
   if (convertOnly) {
     log(`skipping the download: converting what is already unpacked at ${paths.extracted}`);
@@ -662,6 +696,15 @@ export const calibrateScoreCommand = async ({
   for (const failure of result.predictor.failures) {
     log(`  ${failure.recordId} (${failure.category}) produced no figure: ${failure.reason}`);
   }
+  if (result.predictor.overall === null) {
+    // Every record of a corpus that holds records failed — an unmounted cache, images
+    // pruned, a predictor that raises. The figures above are all "no record produced a
+    // figure", and exiting 0 would read as a pass to the script that asked for a score.
+    throw new CliError(
+      `not one of the ${plural(corpus.records.length, 'record')} in ${corpus.label} could be scored, so there is no figure at all. The reasons are above, one per record.`,
+      CALIBRATE_EXIT_CODES.nothingScored,
+    );
+  }
 };
 
 // ---------------------------------------------------------------------------------------
@@ -679,15 +722,24 @@ export interface CalibrateFitOptions {
   readonly progress?: Log;
 }
 
-/** The searched parameters whose fitted value differs from the committed one, by path. */
+/**
+ * Every searched parameter whose fitted value differs from the committed one, by path.
+ *
+ * Both sides' keys, not only the fit's: `--write` replaces the file whole, so a parameter
+ * the search space has since dropped would disappear from it. A dry run that did not
+ * mention that would be a dry run that failed at the one thing it is for.
+ */
 const valueChanges = (
   committed: Readonly<Record<string, number>> | null,
   fitted: Readonly<Record<string, number>>,
 ): readonly string[] =>
-  Object.entries(fitted).flatMap(([path, value]) => {
+  [...new Set([...Object.keys(committed ?? {}), ...Object.keys(fitted)])].flatMap((path) => {
     const was = committed?.[path];
-    if (was === value) return [];
-    return [`  ${path}  ${was === undefined ? '(not recorded)' : String(was)} → ${String(value)}`];
+    const now = fitted[path];
+    if (was === now) return [];
+    const from = was === undefined ? '(not recorded)' : String(was);
+    const to = now === undefined ? '(dropped: the search space no longer holds it)' : String(now);
+    return [`  ${path}  ${from} → ${to}`];
   });
 
 const fitLines = (result: FitResult): readonly string[] => {
@@ -751,6 +803,7 @@ export const calibrateFitCommand = async ({
   log('');
 
   let committedValues: Readonly<Record<string, number>> | null = null;
+  let unreadable = false;
   if (await fileExists(out)) {
     try {
       const parsed: unknown = JSON.parse(await readFile(out, 'utf8'));
@@ -759,11 +812,17 @@ export const calibrateFitCommand = async ({
         fitBlock !== null && isObject(fitBlock.values)
           ? (fitBlock.values as Readonly<Record<string, number>>)
           : null;
+      unreadable = committedValues === null;
     } catch {
-      // A file this command cannot read is still a file it would replace: say so below
-      // rather than refusing, and let the change be "every value".
-      committedValues = null;
+      // A file this command cannot read is still a file it would replace. It is said
+      // below rather than refused, because overwriting a corrupt fit is usually the point
+      // — but it is said, so that `(not recorded) → …` is not read as "there was nothing
+      // here".
+      unreadable = true;
     }
+  }
+  if (unreadable) {
+    log(`${out} is there but carries no fit this can read: every value below would replace it.`);
   }
   const changes = valueChanges(committedValues, record.fit.values);
 

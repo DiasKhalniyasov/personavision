@@ -201,6 +201,7 @@ against a real process:
 | `3`  | the dataset in the cache could not be converted into sessions                  |
 | `4`  | `score --dataset` was asked for and there is no converted dataset in the cache |
 | `5`  | `fit --write` could not write the calibrated configuration                     |
+| `6`  | the corpus held records and not one of them could be scored                    |
 
 **No figure is printed without the record count behind it**, and an empty corpus prints a sentence rather than a
 zero. The committed corpus says in its own heading that its records are synthetic, so a figure from

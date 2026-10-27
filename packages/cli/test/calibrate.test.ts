@@ -149,6 +149,7 @@ describe('personavision calibrate --help', () => {
       '3  the dataset in the cache could not be converted into sessions',
       '4  there is no converted dataset in the cache',
       '5  the calibrated configuration could not be written',
+      '6  the corpus held records and not one of them could be scored',
     ]) {
       expect(stdout).toContain(line);
     }
@@ -188,6 +189,19 @@ describe('personavision calibrate --help', () => {
     expect(code).toBe(1);
     expect(stderr).toContain('--seed tomorrow is not a whole number');
   });
+
+  it('exits 1 on a seed a seeded run could not tell from another', async () => {
+    // The engine's generator reduces a seed modulo 2³², so this one would be measured at
+    // seed 1 while the output said 4294967297 — a figure quoted with a number that does
+    // not reproduce it.
+    const { code, stderr } = await personavision(
+      ['calibrate', 'score', '--seed', '4294967297'],
+      temp,
+    );
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('is above 4294967295');
+  });
 });
 
 describe('personavision calibrate fetch', () => {
@@ -203,6 +217,8 @@ describe('personavision calibrate fetch', () => {
       );
 
       expect(code).toBe(2);
+      // It says which manifest it read, which with --manifest is the one it was given.
+      expect(stdout).toContain(manifest);
       expect(stderr).toContain('could not bring UEyes into the cache');
       expect(stderr).toContain('UEyes_dataset.zip');
       expect(stderr).toContain('ECONNREFUSED');
@@ -220,12 +236,16 @@ describe('personavision calibrate fetch', () => {
     async () => {
       const cache = await cacheDir('fetch-nothing-unpacked');
 
-      const { code, stderr } = await personavision(
+      const { code, stdout, stderr } = await personavision(
         ['calibrate', 'fetch', '--convert-only', '--cache', cache],
         temp,
       );
 
       expect(code).toBe(3);
+      // Without --manifest it reads the committed one, and it says which file that is:
+      // `--record-checksums` writes back into it, so it must be the source the repository
+      // keeps and never the gitignored copy the build leaves under `dist/`.
+      expect(stdout).toContain(join('packages', 'calibration', 'src', 'dataset', 'manifest.json'));
       expect(stderr).toContain('there is no unpacked dataset at');
       expect(stderr).toContain('personavision calibrate fetch');
     },
@@ -318,6 +338,28 @@ describe('personavision calibrate score', () => {
       expect(stdout).not.toContain('not a published UEyes score');
       expect(stdout).toContain('4 records, seed 1');
       expect(stdout).toContain('webpage — 1 record');
+    },
+    SLOW,
+  );
+
+  it(
+    'exits 6 when the corpus holds records and not one of them can be scored',
+    async () => {
+      const cache = await cacheDir('score-nothing-scorable');
+      await writeConvertedDataset(cache, loadCorpus());
+      // The images are gone — an unmounted volume, a pruned cache. Every `predict` fails,
+      // and the figures are all "no record produced a figure": a script that read that as
+      // a pass would be reading a total failure as a score.
+      await rm(join(cache, 'ueyes', 'converted', 'images'), { recursive: true, force: true });
+
+      const { code, stdout, stderr } = await personavision(
+        ['calibrate', 'score', '--dataset', '--cache', cache],
+        temp,
+      );
+
+      expect(code).toBe(6);
+      expect(stdout).toContain('no record produced a figure');
+      expect(stderr).toContain('could be scored, so there is no figure at all');
     },
     SLOW,
   );
