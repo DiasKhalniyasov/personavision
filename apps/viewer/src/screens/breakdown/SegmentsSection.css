@@ -1,0 +1,166 @@
+/* =============================================================================
+   "Which part of your audience this came from" — the `#segments` list of
+   `.segbar` rows at the foot of `#screen-breakdown`, and the `.legend` beneath.
+
+   The prototype is the acceptance — same layout, same hierarchy — and every
+   value below is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. The prototype's own pixel lengths are re-expressed
+   on the spacing scale rather than pasted: its stack is 14px, which is --space-1
+   (4px) times 3.5, and its legend swatch is 10px at half the extra-small radius.
+
+   One length is the prototype's and wider: its label column is 220px, which held
+   a name and a device. This ticket's label also names the part of the audience
+   the person was drawn from, and at 220px every row wrapped to three lines, so
+   the column is --space-24 (6rem) times 3 and the bar gives up the difference.
+
+   The four bands take the `--outcome-*` ramp, and the band for the people our
+   own automation broke on takes `--attr-automation`: the tokens file declares it
+   an attribution and not an outcome, because it is our weakness and not a
+   reading of the checkout under test.
+
+   The `.section`, the `.card`, the `.lede`, the `.footnote`, the `.faint`, the
+   `.num` and the `.tag` pairs are the shell's own, in `styles/base.css`.
+   ========================================================================== */
+
+.segments {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: var(--space-3);
+}
+
+.segbar {
+  display: grid;
+  grid-template-columns: calc(var(--space-24) * 3) 1fr auto;
+  align-items: center;
+  font-size: var(--text-sm);
+  gap: var(--space-4);
+}
+
+/* The label, on two lines: the version tag with the person, and under it the part
+   of the audience they were drawn from with the device they ran on. The second
+   line is the smaller role, so the person's name is what the eye runs down. */
+.segbar-who {
+  display: block;
+  line-height: var(--leading-snug);
+}
+
+.segbar-person {
+  font-weight: var(--weight-medium);
+}
+
+.segbar-who > .faint {
+  display: block;
+  font-size: var(--text-xs);
+}
+
+/* ---- The stacked bar ---------------------------------------------------- */
+
+.stack {
+  display: flex;
+  overflow: hidden;
+  height: calc(var(--space-1) * 3.5);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.stack i {
+  display: block;
+}
+
+.stack .s,
+.legend .s {
+  background: var(--outcome-success);
+}
+
+.stack .ab,
+.legend .ab {
+  background: var(--outcome-abandoned);
+}
+
+.stack .f,
+.legend .f {
+  background: var(--outcome-failed);
+}
+
+.stack .au,
+.legend .au {
+  background: var(--attr-automation);
+}
+
+/* ---- The counts, which carry the reading on their own -------------------- */
+
+.segbar-counts {
+  display: grid;
+  color: var(--color-text-muted);
+  justify-items: end;
+}
+
+.segbar-split {
+  font-size: var(--text-xs);
+}
+
+/* ---- The legend --------------------------------------------------------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  gap: var(--space-4);
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legend i {
+  width: calc(var(--space-1) * 2.5);
+  height: calc(var(--space-1) * 2.5);
+  border-radius: calc(var(--radius-xs) / 2);
+}
+
+/* The line saying what a row's figure is out of belongs to the legend above it,
+   not to the page, so it sits closer than a page footnote would. */
+.segments-note {
+  margin-top: var(--space-3);
+}
+
+/* ---- While the sessions are read ---------------------------------------- */
+
+.segments-reserve {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* One row's own height — two lines of label against two lines of counts, which
+   measures 40px — so the legend under the list does not travel up the page as
+   the counts land. */
+.segbar-reserve {
+  min-block-size: var(--space-10);
+}
+
+/* ---- A narrow window ---------------------------------------------------- */
+
+@media (max-width: 640px) {
+  /* The label takes its own line above the bar, as the prototype stacks it,
+     rather than being squeezed into a column it no longer fits. */
+  .segbar {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .segbar-counts {
+    justify-items: start;
+  }
+
+  /* A stacked row is three lines tall, so the space between two rows has to be
+     larger than the space inside one or the list reads as one block. */
+  .segments {
+    gap: var(--space-6);
+  }
+}
