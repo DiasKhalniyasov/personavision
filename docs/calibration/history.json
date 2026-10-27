@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "date": "2026-10-27",
+      "engineVersion": "0.0.0",
+      "calibrated": true,
+      "corpus": {
+        "id": "committed-synthetic",
+        "label": "the committed synthetic corpus",
+        "synthetic": true,
+        "records": 4
+      },
+      "dataset": null,
+      "seed": 1,
+      "objective": {
+        "id": "web-cc-scanmatch",
+        "scope": "webpage",
+        "value": 0.6554671107527491
+      },
+      "figures": {
+        "overall": {
+          "records": 4,
+          "cc": 0.686953651450616,
+          "nss": 2.5423341150105796,
+          "kld": 5.825325925130386,
+          "aucJudd": 0.8421983352137578,
+          "scanMatch": 0.32802390452517394,
+          "sequenceScore": 0.11944444444444445
+        },
+        "webpage": {
+          "records": 1,
+          "cc": 0.8965272061155534,
+          "nss": 2.73394539667111,
+          "kld": 2.4682671349222876,
+          "aucJudd": 0.9754010695187165,
+          "scanMatch": 0.4144070153899449,
+          "sequenceScore": 0.16666666666666666
+        },
+        "desktop": {
+          "records": 1,
+          "cc": 0.7528924858805738,
+          "nss": 3.347738649833273,
+          "kld": 5.390958077369169,
+          "aucJudd": 0.9694148936170213,
+          "scanMatch": 0.4235032764664155,
+          "sequenceScore": 0.14999999999999997
+        },
+        "mobile": {
+          "records": 1,
+          "cc": 0.932029011287556,
+          "nss": 4.342246642632721,
+          "kld": 0.94440109898441,
+          "aucJudd": 0.9790575916230366,
+          "scanMatch": 0.25806451612903225,
+          "sequenceScore": 0.11111111111111116
+        },
+        "poster": {
+          "records": 1,
+          "cc": 0.16636590251878128,
+          "nss": -0.25459422909478713,
+          "kld": 14.497677389245677,
+          "aucJudd": 0.4449197860962567,
+          "scanMatch": 0.2161208101153032,
+          "sequenceScore": 0.04999999999999999
+        }
+      },
+      "note": "The first recorded measurement: the engine at the committed fit (#90), scored over the committed synthetic corpus."
+    }
+  ]
+}

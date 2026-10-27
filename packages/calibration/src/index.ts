@@ -276,3 +276,41 @@ export type {
   ScoredCandidate,
   SearchParameter,
 } from './fit/index.js';
+
+// The committed report and the regression gate (#89): one scoring run rendered as the
+// markdown at `docs/calibration/report.md`, a row appended to `docs/calibration/history.json`,
+// and the floors the gate holds every figure to read back out of that file's last row.
+export {
+  GATE_COMMAND,
+  HISTORY_PATH,
+  HISTORY_SCHEMA_VERSION,
+  REGRESSION_TOLERANCE,
+  REPORT_COMMAND,
+  REPORT_METRIC_IDS,
+  REPORT_PATH,
+  REPORT_SEED,
+  ReportError,
+  SCOPES,
+  appendHistory,
+  breachesOf,
+  describeBreach,
+  floorsOf,
+  historyRowOf,
+  loadHistory,
+  parseHistory,
+  renderHistory,
+  renderReport,
+  reportPaths,
+  repositoryRoot,
+} from './report/index.js';
+export type {
+  Floor,
+  FloorBreach,
+  History,
+  HistoryRow,
+  RecordOptions,
+  RecordedFigures,
+  ReportInput,
+  ReportMetricId,
+  Scope,
+} from './report/index.js';

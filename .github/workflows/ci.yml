@@ -54,3 +54,19 @@ jobs:
       # The committed example run, held to the schemas: a change that leaves the fixture
       # behind fails the build here rather than breaking the demo.
       - run: pnpm validate:example-run
+
+      # The calibration gate (#89): the engine's human-likeness figures held to the floors
+      # the last recorded measurement put them at, and the committed report held to a fresh
+      # scoring run — so a figure in this repository is always the figure the code produces
+      # and the engine cannot get less human-like without a diff saying so.
+      #
+      # Its own step because its failure is its own: a red gate means the engine changed, not
+      # that a test broke. It needs no network, no API key and no dataset download — the
+      # corpus is committed (#82) and the segmenter is offline — and one run over the four
+      # records costs about 34 ms of scoring (`SCORING_BUDGET`), so the budget below is for
+      # the Node and `sharp` start-up around it on a shared runner, not for the measurement.
+      - name: calibration gate
+        timeout-minutes: 5
+        run: |
+          pnpm --filter @personavision/calibration run gate
+          pnpm --filter @personavision/calibration run report --check
