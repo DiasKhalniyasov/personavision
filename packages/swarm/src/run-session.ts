@@ -490,32 +490,27 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         record(kind, aoi, true);
         history.push({ step, kind, targetElementId: decision.action.targetElementId, ok: true });
       } else {
+        const attempted = { step, kind, targetElementId: decision.action.targetElementId };
         try {
           executed = await execute(input, budget, handle, ctx, kind, aoi, capture);
         } catch (error) {
           record(kind, aoi, false);
+          history.push({ ...attempted, ok: false });
           failure = ourBreakage(error, `acting on the ${step} screen`, step);
         }
-        if (failure !== null) {
-          // Nothing more to record: the driver threw and the attempt is already on the trace.
-        } else if (executed === null) {
+        if (executed === null && failure === null) {
           record(kind, aoi, false);
-          history.push({ step, kind, targetElementId: decision.action.targetElementId, ok: false });
+          history.push({ ...attempted, ok: false });
           failure = {
             kind: 'selector_not_found',
             detail: `nothing on the ${step} screen carries the area of interest the agent aimed at`,
             step,
           };
-        } else {
+        } else if (executed !== null) {
           const worked = executed.ok && gotSomewhere(executed, step, scrollY);
           scrollY = executed.scrollY;
           record(kind, aoi, worked, kind === 'scroll' ? String(executed.scrollY) : null);
-          history.push({
-            step,
-            kind,
-            targetElementId: decision.action.targetElementId,
-            ok: worked,
-          });
+          history.push({ ...attempted, ok: worked });
           if (!executed.ok && !wentBackFromTheStart(kind, executed)) {
             failure = {
               kind: executed.failure ?? 'timeout',

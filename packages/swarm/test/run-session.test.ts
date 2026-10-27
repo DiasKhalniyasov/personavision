@@ -222,7 +222,11 @@ describe('runSession', () => {
       expect(watched.contexts.map((context) => context.history.length)).toEqual(
         watched.contexts.map((_, position) => position),
       );
-      expect(session.actions.length).toBe(watched.contexts.length);
+      // One action per screen, bar the one the walk ended on when that was the task's last
+      // step: there the agent is still asked what it makes of the screen, and nothing is done
+      // to it, because the task declares no step after it to walk to.
+      const endedOnTheLastStep = session.screens.at(-1)?.step === TASK.steps.at(-1)?.id;
+      expect(session.actions).toHaveLength(session.screens.length - (endedOnTheLastStep ? 1 : 0));
     });
 
     it('ends the session as our own breakage when a decision names an element nobody looked at', async () => {
