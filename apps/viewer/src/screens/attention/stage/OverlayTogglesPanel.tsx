@@ -15,8 +15,8 @@ import styles from './attentionStage.module.css';
  * Each switch is the registry's `toggle` primitive, a button carrying `aria-pressed` — the
  * prototype draws a checkbox, and `aria-pressed` is what this product's on/off controls
  * say (the version switch beside it is the same primitive). A layer that has nothing to
- * draw on this version's step is disabled with its reason printed under it, rather than
- * offering a switch whose "on" looks exactly like its "off".
+ * draw on this version's step says so and does nothing when pressed, rather than offering
+ * a switch whose "on" looks exactly like its "off".
  */
 export function OverlayTogglesPanel({ layers, setShown }: OverlayLayerState) {
   const panelId = useId();
@@ -30,9 +30,15 @@ export function OverlayTogglesPanel({ layers, setShown }: OverlayLayerState) {
             className={styles.toggle}
             data-overlay-toggle={layer.id}
             pressed={on}
-            disabled={unavailable !== null}
+            // `aria-disabled`, not `disabled`: a native disabled button is skipped by
+            // keyboard and by a screen reader's focus mode, so the sentence saying why the
+            // layer is unavailable would never reach the reader it was written for. The
+            // control stays reachable and announces itself unavailable, and presses on it
+            // do nothing.
+            aria-disabled={unavailable === null ? undefined : true}
             aria-describedby={unavailable === null ? undefined : reasonId(layer.id)}
             onPressedChange={(next) => {
+              if (unavailable !== null) return;
               setShown(layer.id, next);
             }}
           >

@@ -124,13 +124,13 @@ describe('a step with no areas of interest', () => {
       aoiMetrics: run.aoiMetrics.filter((metric) => !metric.aoiId.startsWith('B-review-')),
     }));
 
-  it('disables the outline switch and says why, rather than offering an empty layer', async () => {
+  it('says why the outline switch is unavailable, rather than offering an empty layer', async () => {
     await withoutAreas();
     attention();
     await ready();
 
     const outlines = screen.getByRole('button', { name: /Areas of interest/ });
-    expect(outlines).toHaveProperty('disabled', true);
+    expect(outlines.getAttribute('aria-disabled')).toBe('true');
     expect(
       screen.getByText(
         'This test marked no area of interest on this version of this step, so there is nothing to outline.',
@@ -143,16 +143,65 @@ describe('a step with no areas of interest', () => {
     );
   });
 
+  it('keeps that switch reachable, so the reason is announced rather than shown only', async () => {
+    await withoutAreas();
+    const { container } = attention();
+    await ready();
+
+    // A native `disabled` button is skipped by the keyboard and by a screen reader's focus
+    // mode, so the sentence under it would never reach the reader it is written for.
+    const outlines = screen.getByRole('button', { name: /Areas of interest/ });
+    expect(outlines).toHaveProperty('disabled', false);
+    outlines.focus();
+    expect(document.activeElement).toBe(outlines);
+
+    await userEvent.click(outlines);
+    expect(outlines.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelector('[data-overlay-layer="aoi"]')).toBeNull();
+  });
+
   it('offers the switch again on a step that does have areas', async () => {
     await withoutAreas();
     attention('B', 'payment');
     await ready();
 
-    expect(screen.getByRole('button', { name: /Areas of interest/ })).toHaveProperty(
-      'disabled',
-      false,
-    );
+    expect(
+      screen.getByRole('button', { name: /Areas of interest/ }).getAttribute('aria-disabled'),
+    ).toBeNull();
     expect(screen.queryByText(/nothing to outline/)).toBeNull();
+  });
+});
+
+describe('a screen that is not showing a stage at all', () => {
+  /** A step after the confirmation that nobody ever stood on, as the scaffold's tests do. */
+  const withUnreachedStep = () =>
+    serveChangedRun((run) => ({
+      ...run,
+      steps: [...run.steps, { id: 'delivery', label: 'Delivery' }],
+    }));
+
+  it('takes the panel away with it, rather than offering switches for nothing', async () => {
+    await withUnreachedStep();
+    attention('B', 'delivery');
+    await screen.findByRole('heading', {
+      name: 'Nobody in your audience reached this step on variant B',
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Overlays' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Areas of interest/ })).toBeNull();
+    // The readings beside it are about the step, not about the page, and stay.
+    expect(screen.getByRole('heading', { name: 'Reading this' })).toBeDefined();
+  });
+
+  it('takes it away when a session file could not be read either', async () => {
+    await serveRunData({
+      files: { [`/runs/${RUN_ID}/sessions/S-13.json`]: 'this is not an artifact' },
+    });
+    attention();
+    await ready();
+    await screen.findByText(/could not be read/);
+
+    expect(screen.queryByRole('heading', { name: 'Overlays' })).toBeNull();
   });
 });
 

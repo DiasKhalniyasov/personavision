@@ -89,6 +89,19 @@ export const transformOf = (capture: Capture): Transform => ({
 });
 
 /**
+ * Whether this capture records a page with anything to draw on it.
+ *
+ * `pageHeight` is a `pixels` in the contract, which permits `0`, and a run that records a
+ * page of no height is a fault in the artifact rather than a page nobody looked at. Without
+ * this the frame would hold a box of nothing and draw an empty rectangle — and an empty
+ * frame on this screen reads as "your audience saw nothing", which is the one thing it must
+ * never say. The stage asks this before it draws, and states the figures when the answer is
+ * no.
+ */
+export const isDrawable = (capture: Capture): boolean =>
+  capture.viewport.width > 0 && capture.pageHeight > 0;
+
+/**
  * A page measurement in overlay units: hundredths of the page's width, along either axis.
  *
  * `pageHeight` and the capture's width are `pixels` in the contract, which permits `0`: a

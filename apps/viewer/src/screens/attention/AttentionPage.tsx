@@ -7,7 +7,7 @@ import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
 import { SideColumn, SidePanel } from './SidePanel';
 import { ThisStepPanel } from './ThisStepPanel';
-import { AttentionStage, useAttentionStage } from './stage/AttentionStage';
+import { AttentionStage, stageIsShown, useAttentionStage } from './stage/AttentionStage';
 import type { AttentionStageView } from './stage/AttentionStage';
 import { OverlayTogglesPanel } from './stage/OverlayTogglesPanel';
 import { useAttentionAreas } from './useAttentionAreas';
@@ -110,9 +110,14 @@ export function AttentionScreen({ run }: { run: Run }) {
             {/* #73 mounts the isolated-area caption here. */}
           </div>
           <SideColumn>
-            <SidePanel title="Overlays">
-              <OverlayTogglesPanel layers={stage.layers} setShown={stage.setShown} />
-            </SidePanel>
+            {/* Beside the stage, and only beside the stage: when the screen is showing a
+                step nobody reached, or a session file it could not read, there is nothing
+                for a layer to be drawn over and so nothing for a switch to do. */}
+            {stageIsShown(sessions) ? (
+              <SidePanel title="Overlays">
+                <OverlayTogglesPanel layers={stage.layers} setShown={stage.setShown} />
+              </SidePanel>
+            ) : null}
             {step === undefined ? null : (
               <SidePanel title="This step">
                 <ThisStepPanel step={step} sessions={sessions} areas={areas} isolated={isolated} />
@@ -225,7 +230,7 @@ function StagePlace({
       </p>
     );
   }
-  if (sessions.status === 'ready' && sessions.reachedCount === 0) {
+  if (!stageIsShown(sessions)) {
     return <NobodyReached runId={run.runId} variant={selection.variant} />;
   }
 

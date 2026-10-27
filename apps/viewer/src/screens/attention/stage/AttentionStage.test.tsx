@@ -177,6 +177,44 @@ describe('a screenshot that is not there', () => {
     expect(boxOf(container, 'B-review-complete').x).toBe(String((16 / 390) * 100));
   });
 
+  it('gives the sentence the frame to sit in, rather than a box of nothing', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      screenshots: run.screenshots.filter(
+        (shot) => !(shot.variant === 'B' && shot.step === 'review'),
+      ),
+    }));
+    const { container } = attention();
+    await ready();
+
+    // No capture means no page box, so the stage states it over the whole frame: a
+    // zero-width box would break the sentence into an unreadable sliver.
+    expect(pageOf(container).getAttribute('style')).toBeNull();
+    const stylesheet = join(dirname(fileURLToPath(import.meta.url)), 'attentionStage.module.css');
+    const rule = ruleIn(rulesOf(readFileSync(stylesheet, 'utf8')));
+    expect(rule('.page')['width']).toBe('100%');
+    expect(rule('.page')['height']).toBe('100%');
+  });
+
+  it('states a capture that records a page of no size, naming its figures', async () => {
+    await serveChangedRun((run) => ({
+      ...run,
+      screenshots: run.screenshots.map((shot) =>
+        shot.variant === 'B' && shot.step === 'review' ? { ...shot, pageHeight: 0 } : shot,
+      ),
+    }));
+    const { container } = attention();
+    await ready();
+
+    expect(frameOf(container).dataset.screenshot).toBe('unusable');
+    const stated = screen.getByText(/records a page of no size/);
+    expect(stated.textContent).toContain('screenshots/B/review.png');
+    expect(stated.textContent).toContain('390 by 0 pixels');
+    expect(container.querySelector('#att-page img')).toBeNull();
+    expect(container.querySelector('[data-overlay-layer]')).toBeNull();
+    expect(container.querySelector('[data-fold]')).toBeNull();
+  });
+
   it('names the path when the file is there but cannot be read', async () => {
     await serveRunData();
     const { container } = attention();
@@ -297,6 +335,23 @@ describe('an overlay stays registered to the screenshot', () => {
     expect(
       (container.querySelector('[data-overlay-layer="aoi"]') as HTMLElement).parentElement,
     ).toBe(page);
+  });
+
+  it('is reachable by keyboard, since scrolling it is how the page is read', async () => {
+    await serveRunData();
+    const { container } = attention();
+    await ready();
+
+    // The frame is what scrolls, so a reader without a pointer has to be able to put focus
+    // on it (WCAG 2.1.1) — and a focusable region needs a name.
+    const frame = frameOf(container);
+    expect(frame.getAttribute('tabindex')).toBe('0');
+    expect(frame.getAttribute('role')).toBe('group');
+    expect(frame.getAttribute('aria-label')).toBe(
+      'The page your audience saw, scrollable: the Review step of Redesign candidate',
+    );
+    frame.focus();
+    expect(document.activeElement).toBe(frame);
   });
 
   it('is the frame that scrolls, over the whole captured page', () => {

@@ -57,6 +57,13 @@
   box-shadow: var(--shadow-md);
 }
 
+/* It scrolls, so it is focusable, so focus is visible — at the width and in
+   the colour every focus ring in this product is drawn at. */
+.frame:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: var(--border-width-strong);
+}
+
 /* The screenshot's own box, in the pixels it was captured in and scaled by the
    zoom. The image, every overlay layer and the fold are all inside it, so the
    zoom scales and the frame scrolls one object: nothing drawn in page
@@ -69,6 +76,12 @@
    start of a too-wide child unreachable. */
 .page {
   position: relative;
+  /* The frame's own size, until the stage gives it the capture's: a page that
+     could not be drawn is a sentence, and a sentence laid out inside a box of
+     nothing is an unreadable sliver. The stage's inline width and height win
+     over this whenever there is a page box to have. */
+  width: 100%;
+  height: 100%;
   margin-inline: auto;
 }
 
@@ -184,4 +197,15 @@
   height: auto;
   min-width: 0;
   padding-block: var(--space-1);
+}
+
+/* A layer with nothing to draw is said to be unavailable rather than made
+   unreachable: a native `disabled` button cannot be focused, so the reason
+   under it would never be announced to the one reader who most needs it. The
+   primitive's own dimming keys off `:disabled`, so the quiet state is written
+   here, in the faint text colour rather than at some opacity of this sheet's
+   own invention. */
+.toggle[aria-disabled='true'] {
+  color: var(--color-text-faint);
+  cursor: default;
 }

@@ -10,6 +10,7 @@ import {
   DEFAULT_ZOOM,
   ZOOM_LEVELS,
   foldMark,
+  isDrawable,
   pageBox,
   transformOf,
   zoomLabel,
@@ -35,7 +36,28 @@ import styles from './attentionStage.module.css';
  */
 
 /** How far the screenshot has got, which is what the frame says instead of showing a gap. */
-type ScreenshotState = 'loading' | 'shown' | 'missing' | 'unreadable';
+type ScreenshotState =
+  /** Not decoded yet. The box is open and nothing is drawn in it. */
+  | 'loading'
+  /** On screen, with whatever layers the reader has on. */
+  | 'shown'
+  /** The run records no capture of this version's step. */
+  | 'missing'
+  /** It records one, but of a page with no size: there is nothing to draw on. */
+  | 'unusable'
+  /** The file it names could not be read. The page's box is still known. */
+  | 'unreadable';
+
+/**
+ * Whether the stage is what this screen shows at all.
+ *
+ * Two things are truer than a page and are shown instead of it — a session file that could
+ * not be read, and a step nobody in the audience reached. Both the frame and the Overlays
+ * panel read this, because they are in two cells of the screen's grid: a panel of live
+ * switches beside a stage that is not there would offer the reader controls for nothing.
+ */
+export const stageIsShown = (sessions: AttentionStepSessions): boolean =>
+  sessions.status !== 'error' && !(sessions.status === 'ready' && sessions.reachedCount === 0);
 
 export interface AttentionStageView {
   /** Every registered layer, with the switch it is at. The panel renders these. */
@@ -131,14 +153,20 @@ export function AttentionStage({ stage }: { stage: AttentionStageView }) {
   const state: ScreenshotState =
     capture === null || screenshotUrl === null
       ? 'missing'
-      : broken === screenshotUrl
-        ? 'unreadable'
-        : decoded === screenshotUrl
-          ? 'shown'
-          : 'loading';
+      : !isDrawable(capture)
+        ? 'unusable'
+        : broken === screenshotUrl
+          ? 'unreadable'
+          : decoded === screenshotUrl
+            ? 'shown'
+            : 'loading';
 
-  const box = pageBox(layerProps.transform, zoom);
-  const fold = capture === null ? null : foldMark(capture);
+  // A page there is something to draw on has a box of its own, in the pixels it was
+  // captured in; without one the stage is a sentence, and the sentence fills the frame
+  // rather than being laid out inside a box of nothing.
+  const box =
+    state === 'missing' || state === 'unusable' ? null : pageBox(layerProps.transform, zoom);
+  const fold = capture === null || !isDrawable(capture) ? null : foldMark(capture);
   // Nothing is drawn until there is a page to draw it on. While the screenshot is still
   // decoding the frame is holding its box open; with no capture at all there are no page
   // coordinates to register to, and overlays over a sentence would be a drawing of
@@ -155,6 +183,13 @@ export function AttentionStage({ stage }: { stage: AttentionStageView }) {
         className={styles.frame}
         id="att-frame"
         data-screenshot={state}
+        // The frame scrolls, so it is focusable and named: a reader who does not use a
+        // pointer has no other way to move down a page taller than the window onto it
+        // (WCAG 2.1.1). What the page is, is the image's own alternative text; what this
+        // says is what the box around it is for.
+        role="group"
+        aria-label={`The page your audience saw, scrollable: the ${stepLabel} step of ${variantName}`}
+        tabIndex={0}
         // Dimmed only while something is drawn over it, as the prototype dims `#att-frame`
         // only when there is gaze to read on top: a page with every overlay off is the page
         // itself, and washing it out would be a treatment with nothing to serve.
@@ -165,12 +200,18 @@ export function AttentionStage({ stage }: { stage: AttentionStageView }) {
         <div
           className={styles.page}
           id="att-page"
-          style={{ width: `${box.width}px`, height: `${box.height}px` }}
+          style={box === null ? undefined : { width: `${box.width}px`, height: `${box.height}px` }}
         >
           {capture === null || screenshotUrl === null ? (
             <p className={styles.unreadable} role="status">
               This test holds no screenshot of the {stepLabel} step on {variantName}, so there is no
               page to show the overlays over.
+            </p>
+          ) : state === 'unusable' ? (
+            <p className={styles.unreadable} role="status">
+              The screenshot at {capture.path} records a page of no size &mdash;{' '}
+              {capture.viewport.width} by {capture.pageHeight} pixels &mdash; so there is nothing to
+              draw the overlays on.
             </p>
           ) : state === 'unreadable' ? (
             <p className={styles.unreadable} role="status">
