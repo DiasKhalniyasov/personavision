@@ -229,7 +229,15 @@ export interface EngineConfig {
     readonly deliberateReturnRelevance: number;
   };
 
-  /** How many fixations a screen gets before the agent moves on, before persona scaling. */
+  /**
+   * How many fixations a screen gets before the agent moves on, before persona scaling.
+   *
+   * **Not a demo knob.** #78 raised `mean` from 9 to 11 to make the swarm find the control
+   * beside it more often, and `packages/calibration`'s regression gate refused it: ten
+   * figures fell, 22 tolerances' worth, because this number is fitted against the UEyes
+   * corpus and moving it makes the engine worse at predicting where people look. It is
+   * reverted here and recorded on #78 as a measurement, not a setting.
+   */
   readonly fixationsPerScreen: {
     readonly mean: number;
     readonly logSigma: number;

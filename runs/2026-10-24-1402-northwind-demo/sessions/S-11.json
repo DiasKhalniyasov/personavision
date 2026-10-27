@@ -3,17 +3,17 @@
   "sessionId": "S-11",
   "runId": "2026-10-24-1402-northwind-demo",
   "variant": "A",
-  "taskId": "buy-boots",
+  "taskId": "northwind-checkout",
   "kind": "simulated",
   "persona": {
     "id": "price",
     "traits": {
-      "persistence": 0.6,
-      "scanningVsReading": 0.8,
-      "detailOrientation": 0.7,
-      "interfaceFamiliarity": 0.5,
-      "patience": 0.4,
-      "riskTolerance": 0.3
+      "persistence": 0.575,
+      "scanningVsReading": 0.793,
+      "detailOrientation": 0.806,
+      "interfaceFamiliarity": 0.494,
+      "patience": 0.229,
+      "riskTolerance": 0.542
     },
     "device": {
       "name": "iPhone 15",
@@ -26,490 +26,2092 @@
     }
   },
   "participant": null,
-  "seed": 2,
-  "startedAt": "2026-10-24T14:09:30.000Z",
-  "durationMs": 19500,
+  "seed": 20261052,
+  "startedAt": "2026-10-24T14:02:00.000Z",
+  "durationMs": 21004.394816348507,
   "screens": [
     {
       "index": 0,
       "step": "cart",
       "screenshot": "screenshots/A/cart.png",
       "scrollY": 0,
-      "intent": "See the real total with shipping before anything else.",
-      "decidedAction": "left without ordering"
+      "intent": "“Checkout” is the closest thing here to what I want.",
+      "decidedAction": "clicked “Checkout”"
+    },
+    {
+      "index": 1,
+      "step": "payment",
+      "screenshot": "screenshots/A/payment.png",
+      "scrollY": 0,
+      "intent": "I can't see what I need yet, so I'll keep going down the page.",
+      "decidedAction": "scrolled down the page"
+    },
+    {
+      "index": 2,
+      "step": "payment",
+      "screenshot": "screenshots/A/payment.png",
+      "scrollY": 0,
+      "intent": "“banner” is the closest thing here to what I want.",
+      "decidedAction": "clicked “banner”"
+    },
+    {
+      "index": 3,
+      "step": "payment",
+      "screenshot": "screenshots/A/payment.png",
+      "scrollY": 0,
+      "intent": "This isn't as obvious as I expected — let me think.",
+      "decidedAction": "hesitated"
+    },
+    {
+      "index": 4,
+      "step": "payment",
+      "screenshot": "screenshots/A/payment.png",
+      "scrollY": 0,
+      "intent": "Wrong turn — back to the previous page.",
+      "decidedAction": "went back"
+    },
+    {
+      "index": 5,
+      "step": "cart",
+      "screenshot": "screenshots/A/cart.png",
+      "scrollY": 0,
+      "intent": "I'll try “Checkout” — that should be it.",
+      "decidedAction": "clicked “Checkout”"
+    },
+    {
+      "index": 6,
+      "step": "payment",
+      "screenshot": "screenshots/A/payment.png",
+      "scrollY": 0,
+      "intent": "I'll try “Continue to review” — that should be it.",
+      "decidedAction": "clicked “Continue to review”"
+    },
+    {
+      "index": 7,
+      "step": "review",
+      "screenshot": "screenshots/A/review.png",
+      "scrollY": 0,
+      "intent": "“Place order · $137.95” is the closest thing here to what I want.",
+      "decidedAction": "clicked “Place order · $137.95”"
+    },
+    {
+      "index": 8,
+      "step": "confirm",
+      "screenshot": "screenshots/A/confirm.png",
+      "scrollY": 0,
+      "intent": "I'll try “NORTHWIND” — that should be it.",
+      "decidedAction": "clicked “NORTHWIND”"
     }
   ],
   "fixations": [
     {
       "index": 0,
       "screenIndex": 0,
-      "tMs": 669,
-      "durationMs": 343,
-      "x": 121.2,
-      "y": 144,
-      "pageX": 121.2,
-      "pageY": 144,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 0,
+      "durationMs": 137.82660742075097,
+      "x": 181.3251645088459,
+      "y": 73.71567544307705,
+      "pageX": 181.3251645088459,
+      "pageY": 73.71567544307705,
+      "aoiId": "a-cart-heading-your-cart-20-66-350x25"
     },
     {
       "index": 1,
       "screenIndex": 0,
-      "tMs": 1485,
-      "durationMs": 238,
-      "x": 324.8,
-      "y": 144.9,
-      "pageX": 324.8,
-      "pageY": 144.9,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 171.14901091680127,
+      "durationMs": 146.91126977723064,
+      "x": 148.02421574171717,
+      "y": 202.37192595628287,
+      "pageX": 148.02421574171717,
+      "pageY": 202.37192595628287,
+      "aoiId": "a-cart-term-subtotal-35-196-244x22"
     },
     {
       "index": 2,
       "screenIndex": 0,
-      "tMs": 2220,
-      "durationMs": 381,
-      "x": 306,
-      "y": 275.8,
-      "pageX": 306,
-      "pageY": 275.8,
-      "aoiId": "A-cart-cart-total"
+      "tMs": 349.7155890499755,
+      "durationMs": 134.65781639780437,
+      "x": 169.83807681392287,
+      "y": 139.85609859765853,
+      "pageX": 169.83807681392287,
+      "pageY": 139.85609859765853,
+      "aoiId": "a-cart-generic-ridgeline-hiking-boots-85-114-160x46"
     },
     {
       "index": 3,
       "screenIndex": 0,
-      "tMs": 2670,
-      "durationMs": 354,
-      "x": 295.9,
-      "y": 298.9,
-      "pageX": 295.9,
-      "pageY": 298.9,
-      "aoiId": "A-cart-cart-total"
+      "tMs": 519.4797068904833,
+      "durationMs": 137.34082860421856,
+      "x": 206.19815429138288,
+      "y": 334.1629895985006,
+      "pageX": 206.19815429138288,
+      "pageY": 334.1629895985006,
+      "aoiId": "A-cart-cart-checkout"
     },
     {
       "index": 4,
       "screenIndex": 0,
-      "tMs": 3390,
-      "durationMs": 504,
-      "x": 191.1,
-      "y": 345.1,
-      "pageX": 191.1,
-      "pageY": 345.1,
-      "aoiId": "A-cart-cart-checkout"
+      "tMs": 695.3892733382386,
+      "durationMs": 125.04476785912648,
+      "x": 348.13683807921143,
+      "y": 22.18440184832818,
+      "pageX": 348.13683807921143,
+      "pageY": 22.18440184832818,
+      "aoiId": "A-cart-cart-badge"
     },
     {
       "index": 5,
       "screenIndex": 0,
-      "tMs": 4299,
-      "durationMs": 287,
-      "x": 129.9,
-      "y": 138.1,
-      "pageX": 129.9,
-      "pageY": 138.1,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 858.0053622359198,
+      "durationMs": 111.09308077171727,
+      "x": 129.18980113342363,
+      "y": 231.42598147063774,
+      "pageX": 129.18980113342363,
+      "pageY": 231.42598147063774,
+      "aoiId": "a-cart-term-shipping-35-222-244x22"
     },
     {
       "index": 6,
       "screenIndex": 0,
-      "tMs": 4941,
-      "durationMs": 232,
-      "x": 320.8,
-      "y": 135.9,
-      "pageX": 320.8,
-      "pageY": 135.9,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 1004.1879849782164,
+      "durationMs": 102.4711372538681,
+      "x": 311.3087417853405,
+      "y": 140.44141460194632,
+      "pageX": 311.3087417853405,
+      "pageY": 140.44141460194632,
+      "aoiId": "a-cart-generic-129-00-294-125-63x23"
     },
     {
       "index": 7,
       "screenIndex": 0,
-      "tMs": 5493,
-      "durationMs": 435,
-      "x": 299.6,
-      "y": 279.4,
-      "pageX": 299.6,
-      "pageY": 279.4,
-      "aoiId": "A-cart-cart-total"
+      "tMs": 1148.641282030988,
+      "durationMs": 125.16161078055521,
+      "x": 311.6764809858817,
+      "y": 262.3310685072471,
+      "pageX": 311.6764809858817,
+      "pageY": 262.3310685072471,
+      "aoiId": "a-cart-definition-137-95-291-252-64x31"
     },
     {
       "index": 8,
       "screenIndex": 0,
-      "tMs": 6207,
-      "durationMs": 328,
-      "x": 303.9,
-      "y": 295.4,
-      "pageX": 303.9,
-      "pageY": 295.4,
-      "aoiId": "A-cart-cart-total"
+      "tMs": 1311.176823272578,
+      "durationMs": 105.28982006442608,
+      "x": 213.37754687695906,
+      "y": 183.87394900844578,
+      "pageX": 213.37754687695906,
+      "pageY": 183.87394900844578,
+      "aoiId": "a-cart-main-main-0-50-390x392"
     },
     {
       "index": 9,
       "screenIndex": 0,
-      "tMs": 6826,
-      "durationMs": 573,
-      "x": 190.3,
-      "y": 343,
-      "pageX": 190.3,
-      "pageY": 343,
-      "aoiId": "A-cart-cart-checkout"
+      "tMs": 1448.2119705809237,
+      "durationMs": 126.74754705354356,
+      "x": 159.3696816928932,
+      "y": 139.63575284666533,
+      "pageX": 159.3696816928932,
+      "pageY": 139.63575284666533,
+      "aoiId": "a-cart-generic-ridgeline-hiking-boots-85-114-160x46"
     },
     {
       "index": 10,
       "screenIndex": 0,
-      "tMs": 7531,
-      "durationMs": 334,
-      "x": 128.3,
-      "y": 144.6,
-      "pageX": 128.3,
-      "pageY": 144.6,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 1620.0926055500213,
+      "durationMs": 134.94829584434927,
+      "x": 160.4235128130044,
+      "y": 206.56737087166292,
+      "pageX": 160.4235128130044,
+      "pageY": 206.56737087166292,
+      "aoiId": "a-cart-term-subtotal-35-196-244x22"
     },
     {
       "index": 11,
       "screenIndex": 0,
-      "tMs": 8443,
-      "durationMs": 221,
-      "x": 312.4,
-      "y": 139.1,
-      "pageX": 312.4,
-      "pageY": 139.1,
-      "aoiId": "A-cart-cart-line"
+      "tMs": 1788.608923727286,
+      "durationMs": 135.26401507089471,
+      "x": 235.884103860874,
+      "y": 327.7075895762699,
+      "pageX": 235.884103860874,
+      "pageY": 327.7075895762699,
+      "aoiId": "A-cart-cart-checkout"
     },
     {
       "index": 12,
       "screenIndex": 0,
-      "tMs": 8954,
-      "durationMs": 391,
-      "x": 301.3,
-      "y": 273.9,
-      "pageX": 301.3,
-      "pageY": 273.9,
-      "aoiId": "A-cart-cart-total"
+      "tMs": 1962.0095337909645,
+      "durationMs": 186.6732795937558,
+      "x": 345.580310120955,
+      "y": 21.287245514884688,
+      "pageX": 345.580310120955,
+      "pageY": 21.287245514884688,
+      "aoiId": "A-cart-cart-badge"
     },
     {
       "index": 13,
-      "screenIndex": 0,
-      "tMs": 9832,
-      "durationMs": 335,
-      "x": 309.9,
-      "y": 295.4,
-      "pageX": 309.9,
-      "pageY": 295.4,
-      "aoiId": "A-cart-cart-total"
+      "screenIndex": 1,
+      "tMs": 2159.5282738021606,
+      "durationMs": 90.27172507556048,
+      "x": 105.2091137939965,
+      "y": 306.4805255387624,
+      "pageX": 105.2091137939965,
+      "pageY": 306.4805255387624,
+      "aoiId": "a-payment-textbox-expiry-33-291-143x27"
     },
     {
       "index": 14,
-      "screenIndex": 0,
-      "tMs": 10523,
-      "durationMs": 565,
-      "x": 197.5,
-      "y": 353.9,
-      "pageX": 197.5,
-      "pageY": 353.9,
-      "aoiId": "A-cart-cart-checkout"
+      "screenIndex": 1,
+      "tMs": 2286.6373622810083,
+      "durationMs": 84.61149317845134,
+      "x": 249.8204158029971,
+      "y": 74.34514989549491,
+      "pageX": 249.8204158029971,
+      "pageY": 74.34514989549491,
+      "aoiId": "a-payment-heading-payment-details-20-66-350x25"
     },
     {
       "index": 15,
-      "screenIndex": 0,
-      "tMs": 11254,
-      "durationMs": 290,
-      "x": 123.4,
-      "y": 135.6,
-      "pageX": 123.4,
-      "pageY": 135.6,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 1,
+      "tMs": 2440.5205247487575,
+      "durationMs": 102.48247341575073,
+      "x": 204.20650261370727,
+      "y": 241.0690544529385,
+      "pageX": 204.20650261370727,
+      "pageY": 241.0690544529385,
+      "aoiId": "a-payment-form-form-20-103-350x300"
     },
     {
       "index": 16,
-      "screenIndex": 0,
-      "tMs": 11782,
-      "durationMs": 258,
-      "x": 324.4,
-      "y": 138,
-      "pageX": 324.4,
-      "pageY": 138,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 1,
+      "tMs": 2582.254025015628,
+      "durationMs": 102.47076613007935,
+      "x": 174.60181114964408,
+      "y": 609.9239835558925,
+      "pageX": 174.60181114964408,
+      "pageY": 609.9239835558925,
+      "aoiId": "A-payment-trust"
     },
     {
       "index": 17,
-      "screenIndex": 0,
-      "tMs": 12416,
-      "durationMs": 417,
-      "x": 299.2,
-      "y": 277.3,
-      "pageX": 299.2,
-      "pageY": 277.3,
-      "aoiId": "A-cart-cart-total"
+      "screenIndex": 1,
+      "tMs": 2722.2898311363488,
+      "durationMs": 89.21297468698634,
+      "x": 108.22358132003117,
+      "y": 314.69244950051757,
+      "pageX": 108.22358132003117,
+      "pageY": 314.69244950051757,
+      "aoiId": "A-payment-expiry"
     },
     {
       "index": 18,
-      "screenIndex": 0,
-      "tMs": 13149,
-      "durationMs": 378,
-      "x": 297.4,
-      "y": 293.5,
-      "pageX": 297.4,
-      "pageY": 293.5,
-      "aoiId": "A-cart-cart-total"
+      "screenIndex": 1,
+      "tMs": 2846.2380069316346,
+      "durationMs": 153.7140511110023,
+      "x": 141.77001832889354,
+      "y": 501.10608586242967,
+      "pageX": 141.77001832889354,
+      "pageY": 501.10608586242967,
+      "aoiId": "a-payment-term-shipping-35-487-244x22"
     },
     {
       "index": 19,
-      "screenIndex": 0,
-      "tMs": 13939,
-      "durationMs": 507,
-      "x": 196.1,
-      "y": 347.8,
-      "pageX": 196.1,
-      "pageY": 347.8,
-      "aoiId": "A-cart-cart-checkout"
+      "screenIndex": 1,
+      "tMs": 3037.96845460703,
+      "durationMs": 123.41657164647567,
+      "x": 338.88552150551686,
+      "y": 611.6380563587443,
+      "pageX": 338.88552150551686,
+      "pageY": 611.6380563587443,
+      "aoiId": "A-payment-support"
     },
     {
       "index": 20,
-      "screenIndex": 0,
-      "tMs": 14536,
-      "durationMs": 311,
-      "x": 119.1,
-      "y": 140.8,
-      "pageX": 119.1,
-      "pageY": 140.8,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 1,
+      "tMs": 3209.9988179901466,
+      "durationMs": 149.10612130412244,
+      "x": 344.90348798741985,
+      "y": 23.65185510855925,
+      "pageX": 344.90348798741985,
+      "pageY": 23.65185510855925,
+      "aoiId": "A-payment-cart-badge"
     },
     {
       "index": 21,
-      "screenIndex": 0,
-      "tMs": 15243,
-      "durationMs": 260,
-      "x": 326.4,
-      "y": 145.1,
-      "pageX": 326.4,
-      "pageY": 145.1,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 1,
+      "tMs": 3409.5337626361265,
+      "durationMs": 103.40516352411606,
+      "x": 189.30586305420724,
+      "y": 495.19489321886886,
+      "pageX": 189.30586305420724,
+      "pageY": 495.19489321886886,
+      "aoiId": "a-payment-term-shipping-35-487-244x22"
     },
     {
       "index": 22,
-      "screenIndex": 0,
-      "tMs": 16146,
-      "durationMs": 406,
-      "x": 307.2,
-      "y": 283.2,
-      "pageX": 307.2,
-      "pageY": 283.2,
-      "aoiId": "A-cart-cart-total"
+      "screenIndex": 1,
+      "tMs": 3549.732247688076,
+      "durationMs": 123.16179424640355,
+      "x": 170.61299703371233,
+      "y": 224.1057481599559,
+      "pageX": 170.61299703371233,
+      "pageY": 224.1057481599559,
+      "aoiId": "a-payment-iframe-card-number-33-213-324x26"
     },
     {
       "index": 23,
-      "screenIndex": 0,
-      "tMs": 16663,
-      "durationMs": 347,
-      "x": 306.9,
-      "y": 301.6,
-      "pageX": 306.9,
-      "pageY": 301.6,
-      "aoiId": "A-cart-cart-total"
+      "screenIndex": 1,
+      "tMs": 3706.0035084955484,
+      "durationMs": 101.750348781828,
+      "x": 281.0092274274266,
+      "y": 281.4008089061255,
+      "pageX": 281.0092274274266,
+      "pageY": 281.4008089061255,
+      "aoiId": "a-payment-labeltext-cvc-214-271-143x19"
     },
     {
       "index": 24,
-      "screenIndex": 0,
-      "tMs": 17348,
-      "durationMs": 499,
-      "x": 199.6,
-      "y": 351,
-      "pageX": 199.6,
-      "pageY": 351,
-      "aoiId": "A-cart-cart-checkout"
+      "screenIndex": 1,
+      "tMs": 3849.6688301875574,
+      "durationMs": 165.46596040116873,
+      "x": 181.19083900729527,
+      "y": 600.022779442891,
+      "pageX": 181.19083900729527,
+      "pageY": 600.022779442891,
+      "aoiId": "A-payment-trust"
     },
     {
       "index": 25,
-      "screenIndex": 0,
-      "tMs": 18234,
-      "durationMs": 297,
-      "x": 126.5,
-      "y": 143.7,
-      "pageX": 126.5,
-      "pageY": 143.7,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 1,
+      "tMs": 4060.0490716971985,
+      "durationMs": 201.56056457639193,
+      "x": 340.8686567969528,
+      "y": 25.218252600943927,
+      "pageX": 340.8686567969528,
+      "pageY": 25.218252600943927,
+      "aoiId": "A-payment-cart-badge"
     },
     {
       "index": 26,
-      "screenIndex": 0,
-      "tMs": 18736,
-      "durationMs": 230,
-      "x": 328.2,
-      "y": 136.8,
-      "pageX": 328.2,
-      "pageY": 136.8,
-      "aoiId": "A-cart-cart-line"
+      "screenIndex": 2,
+      "tMs": 4309.690537048233,
+      "durationMs": 154.40856488654833,
+      "x": 145.99289113305593,
+      "y": 505.25203606843087,
+      "pageX": 145.99289113305593,
+      "pageY": 505.25203606843087,
+      "aoiId": "A-payment-summary"
+    },
+    {
+      "index": 27,
+      "screenIndex": 2,
+      "tMs": 4503.652297447669,
+      "durationMs": 162.5710748900973,
+      "x": 161.03827506623853,
+      "y": 123.42051872833501,
+      "pageX": 161.03827506623853,
+      "pageY": 123.42051872833501,
+      "aoiId": "a-payment-labeltext-email-33-112-324x19"
+    },
+    {
+      "index": 28,
+      "screenIndex": 2,
+      "tMs": 4712.754061368443,
+      "durationMs": 131.69887682970517,
+      "x": 164.5278819671872,
+      "y": 141.9116193873868,
+      "pageX": 164.5278819671872,
+      "pageY": 141.9116193873868,
+      "aoiId": "A-payment-email"
+    },
+    {
+      "index": 29,
+      "screenIndex": 2,
+      "tMs": 4899.640589881879,
+      "durationMs": 115.502160782085,
+      "x": 127.48972639579101,
+      "y": 302.23574379640496,
+      "pageX": 127.48972639579101,
+      "pageY": 302.23574379640496,
+      "aoiId": "a-payment-main-main-0-50-390x535"
+    },
+    {
+      "index": 30,
+      "screenIndex": 2,
+      "tMs": 5048.366239731019,
+      "durationMs": 290.1541856260716,
+      "x": 228.1893727769153,
+      "y": 221.70629549713937,
+      "pageX": 228.1893727769153,
+      "pageY": 221.70629549713937,
+      "aoiId": "a-payment-iframe-card-number-33-213-324x26"
+    },
+    {
+      "index": 31,
+      "screenIndex": 2,
+      "tMs": 5376.641622063059,
+      "durationMs": 134.92485726254148,
+      "x": 332.02827723285117,
+      "y": 529.5108104423133,
+      "pageX": 332.02827723285117,
+      "pageY": 529.5108104423133,
+      "aoiId": "a-payment-definition-137-95-291-517-64x31"
+    },
+    {
+      "index": 32,
+      "screenIndex": 2,
+      "tMs": 5569.484033619614,
+      "durationMs": 226.39649605337033,
+      "x": 231.22449002905122,
+      "y": 198.85925212117763,
+      "pageX": 231.22449002905122,
+      "pageY": 198.85925212117763,
+      "aoiId": "a-payment-generic-card-number-33-192-324x19"
+    },
+    {
+      "index": 33,
+      "screenIndex": 2,
+      "tMs": 5855.585604290779,
+      "durationMs": 165.35815294396332,
+      "x": 328.94322804452173,
+      "y": 499.0406003352741,
+      "pageX": 328.94322804452173,
+      "pageY": 499.0406003352741,
+      "aoiId": "a-payment-definition-8-95-291-487-64x22"
+    },
+    {
+      "index": 34,
+      "screenIndex": 2,
+      "tMs": 6064.190637371359,
+      "durationMs": 89.86029253769037,
+      "x": 89.1662825665955,
+      "y": 26.52102425030785,
+      "pageX": 89.1662825665955,
+      "pageY": 26.52102425030785,
+      "aoiId": "a-payment-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 35,
+      "screenIndex": 2,
+      "tMs": 6190.622579096217,
+      "durationMs": 157.02347621254182,
+      "x": 110.63642060095626,
+      "y": 288.50871486863286,
+      "pageX": 110.63642060095626,
+      "pageY": 288.50871486863286,
+      "aoiId": "A-payment-expiry"
+    },
+    {
+      "index": 36,
+      "screenIndex": 2,
+      "tMs": 6384.27670787567,
+      "durationMs": 189.90194961353257,
+      "x": 143.3361588544452,
+      "y": 25.306107246539348,
+      "pageX": 143.3361588544452,
+      "pageY": 25.306107246539348,
+      "aoiId": "a-payment-banner-banner-0-0-390x50"
+    },
+    {
+      "index": 37,
+      "screenIndex": 2,
+      "tMs": 6629.159249484545,
+      "durationMs": 103.56300886860808,
+      "x": 145.534404693077,
+      "y": 152.76015262696822,
+      "pageX": 145.534404693077,
+      "pageY": 152.76015262696822,
+      "aoiId": "a-payment-textbox-email-33-132-324x27"
+    },
+    {
+      "index": 38,
+      "screenIndex": 2,
+      "tMs": 6766.554959911022,
+      "durationMs": 117.87217509310376,
+      "x": 88.84523167181905,
+      "y": 295.20206932589525,
+      "pageX": 88.84523167181905,
+      "pageY": 295.20206932589525,
+      "aoiId": "A-payment-expiry"
+    },
+    {
+      "index": 39,
+      "screenIndex": 3,
+      "tMs": 6924.343985464422,
+      "durationMs": 108.72772967850989,
+      "x": 72.50777429962042,
+      "y": 25.381879040925227,
+      "pageX": 72.50777429962042,
+      "pageY": 25.381879040925227,
+      "aoiId": "a-payment-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 40,
+      "screenIndex": 3,
+      "tMs": 7096.432267729546,
+      "durationMs": 162.60473857181526,
+      "x": 256.1650252654511,
+      "y": 127.18011231927711,
+      "pageX": 256.1650252654511,
+      "pageY": 127.18011231927711,
+      "aoiId": "A-payment-email"
+    },
+    {
+      "index": 41,
+      "screenIndex": 3,
+      "tMs": 7289.995374415906,
+      "durationMs": 161.13861875624744,
+      "x": 221.466509215707,
+      "y": 143.4762496746672,
+      "pageX": 221.466509215707,
+      "pageY": 143.4762496746672,
+      "aoiId": "a-payment-textbox-email-33-132-324x27"
+    },
+    {
+      "index": 42,
+      "screenIndex": 3,
+      "tMs": 7510.484184399036,
+      "durationMs": 181.12840374862395,
+      "x": 172.3436316230007,
+      "y": 80.12590906714473,
+      "pageX": 172.3436316230007,
+      "pageY": 80.12590906714473,
+      "aoiId": "a-payment-heading-payment-details-20-66-350x25"
+    },
+    {
+      "index": 43,
+      "screenIndex": 3,
+      "tMs": 7727.310241877603,
+      "durationMs": 79.26619595597673,
+      "x": 267.32073681173244,
+      "y": 287.2986928301378,
+      "pageX": 267.32073681173244,
+      "pageY": 287.2986928301378,
+      "aoiId": "A-payment-cvc"
+    },
+    {
+      "index": 44,
+      "screenIndex": 3,
+      "tMs": 7875.068716015929,
+      "durationMs": 101.7659908611829,
+      "x": 191.51672114430627,
+      "y": 78.7263657051415,
+      "pageX": 191.51672114430627,
+      "pageY": 78.7263657051415,
+      "aoiId": "a-payment-heading-payment-details-20-66-350x25"
+    },
+    {
+      "index": 45,
+      "screenIndex": 3,
+      "tMs": 8029.382118685487,
+      "durationMs": 127.70517698624563,
+      "x": 204.94779104031875,
+      "y": 515.8381388562942,
+      "pageX": 204.94779104031875,
+      "pageY": 515.8381388562942,
+      "aoiId": "a-payment-list-list-35-462-320x86"
+    },
+    {
+      "index": 46,
+      "screenIndex": 3,
+      "tMs": 8196.495425010444,
+      "durationMs": 148.37699268113246,
+      "x": 144.4423366011411,
+      "y": 144.40883706469765,
+      "pageX": 144.4423366011411,
+      "pageY": 144.40883706469765,
+      "aoiId": "a-payment-textbox-email-33-132-324x27"
+    },
+    {
+      "index": 47,
+      "screenIndex": 3,
+      "tMs": 8402.130718829058,
+      "durationMs": 157.95888255478133,
+      "x": 275.40915889728007,
+      "y": 301.935489890129,
+      "pageX": 275.40915889728007,
+      "pageY": 301.935489890129,
+      "aoiId": "a-payment-textbox-cvc-214-291-143x27"
+    },
+    {
+      "index": 48,
+      "screenIndex": 3,
+      "tMs": 8598.74936421385,
+      "durationMs": 124.68537530156887,
+      "x": 274.0708639212096,
+      "y": 494.81445235299265,
+      "pageX": 274.0708639212096,
+      "pageY": 494.81445235299265,
+      "aoiId": "A-payment-summary"
+    },
+    {
+      "index": 49,
+      "screenIndex": 3,
+      "tMs": 8758.780910017987,
+      "durationMs": 126.20294617378356,
+      "x": 212.7024519451462,
+      "y": 515.5925621469607,
+      "pageX": 212.7024519451462,
+      "pageY": 515.5925621469607,
+      "aoiId": "a-payment-list-list-35-462-320x86"
+    },
+    {
+      "index": 50,
+      "screenIndex": 3,
+      "tMs": 8943.380631809729,
+      "durationMs": 155.6602499239873,
+      "x": 168.949170184822,
+      "y": 476.28475635682696,
+      "pageX": 168.949170184822,
+      "pageY": 476.28475635682696,
+      "aoiId": "a-payment-term-ridgeline-boots-35-462-244x22"
+    },
+    {
+      "index": 51,
+      "screenIndex": 3,
+      "tMs": 9138.110942039842,
+      "durationMs": 289.39720309664955,
+      "x": 106.98685836618482,
+      "y": 118.81271235209735,
+      "pageX": 106.98685836618482,
+      "pageY": 118.81271235209735,
+      "aoiId": "a-payment-labeltext-email-33-112-324x19"
+    },
+    {
+      "index": 52,
+      "screenIndex": 4,
+      "tMs": 9480.70344766857,
+      "durationMs": 156.0741492979574,
+      "x": 336.8169738476879,
+      "y": 606.9658183995376,
+      "pageX": 336.8169738476879,
+      "pageY": 606.9658183995376,
+      "aoiId": "A-payment-support"
+    },
+    {
+      "index": 53,
+      "screenIndex": 4,
+      "tMs": 9675.719811175972,
+      "durationMs": 114.03513856150146,
+      "x": 271.8504399079611,
+      "y": 287.6077069850729,
+      "pageX": 271.8504399079611,
+      "pageY": 287.6077069850729,
+      "aoiId": "A-payment-cvc"
+    },
+    {
+      "index": 54,
+      "screenIndex": 4,
+      "tMs": 9831.025147952647,
+      "durationMs": 89.9570158619622,
+      "x": 205.10185106263134,
+      "y": 431.3224428928897,
+      "pageX": 205.10185106263134,
+      "pageY": 431.3224428928897,
+      "aoiId": "a-payment-heading-order-summary-20-419-350x20"
+    },
+    {
+      "index": 55,
+      "screenIndex": 4,
+      "tMs": 9965.194443125,
+      "durationMs": 154.8897699675962,
+      "x": 126.62976187345139,
+      "y": 453.7620267756452,
+      "pageX": 126.62976187345139,
+      "pageY": 453.7620267756452,
+      "aoiId": "a-payment-main-main-0-50-390x535"
+    },
+    {
+      "index": 56,
+      "screenIndex": 4,
+      "tMs": 10172.573686988562,
+      "durationMs": 192.62373319497405,
+      "x": 90.85993286202384,
+      "y": 29.805426632163766,
+      "pageX": 90.85993286202384,
+      "pageY": 29.805426632163766,
+      "aoiId": "a-payment-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 57,
+      "screenIndex": 4,
+      "tMs": 10400.059573232136,
+      "durationMs": 103.61491623650568,
+      "x": 178.97015672647618,
+      "y": 203.18777890416996,
+      "pageX": 178.97015672647618,
+      "pageY": 203.18777890416996,
+      "aoiId": "a-payment-generic-card-number-33-192-324x19"
+    },
+    {
+      "index": 58,
+      "screenIndex": 4,
+      "tMs": 10560.04772576604,
+      "durationMs": 97.25491303084063,
+      "x": 207.22795701314828,
+      "y": 380.21528200573556,
+      "pageX": 207.22795701314828,
+      "pageY": 380.21528200573556,
+      "aoiId": "A-payment-primary"
+    },
+    {
+      "index": 59,
+      "screenIndex": 4,
+      "tMs": 10690.106482649628,
+      "durationMs": 112.746611881842,
+      "x": 120.08897160607654,
+      "y": 309.60889572825187,
+      "pageX": 120.08897160607654,
+      "pageY": 309.60889572825187,
+      "aoiId": "a-payment-textbox-expiry-33-291-143x27"
+    },
+    {
+      "index": 60,
+      "screenIndex": 4,
+      "tMs": 10859.927027550155,
+      "durationMs": 114.6835377193343,
+      "x": 174.53239547014385,
+      "y": 430.41426095656027,
+      "pageX": 174.53239547014385,
+      "pageY": 430.41426095656027,
+      "aoiId": "a-payment-heading-order-summary-20-419-350x20"
+    },
+    {
+      "index": 61,
+      "screenIndex": 4,
+      "tMs": 11026.685839349231,
+      "durationMs": 209.81487049448046,
+      "x": 300.87248305926965,
+      "y": 33.21450703511595,
+      "pageX": 300.87248305926965,
+      "pageY": 33.21450703511595,
+      "aoiId": "a-payment-banner-banner-0-0-390x50"
+    },
+    {
+      "index": 62,
+      "screenIndex": 4,
+      "tMs": 11275.974473556342,
+      "durationMs": 119.78137656305654,
+      "x": 264.30343882394124,
+      "y": 304.6445307672565,
+      "pageX": 264.30343882394124,
+      "pageY": 304.6445307672565,
+      "aoiId": "a-payment-textbox-cvc-214-291-143x27"
+    },
+    {
+      "index": 63,
+      "screenIndex": 4,
+      "tMs": 11434.234966519201,
+      "durationMs": 166.70923123532808,
+      "x": 80.13359697266104,
+      "y": 19.839100294555333,
+      "pageX": 80.13359697266104,
+      "pageY": 19.839100294555333,
+      "aoiId": "a-payment-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 64,
+      "screenIndex": 4,
+      "tMs": 11638.60727027899,
+      "durationMs": 121.35831455346143,
+      "x": 214.3146093919745,
+      "y": 295.432541309247,
+      "pageX": 214.3146093919745,
+      "pageY": 295.432541309247,
+      "aoiId": "a-payment-form-form-20-103-350x300"
+    },
+    {
+      "index": 65,
+      "screenIndex": 5,
+      "tMs": 11787.559588520804,
+      "durationMs": 91.4928270986791,
+      "x": 313.88513055299217,
+      "y": 206.4839950709648,
+      "pageX": 313.88513055299217,
+      "pageY": 206.4839950709648,
+      "aoiId": "a-cart-definition-129-00-291-196-64x22"
+    },
+    {
+      "index": 66,
+      "screenIndex": 5,
+      "tMs": 11920.773448653717,
+      "durationMs": 125.0197949424997,
+      "x": 131.01163124126006,
+      "y": 232.583135152353,
+      "pageX": 131.01163124126006,
+      "pageY": 232.583135152353,
+      "aoiId": "a-cart-term-shipping-35-222-244x22"
+    },
+    {
+      "index": 67,
+      "screenIndex": 5,
+      "tMs": 12083.101073494381,
+      "durationMs": 137.71657246267344,
+      "x": 165.19627863088309,
+      "y": 384.8500236781958,
+      "pageX": 165.19627863088309,
+      "pageY": 384.8500236781958,
+      "aoiId": "A-cart-keep-shopping"
+    },
+    {
+      "index": 68,
+      "screenIndex": 5,
+      "tMs": 12272.8882049643,
+      "durationMs": 168.46705505176502,
+      "x": 140.32642353230895,
+      "y": 266.7270037746033,
+      "pageX": 140.32642353230895,
+      "pageY": 266.7270037746033,
+      "aoiId": "a-cart-term-total-35-252-244x31"
+    },
+    {
+      "index": 69,
+      "screenIndex": 5,
+      "tMs": 12486.115036850453,
+      "durationMs": 174.02679848287394,
+      "x": 179.12654530637764,
+      "y": 232.8438321625464,
+      "pageX": 179.12654530637764,
+      "pageY": 232.8438321625464,
+      "aoiId": "a-cart-term-shipping-35-222-244x22"
+    },
+    {
+      "index": 70,
+      "screenIndex": 5,
+      "tMs": 12706.30827891576,
+      "durationMs": 159.50099539705226,
+      "x": 176.68173122023012,
+      "y": 245.17248243069156,
+      "pageX": 176.68173122023012,
+      "pageY": 245.17248243069156,
+      "aoiId": "A-cart-cart-total"
+    },
+    {
+      "index": 71,
+      "screenIndex": 5,
+      "tMs": 12898.343195586798,
+      "durationMs": 212.5314152622162,
+      "x": 180.24937157754937,
+      "y": 143.87843927565035,
+      "pageX": 180.24937157754937,
+      "pageY": 143.87843927565035,
+      "aoiId": "a-cart-generic-ridgeline-hiking-boots-85-114-160x46"
+    },
+    {
+      "index": 72,
+      "screenIndex": 5,
+      "tMs": 13142.570417098688,
+      "durationMs": 134.707511291178,
+      "x": 150.77299253786373,
+      "y": 82.78541825847785,
+      "pageX": 150.77299253786373,
+      "pageY": 82.78541825847785,
+      "aoiId": "a-cart-heading-your-cart-20-66-350x25"
+    },
+    {
+      "index": 73,
+      "screenIndex": 5,
+      "tMs": 13318.402024524408,
+      "durationMs": 117.30292642681442,
+      "x": 176.89678692752645,
+      "y": 136.86163291820097,
+      "pageX": 176.89678692752645,
+      "pageY": 136.86163291820097,
+      "aoiId": "a-cart-generic-ridgeline-hiking-boots-85-114-160x46"
+    },
+    {
+      "index": 74,
+      "screenIndex": 5,
+      "tMs": 13483.790347019916,
+      "durationMs": 152.25205829754876,
+      "x": 236.24524321824705,
+      "y": 310.74088978039504,
+      "pageX": 236.24524321824705,
+      "pageY": 310.74088978039504,
+      "aoiId": "A-cart-cart-checkout"
+    },
+    {
+      "index": 75,
+      "screenIndex": 5,
+      "tMs": 13684.422745645226,
+      "durationMs": 226.61504535879322,
+      "x": 50.98126903157703,
+      "y": 131.58746792325388,
+      "pageX": 50.98126903157703,
+      "pageY": 131.58746792325388,
+      "aoiId": "a-cart-generic-generic-33-117-40x40"
+    },
+    {
+      "index": 76,
+      "screenIndex": 5,
+      "tMs": 13973.090957706712,
+      "durationMs": 121.35809793551738,
+      "x": 130.7142525020774,
+      "y": 397.593180397852,
+      "pageX": 130.7142525020774,
+      "pageY": 397.593180397852,
+      "aoiId": "A-cart-keep-shopping"
+    },
+    {
+      "index": 77,
+      "screenIndex": 5,
+      "tMs": 14132.49620213397,
+      "durationMs": 154.79994239391542,
+      "x": 166.24585179749775,
+      "y": 206.24387435825685,
+      "pageX": 166.24585179749775,
+      "pageY": 206.24387435825685,
+      "aoiId": "a-cart-term-subtotal-35-196-244x22"
+    },
+    {
+      "index": 78,
+      "screenIndex": 6,
+      "tMs": 14315.942722115207,
+      "durationMs": 116.71918491122784,
+      "x": 101.22163636933718,
+      "y": 509.2462352022413,
+      "pageX": 101.22163636933718,
+      "pageY": 509.2462352022413,
+      "aoiId": "a-payment-complementary-complementary-20-419-350x142"
+    },
+    {
+      "index": 79,
+      "screenIndex": 6,
+      "tMs": 14474.866186688514,
+      "durationMs": 106.60590794527748,
+      "x": 127.7720835548726,
+      "y": 21.797590659424657,
+      "pageX": 127.7720835548726,
+      "pageY": 21.797590659424657,
+      "aoiId": "a-payment-banner-banner-0-0-390x50"
+    },
+    {
+      "index": 80,
+      "screenIndex": 6,
+      "tMs": 14637.619882571717,
+      "durationMs": 77.42918081101142,
+      "x": 220.23078011418556,
+      "y": 369.9487885484261,
+      "pageX": 220.23078011418556,
+      "pageY": 369.9487885484261,
+      "aoiId": "A-payment-primary"
+    },
+    {
+      "index": 81,
+      "screenIndex": 6,
+      "tMs": 14748.729464346257,
+      "durationMs": 159.1995044416235,
+      "x": 165.8794127192192,
+      "y": 506.76432445737873,
+      "pageX": 165.8794127192192,
+      "pageY": 506.76432445737873,
+      "aoiId": "a-payment-list-list-35-462-320x86"
+    },
+    {
+      "index": 82,
+      "screenIndex": 6,
+      "tMs": 14963.623823536318,
+      "durationMs": 136.85406762767306,
+      "x": 287.9961349211036,
+      "y": 279.3838170823702,
+      "pageX": 287.9961349211036,
+      "pageY": 279.3838170823702,
+      "aoiId": "A-payment-cvc"
+    },
+    {
+      "index": 83,
+      "screenIndex": 6,
+      "tMs": 15138.687464178227,
+      "durationMs": 145.0482661809295,
+      "x": 81.59128070539983,
+      "y": 23.977515911309062,
+      "pageX": 81.59128070539983,
+      "pageY": 23.977515911309062,
+      "aoiId": "a-payment-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 84,
+      "screenIndex": 6,
+      "tMs": 15349.488425434027,
+      "durationMs": 138.07321520837746,
+      "x": 186.0230972505419,
+      "y": 21.483967021956353,
+      "pageX": 186.0230972505419,
+      "pageY": 21.483967021956353,
+      "aoiId": "a-payment-banner-banner-0-0-390x50"
+    },
+    {
+      "index": 85,
+      "screenIndex": 6,
+      "tMs": 15524.25603293559,
+      "durationMs": 83.11606495939004,
+      "x": 247.14999971239905,
+      "y": 282.18940017490866,
+      "pageX": 247.14999971239905,
+      "pageY": 282.18940017490866,
+      "aoiId": "a-payment-labeltext-cvc-214-271-143x19"
+    },
+    {
+      "index": 86,
+      "screenIndex": 6,
+      "tMs": 15643.654823802171,
+      "durationMs": 93.99269024614918,
+      "x": 308.7776400254053,
+      "y": 525.8249182532296,
+      "pageX": 308.7776400254053,
+      "pageY": 525.8249182532296,
+      "aoiId": "a-payment-definition-137-95-291-517-64x31"
+    },
+    {
+      "index": 87,
+      "screenIndex": 6,
+      "tMs": 15782.994253623752,
+      "durationMs": 88.96187369883606,
+      "x": 338.5914733343216,
+      "y": 498.5990662510456,
+      "pageX": 338.5914733343216,
+      "pageY": 498.5990662510456,
+      "aoiId": "a-payment-definition-8-95-291-487-64x22"
+    },
+    {
+      "index": 88,
+      "screenIndex": 6,
+      "tMs": 15935.258246650601,
+      "durationMs": 153.35094596994182,
+      "x": 329.9800865097207,
+      "y": 474.4087669103262,
+      "pageX": 329.9800865097207,
+      "pageY": 474.4087669103262,
+      "aoiId": "a-payment-definition-129-00-291-462-64x22"
+    },
+    {
+      "index": 89,
+      "screenIndex": 6,
+      "tMs": 16124.657317248997,
+      "durationMs": 185.74816725294906,
+      "x": 247.86594491692856,
+      "y": 246.8456631685952,
+      "pageX": 247.86594491692856,
+      "pageY": 246.8456631685952,
+      "aoiId": "a-payment-form-form-20-103-350x300"
+    },
+    {
+      "index": 90,
+      "screenIndex": 6,
+      "tMs": 16365.704248914679,
+      "durationMs": 105.36246141188651,
+      "x": 272.3501716459732,
+      "y": 278.88271797225013,
+      "pageX": 272.3501716459732,
+      "pageY": 278.88271797225013,
+      "aoiId": "a-payment-labeltext-cvc-214-271-143x19"
+    },
+    {
+      "index": 91,
+      "screenIndex": 7,
+      "tMs": 16530.644984767423,
+      "durationMs": 186.53578144311973,
+      "x": 327.6486125534772,
+      "y": 433.27384180956483,
+      "pageX": 327.6486125534772,
+      "pageY": 433.27384180956483,
+      "aoiId": "a-review-definition-137-95-291-422-64x31"
+    },
+    {
+      "index": 92,
+      "screenIndex": 7,
+      "tMs": 16753.836623419887,
+      "durationMs": 83.07086891837032,
+      "x": 166.72149007693025,
+      "y": 221.18150918695244,
+      "pageX": 166.72149007693025,
+      "pageY": 221.18150918695244,
+      "aoiId": "a-review-link-edit-152-211-28x18"
+    },
+    {
+      "index": 93,
+      "screenIndex": 7,
+      "tMs": 16871.628124843148,
+      "durationMs": 160.38956528655424,
+      "x": 286.8101396046563,
+      "y": 75.46359591415542,
+      "pageX": 286.8101396046563,
+      "pageY": 75.46359591415542,
+      "aoiId": "a-review-heading-review-your-order-20-66-350x25"
+    },
+    {
+      "index": 94,
+      "screenIndex": 7,
+      "tMs": 17096.91982521807,
+      "durationMs": 102.88522173911589,
+      "x": 328.2516535451929,
+      "y": 400.05626131863465,
+      "pageX": 328.2516535451929,
+      "pageY": 400.05626131863465,
+      "aoiId": "a-review-definition-8-95-291-393-64x22"
+    },
+    {
+      "index": 95,
+      "screenIndex": 7,
+      "tMs": 17245.893704913895,
+      "durationMs": 118.86561457746977,
+      "x": 128.85152641339533,
+      "y": 395.27548947554635,
+      "pageX": 128.85152641339533,
+      "pageY": 395.27548947554635,
+      "aoiId": "a-review-complementary-complementary-20-324-350x142"
+    },
+    {
+      "index": 96,
+      "screenIndex": 7,
+      "tMs": 17400.816378843327,
+      "durationMs": 177.00584203038656,
+      "x": 338.0951364668704,
+      "y": 517.4141829387352,
+      "pageX": 338.0951364668704,
+      "pageY": 517.4141829387352,
+      "aoiId": "A-review-support"
+    },
+    {
+      "index": 97,
+      "screenIndex": 7,
+      "tMs": 17617.572559674394,
+      "durationMs": 148.14481416322474,
+      "x": 216.08177248421177,
+      "y": 146.97753548799096,
+      "pageX": 216.08177248421177,
+      "pageY": 146.97753548799096,
+      "aoiId": "a-review-paragraph-14-mill-lane-bristol-33-132-324x23"
+    },
+    {
+      "index": 98,
+      "screenIndex": 7,
+      "tMs": 17801.900234238426,
+      "durationMs": 105.75050802654437,
+      "x": 289.8469675519462,
+      "y": 368.2879688922483,
+      "pageX": 289.8469675519462,
+      "pageY": 368.2879688922483,
+      "aoiId": "a-review-complementary-complementary-20-324-350x142"
+    },
+    {
+      "index": 99,
+      "screenIndex": 7,
+      "tMs": 17975.898635561723,
+      "durationMs": 109.84604605334795,
+      "x": 150.35839249103407,
+      "y": 280.9255021775215,
+      "pageX": 150.35839249103407,
+      "pageY": 280.9255021775215,
+      "aoiId": "a-review-main-main-0-50-390x441"
+    },
+    {
+      "index": 100,
+      "screenIndex": 7,
+      "tMs": 18124.26966293588,
+      "durationMs": 100.1325083011504,
+      "x": 199.9478403236184,
+      "y": 143.42567828552814,
+      "pageX": 199.9478403236184,
+      "pageY": 143.42567828552814,
+      "aoiId": "a-review-paragraph-14-mill-lane-bristol-33-132-324x23"
+    },
+    {
+      "index": 101,
+      "screenIndex": 7,
+      "tMs": 18264.231080286987,
+      "durationMs": 111.86963088880047,
+      "x": 139.46970356522212,
+      "y": 197.76376454146313,
+      "pageX": 139.46970356522212,
+      "pageY": 197.76376454146313,
+      "aoiId": "a-review-generic-pay-with-33-188-324x19"
+    },
+    {
+      "index": 102,
+      "screenIndex": 7,
+      "tMs": 18408.255490180083,
+      "durationMs": 152.45144381985227,
+      "x": 210.61052729551233,
+      "y": 246.42482999167382,
+      "pageX": 210.61052729551233,
+      "pageY": 246.42482999167382,
+      "aoiId": "a-review-main-main-0-50-390x441"
+    },
+    {
+      "index": 103,
+      "screenIndex": 7,
+      "tMs": 18591.45552274512,
+      "durationMs": 138.15399246668983,
+      "x": 201.8273931390842,
+      "y": 275.0512640947193,
+      "pageX": 201.8273931390842,
+      "pageY": 275.0512640947193,
+      "aoiId": "A-review-complete"
+    },
+    {
+      "index": 104,
+      "screenIndex": 8,
+      "tMs": 18758.46657539955,
+      "durationMs": 141.88608169478243,
+      "x": 206.2450600463149,
+      "y": 142.01724282837134,
+      "pageX": 206.2450600463149,
+      "pageY": 142.01724282837134,
+      "aoiId": "A-confirm-order-number"
+    },
+    {
+      "index": 105,
+      "screenIndex": 8,
+      "tMs": 18937.71959318534,
+      "durationMs": 109.2562808236088,
+      "x": 154.11437990301417,
+      "y": 276.39603505546455,
+      "pageX": 154.11437990301417,
+      "pageY": 276.39603505546455,
+      "aoiId": "a-confirm-main-main-0-202-390x152"
+    },
+    {
+      "index": 106,
+      "screenIndex": 8,
+      "tMs": 19088.76295704827,
+      "durationMs": 93.57232640378365,
+      "x": 166.39126300239667,
+      "y": 139.51351449612125,
+      "pageX": 166.39126300239667,
+      "pageY": 139.51351449612125,
+      "aoiId": "A-confirm-order-number"
+    },
+    {
+      "index": 107,
+      "screenIndex": 8,
+      "tMs": 19229.25642529854,
+      "durationMs": 124.08771745809631,
+      "x": 177.41991986568397,
+      "y": 121.10010819837478,
+      "pageX": 177.41991986568397,
+      "pageY": 121.10010819837478,
+      "aoiId": "A-confirm-confirm"
+    },
+    {
+      "index": 108,
+      "screenIndex": 8,
+      "tMs": 19389.0079481059,
+      "durationMs": 120.16565486642787,
+      "x": 243.7319650983316,
+      "y": 274.658349928652,
+      "pageX": 243.7319650983316,
+      "pageY": 274.658349928652,
+      "aoiId": "a-confirm-list-list-35-231-320x86"
+    },
+    {
+      "index": 109,
+      "screenIndex": 8,
+      "tMs": 19553.458608162215,
+      "durationMs": 212.87657709876194,
+      "x": 323.6317271772258,
+      "y": 302.15916444401506,
+      "pageX": 323.6317271772258,
+      "pageY": 302.15916444401506,
+      "aoiId": "a-confirm-definition-137-95-291-286-64x31"
+    },
+    {
+      "index": 110,
+      "screenIndex": 8,
+      "tMs": 19803.375929331778,
+      "durationMs": 116.01732224848048,
+      "x": 317.00538309227005,
+      "y": 244.88666132907653,
+      "pageX": 317.00538309227005,
+      "pageY": 244.88666132907653,
+      "aoiId": "a-confirm-definition-129-00-291-231-64x22"
+    },
+    {
+      "index": 111,
+      "screenIndex": 8,
+      "tMs": 19959.92689213676,
+      "durationMs": 168.1230753134181,
+      "x": 208.364633512619,
+      "y": 148.09903852827827,
+      "pageX": 208.364633512619,
+      "pageY": 148.09903852827827,
+      "aoiId": "A-confirm-order-number"
+    },
+    {
+      "index": 112,
+      "screenIndex": 8,
+      "tMs": 20171.06787162796,
+      "durationMs": 138.60198838932496,
+      "x": 89.46181705985943,
+      "y": 27.277083684686048,
+      "pageX": 89.46181705985943,
+      "pageY": 27.277083684686048,
+      "aoiId": "a-confirm-link-northwind-20-12-119x25"
+    },
+    {
+      "index": 113,
+      "screenIndex": 8,
+      "tMs": 20345.924910382793,
+      "durationMs": 127.137997645958,
+      "x": 339.63037163247293,
+      "y": 23.18533307253033,
+      "pageX": 339.63037163247293,
+      "pageY": 23.18533307253033,
+      "aoiId": "A-confirm-cart-badge"
+    },
+    {
+      "index": 114,
+      "screenIndex": 8,
+      "tMs": 20531.356564432754,
+      "durationMs": 102.08646040948462,
+      "x": 165.8144203504678,
+      "y": 238.65008707536532,
+      "pageX": 165.8144203504678,
+      "pageY": 238.65008707536532,
+      "aoiId": "a-confirm-term-ridgeline-boots-35-231-244x22"
+    },
+    {
+      "index": 115,
+      "screenIndex": 8,
+      "tMs": 20678.26662471367,
+      "durationMs": 149.39761084971508,
+      "x": 148.92616751808185,
+      "y": 251.1343763285894,
+      "pageX": 148.92616751808185,
+      "pageY": 251.1343763285894,
+      "aoiId": "a-confirm-main-main-0-202-390x152"
+    },
+    {
+      "index": 116,
+      "screenIndex": 8,
+      "tMs": 20890.478584482953,
+      "durationMs": 113.91623186555425,
+      "x": 199.8784104719979,
+      "y": 304.2862371281818,
+      "pageX": 199.8784104719979,
+      "pageY": 304.2862371281818,
+      "aoiId": "a-confirm-term-paid-35-286-244x31"
     }
   ],
   "saccades": [
     {
       "fromFixation": 0,
       "toFixation": 1,
-      "amplitudePx": 203.6,
-      "durationMs": 26
+      "amplitudePx": 132.89613984201236,
+      "durationMs": 23.32240349605031
     },
     {
       "fromFixation": 1,
       "toFixation": 2,
-      "amplitudePx": 132.2,
-      "durationMs": 23
+      "amplitudePx": 66.21233423774467,
+      "durationMs": 21.655308355943617
     },
     {
       "fromFixation": 2,
       "toFixation": 3,
-      "amplitudePx": 25.2,
-      "durationMs": 19
+      "amplitudePx": 197.67959713784327,
+      "durationMs": 24.941989928446084
     },
     {
       "fromFixation": 3,
       "toFixation": 4,
-      "amplitudePx": 114.5,
-      "durationMs": 23
+      "amplitudePx": 342.7495137414687,
+      "durationMs": 28.568737843536717
     },
     {
       "fromFixation": 4,
       "toFixation": 5,
-      "amplitudePx": 215.9,
-      "durationMs": 27
+      "amplitudePx": 302.8528415421911,
+      "durationMs": 27.57132103855478
     },
     {
       "fromFixation": 5,
       "toFixation": 6,
-      "amplitudePx": 190.9,
-      "durationMs": 26
+      "amplitudePx": 203.58167882316866,
+      "durationMs": 25.089541970579216
     },
     {
       "fromFixation": 6,
       "toFixation": 7,
-      "amplitudePx": 145.1,
-      "durationMs": 24
+      "amplitudePx": 121.89020863577852,
+      "durationMs": 23.047255215894463
     },
     {
       "fromFixation": 7,
       "toFixation": 8,
-      "amplitudePx": 16.6,
-      "durationMs": 19
+      "amplitudePx": 125.77042596333808,
+      "durationMs": 23.144260649083453
     },
     {
       "fromFixation": 8,
       "toFixation": 9,
-      "amplitudePx": 123.2,
-      "durationMs": 23
+      "amplitudePx": 69.81308975678128,
+      "durationMs": 21.745327243919533
     },
     {
       "fromFixation": 9,
       "toFixation": 10,
-      "amplitudePx": 207.9,
-      "durationMs": 26
+      "amplitudePx": 66.9399137396658,
+      "durationMs": 21.673497843491646
     },
     {
       "fromFixation": 10,
       "toFixation": 11,
-      "amplitudePx": 184.2,
-      "durationMs": 25
+      "amplitudePx": 142.72089331661934,
+      "durationMs": 23.568022332915483
     },
     {
       "fromFixation": 11,
       "toFixation": 12,
-      "amplitudePx": 135.3,
-      "durationMs": 23
-    },
-    {
-      "fromFixation": 12,
-      "toFixation": 13,
-      "amplitudePx": 23.2,
-      "durationMs": 19
+      "amplitudePx": 325.4637997113534,
+      "durationMs": 28.136594992783834
     },
     {
       "fromFixation": 13,
       "toFixation": 14,
-      "amplitudePx": 126.7,
-      "durationMs": 23
+      "amplitudePx": 273.4945361314907,
+      "durationMs": 26.837363403287267
     },
     {
       "fromFixation": 14,
       "toFixation": 15,
-      "amplitudePx": 230.5,
-      "durationMs": 27
+      "amplitudePx": 172.8510614006163,
+      "durationMs": 24.321276535015407
     },
     {
       "fromFixation": 15,
       "toFixation": 16,
-      "amplitudePx": 201,
-      "durationMs": 26
+      "amplitudePx": 370.0410740447978,
+      "durationMs": 29.251026851119946
     },
     {
       "fromFixation": 16,
       "toFixation": 17,
-      "amplitudePx": 141.6,
-      "durationMs": 24
+      "amplitudePx": 302.60159962565126,
+      "durationMs": 27.56503999064128
     },
     {
       "fromFixation": 17,
       "toFixation": 18,
-      "amplitudePx": 16.3,
-      "durationMs": 19
+      "amplitudePx": 189.40804433196803,
+      "durationMs": 24.7352011082992
     },
     {
       "fromFixation": 18,
       "toFixation": 19,
-      "amplitudePx": 114.9,
-      "durationMs": 23
+      "amplitudePx": 225.99079205660473,
+      "durationMs": 25.64976980141512
     },
     {
       "fromFixation": 19,
       "toFixation": 20,
-      "amplitudePx": 220.9,
-      "durationMs": 27
+      "amplitudePx": 588.0169970172634,
+      "durationMs": 34.700424925431584
     },
     {
       "fromFixation": 20,
       "toFixation": 21,
-      "amplitudePx": 207.3,
-      "durationMs": 26
+      "amplitudePx": 496.55156597795315,
+      "durationMs": 32.41378914944883
     },
     {
       "fromFixation": 21,
       "toFixation": 22,
-      "amplitudePx": 139.4,
-      "durationMs": 24
+      "amplitudePx": 271.73286111332305,
+      "durationMs": 26.793321527833076
     },
     {
       "fromFixation": 22,
       "toFixation": 23,
-      "amplitudePx": 18.4,
-      "durationMs": 19
+      "amplitudePx": 124.37866244275706,
+      "durationMs": 23.109466561068928
     },
     {
       "fromFixation": 23,
       "toFixation": 24,
-      "amplitudePx": 118.1,
-      "durationMs": 23
+      "amplitudePx": 333.89170516130474,
+      "durationMs": 28.34729262903262
     },
     {
       "fromFixation": 24,
       "toFixation": 25,
-      "amplitudePx": 219.8,
-      "durationMs": 27
+      "amplitudePx": 596.5712443388984,
+      "durationMs": 34.91428110847246
     },
     {
-      "fromFixation": 25,
-      "toFixation": 26,
-      "amplitudePx": 201.8,
-      "durationMs": 26
+      "fromFixation": 26,
+      "toFixation": 27,
+      "amplitudePx": 382.1278205155139,
+      "durationMs": 29.553195512887847
+    },
+    {
+      "fromFixation": 27,
+      "toFixation": 28,
+      "amplitudePx": 18.817496111500432,
+      "durationMs": 20.47043740278751
+    },
+    {
+      "fromFixation": 28,
+      "toFixation": 29,
+      "amplitudePx": 164.54680135344253,
+      "durationMs": 24.113670033836065
+    },
+    {
+      "fromFixation": 29,
+      "toFixation": 30,
+      "amplitudePx": 128.93956268216348,
+      "durationMs": 23.22348906705409
+    },
+    {
+      "fromFixation": 30,
+      "toFixation": 31,
+      "amplitudePx": 324.84786823872304,
+      "durationMs": 28.121196705968075
+    },
+    {
+      "fromFixation": 31,
+      "toFixation": 32,
+      "amplitudePx": 345.67594150421337,
+      "durationMs": 28.641898537605336
+    },
+    {
+      "fromFixation": 32,
+      "toFixation": 33,
+      "amplitudePx": 315.6862264574887,
+      "durationMs": 27.89215566143722
+    },
+    {
+      "fromFixation": 33,
+      "toFixation": 34,
+      "amplitudePx": 529.8752054646836,
+      "durationMs": 33.246880136617094
+    },
+    {
+      "fromFixation": 34,
+      "toFixation": 35,
+      "amplitudePx": 262.8659674867359,
+      "durationMs": 26.571649187168397
+    },
+    {
+      "fromFixation": 35,
+      "toFixation": 36,
+      "amplitudePx": 265.2261026764078,
+      "durationMs": 26.630652566910193
+    },
+    {
+      "fromFixation": 36,
+      "toFixation": 37,
+      "amplitudePx": 127.47300093982055,
+      "durationMs": 23.186825023495516
+    },
+    {
+      "fromFixation": 37,
+      "toFixation": 38,
+      "amplitudePx": 153.30806231473343,
+      "durationMs": 23.832701557868337
+    },
+    {
+      "fromFixation": 39,
+      "toFixation": 40,
+      "amplitudePx": 209.98301391045865,
+      "durationMs": 25.249575347761468
+    },
+    {
+      "fromFixation": 40,
+      "toFixation": 41,
+      "amplitudePx": 38.334724581769066,
+      "durationMs": 20.95836811454423
+    },
+    {
+      "fromFixation": 41,
+      "toFixation": 42,
+      "amplitudePx": 80.16434842295617,
+      "durationMs": 22.004108710573902
+    },
+    {
+      "fromFixation": 42,
+      "toFixation": 43,
+      "amplitudePx": 227.90614919773287,
+      "durationMs": 25.697653729943323
+    },
+    {
+      "fromFixation": 43,
+      "toFixation": 44,
+      "amplitudePx": 221.92040112086102,
+      "durationMs": 25.548010028021526
+    },
+    {
+      "fromFixation": 44,
+      "toFixation": 45,
+      "amplitudePx": 437.31807173486027,
+      "durationMs": 30.932951793371508
+    },
+    {
+      "fromFixation": 45,
+      "toFixation": 46,
+      "amplitudePx": 376.32517354846766,
+      "durationMs": 29.408129338711692
+    },
+    {
+      "fromFixation": 46,
+      "toFixation": 47,
+      "amplitudePx": 204.858377648395,
+      "durationMs": 25.121459441209876
+    },
+    {
+      "fromFixation": 47,
+      "toFixation": 48,
+      "amplitudePx": 192.88360530173046,
+      "durationMs": 24.822090132543263
+    },
+    {
+      "fromFixation": 48,
+      "toFixation": 49,
+      "amplitudePx": 64.79052272573537,
+      "durationMs": 21.619763068143385
+    },
+    {
+      "fromFixation": 49,
+      "toFixation": 50,
+      "amplitudePx": 58.81711707346079,
+      "durationMs": 21.47042792683652
+    },
+    {
+      "fromFixation": 50,
+      "toFixation": 51,
+      "amplitudePx": 362.80241224505295,
+      "durationMs": 29.070060306126322
+    },
+    {
+      "fromFixation": 52,
+      "toFixation": 53,
+      "amplitudePx": 325.8991467591705,
+      "durationMs": 28.14747866897926
+    },
+    {
+      "fromFixation": 53,
+      "toFixation": 54,
+      "amplitudePx": 158.4591412001731,
+      "durationMs": 23.961478530004328
+    },
+    {
+      "fromFixation": 54,
+      "toFixation": 55,
+      "amplitudePx": 81.61742281244756,
+      "durationMs": 22.04043557031119
+    },
+    {
+      "fromFixation": 55,
+      "toFixation": 56,
+      "amplitudePx": 425.4629002307094,
+      "durationMs": 30.636572505767738
+    },
+    {
+      "fromFixation": 56,
+      "toFixation": 57,
+      "amplitudePx": 194.48612194400388,
+      "durationMs": 24.8621530486001
+    },
+    {
+      "fromFixation": 57,
+      "toFixation": 58,
+      "amplitudePx": 179.26862561925404,
+      "durationMs": 24.48171564048135
+    },
+    {
+      "fromFixation": 58,
+      "toFixation": 59,
+      "amplitudePx": 112.15375410987855,
+      "durationMs": 22.803843852746965
+    },
+    {
+      "fromFixation": 59,
+      "toFixation": 60,
+      "amplitudePx": 132.50668915185935,
+      "durationMs": 23.312667228796485
+    },
+    {
+      "fromFixation": 60,
+      "toFixation": 61,
+      "amplitudePx": 416.8086638342393,
+      "durationMs": 30.420216595855983
+    },
+    {
+      "fromFixation": 61,
+      "toFixation": 62,
+      "amplitudePx": 273.88237033353533,
+      "durationMs": 26.847059258338383
+    },
+    {
+      "fromFixation": 62,
+      "toFixation": 63,
+      "amplitudePx": 339.1646559921392,
+      "durationMs": 28.47911639980348
+    },
+    {
+      "fromFixation": 63,
+      "toFixation": 64,
+      "amplitudePx": 306.5229009783613,
+      "durationMs": 27.663072524459032
+    },
+    {
+      "fromFixation": 65,
+      "toFixation": 66,
+      "amplitudePx": 184.72650557921028,
+      "durationMs": 24.618162639480257
+    },
+    {
+      "fromFixation": 66,
+      "toFixation": 67,
+      "amplitudePx": 156.05702630286882,
+      "durationMs": 23.90142565757172
+    },
+    {
+      "fromFixation": 67,
+      "toFixation": 68,
+      "amplitudePx": 120.71270655473091,
+      "durationMs": 23.01781766386827
+    },
+    {
+      "fromFixation": 68,
+      "toFixation": 69,
+      "amplitudePx": 51.51231666480026,
+      "durationMs": 21.287807916620007
+    },
+    {
+      "fromFixation": 69,
+      "toFixation": 70,
+      "amplitudePx": 12.568720434080044,
+      "durationMs": 20.314218010852002
+    },
+    {
+      "fromFixation": 70,
+      "toFixation": 71,
+      "amplitudePx": 101.35685095944193,
+      "durationMs": 22.53392127398605
+    },
+    {
+      "fromFixation": 71,
+      "toFixation": 72,
+      "amplitudePx": 67.83224998697817,
+      "durationMs": 21.695806249674455
+    },
+    {
+      "fromFixation": 72,
+      "toFixation": 73,
+      "amplitudePx": 60.055721003396734,
+      "durationMs": 21.50139302508492
+    },
+    {
+      "fromFixation": 73,
+      "toFixation": 74,
+      "amplitudePx": 183.7287000744316,
+      "durationMs": 24.593217501860792
+    },
+    {
+      "fromFixation": 74,
+      "toFixation": 75,
+      "amplitudePx": 257.718235083515,
+      "durationMs": 26.442955877087876
+    },
+    {
+      "fromFixation": 75,
+      "toFixation": 76,
+      "amplitudePx": 277.6983754403789,
+      "durationMs": 26.942459386009475
+    },
+    {
+      "fromFixation": 76,
+      "toFixation": 77,
+      "amplitudePx": 194.62027507514463,
+      "durationMs": 24.865506876878616
+    },
+    {
+      "fromFixation": 78,
+      "toFixation": 79,
+      "amplitudePx": 488.17118648316506,
+      "durationMs": 32.20427966207913
+    },
+    {
+      "fromFixation": 79,
+      "toFixation": 80,
+      "amplitudePx": 360.2191932157332,
+      "durationMs": 29.00547983039333
+    },
+    {
+      "fromFixation": 80,
+      "toFixation": 81,
+      "amplitudePx": 147.21603854117436,
+      "durationMs": 23.680400963529358
+    },
+    {
+      "fromFixation": 81,
+      "toFixation": 82,
+      "amplitudePx": 258.09763457933616,
+      "durationMs": 26.452440864483403
+    },
+    {
+      "fromFixation": 82,
+      "toFixation": 83,
+      "amplitudePx": 328.3829205693998,
+      "durationMs": 28.209573014234998
+    },
+    {
+      "fromFixation": 83,
+      "toFixation": 84,
+      "amplitudePx": 104.46158189967161,
+      "durationMs": 22.61153954749179
+    },
+    {
+      "fromFixation": 84,
+      "toFixation": 85,
+      "amplitudePx": 267.7756917273296,
+      "durationMs": 26.694392293183242
+    },
+    {
+      "fromFixation": 85,
+      "toFixation": 86,
+      "amplitudePx": 251.30903628767734,
+      "durationMs": 26.282725907191935
+    },
+    {
+      "fromFixation": 86,
+      "toFixation": 87,
+      "amplitudePx": 40.37464146982208,
+      "durationMs": 21.00936603674555
+    },
+    {
+      "fromFixation": 87,
+      "toFixation": 88,
+      "amplitudePx": 25.677355105939522,
+      "durationMs": 20.641933877648487
+    },
+    {
+      "fromFixation": 88,
+      "toFixation": 89,
+      "amplitudePx": 241.92498513814348,
+      "durationMs": 26.048124628453586
+    },
+    {
+      "fromFixation": 89,
+      "toFixation": 90,
+      "amplitudePx": 40.32183327939907,
+      "durationMs": 21.008045831984976
+    },
+    {
+      "fromFixation": 91,
+      "toFixation": 92,
+      "amplitudePx": 266.23428837376,
+      "durationMs": 26.655857209344
+    },
+    {
+      "fromFixation": 92,
+      "toFixation": 93,
+      "amplitudePx": 188.8253001956343,
+      "durationMs": 24.720632504890858
+    },
+    {
+      "fromFixation": 93,
+      "toFixation": 94,
+      "amplitudePx": 327.2274400353184,
+      "durationMs": 28.18068600088296
+    },
+    {
+      "fromFixation": 94,
+      "toFixation": 95,
+      "amplitudePx": 199.45743024413179,
+      "durationMs": 24.986435756103294
+    },
+    {
+      "fromFixation": 95,
+      "toFixation": 96,
+      "amplitudePx": 242.28237407848206,
+      "durationMs": 26.057059351962053
+    },
+    {
+      "fromFixation": 96,
+      "toFixation": 97,
+      "amplitudePx": 390.013552027249,
+      "durationMs": 29.750338800681227
+    },
+    {
+      "fromFixation": 97,
+      "toFixation": 98,
+      "amplitudePx": 233.2801147482595,
+      "durationMs": 25.83200286870649
+    },
+    {
+      "fromFixation": 98,
+      "toFixation": 99,
+      "amplitudePx": 164.58816228090484,
+      "durationMs": 24.11470405702262
+    },
+    {
+      "fromFixation": 99,
+      "toFixation": 100,
+      "amplitudePx": 146.16878909900632,
+      "durationMs": 23.65421972747516
+    },
+    {
+      "fromFixation": 100,
+      "toFixation": 101,
+      "amplitudePx": 81.3033372237863,
+      "durationMs": 22.032583430594656
+    },
+    {
+      "fromFixation": 101,
+      "toFixation": 102,
+      "amplitudePx": 86.19116017187557,
+      "durationMs": 22.154779004296888
+    },
+    {
+      "fromFixation": 102,
+      "toFixation": 103,
+      "amplitudePx": 29.943549807359485,
+      "durationMs": 20.748588745183987
+    },
+    {
+      "fromFixation": 104,
+      "toFixation": 105,
+      "amplitudePx": 144.13628138888356,
+      "durationMs": 23.60340703472209
+    },
+    {
+      "fromFixation": 105,
+      "toFixation": 106,
+      "amplitudePx": 137.43196969160758,
+      "durationMs": 23.43579924229019
+    },
+    {
+      "fromFixation": 106,
+      "toFixation": 107,
+      "amplitudePx": 21.46356922075224,
+      "durationMs": 20.536589230518807
+    },
+    {
+      "fromFixation": 107,
+      "toFixation": 108,
+      "amplitudePx": 167.26452387231117,
+      "durationMs": 24.18161309680778
+    },
+    {
+      "fromFixation": 108,
+      "toFixation": 109,
+      "amplitudePx": 84.5000992855766,
+      "durationMs": 22.112502482139416
+    },
+    {
+      "fromFixation": 109,
+      "toFixation": 110,
+      "amplitudePx": 57.65455792027957,
+      "durationMs": 21.441363948006988
+    },
+    {
+      "fromFixation": 110,
+      "toFixation": 111,
+      "amplitudePx": 145.50139654538734,
+      "durationMs": 23.637534913634685
+    },
+    {
+      "fromFixation": 111,
+      "toFixation": 112,
+      "amplitudePx": 169.51644325146063,
+      "durationMs": 24.237911081286516
+    },
+    {
+      "fromFixation": 112,
+      "toFixation": 113,
+      "amplitudePx": 250.202014620232,
+      "durationMs": 26.255050365505802
+    },
+    {
+      "fromFixation": 113,
+      "toFixation": 114,
+      "amplitudePx": 276.8339667337998,
+      "durationMs": 26.920849168344994
+    },
+    {
+      "fromFixation": 114,
+      "toFixation": 115,
+      "amplitudePx": 21.001679977772216,
+      "durationMs": 20.525041999444305
+    },
+    {
+      "fromFixation": 115,
+      "toFixation": 116,
+      "amplitudePx": 73.62914754697448,
+      "durationMs": 21.84072868867436
     }
   ],
   "actions": [
     {
-      "tMs": 19500,
-      "type": "abandon",
+      "tMs": 2148.6828133847202,
+      "type": "click",
+      "target": "Checkout",
+      "aoiId": "A-cart-cart-checkout",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 4261.609636273591,
+      "type": "scroll",
+      "target": "window",
+      "aoiId": null,
+      "value": "0",
+      "ok": false
+    },
+    {
+      "tMs": 6884.427135004125,
+      "type": "click",
+      "target": "banner",
+      "aoiId": "a-payment-banner-banner-0-0-390x50",
+      "value": null,
+      "ok": false
+    },
+    {
+      "tMs": 9427.508145136491,
+      "type": "hesitate",
       "target": null,
       "aoiId": null,
-      "value": "Cart — re-read $8.95 shipping, then left",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 11759.965584832451,
+      "type": "back",
+      "target": null,
+      "aoiId": null,
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 14287.296144527885,
+      "type": "click",
+      "target": "Checkout",
+      "aoiId": "A-cart-cart-checkout",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 16471.066710326566,
+      "type": "click",
+      "target": "Continue to review",
+      "aoiId": "A-payment-primary",
+      "value": null,
+      "ok": true
+    },
+    {
+      "tMs": 18729.60951521181,
+      "type": "click",
+      "target": "Place order · $137.95",
+      "aoiId": "A-review-complete",
+      "value": null,
       "ok": true
     }
   ],
   "outcome": {
-    "status": "abandoned",
-    "step": "cart",
-    "reason": "Cart — re-read $8.95 shipping, then left",
+    "status": "success",
+    "step": "confirm",
+    "reason": "Completed the task on the \"confirm\" step. The primary action in \"A-confirm-order-number\" was fixated 3 times, first 18.8 s in, but never clicked.",
     "attribution": "product",
     "excludedFromScores": false
   },

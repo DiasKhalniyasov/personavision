@@ -20,11 +20,18 @@
     "validate:example-run": "tsx --conditions=development packages/cli/src/cli.ts validate runs/2026-10-24-1402-northwind-demo",
     "dev": "pnpm -r --parallel --if-present dev",
     "seed:example-run": "tsx --conditions=development scripts/seed-example-run.ts",
-    "open": "tsx --conditions=development packages/cli/src/cli.ts open"
+    "open": "tsx --conditions=development packages/cli/src/cli.ts open",
+    "demo:run": "pnpm -r build && tsx scripts/generate-demo-run.ts"
   },
   "devDependencies": {
+    "@personavision/browser": "workspace:*",
     "@personavision/contract": "workspace:*",
     "@personavision/engine": "workspace:*",
+    "@personavision/northwind-demo": "workspace:*",
+    "@personavision/personas": "workspace:*",
+    "@personavision/provider": "workspace:*",
+    "@personavision/scoring": "workspace:*",
+    "@personavision/swarm": "workspace:*",
     "@types/node": "^22.20.5",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",

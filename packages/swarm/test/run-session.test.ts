@@ -336,7 +336,11 @@ describe('runSession', () => {
     it('executes every one it decides through the driver, and records whether it worked', async () => {
       const watched = watchingActs(createFixtureSource(COMMITTED));
 
-      const session = await runSession(sessionOver(runDir, { source: watched.source }));
+      // A seed on which the careful person fumbles once before finishing, so that both
+      // answers are in one session: since #78 gave the task's steps their own goals the
+      // walk is no longer a scramble, and most seeds now produce a session in which
+      // everything the agent tried worked.
+      const session = await runSession(sessionOver(runDir, { source: watched.source, seed: 1 }));
 
       const onThePage = session.actions.filter((action) => PAGE_ACTIONS.has(action.type));
       expect(watched.acts).toHaveLength(onThePage.length);
@@ -570,8 +574,11 @@ describe('runSession', () => {
     });
 
     it('lets the agent give up in character rather than at a cap', async () => {
+      // Seed 2 of the band: the rushed person misses the small grey control on the cart and
+      // spends its patience looking. On most seeds it now finds it and finishes, which is
+      // what a step goal buys the agent (#78) — giving up is in character, not inevitable.
       const rushed = await runSession(
-        sessionOver(runDir, { persona: personaWho('rushed'), sessionId: 'S-02' }),
+        sessionOver(runDir, { persona: personaWho('rushed'), seed: 2, sessionId: 'S-02' }),
       );
 
       expect(rushed.outcome.status).toBe('abandoned');

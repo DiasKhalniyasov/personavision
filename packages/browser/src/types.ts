@@ -68,6 +68,20 @@ export interface CaptureElement {
   isPrimaryAction: boolean;
   belowFold: boolean;
   selector: string;
+  /**
+   * The name the page gives this region of itself — its `data-aoi` — or `null` on an
+   * element that declares none.
+   *
+   * It is not part of `id`, which stays a function of the markup alone (`stable-id.ts`):
+   * an element id has to exist for every candidate on every page, including the ones
+   * nobody instrumented. This is the other thing — a site that has been prepared for
+   * eye tracking naming its own areas of interest, the way a Tobii study names them
+   * before it runs — and the attention engine prefers it when minting an area's id, so
+   * that one control has one id at both viewports (`aoiId`). A page that declares nothing
+   * is read exactly as before, which is why this is optional: a capture replayed from a
+   * file written before #78 carries no region at all, and must still parse.
+   */
+  region?: string | null;
 }
 
 /**
@@ -125,6 +139,22 @@ export interface TaskStep {
   label: string;
   match: { urlPattern: string; requiredSelector: string };
   primaryAction: { selector: string };
+  /**
+   * What the person is trying to do *on this screen*, in their own words — "Go to
+   * checkout", not the whole errand. Omitted, the screen inherits the task's `prompt`.
+   *
+   * A task prompt is what somebody was sent to do; it is not what they are thinking at
+   * each screen of doing it. Handing the whole sentence to every screen is what the swarm
+   * did before #78, and it makes the simulation unable to recognise a conventional
+   * next-step control: "Buy the hiking boots and pay with the saved card" shares no word
+   * with "Checkout", so the lexical attention and decision layers rank the page's copy
+   * above the button beside it and no session ever reaches the review step. A step goal
+   * is the smallest thing that fixes that, and it is a claim about the *errand* rather
+   * than about the page: it names no selector and no element, so a control the gaze never
+   * landed on is still invisible to the agent — which is how the planted below-the-fold
+   * defect is still discovered rather than assumed.
+   */
+  goal?: string;
 }
 
 /**

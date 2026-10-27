@@ -48,6 +48,12 @@ export interface CaptureElement {
   readonly isPrimaryAction: boolean;
   readonly belowFold: boolean;
   readonly selector: string;
+  /**
+   * The page's own name for the region this element is — its `data-aoi` — when the site
+   * was prepared for eye tracking, and absent when it was not. `aoiId` prefers it, so an
+   * instrumented control keeps one id across the two viewports of one run.
+   */
+  readonly region?: string | null;
 }
 
 /** One step of one variant, as the browser step captured it. */

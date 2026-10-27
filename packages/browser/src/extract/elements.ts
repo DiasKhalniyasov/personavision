@@ -25,6 +25,13 @@
  * `isPrimaryAction` is left `false` here. The task declares its primary action by selector
  * and `resolvePrimaryAction` sets the flag on the element it resolves to.
  *
+ * **A `data-aoi` is reported, not used as an id.** An element that names itself — a site
+ * prepared for eye tracking, the way a Tobii study marks its areas of interest up front —
+ * has that name carried through as `region`. The element id stays a function of the markup
+ * (`stable-id.ts`); what reads the region is the attention engine, when it mints the id of
+ * the *area* the element becomes, because an area is aggregated across two viewports and a
+ * name holds where a box does not.
+ *
  * The variant in an element's id is the session's — `page.variant.id`, the variant the page
  * was opened under — because that is what this seam is given. A caller that captured one
  * open session under some other variant label would disagree with it, which is a reason not
@@ -59,6 +66,8 @@ interface PageElement {
   text: string | null;
   /** A box with a painted background and no text of its own: a banner, or a card. */
   painted: boolean;
+  /** The page's own name for this region — its `data-aoi` — or `null` when it has none. */
+  region: string | null;
   bbox: Box;
 }
 
@@ -391,6 +400,10 @@ const installDescriber = async (page: Page): Promise<void> => {
         name: normalise(element.getAttribute('alt')) ?? text,
         text,
         painted,
+        // The element's own attribute, never an ancestor's: a region name is read so that
+        // one prepared control has one area id, and inheriting it down a card would give
+        // every field inside the card the card's name.
+        region: normalise(element.getAttribute('data-aoi')),
         bbox: {
           // Page space: the client rect is relative to the viewport, the scroll offset puts
           // it back in the document.
@@ -574,6 +587,7 @@ export const extractElements: ExtractElements = async (page, geometry, step) => 
         isPrimaryAction: false,
         belowFold: isBelowFold(element.bbox, geometry),
         selector: element.selector,
+        region: element.region,
       });
     };
 

@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 2,
+  "runId": "2026-10-24-1402-northwind-demo",
+  "findings": [
+    {
+      "id": "F-1",
+      "rank": 1,
+      "severity": "critical",
+      "claim": "Nobody in your audience ever looked at the button that completes the order on the redesign.",
+      "evidence": "On the review step, “Confirm purchase” sits about 180 px below the fold. Of the 9 people who got that far, 0 looked at it. On your current checkout the same button was seen by 9 of 9, after 2.3 s on average.",
+      "variant": "B",
+      "step": "review",
+      "aoiId": "B-review-complete",
+      "sessionIds": [
+        "S-13",
+        "S-14",
+        "S-15",
+        "S-16",
+        "S-17",
+        "S-18",
+        "S-19",
+        "S-21",
+        "S-24"
+      ],
+      "sessionCount": 9,
+      "attribution": "product",
+      "evidence_link": {
+        "screen": "attention",
+        "params": {
+          "variant": "B",
+          "step": "review",
+          "aoi": "B-review-complete"
+        }
+      }
+    },
+    {
+      "id": "F-2",
+      "rank": 2,
+      "severity": "critical",
+      "claim": "A $9.95 service fee only appears after the card is entered, and 4 of 9 people left within 5 seconds of seeing it.",
+      "evidence": "The fee holds the eye for 610 ms the first time and is returned to 2.4 times — the most re-read thing in the test. The total changes from $129.00 to $147.95 between the two steps.",
+      "variant": "B",
+      "step": "review",
+      "aoiId": "B-review-fee-row",
+      "sessionIds": [
+        "S-15",
+        "S-17",
+        "S-18",
+        "S-24"
+      ],
+      "sessionCount": 4,
+      "attribution": "product",
+      "evidence_link": {
+        "screen": "attention",
+        "params": {
+          "variant": "B",
+          "step": "review",
+          "aoi": "B-review-fee-row"
+        }
+      }
+    },
+    {
+      "id": "F-3",
+      "rank": 3,
+      "severity": "high",
+      "claim": "The sale banner takes the first look in 9 of 10 people, about 1.3 s before they look at any form field.",
+      "evidence": "It holds 3.1 s of attention against 1.2 s on the button beneath it, and nobody used the code: it costs attention without earning anything.",
+      "variant": "B",
+      "step": "payment",
+      "aoiId": "B-payment-promo",
+      "sessionIds": [
+        "S-13",
+        "S-14",
+        "S-15",
+        "S-16",
+        "S-17",
+        "S-18",
+        "S-19",
+        "S-21",
+        "S-24"
+      ],
+      "sessionCount": 9,
+      "attribution": "product",
+      "evidence_link": {
+        "screen": "attention",
+        "params": {
+          "variant": "B",
+          "step": "payment",
+          "aoi": "B-payment-promo"
+        }
+      }
+    },
+    {
+      "id": "F-4",
+      "rank": 4,
+      "severity": "medium",
+      "claim": "The payment button says “Place order” but only moves to a review step, and 3 of 11 people stopped there believing they had bought the boots.",
+      "evidence": "All three look for a confirmation on the next screen, then stop. They end with no order placed — a failure, not someone choosing to leave.",
+      "variant": "B",
+      "step": "payment",
+      "aoiId": "B-payment-primary",
+      "sessionIds": [
+        "S-13",
+        "S-14",
+        "S-19"
+      ],
+      "sessionCount": 3,
+      "attribution": "product",
+      "evidence_link": {
+        "screen": "sessions",
+        "params": {
+          "variant": "B",
+          "outcome": "failed"
+        }
+      }
+    },
+    {
+      "id": "F-5",
+      "rank": 5,
+      "severity": "low",
+      "claim": "On your current checkout, 2 of 11 people gave up at the cart after re-reading the shipping line.",
+      "evidence": "Both were price-led shoppers; $8.95 shipping on a $129.00 order was read twice before they left. Reported for balance: the current checkout is the better version, not a perfect one.",
+      "variant": "A",
+      "step": "cart",
+      "aoiId": "A-cart-cart-total",
+      "sessionIds": [
+        "S-11",
+        "S-12"
+      ],
+      "sessionCount": 2,
+      "attribution": "product",
+      "evidence_link": {
+        "screen": "sessions",
+        "params": {
+          "variant": "A",
+          "outcome": "abandoned"
+        }
+      }
+    },
+    {
+      "id": "F-6",
+      "rank": 6,
+      "severity": "info",
+      "claim": "2 of 24 people could not be simulated to the end, and are excluded from both figures.",
+      "evidence": "Our own browser automation timed out on the card field (one person on each version) after one retry. This is a weakness of the simulation, never evidence against your checkout.",
+      "variant": null,
+      "step": "payment",
+      "aoiId": null,
+      "sessionIds": [
+        "S-09",
+        "S-23"
+      ],
+      "sessionCount": 2,
+      "attribution": "automation",
+      "evidence_link": {
+        "screen": "sessions",
+        "params": {
+          "outcome": "automation_failure"
+        }
+      }
+    }
+  ]
+}

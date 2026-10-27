@@ -13,7 +13,7 @@ import { countsLine, sessionCounts } from '../../src/screens/sessions/counts';
  * Verdict and Score breakdown screens lead with.
  */
 
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../runs');
+const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../tests/fixtures/runs');
 const SEED = '2026-10-24-1402-northwind-demo';
 
 const seedRun = () =>

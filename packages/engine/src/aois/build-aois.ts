@@ -1,6 +1,6 @@
 import type { Aoi } from '../aggregate.js';
 import type { BoundingBox, Capture, CaptureElement, ElementSource } from '../types.js';
-import { aoiId } from './aoi-id.js';
+import { aoiId, aoiRegionId } from './aoi-id.js';
 import { defaultSegmenter } from './segmenter.js';
 import type { SegmentedArea, Segmenter } from './segmenter.js';
 
@@ -119,6 +119,10 @@ const bySourceThenId = (a: CaptureElement, b: CaptureElement): number =>
   SOURCE_PRECEDENCE.indexOf(a.source) - SOURCE_PRECEDENCE.indexOf(b.source) ||
   compareIds(a.id, b.id);
 
+/** The same order as `inReadingOrder`, over the elements a group speaks for. */
+const inDocumentOrder = (a: CaptureElement, b: CaptureElement): number =>
+  a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x || compareIds(a.id, b.id);
+
 /** Down the page, then across, then by id — a total order over the areas of one screen. */
 const inReadingOrder = (a: Aoi, b: Aoi): number =>
   a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x || compareIds(a.id, b.id);
@@ -135,7 +139,12 @@ const firstNonEmpty = (values: readonly string[]): string | null =>
  * role is the last resort, because `run.json` types a label as a non-empty string and a
  * blank label would read on screen as a missing area rather than an unnamed one.
  */
-const mergedArea = (members: readonly CaptureElement[], screen: Screen): Aoi => {
+const mergedArea = (
+  members: readonly CaptureElement[],
+  screen: Screen,
+  /** The ids already minted on this screen: a region name a second area claims is not its. */
+  taken: ReadonlySet<string>,
+): Aoi => {
   const inPrecedence = [...members].sort(bySourceThenId);
   const accessible = inPrecedence.filter((element) => element.source === 'a11y');
   const speaker = inPrecedence[0];
@@ -152,8 +161,18 @@ const mergedArea = (members: readonly CaptureElement[], screen: Screen): Aoi => 
     role ??
     'Unnamed area';
 
+  // The page's own name for this area, when it declared one and no other area on this
+  // screen has already claimed it. Two elements sharing one `data-aoi` would otherwise be
+  // one id over two boxes, which is the split an id exists to prevent; the second falls
+  // back to the measured id rather than merging into the first.
+  const region = firstNonEmpty(inPrecedence.map((element) => element.region ?? ''));
+  const declared = region === null ? null : aoiRegionId({ ...screen, region });
+
   return areaOn(screen, {
-    id: aoiId({ ...screen, role, label, bbox: speaker.bbox }),
+    id:
+      declared !== null && !taken.has(declared)
+        ? declared
+        : aoiId({ ...screen, role, label, bbox: speaker.bbox }),
     label,
     source: speaker.source,
     role,
@@ -257,8 +276,18 @@ export const buildAois = async (input: BuildAoisInput): Promise<Aoi[]> => {
     else group.push(element);
   }
 
+  // Grouped in reading order before any id is minted, so that which of two areas sharing
+  // one region name keeps it is decided by where they sit on the page and not by the
+  // grouping's insertion order.
+  const minted = new Set<string>();
   const elementAreas = [...groups.values()]
-    .map((members) => mergedArea(members, screen))
+    .map((members) => [...members].sort(bySourceThenId))
+    .sort((left, right) => inDocumentOrder(left[0] as CaptureElement, right[0] as CaptureElement))
+    .map((members) => {
+      const area = mergedArea(members, screen, minted);
+      minted.add(area.id);
+      return area;
+    })
     .sort(inReadingOrder);
 
   const taken = new Set(elementAreas.map((area) => area.id));

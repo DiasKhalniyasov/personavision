@@ -1,0 +1,1901 @@
+{
+  "schemaVersion": 2,
+  "runId": "2026-10-24-1402-northwind-demo",
+  "createdAt": "2026-10-24T14:02:00.000Z",
+  "task": {
+    "id": "buy-boots",
+    "prompt": "Buy the hiking boots and pay with the saved card."
+  },
+  "variants": [
+    {
+      "id": "A",
+      "name": "Current checkout",
+      "url": "http://localhost:4173/a/cart.html"
+    },
+    {
+      "id": "B",
+      "name": "Redesign candidate",
+      "url": "http://localhost:4173/b/cart.html"
+    }
+  ],
+  "steps": [
+    {
+      "id": "cart",
+      "label": "Cart"
+    },
+    {
+      "id": "payment",
+      "label": "Payment"
+    },
+    {
+      "id": "review",
+      "label": "Review"
+    },
+    {
+      "id": "confirm",
+      "label": "Confirmation"
+    }
+  ],
+  "stepCaptions": [
+    {
+      "variant": "A",
+      "step": "cart",
+      "caption": "Variant A, cart. The up-front $8.95 shipping line is read as part of the total; two price-led people left here over it."
+    },
+    {
+      "variant": "B",
+      "step": "cart",
+      "caption": "Variant B, cart. The promo banner takes the first fixation, and \"calculated later\" draws a second fixation in 8 of 11 sessions before Checkout is clicked."
+    },
+    {
+      "variant": "A",
+      "step": "payment",
+      "caption": "Variant A, payment step. Attention settles on the card field, then the total, then the primary action: 9 of 9 people who reached this step fixated \"Continue to review\", median 1.8 s in."
+    },
+    {
+      "variant": "B",
+      "step": "payment",
+      "caption": "Variant B, payment step. The promo banner takes the first fixation in 9 of 10 sessions and holds 3.1 s of dwell. The primary action here says \"Place order\", but it only advances to the review step."
+    },
+    {
+      "variant": "A",
+      "step": "review",
+      "caption": "Variant A, review step. The total is read once, then the primary action; 9 of 9 people placed the order."
+    },
+    {
+      "variant": "B",
+      "step": "review",
+      "caption": "Variant B, review step. The newly revealed $9.95 service fee holds 3.6 s of dwell with 2.4 revisits, and \"Confirm purchase\" sits below the fold: 0 of 9 people who reached this step ever fixated it."
+    },
+    {
+      "variant": "A",
+      "step": "confirm",
+      "caption": "Variant A, confirmation. 9 of 11 people reached it."
+    },
+    {
+      "variant": "B",
+      "step": "confirm",
+      "caption": "Variant B, confirmation. Only 2 of 11 people reached it, and both re-read the amount paid: 2.2 s of dwell with 1.5 revisits on a total they had not agreed to."
+    }
+  ],
+  "audience": {
+    "id": "outdoor-gear-shoppers",
+    "name": "Outdoor-gear shoppers",
+    "ageRange": {
+      "min": 25,
+      "max": 45
+    },
+    "roles": [
+      "First-time buyer",
+      "Returning customer"
+    ],
+    "regions": [
+      "United Kingdom",
+      "Ireland"
+    ],
+    "goals": [
+      "Buy one item quickly",
+      "Compare prices first"
+    ],
+    "devices": [
+      {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "touch": true,
+        "share": 0.6
+      },
+      {
+        "name": "desktop",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "deviceScaleFactor": 1,
+        "touch": false,
+        "share": 0.4
+      }
+    ],
+    "techSavviness": 0.55,
+    "priceSensitivity": 0.75,
+    "size": 4,
+    "generatedFrom": {
+      "seed": 20261024,
+      "generatorVersion": "persona-gen-1"
+    }
+  },
+  "personas": [
+    {
+      "id": "rushed",
+      "name": "Rushed buyer",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "mobile · in a hurry",
+      "traits": {
+        "persistence": 0.25,
+        "scanningVsReading": 0.9,
+        "detailOrientation": 0.2,
+        "interfaceFamiliarity": 0.75,
+        "patience": 0.15,
+        "riskTolerance": 0.7
+      },
+      "device": {
+        "name": "iPhone 15",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "touch": true
+      }
+    },
+    {
+      "id": "careful",
+      "name": "Careful comparer",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "desktop · compares carefully",
+      "traits": {
+        "persistence": 0.85,
+        "scanningVsReading": 0.2,
+        "detailOrientation": 0.9,
+        "interfaceFamiliarity": 0.6,
+        "patience": 0.85,
+        "riskTolerance": 0.25
+      },
+      "device": {
+        "name": "MacBook Air 13",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "touch": false
+      }
+    },
+    {
+      "id": "firsttime",
+      "name": "First-time visitor",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "desktop · first visit",
+      "traits": {
+        "persistence": 0.5,
+        "scanningVsReading": 0.45,
+        "detailOrientation": 0.5,
+        "interfaceFamiliarity": 0.15,
+        "patience": 0.55,
+        "riskTolerance": 0.35
+      },
+      "device": {
+        "name": "MacBook Air 13",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "touch": false
+      }
+    },
+    {
+      "id": "price",
+      "name": "Price-sensitive scanner",
+      "audienceId": "outdoor-gear-shoppers",
+      "segment": "mobile · price-sensitive",
+      "traits": {
+        "persistence": 0.6,
+        "scanningVsReading": 0.8,
+        "detailOrientation": 0.7,
+        "interfaceFamiliarity": 0.5,
+        "patience": 0.4,
+        "riskTolerance": 0.3
+      },
+      "device": {
+        "name": "iPhone 15",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "touch": true
+      }
+    }
+  ],
+  "seedGroups": [
+    1,
+    2,
+    3
+  ],
+  "engine": {
+    "mode": "offline",
+    "provider": null,
+    "models": null,
+    "weights": {
+      "alpha": 0.5,
+      "beta": 0.35,
+      "gamma": 0.15
+    },
+    "version": "seed-fixture"
+  },
+  "sessionIds": [
+    "S-01",
+    "S-02",
+    "S-03",
+    "S-04",
+    "S-05",
+    "S-06",
+    "S-07",
+    "S-08",
+    "S-09",
+    "S-10",
+    "S-11",
+    "S-12",
+    "S-13",
+    "S-14",
+    "S-15",
+    "S-16",
+    "S-17",
+    "S-18",
+    "S-19",
+    "S-20",
+    "S-21",
+    "S-22",
+    "S-23",
+    "S-24"
+  ],
+  "screenshots": [
+    {
+      "variant": "A",
+      "step": "cart",
+      "path": "screenshots/A/cart.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "A",
+      "step": "payment",
+      "path": "screenshots/A/payment.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "A",
+      "step": "review",
+      "path": "screenshots/A/review.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "A",
+      "step": "confirm",
+      "path": "screenshots/A/confirm.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "B",
+      "step": "cart",
+      "path": "screenshots/B/cart.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "B",
+      "step": "payment",
+      "path": "screenshots/B/payment.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    },
+    {
+      "variant": "B",
+      "step": "review",
+      "path": "screenshots/B/review.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 1540,
+      "foldY": 844
+    },
+    {
+      "variant": "B",
+      "step": "confirm",
+      "path": "screenshots/B/confirm.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageHeight": 980,
+      "foldY": 844
+    }
+  ],
+  "aois": [
+    {
+      "id": "A-cart-cart-badge",
+      "variant": "A",
+      "step": "cart",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-cart-cart-line",
+      "variant": "A",
+      "step": "cart",
+      "label": "Cart line item",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 104,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-cart-cart-total",
+      "variant": "A",
+      "step": "cart",
+      "label": "Cart total",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 188,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-cart-cart-checkout",
+      "variant": "A",
+      "step": "cart",
+      "label": "\"Checkout\" button",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 324,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false
+    },
+    {
+      "id": "A-cart-keep-shopping",
+      "variant": "A",
+      "step": "cart",
+      "label": "\"Keep shopping\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 16,
+        "y": 382,
+        "width": 358,
+        "height": 36
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-cart-badge",
+      "variant": "A",
+      "step": "payment",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-email",
+      "variant": "A",
+      "step": "payment",
+      "label": "Email field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 104,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-card",
+      "variant": "A",
+      "step": "payment",
+      "label": "Card number field",
+      "source": "dom",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 170,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-expiry",
+      "variant": "A",
+      "step": "payment",
+      "label": "Expiry field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 236,
+        "width": 171,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-cvc",
+      "variant": "A",
+      "step": "payment",
+      "label": "CVC field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 203,
+        "y": 236,
+        "width": 171,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-primary",
+      "variant": "A",
+      "step": "payment",
+      "label": "Primary action — A: \"Continue to review\", B: \"Place order\"",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 308,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-summary",
+      "variant": "A",
+      "step": "payment",
+      "label": "Order summary",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 416,
+        "width": 358,
+        "height": 148
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-trust",
+      "variant": "A",
+      "step": "payment",
+      "label": "Trust badges",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 580,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-payment-support",
+      "variant": "A",
+      "step": "payment",
+      "label": "\"Need help?\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 240,
+        "y": 594,
+        "width": 118,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-cart-badge",
+      "variant": "A",
+      "step": "review",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-ship-to",
+      "variant": "A",
+      "step": "review",
+      "label": "Shipping address row",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 104,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-pay-with",
+      "variant": "A",
+      "step": "review",
+      "label": "Payment method row",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 170,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-complete",
+      "variant": "A",
+      "step": "review",
+      "label": "Completing action — A: \"Place order\", B: \"Confirm purchase\"",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 242,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-summary",
+      "variant": "A",
+      "step": "review",
+      "label": "Order summary",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 350,
+        "width": 358,
+        "height": 148
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-trust",
+      "variant": "A",
+      "step": "review",
+      "label": "Trust badges",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 514,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-review-support",
+      "variant": "A",
+      "step": "review",
+      "label": "\"Need help?\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 240,
+        "y": 528,
+        "width": 118,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-confirm-cart-badge",
+      "variant": "A",
+      "step": "confirm",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-confirm-confirm",
+      "variant": "A",
+      "step": "confirm",
+      "label": "Confirmation message",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 64,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-confirm-order-number",
+      "variant": "A",
+      "step": "confirm",
+      "label": "Order number",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 32,
+        "y": 136,
+        "width": 326,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "A-confirm-summary",
+      "variant": "A",
+      "step": "confirm",
+      "label": "Amount paid",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 200,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-cart-badge",
+      "variant": "B",
+      "step": "cart",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-promo",
+      "variant": "B",
+      "step": "cart",
+      "label": "Promo banner",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 60,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-cart-line",
+      "variant": "B",
+      "step": "cart",
+      "label": "Cart line item",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 192,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-cart-total",
+      "variant": "B",
+      "step": "cart",
+      "label": "Cart total",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 276,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-cart-checkout",
+      "variant": "B",
+      "step": "cart",
+      "label": "\"Checkout\" button",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 412,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false
+    },
+    {
+      "id": "B-cart-keep-shopping",
+      "variant": "B",
+      "step": "cart",
+      "label": "\"Keep shopping\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 16,
+        "y": 470,
+        "width": 358,
+        "height": 36
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-cart-badge",
+      "variant": "B",
+      "step": "payment",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-promo",
+      "variant": "B",
+      "step": "payment",
+      "label": "Promo banner",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 60,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-email",
+      "variant": "B",
+      "step": "payment",
+      "label": "Email field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 192,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-card",
+      "variant": "B",
+      "step": "payment",
+      "label": "Card number field",
+      "source": "dom",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 258,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-expiry",
+      "variant": "B",
+      "step": "payment",
+      "label": "Expiry field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 16,
+        "y": 324,
+        "width": 171,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-cvc",
+      "variant": "B",
+      "step": "payment",
+      "label": "CVC field",
+      "source": "a11y",
+      "role": "textbox",
+      "bbox": {
+        "x": 203,
+        "y": 324,
+        "width": 171,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-primary",
+      "variant": "B",
+      "step": "payment",
+      "label": "Primary action — A: \"Continue to review\", B: \"Place order\"",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 396,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-summary",
+      "variant": "B",
+      "step": "payment",
+      "label": "Order summary",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 504,
+        "width": 358,
+        "height": 148
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-shipping-row",
+      "variant": "B",
+      "step": "payment",
+      "label": "Shipping row — B: \"calculated at next step\"",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 32,
+        "y": 548,
+        "width": 326,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-trust",
+      "variant": "B",
+      "step": "payment",
+      "label": "Trust badges",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 668,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-payment-support",
+      "variant": "B",
+      "step": "payment",
+      "label": "\"Need help?\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 240,
+        "y": 682,
+        "width": 118,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-review-cart-badge",
+      "variant": "B",
+      "step": "review",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-review-promo",
+      "variant": "B",
+      "step": "review",
+      "label": "Promo banner",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 60,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-review-ship-to",
+      "variant": "B",
+      "step": "review",
+      "label": "Shipping address row",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 192,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-review-pay-with",
+      "variant": "B",
+      "step": "review",
+      "label": "Payment method row",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 258,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-review-complete",
+      "variant": "B",
+      "step": "review",
+      "label": "Completing action — A: \"Place order\", B: \"Confirm purchase\"",
+      "source": "dom",
+      "role": "button",
+      "bbox": {
+        "x": 16,
+        "y": 1024,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": true
+    },
+    {
+      "id": "B-review-summary",
+      "variant": "B",
+      "step": "review",
+      "label": "Order summary",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 1132,
+        "width": 358,
+        "height": 176
+      },
+      "isPrimaryAction": false,
+      "belowFold": true
+    },
+    {
+      "id": "B-review-fee-row",
+      "variant": "B",
+      "step": "review",
+      "label": "Service fee row — planted defect",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 32,
+        "y": 1204,
+        "width": 326,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": true
+    },
+    {
+      "id": "B-review-trust",
+      "variant": "B",
+      "step": "review",
+      "label": "Trust badges",
+      "source": "sam",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 1324,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": true
+    },
+    {
+      "id": "B-review-support",
+      "variant": "B",
+      "step": "review",
+      "label": "\"Need help?\" link",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 240,
+        "y": 1338,
+        "width": 118,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": true
+    },
+    {
+      "id": "B-confirm-cart-badge",
+      "variant": "B",
+      "step": "confirm",
+      "label": "Cart badge",
+      "source": "dom",
+      "role": "link",
+      "bbox": {
+        "x": 272,
+        "y": 10,
+        "width": 102,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-confirm-confirm",
+      "variant": "B",
+      "step": "confirm",
+      "label": "Confirmation message",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 64,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-confirm-order-number",
+      "variant": "B",
+      "step": "confirm",
+      "label": "Order number",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 32,
+        "y": 136,
+        "width": 326,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    },
+    {
+      "id": "B-confirm-summary",
+      "variant": "B",
+      "step": "confirm",
+      "label": "Amount paid",
+      "source": "dom",
+      "role": null,
+      "bbox": {
+        "x": 16,
+        "y": 200,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false
+    }
+  ],
+  "aoiMetrics": [
+    {
+      "aoiId": "A-cart-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "A-cart-cart-line",
+      "timeToFirstFixationMs": 644,
+      "firstFixationDurationMs": 296,
+      "totalDwellMs": 1404,
+      "fixationCount": 5,
+      "revisits": 2,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "A-cart-cart-total",
+      "timeToFirstFixationMs": 1954,
+      "firstFixationDurationMs": 418,
+      "totalDwellMs": 1605,
+      "fixationCount": 4,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "A-cart-cart-checkout",
+      "timeToFirstFixationMs": 3274,
+      "firstFixationDurationMs": 488,
+      "totalDwellMs": 1034,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "A-cart-keep-shopping",
+      "timeToFirstFixationMs": 4186,
+      "firstFixationDurationMs": 163,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.09090909090909091,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "A-payment-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-email",
+      "timeToFirstFixationMs": 7985,
+      "firstFixationDurationMs": 249,
+      "totalDwellMs": 531,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-card",
+      "timeToFirstFixationMs": 8592,
+      "firstFixationDurationMs": 468,
+      "totalDwellMs": 959,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-expiry",
+      "timeToFirstFixationMs": 9105,
+      "firstFixationDurationMs": 210,
+      "totalDwellMs": 450,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-cvc",
+      "timeToFirstFixationMs": 9675,
+      "firstFixationDurationMs": 200,
+      "totalDwellMs": 397,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-primary",
+      "timeToFirstFixationMs": 11615,
+      "firstFixationDurationMs": 547,
+      "totalDwellMs": 1523,
+      "fixationCount": 4,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-summary",
+      "timeToFirstFixationMs": 10341,
+      "firstFixationDurationMs": 314,
+      "totalDwellMs": 1430,
+      "fixationCount": 4,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-trust",
+      "timeToFirstFixationMs": 14914,
+      "firstFixationDurationMs": 208,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.4444444444444444,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-payment-support",
+      "timeToFirstFixationMs": 14605,
+      "firstFixationDurationMs": 191.5,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.2222222222222222,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-ship-to",
+      "timeToFirstFixationMs": 19714,
+      "firstFixationDurationMs": 284,
+      "totalDwellMs": 827,
+      "fixationCount": 3,
+      "revisits": 2,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-pay-with",
+      "timeToFirstFixationMs": 20370,
+      "firstFixationDurationMs": 321,
+      "totalDwellMs": 666,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-complete",
+      "timeToFirstFixationMs": 22229,
+      "firstFixationDurationMs": 585,
+      "totalDwellMs": 1151,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-summary",
+      "timeToFirstFixationMs": 20892,
+      "firstFixationDurationMs": 359,
+      "totalDwellMs": 1551,
+      "fixationCount": 4,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-trust",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-review-support",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-confirm-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-confirm-confirm",
+      "timeToFirstFixationMs": 26866,
+      "firstFixationDurationMs": 445,
+      "totalDwellMs": 1314,
+      "fixationCount": 3,
+      "revisits": 2,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-confirm-order-number",
+      "timeToFirstFixationMs": 27590,
+      "firstFixationDurationMs": 402,
+      "totalDwellMs": 797,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "A-confirm-summary",
+      "timeToFirstFixationMs": 28149,
+      "firstFixationDurationMs": 231,
+      "totalDwellMs": 473,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-cart-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-cart-promo",
+      "timeToFirstFixationMs": 797,
+      "firstFixationDurationMs": 494,
+      "totalDwellMs": 2566,
+      "fixationCount": 8,
+      "revisits": 4,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-cart-cart-line",
+      "timeToFirstFixationMs": 2315,
+      "firstFixationDurationMs": 276,
+      "totalDwellMs": 560,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-cart-cart-total",
+      "timeToFirstFixationMs": 3038,
+      "firstFixationDurationMs": 302,
+      "totalDwellMs": 1263,
+      "fixationCount": 4,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-cart-cart-checkout",
+      "timeToFirstFixationMs": 5237,
+      "firstFixationDurationMs": 448,
+      "totalDwellMs": 895,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-cart-keep-shopping",
+      "timeToFirstFixationMs": 6148,
+      "firstFixationDurationMs": 190,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.36363636363636365,
+      "sessionCount": 11
+    },
+    {
+      "aoiId": "B-payment-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-promo",
+      "timeToFirstFixationMs": 12896,
+      "firstFixationDurationMs": 513,
+      "totalDwellMs": 2347.5,
+      "fixationCount": 6,
+      "revisits": 3,
+      "lookedAtShare": 0.9,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-email",
+      "timeToFirstFixationMs": 14235,
+      "firstFixationDurationMs": 243.5,
+      "totalDwellMs": 483,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-card",
+      "timeToFirstFixationMs": 15160,
+      "firstFixationDurationMs": 476,
+      "totalDwellMs": 920,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-expiry",
+      "timeToFirstFixationMs": 15906.5,
+      "firstFixationDurationMs": 214,
+      "totalDwellMs": 418,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-cvc",
+      "timeToFirstFixationMs": 16901,
+      "firstFixationDurationMs": 193,
+      "totalDwellMs": 367,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-primary",
+      "timeToFirstFixationMs": 21600,
+      "firstFixationDurationMs": 425,
+      "totalDwellMs": 639,
+      "fixationCount": 1,
+      "revisits": 0,
+      "lookedAtShare": 0.9,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-summary",
+      "timeToFirstFixationMs": 17715.5,
+      "firstFixationDurationMs": 296.5,
+      "totalDwellMs": 1411,
+      "fixationCount": 4,
+      "revisits": 3,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-shipping-row",
+      "timeToFirstFixationMs": 18533.5,
+      "firstFixationDurationMs": 399,
+      "totalDwellMs": 1500,
+      "fixationCount": 4,
+      "revisits": 3,
+      "lookedAtShare": 1,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-trust",
+      "timeToFirstFixationMs": 22492,
+      "firstFixationDurationMs": 197,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.3,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-payment-support",
+      "timeToFirstFixationMs": 22089.5,
+      "firstFixationDurationMs": 269,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0.4,
+      "sessionCount": 10
+    },
+    {
+      "aoiId": "B-review-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-promo",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-ship-to",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-pay-with",
+      "timeToFirstFixationMs": 36759,
+      "firstFixationDurationMs": 256.5,
+      "totalDwellMs": 502,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 0.8888888888888888,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-complete",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-summary",
+      "timeToFirstFixationMs": 33339,
+      "firstFixationDurationMs": 553,
+      "totalDwellMs": 3497,
+      "fixationCount": 7,
+      "revisits": 6,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-fee-row",
+      "timeToFirstFixationMs": 34044,
+      "firstFixationDurationMs": 631,
+      "totalDwellMs": 2306,
+      "fixationCount": 4,
+      "revisits": 3,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-trust",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-review-support",
+      "timeToFirstFixationMs": 37623,
+      "firstFixationDurationMs": 340,
+      "totalDwellMs": 643,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 9
+    },
+    {
+      "aoiId": "B-confirm-cart-badge",
+      "timeToFirstFixationMs": null,
+      "firstFixationDurationMs": null,
+      "totalDwellMs": 0,
+      "fixationCount": 0,
+      "revisits": 0,
+      "lookedAtShare": 0,
+      "sessionCount": 2
+    },
+    {
+      "aoiId": "B-confirm-confirm",
+      "timeToFirstFixationMs": 50626.5,
+      "firstFixationDurationMs": 456.5,
+      "totalDwellMs": 1388,
+      "fixationCount": 3,
+      "revisits": 2,
+      "lookedAtShare": 1,
+      "sessionCount": 2
+    },
+    {
+      "aoiId": "B-confirm-order-number",
+      "timeToFirstFixationMs": 52058,
+      "firstFixationDurationMs": 323,
+      "totalDwellMs": 621.5,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 2
+    },
+    {
+      "aoiId": "B-confirm-summary",
+      "timeToFirstFixationMs": 51403.5,
+      "firstFixationDurationMs": 566,
+      "totalDwellMs": 1087,
+      "fixationCount": 2,
+      "revisits": 1,
+      "lookedAtShare": 1,
+      "sessionCount": 2
+    }
+  ],
+  "scores": [
+    {
+      "variant": "A",
+      "taskId": "buy-boots",
+      "frictionScore": {
+        "median": 22,
+        "sd": 3
+      },
+      "completionRate": 0.818182,
+      "components": {
+        "taskFailureRate": 0,
+        "abandonment": 0.181818,
+        "timeToFirstFixationPrimary": {
+          "worstStep": "review",
+          "medianSeconds": 2.3,
+          "value": 0.383333
+        },
+        "deadEndRevisits": 0.3
+      },
+      "outcomeCounts": {
+        "success": 9,
+        "abandoned": 2,
+        "failed": 0,
+        "automationFailure": 1
+      },
+      "scoredSessionCount": 11,
+      "perSeedGroup": [
+        {
+          "seed": 1,
+          "frictionScore": 19
+        },
+        {
+          "seed": 2,
+          "frictionScore": 22
+        },
+        {
+          "seed": 3,
+          "frictionScore": 25
+        }
+      ]
+    },
+    {
+      "variant": "B",
+      "taskId": "buy-boots",
+      "frictionScore": {
+        "median": 67,
+        "sd": 4
+      },
+      "completionRate": 0.181818,
+      "components": {
+        "taskFailureRate": 0.272727,
+        "abandonment": 0.545455,
+        "timeToFirstFixationPrimary": {
+          "worstStep": "review",
+          "medianSeconds": null,
+          "value": 1
+        },
+        "deadEndRevisits": 0.86
+      },
+      "outcomeCounts": {
+        "success": 2,
+        "abandoned": 6,
+        "failed": 3,
+        "automationFailure": 1
+      },
+      "scoredSessionCount": 11,
+      "perSeedGroup": [
+        {
+          "seed": 1,
+          "frictionScore": 67
+        },
+        {
+          "seed": 2,
+          "frictionScore": 71
+        },
+        {
+          "seed": 3,
+          "frictionScore": 63
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "harderVariant": "B",
+    "gapPoints": 45,
+    "bandsDisjoint": true,
+    "seedGroupsAgreeing": 3,
+    "sentence": "Variant B is harder. The gap held in all 3 seed groups (A 19–25, B 63–71 — the bands do not overlap).",
+    "preferredVariant": "A",
+    "audienceSentence": "Your audience completes the purchase on the current checkout, not on the redesign.",
+    "reasons": [
+      "The button that completes the order was never seen on the redesign.",
+      "A $9.95 service fee appears only after the card is entered, and people leave when they see it."
+    ],
+    "headlineFindingIds": [
+      "F-1",
+      "F-2",
+      "F-3"
+    ],
+    "heroEvidence": {
+      "variant": "B",
+      "step": "review",
+      "aoiId": null
+    }
+  },
+  "calibration": {
+    "benchmark": "UEyes",
+    "cc": 0.68,
+    "nss": 1.9,
+    "scanMatch": 0.54
+  }
+}

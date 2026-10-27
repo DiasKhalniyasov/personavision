@@ -16,7 +16,12 @@
  *    planted defects, and a task that needed its own spelling for B would not be comparing
  *    the same checkout. The patterns match on the **path**: steps 3 and 4 are reached by a
  *    GET form submit, so the URL arrives carrying a query string.
- * 3. **The step ids are the prototype's** — `cart`, `payment`, `review`, `confirm`, as
+ * 3. **Every step carries its own goal** — what the person wants on that screen, as #78
+ *    needed to make the shop completable at all. The task's `prompt` is the errand; a step's
+ *    `goal` is the thought at that screen, and it names no control: "Pay with the saved card
+ *    and continue to review the order" is true of both variants' payment steps, which spell
+ *    their primary action differently on purpose.
+ * 4. **The step ids are the prototype's** — `cart`, `payment`, `review`, `confirm`, as
  *    `docs/design/prototype.html`'s `STEPS` gives them. `@personavision/contract` leaves a
  *    step a free name, so the prototype decides; the page file keeps its ordinary name
  *    `confirmation.html`. Recorded on #10 so the run artifact, the Attention filmstrip and
@@ -61,6 +66,11 @@ export const NORTHWIND_TASK: TaskDefinition = {
       // The cart line is what makes this the cart rather than any page under `/cart.html`.
       match: { urlPattern: '/[ab]/cart\\.html', requiredSelector: '[data-aoi="cart-line"]' },
       primaryAction: { selector: '[data-aoi="cart-checkout"]' },
+      // What the person wants *here*, not the whole errand (#78). Both the attention
+      // engine and the decision policy read the goal lexically, and the task sentence
+      // shares no word with "Checkout" — so without this the swarm ranks the cart copy
+      // above the button beside it and no session ever leaves this step.
+      goal: 'Go to checkout.',
     },
     {
       id: 'payment',
@@ -69,6 +79,11 @@ export const NORTHWIND_TASK: TaskDefinition = {
       // page's markup, which is all a required element has to be.
       match: { urlPattern: '/[ab]/payment\\.html', requiredSelector: '[data-aoi="card"]' },
       primaryAction: { selector: '[data-aoi="primary"]' },
+      // One sentence for both variants, because one task drives both and the two spell
+      // this control differently on purpose: variant A offers "Continue to review" and
+      // variant B offers "Place order · $129.00", which is the undeclared mislabel
+      // `defects.json` records. A goal written to match either one by name would hide it.
+      goal: 'Continue to the review, and place the order.',
     },
     {
       id: 'review',
@@ -77,6 +92,10 @@ export const NORTHWIND_TASK: TaskDefinition = {
       // The only `<button>` on the step, on both variants. On variant B it sits below the
       // fold at both viewports, which is planted defect 1 rather than a broken declaration.
       primaryAction: { selector: '[data-aoi="complete"]' },
+      // Variant A reads "Place order · $137.95" and variant B "Confirm purchase ·
+      // $147.95", so this names both without naming either control: an agent that never
+      // looks at B's button still cannot act on it, which is what planted defect 1 is.
+      goal: 'Place the order and confirm the purchase.',
     },
     {
       id: 'confirm',
@@ -90,6 +109,9 @@ export const NORTHWIND_TASK: TaskDefinition = {
       // screen is attributed to. Leaving it unnamed would raise `selector_not_found` on
       // every session's last screen and exclude the run.
       primaryAction: { selector: '[data-aoi="order-number"]' },
+      // Nothing advances a terminal step, so this goal only has to be what the person is
+      // doing on it: checking the order number says the boots are bought.
+      goal: 'Find the order number.',
     },
   ],
 };

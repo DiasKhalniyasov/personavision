@@ -384,9 +384,11 @@ body.card-frame-body input {
  * 348 px; with it, at 1024 px — 180 px below the 844 px fold of the mobile viewport and 124 px
  * below the 900 px fold of the desktop one, which is what the prototype's first finding
  * claims. The prototype's own `.pushdown` is 150 px, but it is sized for a 9 px thumbnail and
- * does not transfer. The arithmetic is written out in the variant-B section of
+ * does not transfer. It was 676 px until #78 ran the swarm over the shop and found that a
+ * control one 0.75-viewport scroll below the fold is scrolled to and looked at, which is
+ * not a control nobody sees: the spacer is now past one scroll at both viewports. The arithmetic is written out in the variant-B section of
  * `demo/README.md`, and a test keeps that number and this one in step.
  */
 .pushdown {
-  height: 676px;
+  height: 1400px;
 }

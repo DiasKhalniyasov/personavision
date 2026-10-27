@@ -362,6 +362,46 @@ export const runSchema = z
       weights: z.strictObject({ alpha: z.number(), beta: z.number(), gamma: z.number() }),
       version: name,
     }),
+    /**
+     * What it takes to run this run again, on the record beside what it produced (#78).
+     *
+     * Everything here is already true of the run somewhere else — the seeds are
+     * `seedGroups`, the engine is `engine`, the devices are the people's — and it is
+     * restated as one block on purpose: a reader looking at a committed artifact asks "how
+     * do I get this directory back?", and the answer should be one object rather than six
+     * fields and a ticket. The step rules are the only thing here that is nowhere else: a
+     * run records the *steps* it walked, and not how a page is recognised as one.
+     *
+     * Optional, with no default: a run written before this block carries none, and an
+     * absent block is a run that did not say how to reproduce itself rather than a claim
+     * that it cannot be.
+     */
+    reproduce: z
+      .strictObject({
+        /** The one command that regenerates the directory in place. */
+        command: name,
+        /** The seed groups, restated so the block is the whole recipe. */
+        seeds: z.array(z.int()),
+        engineMode: engineModeSchema,
+        engineVersion: name,
+        /** Every device the run drove, once each, in the order the audience declares them. */
+        devices: z.array(deviceSchema).min(1),
+        /** How each step is recognised, and what advances it, as the task declared it. */
+        steps: z
+          .array(
+            z.strictObject({
+              id: name,
+              label: name,
+              urlPattern: name,
+              requiredSelector: name,
+              primaryActionSelector: name,
+              /** What the person wants on that screen, where the task declares one. */
+              goal: name.optional(),
+            }),
+          )
+          .min(1),
+      })
+      .optional(),
     sessionIds: z.array(name),
     screenshots: z.array(
       z.strictObject({

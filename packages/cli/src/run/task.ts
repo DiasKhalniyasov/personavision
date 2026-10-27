@@ -126,6 +126,12 @@ const stepSchema = z.strictObject({
   label: nonEmpty,
   match: z.strictObject({ urlPattern: nonEmpty, requiredSelector: nonEmpty }),
   primaryAction: z.strictObject({ selector: nonEmpty }),
+  /**
+   * What the person wants on that screen, where the file says. Optional, and the step
+   * inherits the task's own sentence without it (#78): the sentence is the errand, and a
+   * step goal is the thought at one screen of doing it.
+   */
+  goal: nonEmpty.optional(),
 });
 
 /**
@@ -149,7 +155,7 @@ const notSteps = (file: string, issues: readonly { path: string; message: string
     [
       `The test was not started: ${file} does not declare the task’s steps.`,
       ...issues.map((issue) => `  ${issue.path} — ${issue.message}`),
-      'A step declares its id, its label, the URL pattern and required element that recognise it, and the selector of the control that advances it.',
+      'A step declares its id, its label, the URL pattern and required element that recognise it, and the selector of the control that advances it. It may also declare the goal the person has on that screen.',
       'Nothing was written: no run directory was created.',
     ].join('\n'),
   );

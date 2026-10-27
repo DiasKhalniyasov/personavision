@@ -22,7 +22,7 @@ import { noMatchWords } from '../../src/screens/sessions/noMatchWords';
  * can drop it from the URL, rather than narrowing the list to nothing.
  */
 
-const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../runs');
+const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../tests/fixtures/runs');
 const SEED = '2026-10-24-1402-northwind-demo';
 
 const seedRun = () =>
