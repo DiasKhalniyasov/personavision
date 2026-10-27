@@ -53,6 +53,12 @@ describe('the calibration package reads the contract', () => {
     expect(dependencies?.['@personavision/contract']).toBe('workspace:*');
   });
 
+  it('and declares the engine too, which #88 scores through its published predict', () => {
+    const { dependencies } = packageJson('packages/calibration');
+
+    expect(dependencies?.['@personavision/engine']).toBe('workspace:*');
+  });
+
   it('and actually imports it, so the vocabulary is the contract’s and not a restatement', () => {
     const importers = sources('packages/calibration/src').filter(({ text }) =>
       imports(text, '@personavision/contract'),
@@ -86,20 +92,38 @@ describe('nothing reads the calibration package back', () => {
   });
 });
 
-describe('the Predictor seam is structural', () => {
-  it('so no module of this package imports the engine', () => {
-    // What this asserts is the direction, not that the seam is in step: `predict` does not
-    // exist in the engine yet (#68), and this test is part of why it cannot be checked from
-    // here. #68 is asked to assign its real `predict` to `Predictor` on its own side.
-    // #81 forbids it here, and the seam in `src/types.ts` is what makes it unnecessary: the
-    // engine's `predict` satisfies `Predictor` field for field. A later ticket of step #11
-    // that genuinely needs the engine may depend on it — the direction allows that — but it
-    // says so on #11 and relaxes this test deliberately rather than drifting into it.
+describe('the engine is read from one module and no other', () => {
+  it('so only the scoring imports it', () => {
+    // #81 forbade this package the engine outright, and said that a later ticket of step #11
+    // which genuinely needs it may depend on it — the direction has always allowed
+    // calibration to read the engine — provided the ticket relaxes this test deliberately
+    // rather than drifting into it. #88 is that ticket: it scores the engine through its
+    // published `predict`, which is a dependency no seam can stand in for, and it is
+    // recorded on #11 and #88. What stays asserted is the shape of the dependency: one
+    // importer, named here, so a later ticket cannot spread the engine through the metrics
+    // or the baselines — those are the ruler, and a ruler that imported the thing it
+    // measures could be moved by it.
     const importers = [
       ...sources('packages/calibration/src'),
       ...sources('packages/calibration/test'),
     ].filter(({ text }) => imports(text, '@personavision/engine'));
 
-    expect(importers.map(({ path }) => path)).toEqual([]);
+    expect(importers.map(({ path }) => path).sort()).toEqual([
+      'packages/calibration/src/score/score.ts',
+      'packages/calibration/test/score.test.ts',
+    ]);
+  });
+
+  it('and the Predictor seam still holds the two sides together field for field', () => {
+    // The seam in `src/types.ts` is what the metrics, the baselines and the corpus are
+    // written against, and `packages/engine/tests/predict.test.ts` assigns the real
+    // `predict` to it (#68). The scoring's own assignment — `enginePredictor`'s `predictor`
+    // field — is now a second check of the same thing, on this side.
+    const scoring = sources('packages/calibration/src/score');
+
+    expect(scoring.map(({ path }) => path).sort()).toEqual([
+      'packages/calibration/src/score/index.ts',
+      'packages/calibration/src/score/score.ts',
+    ]);
   });
 });
