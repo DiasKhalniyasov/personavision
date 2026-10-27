@@ -108,14 +108,16 @@ describe('the vocabulary', () => {
 });
 
 describe('the public entry point', () => {
-  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers, the download and the conversion, and nothing else', () => {
+  it('exports the types, the corpus loader, the metrics, the manifest loader, the cache-path helpers, the download, the conversion and the scoring, and nothing else', () => {
     // The types carry no runtime binding, so this is the whole runtime surface. A later
     // ticket of step #11 adds its own exports here deliberately rather than by accident.
     expect(Object.keys(entryPoint).sort()).toEqual([
       'BASELINE_SCANPATH',
       'BaselineError',
       'CACHE_ENV_VAR',
+      'CENTRE_BIAS_PREDICTOR_ID',
       'CENTRE_BIAS_PRIOR',
+      'COMMITTED_CORPUS_ID',
       'COMMITTED_MANIFEST_PATH',
       'CORPUS_RECORD_NAMES',
       'CachePathError',
@@ -123,9 +125,11 @@ describe('the public entry point', () => {
       'CorpusError',
       'DEFAULT_CHECKSUM_ALGORITHM',
       'DatasetFetchError',
+      'ENGINE_PREDICTOR_ID',
       'MANIFEST_SCHEMA_VERSION',
       'MAP_RENDERING',
       'ManifestError',
+      'RANDOM_FIXATION_PREDICTOR_ID',
       'RANDOM_FIXATION_UNIFORMITY',
       'RECORD_CATEGORIES',
       'SALIENCY_METRICS',
@@ -136,8 +140,10 @@ describe('the public entry point', () => {
       'SCANPATH_METRIC_IDS',
       'SCANPATH_METRIC_PARAMETERS',
       'SCANPATH_REGION_COUNT',
+      'SCORING_BUDGET',
       'SaliencyMetricError',
       'ScanpathMetricError',
+      'ScoreError',
       'VIEWING_DURATIONS_SECONDS',
       'VerificationError',
       'aucJudd',
@@ -145,11 +151,16 @@ describe('the public entry point', () => {
       'cc',
       'centreBiasBaseline',
       'centreBiasPeakCell',
+      'centreBiasPredictor',
       'centreBiasPrior',
+      'committedCorpus',
+      'comparableFigures',
       'convertRecord',
       'convertRecords',
       'datasetCachePaths',
+      'defaultBaselines',
       'describeChecksum',
+      'enginePredictor',
       'fetchDataset',
       'hashFile',
       'isContainedRelativePath',
@@ -165,6 +176,7 @@ describe('the public entry point', () => {
       'parseManifest',
       'poolFixations',
       'randomFixationBaseline',
+      'randomFixationPredictor',
       'recordedChecksum',
       'regionOfFixation',
       'renderSaliencyMap',
@@ -176,6 +188,7 @@ describe('the public entry point', () => {
       'scanMatchSubstitutionMatrix',
       'scanpathMetric',
       'scanpathOf',
+      'score',
       'scoreSaliency',
       'scoreScanpath',
       'scoreScanpathAgainstHumans',

@@ -16,13 +16,16 @@
  * of it into the project's own session shape, as `kind: "real"` with a participant, so a
  * human's free viewing and a simulated session are two files of one shape. #87 adds the two
  * baselines a figure is quoted against — the centre-bias prior and random fixations — with
- * the one map-rendering function that mirrors the engine's documented kernel. The scoring
- * and the fit arrive as later tickets and export from here.
+ * the one map-rendering function that mirrors the engine's documented kernel. #88 is the
+ * scoring: the engine reached through its own published `predict`, scored beside both
+ * baselines per record, per category and overall, with the provenance a figure is quoted
+ * with — which is why this package declares `@personavision/engine` as a dependency from
+ * that ticket on. The fit arrives as a later ticket and exports from here.
  *
- * **The dependency runs one way.** This package reads `@personavision/contract` and may later
- * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
+ * **The dependency runs one way.** This package reads `@personavision/contract` and, from
+ * #88, the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
  * the engine is pure and the viewer only formats. `test/dependency-direction.test.ts` asserts
- * it.
+ * it, and asserts that `src/score/score.ts` is this package's only importer of the engine.
  */
 
 export { RECORD_CATEGORIES, VIEWING_DURATIONS_SECONDS } from './types.js';
@@ -182,6 +185,44 @@ export type {
   MapPoint,
   MapRenderingParameters,
 } from './baselines/index.js';
+
+// The scoring (#88): the engine scored through its published `predict` over a corpus, beside
+// both baselines, per record, per category and overall — with the provenance every figure is
+// quoted with. This is where `@personavision/engine` becomes a dependency of this package.
+export {
+  CENTRE_BIAS_PREDICTOR_ID,
+  COMMITTED_CORPUS_ID,
+  ENGINE_PREDICTOR_ID,
+  RANDOM_FIXATION_PREDICTOR_ID,
+  SCORING_BUDGET,
+  ScoreError,
+  centreBiasPredictor,
+  committedCorpus,
+  comparableFigures,
+  defaultBaselines,
+  enginePredictor,
+  randomFixationPredictor,
+  score,
+} from './score/index.js';
+export type {
+  Aggregate,
+  CategoryAggregates,
+  EnginePredictorOptions,
+  MapKernelDivergence,
+  MapKernelProvenance,
+  Margin,
+  MarginFigures,
+  PredictorFigures,
+  PredictorProvenance,
+  RecordFailure,
+  RecordFigures,
+  ScoreOptions,
+  ScoreProgress,
+  ScoreProvenance,
+  ScoreResult,
+  ScoredCorpus,
+  ScoredPredictor,
+} from './score/index.js';
 
 // The conversion (#86): a UEyes record becomes sessions with `kind: "real"`, which the
 // contract's session schema accepts beside a simulated one.
