@@ -23,6 +23,7 @@ export {
   centreBiasPeakCell,
   centreBiasPrior,
 } from './centre-bias.js';
+export type { CentreBiasPrior } from './centre-bias.js';
 
 export {
   BASELINE_SCANPATH,
@@ -31,3 +32,4 @@ export {
   sampleDurationMs,
   scanpathOf,
 } from './random-fixations.js';
+export type { BaselineScanpathShape, DwellDistribution } from './random-fixations.js';

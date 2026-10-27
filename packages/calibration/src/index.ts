@@ -175,7 +175,13 @@ export {
   sampleDurationMs,
   scanpathOf,
 } from './baselines/index.js';
-export type { MapPoint, MapRenderingParameters } from './baselines/index.js';
+export type {
+  BaselineScanpathShape,
+  CentreBiasPrior,
+  DwellDistribution,
+  MapPoint,
+  MapRenderingParameters,
+} from './baselines/index.js';
 
 // The conversion (#86): a UEyes record becomes sessions with `kind: "real"`, which the
 // contract's session schema accepts beside a simulated one.

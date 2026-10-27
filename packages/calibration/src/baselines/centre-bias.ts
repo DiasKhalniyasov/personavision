@@ -27,12 +27,30 @@ import { BASELINE_SCANPATH, scanpathOf } from './random-fixations.js';
 import { MAP_RENDERING, mapResolution, renderSaliencyMap } from './render-map.js';
 
 /**
- * The prior's shape, as committed data with the reason each number is what it is.
+ * The prior's shape: where it peaks, how far it spreads, and where it stops.
  *
- * Not reachable by #90's fit, for the reason every baseline parameter is not: this is the
- * ruler, and #11 settled that the fit moves the engine and never the ruler.
+ * A structural interface rather than the constant's own literal types, so that a sensitivity
+ * check — what would the figure have been at a wider spread? — is a call and not an edit to
+ * this file. #90 may not fit these: this is the ruler, and #11 settled that the fit moves the
+ * engine and never the ruler.
  */
-export const CENTRE_BIAS_PRIOR = Object.freeze({
+export interface CentreBiasPrior {
+  /** Where the peak sits across the image, as a share of its width. */
+  readonly centreXShare: number;
+  /** And down the image, as a share of its height. */
+  readonly centreYShare: number;
+  /** The standard deviation, as a share of the image's shorter side. */
+  readonly spreadShare: number;
+  /** Where the kernel stops: a number of standard deviations, or the whole map. */
+  readonly truncation: number | 'whole-map';
+  /** The exponent a point's dwell is raised to. The prior is one point, so 0. */
+  readonly dwellWeightExponent: number;
+}
+
+/**
+ * The prior's shape, as committed data with the reason each number is what it is.
+ */
+export const CENTRE_BIAS_PRIOR: Readonly<CentreBiasPrior> = Object.freeze({
   /**
    * Horizontally centred. A user interface is laid out about its vertical axis — a centred
    * column, a centred hero, a symmetric pair of panels — so there is no evidence for a left
@@ -65,16 +83,22 @@ export const CENTRE_BIAS_PRIOR = Object.freeze({
    */
   spreadShare: 0.25,
   /**
-   * The kernel is **not truncated**: every cell of the map gets mass, however far from the
+   * The kernel is **not truncated**: every cell of the map gets summed, however far from the
    * peak it sits. A zero cell under a human fixation is a hole in a distribution rather than
    * a low score — KLD reads it as one — and a baseline should lose a comparison on where it
-   * put its mass, never on having none to put. The map rendering reads an infinite
-   * truncation radius as the whole map.
+   * put its mass, never on having none to put. The map rendering reads an infinite truncation
+   * radius as the whole map.
+   *
+   * The arithmetic has a ceiling the summing cannot lift: past about seventeen to one in
+   * aspect ratio, `Math.exp` underflows to exactly 0 in the far cells of the long side, and a
+   * map with a zero cell is what this setting exists to avoid. Measured: no zero cell at
+   * 390 × 4000 or 1440 × 20000, twenty of them at 100 × 1700. No UI screenshot is that
+   * elongated; a record that was would need a floor under the kernel rather than a wider one.
    */
   truncation: 'whole-map',
   /** Dwell plays no part in the prior: it is one point, and the map is its kernel. */
   dwellWeightExponent: 0,
-} as const);
+});
 
 /**
  * The prior rendered on the map grid: the one map-rendering function, one point at the
@@ -87,7 +111,7 @@ export const CENTRE_BIAS_PRIOR = Object.freeze({
  */
 export const centreBiasPrior = (
   imageSize: ImageSize,
-  prior: typeof CENTRE_BIAS_PRIOR = CENTRE_BIAS_PRIOR,
+  prior: CentreBiasPrior = CENTRE_BIAS_PRIOR,
 ): SaliencyMap => {
   const { width, height } = mapResolution(imageSize, MAP_RENDERING.cellPx);
   /**
@@ -111,7 +135,8 @@ export const centreBiasPrior = (
     {
       cellPx: MAP_RENDERING.cellPx,
       kernelSigmaShare,
-      kernelRadiusSigmas: Number.POSITIVE_INFINITY,
+      kernelRadiusSigmas:
+        prior.truncation === 'whole-map' ? Number.POSITIVE_INFINITY : prior.truncation,
       dwellWeightExponent: prior.dwellWeightExponent,
     },
   );
@@ -191,7 +216,7 @@ export const centreBiasBaseline = ((image, seed): Prediction => {
  */
 export const centreBiasPeakCell = (
   imageSize: ImageSize,
-  prior: typeof CENTRE_BIAS_PRIOR = CENTRE_BIAS_PRIOR,
+  prior: CentreBiasPrior = CENTRE_BIAS_PRIOR,
 ): { readonly x: number; readonly y: number } => {
   const { width, height } = mapResolution(imageSize, MAP_RENDERING.cellPx);
   return {

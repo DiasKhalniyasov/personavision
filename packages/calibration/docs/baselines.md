@@ -37,19 +37,33 @@ than one participant, and #88 prints it beside both baselines.
 Measured on the four synthetic records of the committed corpus (#82) as the mean over the seeds 1–8. These are the
 figures #88 reports against; they are measured on **synthetic** records, as every CI figure in this step is.
 
-| Record | Category | CC: prior | CC: random | ScanMatch: prior | ScanMatch: random |
-| --- | --- | --- | --- | --- | --- |
-| `webpage-bright-hero` | webpage | 0.590 | −0.026 | 0.203 | 0.176 |
-| `desktop-two-panels` | desktop | 0.232 | 0.088 | 0.212 | 0.186 |
-| `mobile-single-fixation` | mobile | 0.559 | −0.008 | 0.117 | 0.106 |
-| `poster-uniform-field` | poster | 0.861 | 0.071 | 0.131 | 0.123 |
+| Record | Category | CC: prior | CC: random | CC: random, blur-matched | ScanMatch: prior | ScanMatch: random |
+| --- | --- | --- | --- | --- | --- | --- |
+| `webpage-bright-hero` | webpage | 0.590 | −0.026 | 0.265 | 0.203 | 0.176 |
+| `desktop-two-panels` | desktop | 0.232 | 0.088 | 0.222 | 0.212 | 0.186 |
+| `mobile-single-fixation` | mobile | 0.559 | −0.008 | 0.268 | 0.117 | 0.106 |
+| `poster-uniform-field` | poster | 0.861 | 0.071 | 0.555 | 0.131 | 0.123 |
 
-Two things a reader should take from that table. The prior beats uniform noise on **where** attention lands by half
-a correlation point or more on three of the four records, which is the gap an engine has to clear to have said
-anything. And on **order** the two are within hundredths of each other: neither baseline has any sequence logic —
-each fixation is drawn independently of the one before it — so a ScanMatch figure a little above the prior's is not
-evidence that a predictor got the order right. The scanpath half of the figure is only worth quoting against the
-human-to-human ceiling.
+Three things a reader should take from that table.
+
+**The CC column is not a pure statement about placement.** The two baselines are rendered at the blur each one's own
+definition asks for: the random baseline at the engine's kernel (three per cent of the map's longer side, so ten
+small blobs) and the prior at its own quarter of the shorter side (one broad field). A broad field correlates better
+with a human fixation map than ten blobs do wherever they sit, so part of the gap is the kernel and not the
+positions. **CC: random, blur-matched** is the same random fixations re-rendered at the prior's own spread, and it
+is how much of the gap is really about where the fixations landed: wide on `webpage-bright-hero`,
+`mobile-single-fixation` and `poster-uniform-field`, and all but gone on `desktop-two-panels` (0.232 against 0.222).
+Quote the blur-matched figure when the claim is about placement, and the plain one when the claim is "what does the
+reference baseline score, drawn as it is defined".
+
+**The prior is the figure to beat, not the random baseline.** The engine, rendered at the engine's own kernel, is
+compared with the prior's broad field on the same terms a published centre baseline is — so a margin over the prior
+is the result, and clearing uniform noise is the floor.
+
+**On order, the two baselines are within hundredths of each other.** Neither has any sequence logic — each fixation
+is drawn independently of the one before it — so a ScanMatch figure a little above the prior's is not evidence that
+a predictor got the order right. The scanpath half of a figure is only worth quoting against the human-to-human
+ceiling.
 
 ## The map-rendering function
 
@@ -77,7 +91,10 @@ Every value above is the value `packages/engine`'s `prediction.map` carries on i
 `dwellWeightExponent` 1, `sum-to-one`, row-major image space. **The correspondence is stated here because it cannot
 be stated in code:** this package may not import `packages/engine` — the dependency runs one way and
 `test/dependency-direction.test.ts` asserts it — so the two sides are held together by the table above, by
-`MAP_RENDERING`'s own doc comments, and by a test that reads this file.
+`MAP_RENDERING`'s own doc comments, and by two tests: one reads this file, and one reads
+`packages/engine/src/config.ts` **as text** — never as an import, which the dependency direction forbids — and
+fails if the engine's `prediction.map` defaults stop agreeing with the table above. A retuned engine kernel is then
+a failing build rather than a reported margin that has quietly become a blur difference.
 
 Nothing in the engine's documented map diverges from it, so #87's "say so on #11 and #87 rather than quietly
 choosing one" clause has nothing to report. The engine's numbers are leaves of `EngineConfig.prediction.map` that
@@ -91,7 +108,7 @@ and never the ruler. A change on either side is a change to both.
 | `centreXShare` | 0.5 | A user interface is laid out about its vertical axis — a centred column, a centred hero, a symmetric pair of panels — so there is no evidence for a left or right bias across the four categories UEyes covers |
 | `centreYShare` | 0.42 | The peak sits a twelfth of the height above the middle. Gaze on a screen is top-biased: reading order starts at the top, navigation and hero live there, and the lower part of a tall screenshot is often never reached. Enough of a shift to carry that, small enough that the prior stays a *centre* prior |
 | `spreadShare` | 0.25 | The standard deviation, a quarter of the image's **shorter** side — the spread the saliency benchmarks publish their centre baselines at. Isotropic in image pixels, because the spread of human gaze is a span of visual angle; measured against the shorter side so it stays a blob on any aspect ratio rather than a horizontal band on a phone screenshot |
-| `truncation` | `whole-map` | Not truncated at all: every cell gets mass. A zero cell under a human fixation is a hole in a distribution rather than a low score — KLD reads it as one — and a baseline should lose on where it put its mass, never on having none |
+| `truncation` | `whole-map` | Not truncated at all: every cell gets summed. A zero cell under a human fixation is a hole in a distribution rather than a low score — KLD reads it as one — and a baseline should lose on where it put its mass, never on having none. Past about 17:1 in aspect ratio `Math.exp` underflows to 0 in the far cells of the long side whatever the radius; no UI screenshot is that elongated (measured: no zero cell at 390 × 4000 or 1440 × 20000, twenty at 100 × 1700), and one that was would need a floor under the kernel rather than a wider one |
 
 The prior is **the same Gaussian machinery at a wider setting**, not a second way of drawing a map: it is one point
 at the prior's centre rendered by the map-rendering function with the prior's own spread as that point's kernel. So
@@ -101,6 +118,10 @@ because the tails that fall off the image are renormalised away.
 
 `centreYShare` is a documented choice from the layout literature and **not** a value fitted to UEyes. Fitting a
 baseline to the dataset it is a baseline for would make the margin over it meaningless.
+
+Every parameter above is a **parameter**: `centreBiasPrior(imageSize, { ...CENTRE_BIAS_PRIOR, spreadShare: 0.4 })`
+answers what the prior would have scored at another spread, and `truncation` takes a number of standard deviations
+in place of `whole-map`. The committed values are what a figure is quoted against; #90 may not fit them.
 
 **The scanpath drawn from it.** A fixation is drawn by inverse transform over the prior's cells — the map sums to 1,
 so one uniform draw walked against the running total picks a cell with exactly the prior's probability — and then
@@ -127,9 +148,11 @@ are, so it has to survive a change of seed range, while a genuinely skewed draw 
 
 ## The scanpath shape both baselines share
 
-Committed data in `BASELINE_SCANPATH`, shared by both baselines **on purpose**: the prior differs from uniform noise
-only in *where* its fixations land, so the margin between the two is a spatial result and not a difference in how
-long either one looked or how many times.
+Committed data in `BASELINE_SCANPATH`, shared by both baselines **on purpose**: neither how long a baseline looked
+nor how many times it looked explains any part of the margin between the two. What is left is where each one looked
+and, on the saliency metrics, how widely each one's map is blurred — which the blur-matched column above reports
+separately rather than folding into the margin. `sampleDurationMs` and `scanpathOf` take the shape as a parameter,
+so another count or dwell is a call rather than an edit.
 
 | Parameter | Value | Why |
 | --- | --- | --- |

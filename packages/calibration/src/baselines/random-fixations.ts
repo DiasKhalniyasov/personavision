@@ -22,20 +22,43 @@ import { createSeededRandom } from '@personavision/contract';
 import type { Fixation, Prediction, Predictor, Scanpath } from '../types.js';
 import { MAP_RENDERING, renderSaliencyMap } from './render-map.js';
 
+/** The dwell distribution a baseline's fixations are drawn from. */
+export interface DwellDistribution {
+  /** The log-normal's median in milliseconds. */
+  readonly medianMs: number;
+  /** Its standard deviation in log space. */
+  readonly logSigma: number;
+  /** The draw is clamped to this floor. */
+  readonly minMs: number;
+  /** And to this ceiling. */
+  readonly maxMs: number;
+}
+
+/** How many fixations a baseline's scanpath holds, how long each dwells, and the gap. */
+export interface BaselineScanpathShape {
+  readonly fixations: number;
+  readonly duration: DwellDistribution;
+  /** Milliseconds between one fixation's end and the next one's onset. */
+  readonly saccadeMs: number;
+}
+
 /**
  * The shape of a scanpath **both** baselines produce, as committed data with its reason.
  *
- * Shared on purpose, and shared from here because the floor is what defines it: the centre
- * prior differs from uniform noise only in *where* its fixations land, so a margin between
- * the two is a spatial result and not a difference in how long either one looked or how many
- * times. It lives in this module rather than in a module of its own so there is one place to
- * read it, and `docs/baselines.md` states the same numbers for a reader who never opens the
- * code.
+ * Shared on purpose, and shared from here because the floor is what defines it: neither how
+ * long a baseline looked nor how many times it looked explains any part of the margin between
+ * the two, so what is left is where each one looked and — on the saliency metrics — how
+ * widely each one's map is blurred, which `docs/baselines.md` reports separately rather than
+ * folding into the margin. It lives in this module rather than in a module of its own so
+ * there is one place to read it, and the doc states the same numbers for a reader who never
+ * opens the code.
  *
  * None of it is reachable by #90's fit: a baseline is a fixed reference point, and a
- * reference point that moved with the thing it measures would measure nothing.
+ * reference point that moved with the thing it measures would measure nothing. It is
+ * nonetheless a **parameter** of every function below, so #88 and #90 can ask what a figure
+ * would have been at another fixation count or dwell without editing this file.
  */
-export const BASELINE_SCANPATH = Object.freeze({
+export const BASELINE_SCANPATH: Readonly<BaselineScanpathShape> = Object.freeze({
   /**
    * Ten fixations. At the dwell below plus a saccade that is about three seconds of free
    * viewing — the middle of the three cuts UEyes publishes (1 s, 3 s, 7 s) and the one three
@@ -52,7 +75,12 @@ export const BASELINE_SCANPATH = Object.freeze({
    * 80–1200 ms a recorded fixation lies in. Shared with the engine so that a margin over a
    * baseline is a difference in where each one looked and not in how long it dwelled there.
    */
-  duration: Object.freeze({ medianMs: 250, logSigma: 0.45, minMs: 80, maxMs: 1200 }),
+  duration: Object.freeze<DwellDistribution>({
+    medianMs: 250,
+    logSigma: 0.45,
+    minMs: 80,
+    maxMs: 1200,
+  }),
   /**
    * The gap between one fixation's end and the next one's onset: 40 ms, the middle of the
    * 30–50 ms a saccade across a screen-sized image takes. It sets `tMs` and nothing else —
@@ -60,7 +88,7 @@ export const BASELINE_SCANPATH = Object.freeze({
    * position and its dwell — so it is stated for a reader of a scanpath rather than fitted.
    */
   saccadeMs: 40,
-} as const);
+});
 
 /**
  * How uniform the uniform baseline measurably is, over a fixed set of seeds.
@@ -97,7 +125,7 @@ export const RANDOM_FIXATION_UNIFORMITY = Object.freeze({
  */
 export const sampleDurationMs = (
   random: () => number,
-  duration: (typeof BASELINE_SCANPATH)['duration'] = BASELINE_SCANPATH.duration,
+  duration: DwellDistribution = BASELINE_SCANPATH.duration,
 ): number => {
   const normal = Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
   const sampled = duration.medianMs * Math.exp(duration.logSigma * normal);
@@ -115,7 +143,7 @@ export const sampleDurationMs = (
 export const scanpathOf = (
   points: readonly { readonly x: number; readonly y: number }[],
   random: () => number,
-  shape: typeof BASELINE_SCANPATH = BASELINE_SCANPATH,
+  shape: BaselineScanpathShape = BASELINE_SCANPATH,
 ): Scanpath => {
   const fixations: Fixation[] = [];
   let onsetMs = 0;

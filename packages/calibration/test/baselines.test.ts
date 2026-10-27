@@ -109,6 +109,36 @@ describe('the map-rendering function', () => {
     expect(Object.isFrozen(MAP_RENDERING)).toBe(true);
   });
 
+  it('and the engine’s own defaults still say the same, read from its source', () => {
+    // `MAP_RENDERING`'s own doc and `docs/baselines.md` claim a correspondence with
+    // `packages/engine`'s `prediction.map`. This package may not *import* the engine — the
+    // dependency runs one way and `test/dependency-direction.test.ts` asserts it — but it can
+    // read the file as text, which is what that test does to make its own cross-package
+    // claim. So a retuned engine kernel fails here instead of silently turning every reported
+    // margin into a blur difference.
+    const config = readFileSync(
+      fileURLToPath(new URL('../../engine/src/config.ts', import.meta.url)),
+      'utf8',
+    );
+    const block = /^ {4}map: \{$([\s\S]*?)^ {4}\},$/m.exec(config)?.[1];
+
+    expect(
+      block,
+      'the engine’s prediction.map block moved; this mirror has to move with it',
+    ).toBeDefined();
+    for (const key of [
+      'cellPx',
+      'kernelSigmaShare',
+      'kernelRadiusSigmas',
+      'dwellWeightExponent',
+    ] as const) {
+      const value = new RegExp(`^\\s*${key}: ([-\\d.]+),$`, 'm').exec(block ?? '')?.[1];
+
+      expect(value, key).toBeDefined();
+      expect(Number(value), key).toBe(MAP_RENDERING[key]);
+    }
+  });
+
   it('is named in the baselines doc beside what it mirrors, since the code cannot say it', () => {
     const doc = readFileSync(
       fileURLToPath(new URL('../docs/baselines.md', import.meta.url)),
@@ -163,7 +193,14 @@ describe('the map-rendering function', () => {
 
   it('refuses a size no map can be drawn over, and a point outside the image', () => {
     expect(() => renderSaliencyMap([], { width: 0, height: 240 })).toThrow(BaselineError);
-    expect(() => renderSaliencyMap([], { width: 320, height: Number.NaN })).toThrow(/not a size/);
+    expect(() => renderSaliencyMap([], { width: 320, height: Number.NaN })).toThrow(
+      /not a whole number of pixels/,
+    );
+    // A fraction is refused however large: #83's metrics read a map's `imageSize` to decide
+    // whether two maps describe the same picture, so a malformed size has to stop here.
+    expect(() => renderSaliencyMap([], { width: 320.5, height: 240 })).toThrow(
+      /320\.5 is not a whole number of pixels/,
+    );
     expect(() =>
       renderSaliencyMap([{ x: 321, y: 10, durationMs: 200 }], { width: 320, height: 240 }),
     ).toThrow(/outside the 320 × 240 image/);
@@ -205,6 +242,24 @@ describe('the centre-bias prior', () => {
       expect(massWithin(prior, 2)).toBeGreaterThan(0.86);
       expect(massWithin(prior, 3)).toBeGreaterThan(0.99);
     }
+  });
+
+  it('is a parameter, so a sensitivity check is a call and not an edit to the source', () => {
+    const imageSize = { width: 320, height: 240 };
+    const wider = centreBiasPrior(imageSize, { ...CENTRE_BIAS_PRIOR, spreadShare: 0.5 });
+    const narrower = centreBiasPrior(imageSize, { ...CENTRE_BIAS_PRIOR, spreadShare: 0.1 });
+    const peak = centreBiasPeakCell(imageSize);
+    const peakOf = (map: SaliencyMap): number => map.values[peak.y * map.width + peak.x] ?? 0;
+
+    // A wider spread puts less of the distribution in the peak cell, and a narrower one more.
+    expect(peakOf(wider)).toBeLessThan(peakOf(centreBiasPrior(imageSize)));
+    expect(peakOf(narrower)).toBeGreaterThan(peakOf(centreBiasPrior(imageSize)));
+    // And the truncation is read rather than decorative: one standard deviation leaves the
+    // corners of the map empty, where the committed `whole-map` setting leaves no cell at 0.
+    expect(least(centreBiasPrior(imageSize, { ...CENTRE_BIAS_PRIOR, truncation: 1 }).values)).toBe(
+      0,
+    );
+    expect(least(centreBiasPrior(imageSize).values)).toBeGreaterThan(0);
   });
 
   it('is finite, non-negative, normalised, and has no zero cell for KLD to read as a hole', () => {
@@ -265,7 +320,9 @@ describe('the centre-bias prior', () => {
     // Measured over these 64 seeds: 0.5031 and 0.4287 — the prior's own 0.5 and 0.42.
     expect(mean(xs)).toBeCloseTo(CENTRE_BIAS_PRIOR.centreXShare, 1);
     expect(mean(ys)).toBeCloseTo(CENTRE_BIAS_PRIOR.centreYShare, 1);
-    expect(mean(ys)).toBeLessThan(CENTRE_BIAS_PRIOR.centreXShare);
+    // Above the geometric middle, which is what the top bias means — named as 0.5 rather
+    // than borrowed from `centreXShare`, which is only incidentally the same number.
+    expect(mean(ys)).toBeLessThan(0.5);
   });
 });
 
@@ -424,6 +481,34 @@ describe('what the two baselines are evidence of', () => {
       );
 
       expect(priorCc, record.id).toBeGreaterThan(randomCc);
+    }
+  });
+
+  it('though part of that gap is the blur and not the placement, as the doc reports', () => {
+    // The two baselines are rendered at the blur each one's definition asks for — the random
+    // baseline at the engine's kernel, the prior at its own quarter of the shorter side — so a
+    // broad field correlates better with a human fixation map than ten small blobs wherever
+    // they sit. Re-rendering the *same* random fixations at the prior's spread is how much of
+    // the gap is really about where they landed, and `docs/baselines.md` prints both columns.
+    // Measured: −0.026 becomes 0.265 on `webpage-bright-hero`, and 0.088 becomes 0.222 on
+    // `desktop-two-panels`, where the prior's 0.232 is then all but matched.
+    for (const record of loadCorpus()) {
+      const image = { bytes: new Uint8Array([0]), size: record.imageSize, display: record.display };
+      const resolution = mapResolution(record.imageSize);
+      const priorShare =
+        (CENTRE_BIAS_PRIOR.spreadShare * Math.min(resolution.width, resolution.height)) /
+        Math.max(resolution.width, resolution.height);
+      const { scanpath, saliencyMap } = randomFixationBaseline(image, 1);
+      const blurMatched = renderSaliencyMap(scanpath.fixations, record.imageSize, {
+        ...MAP_RENDERING,
+        kernelSigmaShare: priorShare,
+        kernelRadiusSigmas: Number.POSITIVE_INFINITY,
+      });
+
+      expect(
+        cc(blurMatched, record.saliencyMap),
+        `${record.id}: the same fixations at the prior's blur`,
+      ).toBeGreaterThan(cc(saliencyMap, record.saliencyMap));
     }
   });
 

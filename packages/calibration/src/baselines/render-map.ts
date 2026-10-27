@@ -122,15 +122,20 @@ const atLeastOneWhole = (value: number): number => Math.max(1, Math.round(value)
  * An image size a map can be drawn over, or a named error.
  *
  * Refused rather than clamped: a zero, a fraction or a `NaN` side is a malformed record or a
- * caller's bug, and a silently invented 1 × 1 map would turn it into a figure.
+ * caller's bug, and a silently invented 1 × 1 map would turn it into a figure. A fraction is
+ * refused however large — an image is a whole number of pixels, and #83's metrics compare two
+ * maps' `imageSize` to decide whether they describe the same picture, so a fractional size
+ * would travel into a published comparison rather than being refused here.
  */
 const assertImageSize = (imageSize: ImageSize): void => {
   for (const [side, value] of [
     ['width', imageSize.width],
     ['height', imageSize.height],
   ] as const) {
-    if (!Number.isFinite(value) || value < 1) {
-      throw new BaselineError(`an image ${side} of ${String(value)} is not a size to render over`);
+    if (!Number.isInteger(value) || value < 1) {
+      throw new BaselineError(
+        `an image ${side} of ${String(value)} is not a whole number of pixels to render over`,
+      );
     }
   }
 };
