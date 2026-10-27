@@ -699,10 +699,20 @@ describe('the task can still be completed on variant B with JavaScript disabled'
     expect((await get('/shared/card-frame.html')).status).toBe(200);
   });
 
-  it('adds no dependency to the shop', () => {
+  it('adds no third-party dependency to the shop', () => {
     const manifest = JSON.parse(read('demo/northwind/package.json')) as Record<string, unknown>;
-    expect(manifest.dependencies).toBeUndefined();
     expect(manifest.devDependencies).toBeUndefined();
+
+    // Relaxed by #76, which declares the planted defects against the shape
+    // `@personavision/scoring` exports and so makes the shop depend on one workspace
+    // package. A `workspace:*` range resolves to a directory in this repository: it
+    // installs nothing, reaches no registry and changes nothing about how the pages are
+    // served. What this test is here to keep out is a third-party package.
+    const dependencies = (manifest.dependencies ?? {}) as Record<string, string>;
+    for (const [name, range] of Object.entries(dependencies)) {
+      expect(name, `${name} is a package of this repository`).toMatch(/^@personavision\//);
+      expect(range, `${name} is resolved from the workspace`).toBe('workspace:*');
+    }
   });
 });
 

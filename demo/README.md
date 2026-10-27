@@ -4,9 +4,12 @@ A small static shop with a checkout, served from disk. It is the **system under 
 part of the product: it is what the agents browse, and it appears inside PersonaVision only
 as a screenshot.
 
-Plain HTML and CSS. No framework, no build step, no JavaScript, no dependency. The whole
-task — cart to confirmation — can be completed in a browser with **JavaScript disabled**,
-because every step advances by an ordinary link or an ordinary `GET` form submit.
+Plain HTML and CSS. No framework, no build step, no JavaScript, and no third-party
+dependency — the one dependency is `@personavision/scoring`, for the shape
+[the ground truth](#the-planted-defect-ground-truth) is typed against, and a `workspace:*`
+range installs nothing. The whole task — cart to confirmation — can be completed in a
+browser with **JavaScript disabled**, because every step advances by an ordinary link or an
+ordinary `GET` form submit.
 
 > **Visual values are owned here.** `demo/northwind/shared/shop.css` does not import
 > `docs/design/tokens.css` and copies nothing from it. The product's visual language belongs
@@ -146,6 +149,15 @@ The numbers are the same at both viewports, because the column that carries the 
 first either way. Nothing is absolutely positioned, so no scroll offset can move it. The one
 row above the fold on neither viewport is the planted defect; its arithmetic is written out
 in [Variant B](#variant-b-the-three-planted-defects).
+
+## The planted-defect ground truth
+
+`demo/northwind/defects.json` is the declared answer: which of variant B's defects were
+planted on purpose, so that "the swarm found the planted defects" is computed rather than
+remembered. It is read through `demo/northwind/defects.ts`, which validates it against the
+`PlantedDefect` shape `@personavision/scoring` exports and is the only thing that parses it.
+The file documents, in its own prose, the one real defect it deliberately leaves out and
+what that costs in measured precision.
 
 ## Variant B: the three planted defects
 

@@ -1,0 +1,53 @@
+{
+  "about": [
+    "The declared answer. These are the defects variant B of the northwind shop was built with, so that \"the swarm found the planted defects\" is a number computed against this file rather than a claim remembered by whoever wrote the shop.",
+    "Each entry of `defects` is a `PlantedDefect` exactly as `@personavision/scoring` exports it. `evaluateAgainstPlantedDefects` credits a finding to an entry on `ruleId`, `variant`, `step` and `aoiId` and on nothing else; `description` is for the report and is never matched against, so it can be reworded without moving a score.",
+    "`aoiId` is the run artifact's scheme, `<variant>-<step>-<data-aoi>`, as the committed example run spells it in its `aois` and its findings. Its last segment is the shop's own `data-aoi` value, which is what lets a test ask the shop's server whether the region being declared is really on the page.",
+    "The promo banner is on three of variant B's steps, and D-3 declares it on the payment step alone: `competing-first-fixation` fires at most once per variant, and both `docs/design/prototype.html`'s own finding (`payment / promo`) and the committed example run (`B-payment-promo`) place it there. Declaring it on the cart step as well would declare a defect no finding can be credited to.",
+    "Read this file through `demo/northwind/defects.ts`, which validates it against that shape and is the only thing that parses it."
+  ],
+  "defects": [
+    {
+      "id": "D-1",
+      "ruleId": "never-fixated-primary-action",
+      "variant": "B",
+      "step": "review",
+      "aoiId": "B-review-complete",
+      "description": "The control that completes the order sits below the fold at both viewports, so nobody who reaches the review step ever looks at the one thing that would finish the purchase."
+    },
+    {
+      "id": "D-2",
+      "ruleId": "value-changed-between-steps",
+      "variant": "B",
+      "step": "review",
+      "aoiId": "B-review-fee-row",
+      "description": "A $9.95 service fee appears for the first time on the review step, after the card has been entered, so the total a buyer agreed to is not the total they are asked to confirm."
+    },
+    {
+      "id": "D-3",
+      "ruleId": "competing-first-fixation",
+      "variant": "B",
+      "step": "payment",
+      "aoiId": "B-payment-promo",
+      "description": "A spring-sale banner above the content takes the first look on the payment step and holds it, ahead of the form fields and the action that advances the task."
+    }
+  ],
+  "notDeclared": [
+    {
+      "what": "Variant B's payment step offers \"Place order · $129.00\" on a control that only advances to the review step.",
+      "variant": "B",
+      "step": "payment",
+      "aoiId": "B-payment-primary",
+      "why": [
+        "It is a real defect, and the findings generator may well report it: `docs/design/prototype.html` draws it that way and reports it as a finding of its own, and three of the prototype's variant-B session outcomes are caused by it.",
+        "It is still not declared here, because #10's user story 4 fixes the planted set at three and `docs/FLOW.md` §7 beat 3 names those three. A fourth entry would change what the demo claims, which is not this file's to change.",
+        "So a finding about it counts as a false positive under this ground truth. That is the price of keeping the claim at three, and it is paid in a measured number rather than in honesty."
+      ]
+    }
+  ],
+  "precision": [
+    "Precision is measured over the whole findings list, not over the findings that happen to be about declared defects, so every true finding outside the declared set holds it below 1.0 by construction. The payment-step mislabel above is one; variant A's cart abandonment is another.",
+    "The informational note is the exception, and not because it is forgiven: `evaluateAgainstPlantedDefects` leaves findings attributed to automation out of the denominator altogether, so saying something honest about our own coverage costs nothing.",
+    "The floor is therefore a measured baseline, taken by the acceptance ticket from the first real run. It is not a target to be reached, and it is never to be raised by declaring more defects."
+  ]
+}
