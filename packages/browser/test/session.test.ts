@@ -14,6 +14,10 @@
  */
 
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runPaths } from '@personavision/contract';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -24,14 +28,12 @@ import {
   closeSession,
   createFixtureSource,
   createLiveSource,
-  detectStep,
   extractElements,
   mapToAutomationFailure,
   openSession,
   readContentHash,
   readGeometry,
   readSessionState,
-  resolvePrimaryAction,
   stableElementId,
   toAoiEntries,
   toScreenshotEntries,
@@ -39,14 +41,7 @@ import {
   withCache,
   writeScreenshot,
 } from '../src/index.js';
-import type {
-  Capture,
-  CaptureContext,
-  CaptureElement,
-  Device,
-  PageHandle,
-  TaskDefinition,
-} from '../src/index.js';
+import type { Capture, CaptureContext, Device, PageHandle, TaskDefinition } from '../src/index.js';
 import { serveFixtureSite } from './helpers/static-site.js';
 import type { FixtureSite } from './helpers/static-site.js';
 
@@ -170,19 +165,23 @@ describeWithChromium('a browser session', () => {
       variant: `v-${device.name}`,
       device,
       task: TASK,
-      runDir: 'runs/unused-by-the-neutral-seams',
+      runDir,
     });
 
+    /** The cart page is on a step, so this capture writes an image: not into the repository. */
+    let runDir: string;
     let handle: PageHandle;
     let captured: Capture;
 
     beforeAll(async () => {
+      runDir = await mkdtemp(join(tmpdir(), 'personavision-capture-'));
       handle = await open(DESKTOP);
       captured = await capture(handle, contextFor(DESKTOP));
     }, BROWSER_TIMEOUT_MS);
 
     afterAll(async () => {
       await closeSession(handle);
+      await rm(runDir, { recursive: true, force: true });
     });
 
     it('carries the variant, the geometry and a content hash', () => {
@@ -193,12 +192,17 @@ describeWithChromium('a browser session', () => {
       expect(captured.contentHash).toMatch(/^[0-9a-f]{16}$/);
     });
 
-    it('carries nothing the neutral seams have yet to produce, and does not throw', () => {
-      expect(captured.screenshot).toBeNull();
-      expect(captured.step).toBeNull();
+    it('carries the elements of the page, and does not throw', () => {
       // Extraction has landed, so a capture carries elements; `elements.test.ts` holds
       // what they are, against the fixture site's own record.
       expect(captured.elements.length).toBeGreaterThan(0);
+      // One of them is the step's declared primary action; `steps.test.ts` holds which.
+      expect(captured.elements.filter((element) => element.isPrimaryAction)).toHaveLength(1);
+    });
+
+    it('labels the step of the task the page is on, and writes the image under it', () => {
+      expect(captured.step).toBe('cart');
+      expect(captured.screenshot).toBe(runPaths('').screenshot('v-desktop', 'cart'));
     });
 
     it(
@@ -248,27 +252,6 @@ describeWithChromium('a browser session', () => {
       await expect(
         writeScreenshot(handle, { runDir: 'runs/x', variant: 'v', step: null }),
       ).resolves.toBeNull();
-    });
-
-    it('detects no step yet', async () => {
-      await expect(detectStep(handle, TASK)).resolves.toBeNull();
-    });
-
-    it('leaves the elements as they were when resolving the primary action', async () => {
-      const elements: CaptureElement[] = [
-        {
-          id: 'e-000000000000',
-          source: 'dom',
-          role: 'button',
-          name: 'Checkout',
-          text: 'Checkout',
-          bbox: { x: 16, y: 1200, width: 358, height: 48 },
-          isPrimaryAction: false,
-          belowFold: true,
-          selector: '#cart-checkout',
-        },
-      ];
-      await expect(resolvePrimaryAction(handle, elements, 'cart')).resolves.toEqual(elements);
     });
 
     it('cannot act yet', async () => {
