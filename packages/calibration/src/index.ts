@@ -14,8 +14,10 @@
  * where it landed. #85 brings the real benchmark onto the machine: one resumable,
  * checksum-verified download into the cache outside this repository. #86 converts a record
  * of it into the project's own session shape, as `kind: "real"` with a participant, so a
- * human's free viewing and a simulated session are two files of one shape. The baselines,
- * the scoring and the fit arrive as later tickets and export from here.
+ * human's free viewing and a simulated session are two files of one shape. #87 adds the two
+ * baselines a figure is quoted against — the centre-bias prior and random fixations — with
+ * the one map-rendering function that mirrors the engine's documented kernel. The scoring
+ * and the fit arrive as later tickets and export from here.
  *
  * **The dependency runs one way.** This package reads `@personavision/contract` and may later
  * read the engine; nothing in `packages/engine` or `apps/viewer` reads this package, because
@@ -155,6 +157,25 @@ export type {
   FetchFailure,
   FileOutcome,
 } from './dataset/fetch.js';
+
+// The baselines (#87): the floor and the reference a human-likeness figure is quoted
+// against, plus the one map-rendering function both of them and #88 state their maps by.
+export {
+  BASELINE_SCANPATH,
+  BaselineError,
+  CENTRE_BIAS_PRIOR,
+  MAP_RENDERING,
+  RANDOM_FIXATION_UNIFORMITY,
+  centreBiasBaseline,
+  centreBiasPeakCell,
+  centreBiasPrior,
+  mapResolution,
+  randomFixationBaseline,
+  renderSaliencyMap,
+  sampleDurationMs,
+  scanpathOf,
+} from './baselines/index.js';
+export type { MapPoint, MapRenderingParameters } from './baselines/index.js';
 
 // The conversion (#86): a UEyes record becomes sessions with `kind: "real"`, which the
 // contract's session schema accepts beside a simulated one.
