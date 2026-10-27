@@ -16,6 +16,13 @@ runs
 packages/browser/test/fixtures/captures/capture-set.json
 packages/browser/test/fixtures/captures/captures
 
+# The behaviour suite's capture set is recorded data too: `pnpm -F @personavision/swarm
+# record:fixtures` writes it from the pages beside it, and the fields are written in a fixed
+# order so a re-recording over unchanged pages is byte-identical. Its README is prose, and is
+# formatted.
+packages/swarm/fixtures/captures/capture-set.json
+packages/swarm/fixtures/captures/captures
+
 # The calibration corpus is generated data: `pnpm -F @personavision/calibration corpus` writes
 # it and `packages/calibration/test/corpus.test.ts` asserts the committed bytes are that
 # generator's output, so formatting it here would make the two disagree.

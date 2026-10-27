@@ -1,0 +1,302 @@
+{
+  "variant": "vanishing",
+  "step": "list",
+  "screenshot": "screenshots/vanishing/list.png",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageHeight": 1000,
+  "foldY": 844,
+  "elements": [
+    {
+      "id": "e-8f3af8a6fd84",
+      "source": "dom",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-heading"
+    },
+    {
+      "id": "e-95fd9fe23592",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-step-note"
+    },
+    {
+      "id": "e-47105c0a2bd0",
+      "source": "dom",
+      "role": "link",
+      "name": "Place the order",
+      "text": "Place the order",
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": true,
+      "belowFold": false,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-f7f6c2383d42",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 212,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-36edef8f428b",
+      "source": "dom",
+      "role": "generic",
+      "name": "One item, in natural",
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 224,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-line-one"
+    },
+    {
+      "id": "e-4ceb149041d1",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 252,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-remove-one"
+    },
+    {
+      "id": "e-375180431487",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The control above takes itself out of the document the moment a pointer goes down on it, which is what a remount under an agent's hands looks like: the element the agent looked at is gone by the time the click lands, and the selector never resolves.",
+      "text": "The control above takes itself out of the document the moment a pointer goes down on it, which is what a remount under an agent's hands looks like: the element the agent looked at is gone by the time the click lands, and the selector never resolves.",
+      "bbox": {
+        "x": 16,
+        "y": 356,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-note"
+    },
+    {
+      "id": "e-c57e82339ba8",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 476,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-banner"
+    },
+    {
+      "id": "e-57e81153e860",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "text": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 572,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-footnote"
+    },
+    {
+      "id": "e-9558c04d0dca",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-heading"
+    },
+    {
+      "id": "e-95b16e1a50d4",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-step-note"
+    },
+    {
+      "id": "e-f5cad4230bb2",
+      "source": "a11y",
+      "role": "link",
+      "name": "Place the order",
+      "text": "Place the order",
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-5c9b98bd4696",
+      "source": "a11y",
+      "role": "region",
+      "name": "Items",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 212,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-604b8d8364fb",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The control above takes itself out of the document the moment a pointer goes down on it, which is what a remount under an agent's hands looks like: the element the agent looked at is gone by the time the click lands, and the selector never resolves.",
+      "bbox": {
+        "x": 16,
+        "y": 356,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-note"
+    },
+    {
+      "id": "e-ca289c09b3c9",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 476,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-banner"
+    },
+    {
+      "id": "e-60b6ea629fb4",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 572,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-footnote"
+    },
+    {
+      "id": "e-6a660fe317ae",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 224,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-line-one"
+    },
+    {
+      "id": "e-83667ee40b08",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 252,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#vanishing-remove-one"
+    }
+  ],
+  "contentHash": "0beac18e80790eb3"
+}

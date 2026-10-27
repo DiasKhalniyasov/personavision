@@ -1,0 +1,814 @@
+{
+  "variant": "tedious",
+  "step": "list",
+  "screenshot": "screenshots/tedious/list.png",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageHeight": 2400,
+  "foldY": 844,
+  "elements": [
+    {
+      "id": "e-b47abd68cf36",
+      "source": "dom",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-heading"
+    },
+    {
+      "id": "e-c563b748d49b",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-step-note"
+    },
+    {
+      "id": "e-1b7c13e329a4",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-banner"
+    },
+    {
+      "id": "e-9d8e209112bc",
+      "source": "dom",
+      "role": "link",
+      "name": "See the item in other colours",
+      "text": "See the item in other colours",
+      "bbox": {
+        "x": 16,
+        "y": 228,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-colours"
+    },
+    {
+      "id": "e-94e237f4a663",
+      "source": "dom",
+      "role": "link",
+      "name": "See what else is in this range",
+      "text": "See what else is in this range",
+      "bbox": {
+        "x": 16,
+        "y": 260,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-range"
+    },
+    {
+      "id": "e-8468da9df2d0",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 300,
+        "width": 358,
+        "height": 196
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-e2b59d95707f",
+      "source": "dom",
+      "role": "link",
+      "name": "One item, in natural",
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 312,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-line-one"
+    },
+    {
+      "id": "e-2dd89cd90322",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 344,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-remove-one"
+    },
+    {
+      "id": "e-b25455ebc450",
+      "source": "dom",
+      "role": "link",
+      "name": "One item, in enamel",
+      "text": "One item, in enamel",
+      "bbox": {
+        "x": 28,
+        "y": 388,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-line-two"
+    },
+    {
+      "id": "e-cf376baa1c1f",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 420,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-remove-two"
+    },
+    {
+      "id": "e-dfe7c6e9002d",
+      "source": "dom",
+      "role": "link",
+      "name": "Wrap this as a gift",
+      "text": "Wrap this as a gift",
+      "bbox": {
+        "x": 28,
+        "y": 460,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-gift"
+    },
+    {
+      "id": "e-0b6b13f93b53",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "A promotion code can be entered on the next screen, once the payment details are in. The bag is held for ten minutes.",
+      "text": "A promotion code can be entered on the next screen, once the payment details are in. The bag is held for ten minutes.",
+      "bbox": {
+        "x": 16,
+        "y": 520,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-promo-note"
+    },
+    {
+      "id": "e-50e032013806",
+      "source": "dom",
+      "role": "button",
+      "name": "Edit the address",
+      "text": "Edit the address",
+      "bbox": {
+        "x": 16,
+        "y": 592,
+        "width": 180,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-edit-address"
+    },
+    {
+      "id": "e-30921a6c00fc",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged. Every id on this page is recorded in the README beside it, and the suite asserts against that record rather than re-reading the markup.",
+      "text": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged. Every id on this page is recorded in the README beside it, and the suite asserts against that record rather than re-reading the markup.",
+      "bbox": {
+        "x": 16,
+        "y": 644,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-terms"
+    },
+    {
+      "id": "e-8688355f98a0",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 860,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-upsell-card"
+    },
+    {
+      "id": "e-4a35ad5d283e",
+      "source": "dom",
+      "role": "link",
+      "name": "Another item, half price",
+      "text": "Another item, half price",
+      "bbox": {
+        "x": 16,
+        "y": 1060,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-upsell-link"
+    },
+    {
+      "id": "e-0e4f4ba25f88",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Why is this page so long? Because a session that gives up needs somewhere to give up on, and a session that keeps looking needs something left to find.",
+      "text": "Why is this page so long? Because a session that gives up needs somewhere to give up on, and a session that keeps looking needs something left to find.",
+      "bbox": {
+        "x": 16,
+        "y": 1100,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-faq-one"
+    },
+    {
+      "id": "e-d0bae2b7b64c",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1200,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-second-card"
+    },
+    {
+      "id": "e-59b86a9e96d8",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The control that finishes this is far below, in the same grey as everything around it. It is reachable, and it is not where the eye goes first.",
+      "text": "The control that finishes this is far below, in the same grey as everything around it. It is reachable, and it is not where the eye goes first.",
+      "bbox": {
+        "x": 16,
+        "y": 1400,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-faq-two"
+    },
+    {
+      "id": "e-0b8981aa5be6",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1500,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-third-card"
+    },
+    {
+      "id": "e-e28876ef36bc",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Shipping is free above twenty pounds. The canvas is woven in two weights and a parcel is handed over within one working day.",
+      "text": "Shipping is free above twenty pounds. The canvas is woven in two weights and a parcel is handed over within one working day.",
+      "bbox": {
+        "x": 16,
+        "y": 1700,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-shipping"
+    },
+    {
+      "id": "e-b5e8fcda9d41",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1800,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-fourth-card"
+    },
+    {
+      "id": "e-08cb69438e75",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Help is a telephone number nobody answers and a form that goes nowhere, which is the other half of what makes a tote of this kind a tedious thing to buy.",
+      "text": "Help is a telephone number nobody answers and a form that goes nowhere, which is the other half of what makes a tote of this kind a tedious thing to buy.",
+      "bbox": {
+        "x": 16,
+        "y": 2000,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-help"
+    },
+    {
+      "id": "e-7025ab123afe",
+      "source": "dom",
+      "role": "link",
+      "name": "Order",
+      "text": "Order",
+      "bbox": {
+        "x": 16,
+        "y": 2100,
+        "width": 90,
+        "height": 18
+      },
+      "isPrimaryAction": true,
+      "belowFold": true,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-8b71b508fdc5",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "text": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 2140,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-footnote"
+    },
+    {
+      "id": "e-c065351e3b7c",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-heading"
+    },
+    {
+      "id": "e-1531fc31791c",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-step-note"
+    },
+    {
+      "id": "e-522eced3c31d",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-banner"
+    },
+    {
+      "id": "e-dda7f7c7ceb8",
+      "source": "a11y",
+      "role": "link",
+      "name": "See the item in other colours",
+      "text": "See the item in other colours",
+      "bbox": {
+        "x": 16,
+        "y": 228,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-colours"
+    },
+    {
+      "id": "e-ea90bde86660",
+      "source": "a11y",
+      "role": "link",
+      "name": "See what else is in this range",
+      "text": "See what else is in this range",
+      "bbox": {
+        "x": 16,
+        "y": 260,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-range"
+    },
+    {
+      "id": "e-d0b5244100ec",
+      "source": "a11y",
+      "role": "region",
+      "name": "Items",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 300,
+        "width": 358,
+        "height": 196
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-720f9fe5e342",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "A promotion code can be entered on the next screen, once the payment details are in. The bag is held for ten minutes.",
+      "bbox": {
+        "x": 16,
+        "y": 520,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-promo-note"
+    },
+    {
+      "id": "e-e5a5d37132d3",
+      "source": "a11y",
+      "role": "button",
+      "name": "Edit the address",
+      "text": "Edit the address",
+      "bbox": {
+        "x": 16,
+        "y": 592,
+        "width": 180,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-edit-address"
+    },
+    {
+      "id": "e-208f88cb7659",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged. Every id on this page is recorded in the README beside it, and the suite asserts against that record rather than re-reading the markup.",
+      "bbox": {
+        "x": 16,
+        "y": 644,
+        "width": 358,
+        "height": 120
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-terms"
+    },
+    {
+      "id": "e-fe92852d21a4",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 860,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-upsell-card"
+    },
+    {
+      "id": "e-b00604da4df1",
+      "source": "a11y",
+      "role": "link",
+      "name": "Another item, half price",
+      "text": "Another item, half price",
+      "bbox": {
+        "x": 16,
+        "y": 1060,
+        "width": 358,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-upsell-link"
+    },
+    {
+      "id": "e-10e7f500667a",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Why is this page so long? Because a session that gives up needs somewhere to give up on, and a session that keeps looking needs something left to find.",
+      "bbox": {
+        "x": 16,
+        "y": 1100,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-faq-one"
+    },
+    {
+      "id": "e-2c78c044f8f4",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1200,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-second-card"
+    },
+    {
+      "id": "e-c051a7b09e64",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The control that finishes this is far below, in the same grey as everything around it. It is reachable, and it is not where the eye goes first.",
+      "bbox": {
+        "x": 16,
+        "y": 1400,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-faq-two"
+    },
+    {
+      "id": "e-864c427f5c5c",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1500,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-third-card"
+    },
+    {
+      "id": "e-cd0a7f2ad34b",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Shipping is free above twenty pounds. The canvas is woven in two weights and a parcel is handed over within one working day.",
+      "bbox": {
+        "x": 16,
+        "y": 1700,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-shipping"
+    },
+    {
+      "id": "e-787959a22f5f",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 1800,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-fourth-card"
+    },
+    {
+      "id": "e-8404fe9d1831",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Help is a telephone number nobody answers and a form that goes nowhere, which is the other half of what makes a tote of this kind a tedious thing to buy.",
+      "bbox": {
+        "x": 16,
+        "y": 2000,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-help"
+    },
+    {
+      "id": "e-949cc7eba260",
+      "source": "a11y",
+      "role": "link",
+      "name": "Continue",
+      "text": "Order",
+      "bbox": {
+        "x": 16,
+        "y": 2100,
+        "width": 90,
+        "height": 18
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-47f7563f8e25",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Every id on this page is recorded in the README beside it.",
+      "bbox": {
+        "x": 16,
+        "y": 2140,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#tedious-footnote"
+    },
+    {
+      "id": "e-36a68a30b3b9",
+      "source": "a11y",
+      "role": "link",
+      "name": "One item, in natural",
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 312,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-line-one"
+    },
+    {
+      "id": "e-df99ea730300",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 344,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-remove-one"
+    },
+    {
+      "id": "e-0192a54be119",
+      "source": "a11y",
+      "role": "link",
+      "name": "One item, in enamel",
+      "text": "One item, in enamel",
+      "bbox": {
+        "x": 28,
+        "y": 388,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-line-two"
+    },
+    {
+      "id": "e-25a14d6bf864",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 420,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-remove-two"
+    },
+    {
+      "id": "e-bc8729d94431",
+      "source": "a11y",
+      "role": "link",
+      "name": "Wrap this as a gift",
+      "text": "Wrap this as a gift",
+      "bbox": {
+        "x": 28,
+        "y": 460,
+        "width": 300,
+        "height": 24
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#tedious-gift"
+    }
+  ],
+  "contentHash": "17c7cacb9c934498"
+}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checkout - behaviour fixture</title>
+    <link rel="stylesheet" href="behaviour.css" />
+  </head>
+  <body class="page-mislabelled">
+    <h1 id="mislabelled-heading" style="left: 16px; top: 24px; width: 358px; height: 40px">
+      Checkout
+    </h1>
+    <p id="mislabelled-step-note" style="left: 16px; top: 72px; width: 358px; height: 56px">
+      Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven
+      with no network at all.
+    </p>
+    <button
+      id="mislabelled-decoy"
+      type="button"
+      class="control-loud"
+      style="left: 16px; top: 140px; width: 358px; height: 48px"
+    >
+      Place the order for the canvas tote bag
+    </button>
+    <p id="mislabelled-delivery" style="left: 16px; top: 204px; width: 358px; height: 72px">
+      Delivery to 14 Mill Lane arrives on Thursday. Returns are free within thirty days of the
+      parcel reaching you.
+    </p>
+    <section
+      id="order-panel"
+      aria-label="Items"
+      style="left: 16px; top: 292px; width: 358px; height: 180px"
+    >
+      <span id="mislabelled-line-one" style="left: 12px; top: 12px; width: 240px; height: 20px"
+        >One item, in natural</span
+      >
+      <button
+        id="mislabelled-remove-one"
+        type="button"
+        style="left: 12px; top: 40px; width: 120px; height: 32px"
+      >
+        Remove
+      </button>
+      <span id="mislabelled-line-two" style="left: 12px; top: 84px; width: 240px; height: 20px"
+        >One item, in enamel</span
+      >
+      <button
+        id="mislabelled-remove-two"
+        type="button"
+        style="left: 12px; top: 112px; width: 120px; height: 32px"
+      >
+        Remove
+      </button>
+    </section>
+    <p id="mislabelled-promo-note" style="left: 16px; top: 496px; width: 358px; height: 56px">
+      A promotion code can be entered on the next screen, once the payment details are in.
+    </p>
+    <p id="mislabelled-terms" style="left: 16px; top: 568px; width: 358px; height: 96px">
+      By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody
+      is charged.
+    </p>
+    <p id="mislabelled-returns" style="left: 16px; top: 676px; width: 358px; height: 96px">
+      A return is free, and a refund reaches the card it was paid from within five working days of
+      the parcel arriving back with us.
+    </p>
+    <div
+      id="mislabelled-upsell-card"
+      class="region-card"
+      style="left: 16px; top: 860px; width: 358px; height: 160px"
+    ></div>
+    <p id="mislabelled-faq-one" style="left: 16px; top: 1040px; width: 358px; height: 76px">
+      The big blue control above this says what you came to do and does nothing at all. That is the
+      defect this page is: the words are on the wrong element.
+    </p>
+    <p id="mislabelled-faq-two" style="left: 16px; top: 1132px; width: 358px; height: 76px">
+      What finishes this is the quiet grey link below, which says something else entirely. A person
+      reading every word on the page is not told which one it is.
+    </p>
+    <span
+      id="order-submit"
+      class="control-quiet"
+      style="left: 128px; top: 1248px; width: 140px; height: 28px"
+      >Gift options</span
+    >
+    <p id="mislabelled-footnote" style="left: 16px; top: 1340px; width: 358px; height: 40px">
+      Fixture site. Nothing below this line is reachable from one page scroll.
+    </p>
+    <p id="mislabelled-tail" style="left: 16px; top: 1560px; width: 358px; height: 40px">
+      The tail of the page, which is what makes it a long one.
+    </p>
+    <script>
+      // The other half of the defect: what advances this page is not marked as a control at
+      // all — no role, no link, nothing a screen reader would announce as actionable — and
+      // what it says is not what the task is. A click still navigates, so the recorder can
+      // walk through it; an agent has no reason to touch it.
+      document.getElementById('order-submit').addEventListener('click', () => {
+        location.href = 'done.html';
+      });
+    </script>
+  </body>
+</html>

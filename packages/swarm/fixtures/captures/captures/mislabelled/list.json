@@ -1,0 +1,590 @@
+{
+  "variant": "mislabelled",
+  "step": "list",
+  "screenshot": "screenshots/mislabelled/list.png",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageHeight": 1800,
+  "foldY": 844,
+  "elements": [
+    {
+      "id": "e-34f1f0ff48e4",
+      "source": "dom",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-heading"
+    },
+    {
+      "id": "e-447f4be5985c",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-step-note"
+    },
+    {
+      "id": "e-37f94164f79c",
+      "source": "dom",
+      "role": "button",
+      "name": "Place the order for the canvas tote bag",
+      "text": "Place the order for the canvas tote bag",
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-decoy"
+    },
+    {
+      "id": "e-4164e5c68b45",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Delivery to 14 Mill Lane arrives on Thursday. Returns are free within thirty days of the parcel reaching you.",
+      "text": "Delivery to 14 Mill Lane arrives on Thursday. Returns are free within thirty days of the parcel reaching you.",
+      "bbox": {
+        "x": 16,
+        "y": 204,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-delivery"
+    },
+    {
+      "id": "e-ef99870dc67a",
+      "source": "dom",
+      "role": "region",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 292,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-f9e37f201bfd",
+      "source": "dom",
+      "role": "generic",
+      "name": "One item, in natural",
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 304,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-line-one"
+    },
+    {
+      "id": "e-ff4bff7638b1",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 332,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-remove-one"
+    },
+    {
+      "id": "e-bf0b7c64526f",
+      "source": "dom",
+      "role": "generic",
+      "name": "One item, in enamel",
+      "text": "One item, in enamel",
+      "bbox": {
+        "x": 28,
+        "y": 376,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-line-two"
+    },
+    {
+      "id": "e-85d13775edd2",
+      "source": "dom",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 404,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-remove-two"
+    },
+    {
+      "id": "e-17a00c663e28",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "A promotion code can be entered on the next screen, once the payment details are in.",
+      "text": "A promotion code can be entered on the next screen, once the payment details are in.",
+      "bbox": {
+        "x": 16,
+        "y": 496,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-promo-note"
+    },
+    {
+      "id": "e-cf4bffd85ccc",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged.",
+      "text": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged.",
+      "bbox": {
+        "x": 16,
+        "y": 568,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-terms"
+    },
+    {
+      "id": "e-b2e9efbb571a",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "A return is free, and a refund reaches the card it was paid from within five working days of the parcel arriving back with us.",
+      "text": "A return is free, and a refund reaches the card it was paid from within five working days of the parcel arriving back with us.",
+      "bbox": {
+        "x": 16,
+        "y": 676,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-returns"
+    },
+    {
+      "id": "e-71ad6f88cfdd",
+      "source": "dom",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 860,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-upsell-card"
+    },
+    {
+      "id": "e-8876d4b5358e",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The big blue control above this says what you came to do and does nothing at all. That is the defect this page is: the words are on the wrong element.",
+      "text": "The big blue control above this says what you came to do and does nothing at all. That is the defect this page is: the words are on the wrong element.",
+      "bbox": {
+        "x": 16,
+        "y": 1040,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-faq-one"
+    },
+    {
+      "id": "e-6a945001abc0",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "What finishes this is the quiet grey link below, which says something else entirely. A person reading every word on the page is not told which one it is.",
+      "text": "What finishes this is the quiet grey link below, which says something else entirely. A person reading every word on the page is not told which one it is.",
+      "bbox": {
+        "x": 16,
+        "y": 1132,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-faq-two"
+    },
+    {
+      "id": "e-73e211b5c147",
+      "source": "dom",
+      "role": "generic",
+      "name": "Gift options",
+      "text": "Gift options",
+      "bbox": {
+        "x": 128,
+        "y": 1248,
+        "width": 140,
+        "height": 28
+      },
+      "isPrimaryAction": true,
+      "belowFold": true,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-5752a7cb2e46",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "Fixture site. Nothing below this line is reachable from one page scroll.",
+      "text": "Fixture site. Nothing below this line is reachable from one page scroll.",
+      "bbox": {
+        "x": 16,
+        "y": 1340,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-footnote"
+    },
+    {
+      "id": "e-b8c6885e943e",
+      "source": "dom",
+      "role": "paragraph",
+      "name": "The tail of the page, which is what makes it a long one.",
+      "text": "The tail of the page, which is what makes it a long one.",
+      "bbox": {
+        "x": 16,
+        "y": 1560,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-tail"
+    },
+    {
+      "id": "e-50cd3783bc29",
+      "source": "a11y",
+      "role": "heading",
+      "name": "Checkout",
+      "text": "Checkout",
+      "bbox": {
+        "x": 16,
+        "y": 24,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-heading"
+    },
+    {
+      "id": "e-e2bdea56e35f",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Step three of four. Nothing here is a real shop: these pages exist so a swarm can be driven with no network at all.",
+      "bbox": {
+        "x": 16,
+        "y": 72,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-step-note"
+    },
+    {
+      "id": "e-48f9b75c057f",
+      "source": "a11y",
+      "role": "button",
+      "name": "Place the order for the canvas tote bag",
+      "text": "Place the order for the canvas tote bag",
+      "bbox": {
+        "x": 16,
+        "y": 140,
+        "width": 358,
+        "height": 48
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-decoy"
+    },
+    {
+      "id": "e-eea568307f3d",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Delivery to 14 Mill Lane arrives on Thursday. Returns are free within thirty days of the parcel reaching you.",
+      "bbox": {
+        "x": 16,
+        "y": 204,
+        "width": 358,
+        "height": 72
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-delivery"
+    },
+    {
+      "id": "e-4cae9dce3c4e",
+      "source": "a11y",
+      "role": "region",
+      "name": "Items",
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 292,
+        "width": 358,
+        "height": 180
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#order-panel"
+    },
+    {
+      "id": "e-08efe098cb00",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "A promotion code can be entered on the next screen, once the payment details are in.",
+      "bbox": {
+        "x": 16,
+        "y": 496,
+        "width": 358,
+        "height": 56
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-promo-note"
+    },
+    {
+      "id": "e-f8c80a3b4ee7",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "By continuing you agree to the fixture terms: nothing is bought, nothing is shipped and nobody is charged.",
+      "bbox": {
+        "x": 16,
+        "y": 568,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-terms"
+    },
+    {
+      "id": "e-deb1b7984777",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "A return is free, and a refund reaches the card it was paid from within five working days of the parcel arriving back with us.",
+      "bbox": {
+        "x": 16,
+        "y": 676,
+        "width": 358,
+        "height": 96
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-returns"
+    },
+    {
+      "id": "e-7fd409f1a909",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 16,
+        "y": 860,
+        "width": 358,
+        "height": 160
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-upsell-card"
+    },
+    {
+      "id": "e-e82edf6a9932",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The big blue control above this says what you came to do and does nothing at all. That is the defect this page is: the words are on the wrong element.",
+      "bbox": {
+        "x": 16,
+        "y": 1040,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-faq-one"
+    },
+    {
+      "id": "e-9e08fa8a7889",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "What finishes this is the quiet grey link below, which says something else entirely. A person reading every word on the page is not told which one it is.",
+      "bbox": {
+        "x": 16,
+        "y": 1132,
+        "width": 358,
+        "height": 76
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-faq-two"
+    },
+    {
+      "id": "e-a28a7597638d",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "Gift options",
+      "bbox": {
+        "x": 128,
+        "y": 1248,
+        "width": 140,
+        "height": 28
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#order-submit"
+    },
+    {
+      "id": "e-4411e57827ae",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "Fixture site. Nothing below this line is reachable from one page scroll.",
+      "bbox": {
+        "x": 16,
+        "y": 1340,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-footnote"
+    },
+    {
+      "id": "e-94a0c1ff4dee",
+      "source": "a11y",
+      "role": "paragraph",
+      "name": null,
+      "text": "The tail of the page, which is what makes it a long one.",
+      "bbox": {
+        "x": 16,
+        "y": 1560,
+        "width": 358,
+        "height": 40
+      },
+      "isPrimaryAction": false,
+      "belowFold": true,
+      "selector": "#mislabelled-tail"
+    },
+    {
+      "id": "e-229299c3d3b7",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "One item, in natural",
+      "bbox": {
+        "x": 28,
+        "y": 304,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-line-one"
+    },
+    {
+      "id": "e-1567d8210b9c",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 332,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-remove-one"
+    },
+    {
+      "id": "e-5c73a48fbabe",
+      "source": "a11y",
+      "role": "generic",
+      "name": null,
+      "text": "One item, in enamel",
+      "bbox": {
+        "x": 28,
+        "y": 376,
+        "width": 240,
+        "height": 20
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-line-two"
+    },
+    {
+      "id": "e-4ded700b5743",
+      "source": "a11y",
+      "role": "button",
+      "name": "Remove",
+      "text": "Remove",
+      "bbox": {
+        "x": 28,
+        "y": 404,
+        "width": 120,
+        "height": 32
+      },
+      "isPrimaryAction": false,
+      "belowFold": false,
+      "selector": "#mislabelled-remove-two"
+    }
+  ],
+  "contentHash": "6cb2a0618ec4fbf1"
+}
