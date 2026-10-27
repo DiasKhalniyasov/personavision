@@ -133,25 +133,31 @@ export function segmentBars(run: Run, rows: readonly SessionRow[]): readonly Seg
     }),
   );
 
-  // One unknown-person row per version that has such a session, and none where there is
-  // none: an empty row on a version nothing landed in would be a gap the run does not have.
-  const strays = [...new Set(rows.filter(isUnknown).map((row) => row.variant))];
-  const unknown = strays.map((variant) => {
-    const key = groupKey(UNKNOWN, variant);
-    const named = run.variants.find((candidate) => candidate.id === variant);
-    return {
-      key,
-      variant,
-      variantName: named?.name ?? variant,
-      personaName: null,
-      segment: null,
-      deviceName: null,
-      counts: countsAt(key),
-      total: totalOf(countsAt(key)),
-    };
-  });
+  // Whatever the grid did not claim keeps a row of its own at the foot, in the manifest's
+  // order: a person the run never listed, an imported real session with no persona at all,
+  // or a version the run's own list does not name. This is the only place a count could
+  // otherwise be lost, and losing one would quietly change what the test measured.
+  const claimed = new Set(known.map((bar) => bar.key));
+  const stray = [...gathered.keys()]
+    .filter((key) => !claimed.has(key))
+    .map((key) => {
+      const [personaId = '', variant = ''] = key.split('\u0000');
+      // An unknown-person key carries no id, and no persona has the empty name.
+      const persona = run.personas.find((candidate) => candidate.id === personaId);
+      const named = run.variants.find((candidate) => candidate.id === variant);
+      return {
+        key,
+        variant,
+        variantName: named?.name ?? variant,
+        personaName: persona?.name ?? null,
+        segment: persona?.segment ?? null,
+        deviceName: persona?.device.name ?? null,
+        counts: countsAt(key),
+        total: totalOf(countsAt(key)),
+      };
+    });
 
-  return [...known, ...unknown];
+  return [...known, ...stray];
 }
 
 /**
@@ -189,7 +195,10 @@ export function SegmentsSection({ run }: { run: Run }) {
         ) : (
           <>
             {reading ? (
-              <Reserved rows={states.length} />
+              // The grid is `personas × variants`, which the run names before a single
+              // session file is read, so the reservation is the list's own height and not
+              // an approximation of it.
+              <Reserved rows={run.personas.length * run.variants.length} />
             ) : (
               <Bars bars={segmentBars(run, read)} unreadable={unreadable} />
             )}

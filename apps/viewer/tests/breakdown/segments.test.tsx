@@ -10,6 +10,7 @@ import { loadDesignTokens } from '../setup';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../app';
 import { axePass, describeViolations } from '../axe';
 import { paths } from '../../src/shell/paths';
+import { sessionRow } from '../../src/session';
 import { SegmentsSection, segmentBars } from '../../src/screens/breakdown/SegmentsSection';
 import { SEED_RUN_ID, seedRun } from '../verdict/fixture';
 
@@ -196,6 +197,23 @@ describe('one row per generated person, per version', () => {
     expect(blocks).toEqual([shared, alone]);
   });
 
+  it('keeps a row for a session on a version the run never listed, rather than losing its count', () => {
+    // The contract does not forbid it, and this section's whole premise is that no
+    // session is dropped: the count would otherwise fall out of every bar in silence.
+    const run = seedRun();
+    const persona = run.personas[0] as Run['personas'][number];
+    const session = sessionFile('S-01');
+    const row = sessionRow(run, { ...session, variant: 'C', persona: session.persona });
+
+    const bars = segmentBars(run, [row]);
+
+    expect(bars).toHaveLength(run.personas.length * run.variants.length + 1);
+    const stray = bars[bars.length - 1] as (typeof bars)[number];
+    expect(stray.variant).toBe('C');
+    expect(stray.personaName).toBe(persona.name);
+    expect(stray.total).toBe(1);
+  });
+
   it('keeps a row for a person who ran on neither version, rather than dropping them', () => {
     const run = seedRun();
     const bars = segmentBars(run, []);
@@ -356,7 +374,9 @@ describe('the section’s own states', () => {
     const reserved = container.querySelector('[data-section="segments-loading"]') as HTMLElement;
     expect(reserved).not.toBeNull();
     expect(reserved.getAttribute('aria-busy')).toBe('true');
-    expect(reserved.children).toHaveLength(run.sessionIds.length);
+    // As many placeholders as there will be rows — `personas × variants`, which the run
+    // names before a session file is read — and not one per session file.
+    expect(reserved.children).toHaveLength(run.personas.length * run.variants.length);
     expect(container.querySelectorAll('.segbar')).toHaveLength(0);
   });
 
@@ -504,6 +524,12 @@ describe('the stylesheet', () => {
 
   it('takes the excluded band from --attr-automation, an attribution and not an outcome', () => {
     expect(rule('.stack .au, .legend .au').background).toBe('var(--attr-automation)');
+  });
+
+  it('reserves a whole row’s height while the sessions are read, not a bar’s', () => {
+    // 40px: two lines of label against two lines of counts. A reservation the height of
+    // the bar alone would let the legend travel up the page as the counts land.
+    expect(rule('.segbar-reserve')['min-block-size']).toBe('var(--space-10)');
   });
 
   it('stacks each row’s label above its bar below the prototype’s breakpoint', () => {
