@@ -15,6 +15,9 @@
  */
 
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -751,12 +754,15 @@ describeWithChromium('candidate elements', () => {
     'carries the elements into a capture',
     async () => {
       const handle = await open(MOBILE, '/cart.html');
+      // The cart page is on one of the task's steps, so this capture writes an image.
+      // It goes to a temporary directory, not into the repository.
+      const runDir = await mkdtemp(join(tmpdir(), 'personavision-elements-'));
       try {
         const captured = await capture(handle, {
           variant: VARIANT_ID,
           device: MOBILE,
           task: TASK,
-          runDir: 'runs/elements-test',
+          runDir,
         });
 
         expect(captured.elements.length).toBeGreaterThan(CART.length);
@@ -766,6 +772,7 @@ describeWithChromium('candidate elements', () => {
         expect(checkout.belowFold).toBe(false);
       } finally {
         await closeSession(handle);
+        await rm(runDir, { recursive: true, force: true });
       }
     },
     BROWSER_TIMEOUT_MS,
