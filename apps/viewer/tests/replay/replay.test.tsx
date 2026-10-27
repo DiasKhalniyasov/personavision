@@ -316,6 +316,19 @@ describe('a session with no fixations', () => {
     expect(disabled('Next fixation')).toBe(true);
     expect(screen.getByText(/No fixations were recorded for this person/)).toBeTruthy();
   });
+
+  it('still reads as a transcript, with rows that do not offer to move the scrubber', async () => {
+    await serveRunData({ files: noFixations() });
+    const { container } = mountApp(replay('S-15'));
+    await ready();
+
+    expect(rows(container, 1)).toEqual([
+      '0:14 | type · Card number · autofilled',
+      '0:26 | click · Place order · $129.00',
+    ]);
+    expect(container.querySelectorAll('[data-event]')).not.toHaveLength(0);
+    expect(container.querySelectorAll('button[data-event]')).toHaveLength(0);
+  });
 });
 
 /** The cards in the right-hand column, by the order they are rendered in. */

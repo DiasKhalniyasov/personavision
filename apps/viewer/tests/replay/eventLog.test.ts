@@ -162,6 +162,60 @@ describe('the events of a screen', () => {
   });
 });
 
+describe('a screen the person never looked at', () => {
+  /** S-15 with the gaze on the payment screen gone, which is a screen with no fixations. */
+  const unlooked = (): Session => {
+    const kept = session.fixations.filter((fixation) => fixation.screenIndex !== 1);
+    return {
+      ...session,
+      fixations: kept.map((fixation, index) => ({ ...fixation, index })),
+      saccades: [],
+    };
+  };
+
+  it('still files its actions under it, because the run names the step each area is on', () => {
+    const log = at(unlooked(), 0);
+
+    // The clock cannot place them — it has no gaze on that screen to place them by — but
+    // "Card number" is an area of the payment step, so the row belongs to the payment card.
+    expect(log.cards[1]?.events.map((event) => `${event.time} ${event.kind}`)).toEqual([
+      '0:14 type',
+      '0:26 click',
+    ]);
+    expect(log.cards[1]?.meta).toBe('no fixations · no time on the clock');
+    // And it is not claiming the person typed their card number on the cart.
+    expect(log.cards[0]?.events.map((event) => event.kind)).not.toContain('type');
+  });
+
+  it('keeps the card before it on the clock for as long as the clock keeps it active', () => {
+    // Nothing moved the clock on at 0:10, because nothing was looked at on the payment
+    // screen, so the cart really was the screen the replay shows until 0:29.
+    expect(at(unlooked(), 0).cards[0]?.meta).toBe('fixations 1–7 · 0:00–0:29');
+    expect(at(unlooked(), 20000).cards.map((card) => card.active)).toEqual([true, false, false]);
+  });
+});
+
+describe('a session that recorded no fixations', () => {
+  const gazeless = (): Session => ({ ...session, fixations: [], saccades: [] });
+
+  it('reads as a transcript, with no row offering to move a scrubber that cannot move', () => {
+    const log = at(gazeless(), 0);
+
+    expect(log.cards.flatMap((card) => card.events).map((event) => event.fixationNumber)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(log.cards[1]?.events.map((event) => event.target)).toEqual([
+      'Card number',
+      'Place order · $129.00',
+    ]);
+  });
+});
+
 describe('following the scrubber', () => {
   it('marks the card covering the moment, and only that one', () => {
     expect(at(session, AT_FIXATION_12).cards.map((card) => card.active)).toEqual([
@@ -190,13 +244,28 @@ describe('following the scrubber', () => {
     expect(moment.eventLogRow?.target).toBe('Place order · $129.00');
   });
 
-  it('sends a row click to the fixation the model reports at that moment', () => {
+  it('sends a row click to the nearest moment the scrubber has, on the row’s own card', () => {
     const log = at(session, AT_FIXATION_12);
 
     // A fixation row goes to its own number, continuous across the session.
     expect(row(log, 2, 'read:19')?.fixationNumber).toBe(20);
-    // An action carries no fixation of its own, so it goes to the nearest one that exists.
+    // An action carries no fixation of its own, so it goes to the nearest one on its card:
+    // the click at 0:08 is 52 ms from fixation 7 and 1.3 s from fixation 6.
+    expect(row(log, 0, 'action:0')?.fixationNumber).toBe(7);
     expect(row(log, 2, 'action:5')?.fixationNumber).toBe(23);
     expect(row(log, 1, 'action:3')?.fixationNumber).toBe(19);
+  });
+
+  it('prints an area the run does not declare rather than leaving the row with no object', () => {
+    const strayArea = {
+      ...session,
+      actions: session.actions.map((action, index) =>
+        index === 0 ? { ...action, target: null, aoiId: 'B-cart-gone' } : action,
+      ),
+    };
+
+    expect(row(at(strayArea as Session, AT_FIXATION_12), 0, 'action:0')?.target).toBe(
+      'B-cart-gone',
+    );
   });
 });

@@ -40,8 +40,11 @@ export interface LogEvent {
   readonly target: string | null;
   /** The figure behind the row — a dwell, a scroll offset, what was typed. */
   readonly detail: string | null;
-  /** Where clicking this row sends the scrubber. */
-  readonly fixationNumber: number;
+  /**
+   * Where clicking this row sends the scrubber: `null` in a session that recorded no
+   * fixations, where the scrubber is disabled and the log is read rather than walked.
+   */
+  readonly fixationNumber: number | null;
   /** The row the session model reports for the scrubber's moment. */
   readonly current: boolean;
   /**
@@ -80,17 +83,26 @@ export const NOTHING_RECORDED = 'no actions recorded on this screen';
 /**
  * When each screen came up and when it gave way to the next.
  *
- * A screen carries no timestamp, so its boundary is the first fixation recorded on it, and
- * the session starts on its first screen — the same rule the session model's clock uses, so
- * the card that says `0:10–0:29` is the card the clock makes active over that stretch. The
- * starts are kept non-decreasing, which leaves a screen nobody looked at covering no time
- * rather than swallowing its neighbour's.
+ * A screen carries no timestamp of its own, so the boundaries are **asked of the clock**
+ * rather than worked out again here: a screen came up at the first fixation the model
+ * answers with that screen, and the session starts on its first screen. The card that
+ * reads `0:10–0:29` is therefore exactly the card the clock marks active over that
+ * stretch, however the model resolves a tie.
+ *
+ * A stretch can outlast its own fixations: when the next screen was never looked at, the
+ * clock has nothing to move on to and keeps this one on. That is what the clock says, so
+ * it is what the header says.
  */
-function screenSpans(session: Session): ReadonlyArray<{ startMs: number; endMs: number }> {
+function screenSpans(
+  session: Session,
+  timeline: SessionTimeline,
+): ReadonlyArray<{ startMs: number; endMs: number }> {
   const starts: number[] = [];
   session.screens.forEach((_screen, index) => {
-    const first = session.fixations.find((fixation) => fixation.screenIndex === index);
     const previous = starts[index - 1] ?? 0;
+    const first = session.fixations.find(
+      (fixation) => timeline.at(fixation.tMs).screenIndex === index,
+    );
     starts.push(index === 0 ? 0 : Math.max(first?.tMs ?? previous, previous));
   });
   return starts.map((startMs, index) => ({
@@ -101,9 +113,40 @@ function screenSpans(session: Session): ReadonlyArray<{ startMs: number; endMs: 
   }));
 }
 
-/** What the run calls the area a fixation or an action landed on. */
-function aoiLabels(run: Run): Map<string, string> {
-  return new Map(run.aois.map((aoi) => [aoi.id, aoi.label]));
+/** What the run calls the area a fixation or an action landed on, and which step it is on. */
+function aoiWords(run: Run): Map<string, { label: string; step: string }> {
+  return new Map(run.aois.map((aoi) => [aoi.id, { label: aoi.label, step: aoi.step }]));
+}
+
+/**
+ * Which card an action belongs under.
+ *
+ * An action carries no screen of its own, so the clock is the general answer: the screen
+ * the model says was on at that time. But the clock's boundaries come from the gaze, so a
+ * screen nobody looked at is never the clock's answer and its actions would be filed under
+ * the screen before it — this column would then say the person typed their card number on
+ * the cart. Where the run names the area an action resolved to, that area names the step
+ * it belongs to, which settles it; the nearest screen on that step to the clock's answer
+ * is the one, so a session that walks the same step twice still files each visit's actions
+ * under the visit they happened on.
+ */
+function cardForAction(session: Session, step: string | null, byClock: number): number {
+  if (step === null || session.screens[byClock]?.step === step) return byClock;
+  let best: number | null = null;
+  session.screens.forEach((screen, index) => {
+    if (screen.step !== step) return;
+    if (best === null || Math.abs(index - byClock) <= Math.abs(best - byClock)) best = index;
+  });
+  return best ?? byClock;
+}
+
+/** The fixation nearest in time among a card's own, so a row click never leaves its card. */
+function nearestOnCard(own: readonly Fixation[], tMs: number): Fixation | null {
+  let best: Fixation | null = null;
+  own.forEach((fixation) => {
+    if (best === null || Math.abs(fixation.tMs - tMs) < Math.abs(best.tMs - tMs)) best = fixation;
+  });
+  return best;
 }
 
 /** The figure behind an action, in the words the session records it in. */
@@ -168,9 +211,12 @@ export function eventLog({
     };
   }
 
-  const spans = screenSpans(session);
-  const labels = aoiLabels(run);
+  const spans = screenSpans(session, timeline);
+  const areas = aoiWords(run);
   const lastCard = session.screens.length - 1;
+  const ownFixations = session.screens.map((_screen, index) =>
+    session.fixations.filter((fixation) => fixation.screenIndex === index),
+  );
   const placed: Placed[] = [];
 
   session.fixations.forEach((fixation) => {
@@ -182,7 +228,8 @@ export function eventLog({
         tMs: fixation.tMs,
         time: timeLabel(fixation.tMs),
         kind: 'read',
-        target: fixation.aoiId === null ? null : (labels.get(fixation.aoiId) ?? fixation.aoiId),
+        target:
+          fixation.aoiId === null ? null : (areas.get(fixation.aoiId)?.label ?? fixation.aoiId),
         detail: fixationDetail(fixation),
         fixationNumber: fixation.index + 1,
         inconsistency: known
@@ -194,9 +241,14 @@ export function eventLog({
 
   session.actions.forEach((action, index) => {
     const at = timeline.at(action.tMs);
-    const label = action.aoiId === null ? null : (labels.get(action.aoiId) ?? null);
+    const area = action.aoiId === null ? null : (areas.get(action.aoiId) ?? null);
+    // An aoi id the run does not declare is still what the session says this action hit,
+    // so the id itself is printed rather than the row losing its object.
+    const label = action.aoiId === null ? null : (area?.label ?? action.aoiId);
+    const screenIndex = cardForAction(session, area?.step ?? null, at.screenIndex ?? lastCard);
+    const nearest = nearestOnCard(ownFixations[screenIndex] ?? [], action.tMs);
     placed.push({
-      screenIndex: at.screenIndex ?? lastCard,
+      screenIndex,
       event: {
         key: `action:${index}`,
         tMs: action.tMs,
@@ -207,9 +259,16 @@ export function eventLog({
           [actionDetail(action), action.ok ? null : 'this action did not resolve']
             .filter((part) => part !== null)
             .join(' · ') || null,
-        // The scrubber's unit is a fixation, so a row with no fixation of its own moves it to
-        // the one the model reports at that moment — the nearest position that exists.
-        fixationNumber: at.fixationNumber ?? 1,
+        // The scrubber's unit is a fixation, so an action — which has none of its own —
+        // moves it to the nearest fixation on its own card. That is the closest position
+        // the scrubber has to the moment, and it keeps the frame on the screen the row
+        // sits under rather than stepping off it.
+        fixationNumber:
+          timeline.fixationCount === 0
+            ? null
+            : nearest === null
+              ? (at.fixationNumber ?? 1)
+              : nearest.index + 1,
         inconsistency: null,
       },
     });
@@ -218,7 +277,7 @@ export function eventLog({
   const current = currentKey(moment);
 
   const cards = session.screens.map((screen, index): ScreenCard => {
-    const own = session.fixations.filter((fixation) => fixation.screenIndex === index);
+    const own = ownFixations[index] ?? [];
     const span = spans[index] as { startMs: number; endMs: number };
     // A screen nobody looked at is not placed on the clock at all: a screen carries no
     // timestamp of its own, so with no fixation on it nothing says when the person was

@@ -10,8 +10,10 @@ import styles from './replay.module.css';
  *
  * It follows the scrubber — the card covering the scrubber's moment is marked, and so is the
  * row for the latest thing that had happened by then — and it works the other way too:
- * every row is a button that moves the scrubber to that moment, so the log is how a reader
- * navigates the session as well as how they read it.
+ * every row moves the scrubber to the nearest moment the scrubber has. A gaze row has a
+ * fixation of its own; an action is taken to the nearest fixation on its own screen, since
+ * the scrubber's unit is a fixation and the frame must not step off the screen the row sits
+ * under. So the log is how a reader navigates the session as well as how they read it.
  *
  * This is the replay's **accessible representation**. The frame is a picture; this column is
  * the same session in words, down to how long each fixation was held, so somebody who
@@ -73,26 +75,45 @@ function Card({ card, onGoTo }: { card: ScreenCard; onGoTo: (fixationNumber: num
         <ul className={styles.events}>
           {card.events.map((event) => (
             <li key={event.key}>
-              <button
-                type="button"
-                className={styles.event}
-                data-event={event.key}
-                aria-current={event.current ? 'true' : undefined}
-                onClick={() => onGoTo(event.fixationNumber)}
-              >
-                <span className={styles.t}>{event.time}</span>
-                <span>
-                  <span className={styles.kind}>{event.kind}</span>
-                  {words(event).map((part, at) => (
-                    <span key={at}> &middot; {part}</span>
-                  ))}
-                </span>
-              </button>
+              <Row event={event} onGoTo={onGoTo} />
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * One row. It is a control wherever the scrubber has somewhere to go — which is every
+ * session that recorded a fixation. A session that recorded none has a disabled scrubber,
+ * so its rows are read rather than walked, and a button that could not move anything would
+ * be a promise the screen cannot keep.
+ */
+function Row({ event, onGoTo }: { event: LogEvent; onGoTo: (fixationNumber: number) => void }) {
+  const body = (
+    <>
+      <span className={styles.t}>{event.time}</span>
+      <span>
+        <span className={styles.kind}>{event.kind}</span>
+        {words(event).map((part, at) => (
+          <span key={at}> &middot; {part}</span>
+        ))}
+      </span>
+    </>
+  );
+  const shared = {
+    className: styles.event,
+    'data-event': event.key,
+    'aria-current': event.current ? ('true' as const) : undefined,
+  };
+
+  if (event.fixationNumber === null) return <span {...shared}>{body}</span>;
+
+  return (
+    <button type="button" {...shared} onClick={() => onGoTo(event.fixationNumber as number)}>
+      {body}
+    </button>
   );
 }
 
