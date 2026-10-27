@@ -1,0 +1,187 @@
+/* =============================================================================
+   The stage of `#screen-attention` in `docs/design/prototype.html`: `#att-frame`,
+   `#att-page`, the `.fold` marker and its label, the overlay layer surfaces, the
+   `.aoibox` / `.aoilabel` outlines, and the Overlays panel's `.toggles`.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies.
+
+   Two stated refinements of the prototype, both because the prototype has no
+   screenshot to show and this screen does:
+
+   1. `.frame` scrolls. The prototype's is `overflow: hidden` around a page it
+      draws to fit; here the content is a whole captured page, often four times
+      taller than it is wide, so the frame is the window onto it. Its border,
+      radius, shadow and desktop ratio are the prototype's own.
+   2. The frame keeps `--frame-ratio-desktop` for a mobile-emulated capture too,
+      and does not take the prototype's `.is-mobile` phone shell. That shell is a
+      picture of a device holding one viewport, which is the replay's job (#22);
+      this frame is a scroll window onto a whole page, and `--frame-width-mobile`
+      would leave a page the reader has come to examine three hundred pixels
+      wide. Which viewport the capture was taken on is said in words, on the
+      fold's own label.
+   ========================================================================== */
+
+.stage {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* ---- The row above the frame ------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* The group inside is the registry's `toggle-group`, restyled by nothing: the
+   Tailwind theme already maps its radius, type and fill onto the tokens. */
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---- The frame, and the page inside it ---------------------------------- */
+
+.frame {
+  position: relative;
+  overflow: auto;
+  aspect-ratio: var(--frame-ratio-desktop);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+/* The screenshot's own box, in the pixels it was captured in and scaled by the
+   zoom. The image, every overlay layer and the fold are all inside it, so the
+   zoom scales and the frame scrolls one object: nothing drawn in page
+   coordinates can come out of register with the page under it.
+
+   `margin-inline: auto` centres a capture narrower than the frame — a phone's
+   390 pixels in a frame twice that — and is simply ignored once the page is the
+   wider of the two, where an automatic margin computes to zero and the overflow
+   scrolls from its own left edge. A grid's centring would not: it leaves the
+   start of a too-wide child unreachable. */
+.page {
+  position: relative;
+  margin-inline: auto;
+}
+
+.page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Dimmed so what is drawn over it reads on top — and only then. */
+.frame[data-dim] .page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--screenshot-scrim);
+}
+
+/* A screenshot that is missing or will not load leaves the frame and its box in
+   place and says so, naming the file: a blank frame on this screen would read as
+   "your audience saw nothing", which is the one thing it must never say. */
+.unreadable {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* ---- The fold ---------------------------------------------------------- */
+
+.fold {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  border-top: var(--border-width) dashed var(--color-border-strong);
+  pointer-events: none;
+}
+
+.fold span {
+  position: absolute;
+  right: var(--space-2);
+  padding-inline: var(--space-1);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* ---- The overlay layers ------------------------------------------------- */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.layer svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- The areas of interest --------------------------------------------- */
+
+.aoibox {
+  fill: none;
+  stroke: var(--gaze-aoi);
+  stroke-width: var(--border-width);
+  stroke-dasharray: var(--gaze-aoi-dash);
+}
+
+/* The isolated area, in the teal that is this screen's word for "this is the one
+   you asked about" — data, never the action colour. */
+.aoibox.isolated {
+  stroke: var(--gaze-aoi-active);
+  stroke-width: var(--border-width-strong);
+  stroke-dasharray: none;
+}
+
+/* A length inside the `viewBox` is in overlay units, and the type token is in
+   CSS pixels: dividing by `--overlay-unit` is the conversion between the two,
+   and is why the label is the token's own size over a narrow capture and over a
+   wide one alike. The layer sets that property from the capture it is drawn
+   over; the fallback is what this rule means on its own, and no value here is
+   this stylesheet's to declare. */
+.aoilabel {
+  fill: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: calc(var(--text-2xs) / var(--overlay-unit, 1));
+  font-weight: var(--weight-medium);
+}
+
+/* ---- The Overlays panel ------------------------------------------------- */
+
+.toggles {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The prototype's rows are labels in a column, so the switch fills its row and
+   reads from the left. The primitive centres its content and sizes itself to a
+   square, which is right for an icon button and not for this. */
+.toggle {
+  width: 100%;
+  justify-content: flex-start;
+  height: auto;
+  min-width: 0;
+  padding-block: var(--space-1);
+}
