@@ -480,6 +480,10 @@ it('is pure: nothing under src/aois reaches for a file, a socket or an unseeded 
     // below are what *this package* may not ask for, and the heuristic asks for none.
     'heuristic-segmenter.ts',
     'index.ts',
+    // #69's SAM 3.1 segmenter is here too, and it is in this scan rather than exempt from
+    // it: its HTTP call and its screenshot read are injected, so the module itself names
+    // no socket and no file and the engine stays pure with the model path in it.
+    'sam-segmenter.ts',
     'segmenter.ts',
   ]);
   for (const forbidden of [

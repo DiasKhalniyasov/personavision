@@ -210,6 +210,12 @@ describe('only the one sanctioned place reads a credential', () => {
     // The live test reads it only to decide whether to run at all: with no key it skips,
     // visibly and with the reason in its name, which is how CI makes no call.
     'packages/provider/tests/meta-model-live.test.ts',
+    // `#69`'s SAM 3.1 live test, for the same reason and with one more lock: it needs the
+    // key *and* an explicit opt-in, because the owner deferred SAM 3.1 and a key alone is
+    // present on the owner's machine for every other model call. `packages/engine` itself
+    // reads no credential — its segmenter is handed one — so the engine's own sources stay
+    // outside this exception.
+    'packages/engine/tests/sam-segmenter.test.ts',
   ];
 
   it('reads no API key from the environment and holds no CI secret', () => {
