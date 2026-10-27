@@ -174,7 +174,7 @@ Every case, with the field it is named at:
 | A participant with no id, or two scanpaths under one id | `participants[i].participantId` |
 | No fixations | `participants[i].fixations` |
 | An onset, dwell or coordinate that is not a finite, non-negative number | `participants[i].fixations[j].{tMs,durationMs,x,y}` |
-| Timestamps out of order, or two fixations overlapping | `participants[i].fixations[j].tMs` |
+| Timestamps out of order: an onset that is not after the one before it, or that is before the one before it ends | `participants[i].fixations[j].tMs` |
 | A fixation beginning after the exposure | `participants[i].fixations[j].tMs` |
 | A fixation outside the image | `participants[i].fixations[j].x`, `…y` |
 | A session the contract's schema does not accept — a defect here, not in the record | `session.<path>` |

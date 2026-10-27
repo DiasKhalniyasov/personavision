@@ -196,6 +196,11 @@ export const malformedRawRecords = (): readonly MalformedRawRecord[] => [
     record: withScanpath(webpageRecord(), 2, { participantId: '  ' }),
   },
   {
+    case: 'two fixations at one instant, the first dwelling for no time',
+    field: 'participants[0].fixations[1].tMs',
+    record: withFixation(withFixation(webpageRecord(), 0, 0, { durationMs: 0 }), 0, 1, { tMs: 0 }),
+  },
+  {
     case: 'a fixation beginning after the exposure',
     field: 'participants[0].fixations[2].tMs',
     record: withFixation(webpageRecord(), 0, 2, { tMs: 7001 }),

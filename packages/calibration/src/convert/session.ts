@@ -441,12 +441,16 @@ const convertFixations = (
     const previous = index === 0 ? null : scanpath.fixations[index - 1];
     if (previous !== null) {
       const previousEnd = previous.tMs + previous.durationMs;
-      if (fixation.tMs < previousEnd) {
+      // Strictly after the previous onset *and* not before its dwell ends. The second
+      // condition is the overlap; the first is what makes a session's onsets strictly
+      // increasing even where a dwell is zero, which is what a replay's scrubber reads.
+      if (fixation.tMs <= previous.tMs || fixation.tMs < previousEnd) {
         throw rejection(
           recordId,
           at(index, 'tMs'),
-          `is ${fixation.tMs} ms, which is not after fixation ${index - 1}, whose dwell ends at ` +
-            `${previousEnd} ms: a scanpath's fixations run forwards in time and do not overlap`,
+          `is ${fixation.tMs} ms, and fixation ${index - 1} begins at ${previous.tMs} ms and ` +
+            `ends at ${previousEnd} ms: a scanpath's fixations run forwards in time, one after ` +
+            'another, and never overlap',
         );
       }
     }
