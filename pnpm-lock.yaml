@@ -183,15 +183,30 @@ importers:
 
   packages/cli:
     dependencies:
+      '@personavision/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@personavision/calibration':
         specifier: workspace:*
         version: link:../calibration
       '@personavision/contract':
         specifier: workspace:*
         version: link:../contract
+      '@personavision/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@personavision/personas':
+        specifier: workspace:*
+        version: link:../personas
       '@personavision/platform':
         specifier: workspace:*
         version: link:../platform
+      '@personavision/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@personavision/swarm':
+        specifier: workspace:*
+        version: link:../swarm
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -201,7 +216,13 @@ importers:
       sirv:
         specifier: ^3.0.2
         version: 3.0.2
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
+      playwright:
+        specifier: ^1.64.1
+        version: 1.64.1
       tsx:
         specifier: ^4.23.15
         version: 4.23.15

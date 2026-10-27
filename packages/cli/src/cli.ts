@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIT_DEFAULTS } from '@personavision/calibration';
 import { DEFAULT_PORT as DEFAULT_SERVE_PORT } from '@personavision/platform';
+import { DEFAULT_MODEL_MODE } from '@personavision/provider';
 import { Command } from 'commander';
 import { CliError } from './cli-error.js';
 import {
@@ -16,6 +17,7 @@ import { openCommand } from './commands/open.js';
 import { runCommand } from './commands/run.js';
 import { serveCommand } from './commands/serve.js';
 import { validateCommand } from './commands/validate.js';
+import { DEFAULT_AUDIENCE } from './run/audience.js';
 import { DEFAULT_PORT } from './server.js';
 
 /**
@@ -110,7 +112,10 @@ program
 program
   .command('run')
   .description(
-    'Parse the arguments the New test form submits into a RunRequest. It does not run a test yet.',
+    [
+      'Run a swarm: the audience’s people walk the task on each version, and each session is printed as it finishes.',
+      'The run directory it writes is the one the app reads — the same pipeline the New test form submits to.',
+    ].join('\n'),
   )
   .option(
     '--url <url>',
@@ -124,9 +129,12 @@ program
     '',
   )
   .option(
+    '--audience <name|path>',
+    `the audience the test is for — a committed preset by name, or the path of a JSON file; the people are generated from it (${DEFAULT_AUDIENCE.id} by default)`,
+  )
+  .option(
     '--personas <audienceId>',
-    'the audience the test is for, by id; the people are generated from it',
-    'default',
+    'the same as --audience, under the name this command has always published it with',
   )
   .option('--repeats <count>', 'sessions per person per version', '3')
   .option(
@@ -134,22 +142,43 @@ program
     'base seed; the same seed and the same person reproduce a session exactly',
     '1',
   )
-  .option('--engine <mode>', 'offline (deterministic, no API key) or model', 'offline')
+  .option(
+    '--engine <mode>',
+    'offline (deterministic, no API key) or model; offline by default, and a model run with no key in the environment is recorded and run as offline rather than upgraded',
+  )
+  .option(
+    '--mode <modelMode>',
+    `which model a model run calls: contributor (cheap, and Meta may use the content to train its models) or standard (the published prices, content not used for training). ${DEFAULT_MODEL_MODE} by default, because this command is the internal tool`,
+    DEFAULT_MODEL_MODE,
+  )
+  .option(
+    '--steps <file>',
+    'a JSON file declaring the task’s steps — each with the URL pattern and required element that recognise it and the selector that advances it; without one the page is the task’s single step',
+  )
   .action(
-    (options: {
+    async (options: {
       url: string[];
       task: string;
-      personas: string;
+      audience?: string;
+      personas?: string;
       repeats: string;
       seed: string;
-      engine: string;
+      engine?: string;
+      mode: string;
+      steps?: string;
     }) => {
-      runCommand(options);
+      await runCommand({
+        ...options,
+        runsRoot: runsRoot(),
+        // One argument under two names: `--audience` is what it is, `--personas` is what the
+        // published surface calls it, and the newer name wins where both are passed.
+        audience: options.audience ?? options.personas ?? DEFAULT_AUDIENCE.id,
+      });
     },
   )
   .addHelpText(
     'after',
-    '\nExample:\n  personavision run --url http://localhost:4173/checkout-a --task "Buy the boots" --personas default --repeats 3\n',
+    '\nExample:\n  personavision run --url http://localhost:4173/checkout-a --task "Buy the boots" --audience outdoor-gear-shoppers --repeats 3\n',
   );
 
 program
