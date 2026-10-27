@@ -77,12 +77,12 @@ sees what this document says. A name recorded as — is empty in the accessibili
 missing: Chromium reports no accessible name for the paragraphs or for the two regions the
 DOM cannot explain.
 
-That reading was done out of band, and it is the one claim in this document that
-`../../fixture-site.test.ts` cannot keep honest: this package has no browser yet, so the suite
-checks each role against the rules above — the markup that implies it — and not against a live
-accessibility tree. **#45 is where the claim becomes enforced**: it drives Chromium against
-these pages and asserts the roles and names recorded here. If one of them disagrees, the
-accessibility tree is right and this document is wrong.
+That reading was done out of band, and `../../fixture-site.test.ts` cannot keep it honest:
+that suite checks each role against the rules above — the markup that implies it — and not
+against a live accessibility tree. **`../../elements.test.ts` is where the claim is
+enforced**: it drives Chromium against these pages and asserts the role, the accessible name
+and the box of every landmark below, from the DOM and from the accessibility tree. If one of
+them disagrees, the accessibility tree is right and this document is wrong.
 
 ## Pages
 
