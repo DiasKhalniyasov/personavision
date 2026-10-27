@@ -46,7 +46,7 @@ export {
   selectDecisionProvider,
 } from './select.js';
 export type {
-  ModelModeRequest,
+  ProviderModeRequest,
   RequestedProviderMode,
   SelectDecisionProviderOptions,
   SelectedDecisionProvider,

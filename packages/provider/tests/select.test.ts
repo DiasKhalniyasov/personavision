@@ -72,9 +72,13 @@ describe('choosing the decision provider', () => {
   });
 
   it('refuses model mode without a key rather than quietly running offline', () => {
-    expect(() => selectDecisionProvider({ seed: 1, env: {}, requestedMode: 'model' })).toThrow(
-      ModelModeUnavailableError,
-    );
+    expect(() =>
+      selectDecisionProvider({
+        seed: 1,
+        env: {},
+        requestedMode: { mode: 'model', modelMode: 'standard' },
+      }),
+    ).toThrow(ModelModeUnavailableError);
   });
 
   it('refuses model mode with a key but nothing to build the provider with', () => {
@@ -82,7 +86,7 @@ describe('choosing the decision provider', () => {
       selectDecisionProvider({
         seed: 1,
         env: { [MODEL_API_KEY_ENV]: SECRET },
-        requestedMode: 'model',
+        requestedMode: { mode: 'model', modelMode: 'standard' },
       }),
     ).toThrow(ModelModeUnavailableError);
   });
@@ -103,7 +107,7 @@ describe('choosing the decision provider', () => {
       selectDecisionProvider({
         seed: 1,
         env: { [MODEL_API_KEY_ENV]: SECRET },
-        requestedMode: 'model',
+        requestedMode: { mode: 'model', modelMode: 'standard' },
       });
       expect.unreachable('model mode without a provider is an error');
     } catch (error) {
@@ -241,16 +245,105 @@ describe('choosing which model tier a run decides on', () => {
     expect(selected.modelId).toBeUndefined();
   });
 
-  it('gives a tier-less model request the default tier', () => {
+  it('refuses a model request that names no model, however able the machine is', () => {
+    try {
+      selectDecisionProvider({
+        seed: 1,
+        env: withKey,
+        requestedMode: 'model',
+        createModelProvider: () => fakeModelProvider,
+      });
+      expect.unreachable('a model request that names no model is a refusal');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ModelModeUnavailableError);
+      expect((error as Error).message).toContain('contributor');
+      expect((error as Error).message).toContain('standard');
+    }
+  });
+
+  it('refuses a model request naming something it does not run', () => {
+    expect(() =>
+      selectDecisionProvider({
+        seed: 1,
+        env: withKey,
+        requestedMode: { mode: 'model', modelMode: 'muse-spark-9' as unknown as 'standard' },
+        createModelProvider: () => fakeModelProvider,
+      }),
+    ).toThrow(ModelModeUnavailableError);
+  });
+
+  it('expresses no preference as the default tier, as it did before this ticket', () => {
     const selected = selectDecisionProvider({
       seed: 1,
       env: withKey,
-      requestedMode: 'model',
       createModelProvider: () => fakeModelProvider,
     });
 
     expect(selected.modelMode).toBe(DEFAULT_MODEL_MODE);
     expect(selected.modelId).toBe(MODEL_ID_BY_MODE[DEFAULT_MODEL_MODE]);
+  });
+
+  it('reads a null request as no preference rather than throwing a TypeError', () => {
+    expect(
+      selectDecisionProvider({
+        seed: 1,
+        env: {},
+        requestedMode: null as unknown as undefined,
+      }).mode,
+    ).toBe('offline');
+  });
+
+  it('takes an offline request that carries a model as offline, and spends it on nothing', () => {
+    const createModelProvider = vi.fn(() => fakeModelProvider);
+
+    const selected = selectDecisionProvider({
+      seed: 1,
+      env: withKey,
+      requestedMode: { mode: 'offline', modelMode: 'standard' },
+      createModelProvider,
+    });
+
+    expect(selected.mode).toBe('offline');
+    expect(selected.modelMode).toBeUndefined();
+    expect(createModelProvider).not.toHaveBeenCalled();
+  });
+
+  it('refuses a factory that builds a model other than the one asked for', () => {
+    const contributorProvider: DecisionProvider = {
+      ...fakeModelProvider,
+      modelId: MODEL_ID_BY_MODE.contributor,
+    };
+
+    expect(() =>
+      selectDecisionProvider({
+        seed: 1,
+        env: withKey,
+        requestedMode: { mode: 'model', modelMode: 'standard' },
+        createModelProvider: () => contributorProvider,
+      }),
+    ).toThrow(ModelModeUnavailableError);
+    expect(
+      () =>
+        selectDecisionProvider({
+          seed: 1,
+          env: withKey,
+          requestedMode: { mode: 'model', modelMode: 'contributor' },
+          createModelProvider: () => contributorProvider,
+        }).modelId,
+    ).not.toThrow();
+  });
+
+  it('runs offline when a contributor factory answers with a provider that is not a model', () => {
+    const selected = selectDecisionProvider({
+      seed: 1,
+      env: withKey,
+      requestedMode: { mode: 'model', modelMode: 'contributor' },
+      createModelProvider: () => createOfflineDeterministicProvider({ seed: 1 }),
+    });
+
+    expect(selected.mode).toBe('offline');
+    expect(selected.modelMode).toBeUndefined();
+    expect(selected.reason).toContain('contributor');
   });
 
   it('keeps the key out of a tier result, its reason and a refusal', () => {

@@ -590,14 +590,24 @@ describe('the Meta Model API provider', () => {
     });
 
     it('keeps the offline provider when no key is present, and never upgrades a run', () => {
-      const createModelProvider = ({ apiKey }: { readonly apiKey: string }) =>
-        createMetaModelApiProvider({ mode: 'contributor', apiKey });
+      const createModelProvider = ({
+        apiKey,
+        modelMode,
+      }: {
+        readonly apiKey: string;
+        readonly modelMode: 'contributor' | 'standard';
+      }) => createMetaModelApiProvider({ mode: modelMode, apiKey });
 
       expect(selectDecisionProvider({ seed: 1, env: {}, createModelProvider }).provider.name).toBe(
         OFFLINE_PROVIDER_NAME,
       );
       expect(() =>
-        selectDecisionProvider({ seed: 1, env: {}, requestedMode: 'model', createModelProvider }),
+        selectDecisionProvider({
+          seed: 1,
+          env: {},
+          requestedMode: { mode: 'model', modelMode: 'standard' },
+          createModelProvider,
+        }),
       ).toThrow(ModelModeUnavailableError);
       expect(
         selectDecisionProvider({

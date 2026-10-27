@@ -267,6 +267,15 @@ export interface DecisionProvider {
   /** Whether it reads `context.screenshot`; the swarm omits the screenshot when it does not. */
   readonly readsImages: boolean;
   /**
+   * The model this provider calls, as its decisions and the run artifact spell it. Absent
+   * on a provider that calls none — the offline policy — and on one that will not say.
+   *
+   * It is here so that a caller which asked for one tier can see that it was handed
+   * another: `selectDecisionProvider` refuses a provider naming a model it did not ask for,
+   * rather than record a model id no decision in the run was ever costed at (#143).
+   */
+  readonly modelId?: string;
+  /**
    * One decision, belonging to no session. The swarm does not use this: a session's screens
    * go through the handle `beginSession` returns, which is the only thing that can hold a
    * conversation, a cache key or a trajectory. It stays because a single decision — a test,
