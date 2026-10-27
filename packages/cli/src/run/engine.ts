@@ -1,4 +1,4 @@
-import { resolveEngineConfig } from '@personavision/engine';
+import { ENGINE_VERSION, resolveEngineConfig } from '@personavision/engine';
 import {
   createMetaModelApiProvider,
   MODEL_ID_BY_MODE,
@@ -38,21 +38,23 @@ export interface SelectedEngine {
 }
 
 /**
- * The weights the run sampled with, and whether they were fitted.
+ * The weights the run sampled with, and which engine sampled with them.
  *
  * `engine.weights` carries the three softmax weights a run artifact may hold, read off the
  * engine's own resolved configuration — the defaults, with `config/calibrated.json` over
  * them — rather than restated here, so a run records what it actually sampled with.
  *
- * `version` says whether that configuration was fitted to the benchmark, because that is
- * the one thing about the engine that changes a figure. Every package in this workspace is
- * version `0.0.0`, so a package version would say nothing at all.
+ * `version` names the engine: `ENGINE_VERSION`, the engine package's own, which is the
+ * string every row of the committed calibration report carries, so a run can be matched
+ * against the row whose figures it quotes (#89, #92). It does **not** say whether that
+ * configuration was fitted — `run.calibration` says that by being a block or by being
+ * `null`, and nothing in this artifact is stated twice.
  */
 const engineConfiguration = (): Pick<Run['engine'], 'weights' | 'version'> => {
-  const { config, calibrated } = resolveEngineConfig();
+  const { config } = resolveEngineConfig();
   return {
     weights: { alpha: config.alpha, beta: config.beta, gamma: config.gamma },
-    version: calibrated ? 'calibrated' : 'uncalibrated',
+    version: ENGINE_VERSION,
   };
 };
 

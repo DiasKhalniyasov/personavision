@@ -8,10 +8,10 @@
  * The whole of its job is to **carry** figures. It computes nothing, scores nothing, rounds
  * nothing, defaults nothing and reads no file of its own: the figures arrive through the
  * engine's resolved configuration (#56), which is where the fit (#90) already put them for
- * this purpose. An engine nobody calibrated writes `calibration: null` — not a zero, not a
- * default, not the last number anyone saw. The viewer renders that block as "not calibrated"
- * in words (#12, #14), and a fabricated similarity figure would be the worst defect this
- * product could ship.
+ * this purpose. An engine with no figure a run may state writes `calibration: null` — not a
+ * zero, not a default, not the last number anyone saw. The viewer renders that block as "no
+ * calibration recorded" in words (#12, #14), and a similarity figure the engine did not earn
+ * against the benchmark the block names would be the worst defect this product could ship.
  *
  * `run.engine.version` names the engine the figures were earned by, so a run can be matched
  * against the committed calibration report (`docs/calibration/report.md`, #89), whose every
@@ -43,10 +43,28 @@ export interface EngineOnTheRecord {
  * Three of the six figures the fit recorded, because three are what the badge and the
  * comparison footnote state; the other three stay in `packages/engine/config/calibrated.json`
  * where a reviewer reads them. Nothing is derived on the way — every value is the
- * configuration's own, to the last digit — and `null` in is `null` out.
+ * configuration's own, to the last digit.
+ *
+ * Two configurations carry no figure a run may state, and both answer `null`:
+ *
+ * - **no calibrated configuration at all** — an engine nobody fitted;
+ * - **a configuration whose figures were measured over a synthetic corpus.** The contract's
+ *   block admits one benchmark name and the viewer states it in words — *"Similarity to real
+ *   human gaze on the UEyes benchmark"* — so only a figure measured against that benchmark
+ *   can honestly fill it. Today's committed fit was measured over the generated stand-in
+ *   corpus (#82), because no UEyes bytes are vendored (#11's decision), and
+ *   `docs/calibration/report.md` says of those very numbers that **"no number in this report
+ *   is a published UEyes score and none may be quoted as one"**. A badge reading `gaze
+ *   similarity 0.90` would be quoting one. The flag is the configuration's own
+ *   `metrics.corpus.synthetic`; nothing here decides what counts as synthetic.
+ *
+ * `null` is the state the viewer already words for exactly this: *"No calibration against real
+ * human gaze has been recorded for this test"* — true of a synthetic fit to the letter. Point
+ * `personavision calibrate` at the dataset and the same configuration carries a real figure,
+ * which this function then writes with nothing here changed.
  */
 export const calibrationOf = (metrics: CalibratedMetrics | null): RunCalibration =>
-  metrics === null
+  metrics === null || metrics.corpus.synthetic
     ? null
     : {
         benchmark: metrics.benchmark,

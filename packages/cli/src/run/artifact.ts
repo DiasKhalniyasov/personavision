@@ -7,6 +7,7 @@ import {
   writeRun,
   ZERO_USAGE,
 } from '@personavision/contract';
+import { engineOnTheRecord } from '@personavision/swarm';
 import { stepsOf } from './task.js';
 import type { TaskDefinition } from '@personavision/browser';
 import type { Audience, Persona, Run, RunFailure } from '@personavision/contract';
@@ -127,7 +128,11 @@ export const openRunRecord = (record: RunRecord, planned: PlannedSessions): Run 
       headlineFindingIds: [],
       heroEvidence: { variant: firstVariant, step: firstStep, aoiId: null },
     },
-    calibration: null,
+    // The figures the header badge states, carried from the engine's own configuration and
+    // `null` from an engine nobody calibrated (#92). Written here rather than left to the
+    // loop, so the badge reads the same number from the moment the run exists — and because
+    // a run that failed to start never reaches the loop at all.
+    calibration: engineOnTheRecord().calibration,
   };
 };
 

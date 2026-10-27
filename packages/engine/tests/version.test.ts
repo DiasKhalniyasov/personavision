@@ -24,8 +24,12 @@ describe('the engine’s version', () => {
 
   it('is the engine the committed calibrated configuration was fitted against', () => {
     // The tie the header badge rests on: the figures in that file were measured on this
-    // engine, and a run that quotes them names this version. An engine that moved on
-    // without a refit fails here rather than shipping a figure another engine earned.
+    // engine, and a run that quotes them names this version.
+    //
+    // Every package here is version `0.0.0`, so this cannot fail today whatever the engine
+    // does — it is the tripwire for the day one of them is not, when a fit left behind by a
+    // version bump has to be caught here rather than shipped as a figure another engine
+    // earned. What guards the engine's behaviour in the meantime is #89's regression gate.
     const record = readJson<{ engine: { version: string } }>('../config/calibrated.json');
 
     expect(ENGINE_VERSION).toBe(record.engine.version);

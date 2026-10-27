@@ -4,7 +4,14 @@
  * The figures are asserted **against the committed calibrated configuration** rather than
  * against literals copied into this file: a fit that moves them (#90) must move the badge
  * with them, and a test holding its own copy of 0.68 would pass a run that had gone stale.
- * The one figure restated here is `null`, which is the whole point of the uncalibrated state.
+ * The one figure restated here is `null`, which is the whole point of the honest-nothing
+ * state.
+ *
+ * The committed fit was measured over the generated stand-in corpus (#82), which is not the
+ * benchmark the block names, so the block a run carries **today** is `null`. The figures a
+ * real fit would carry are asserted through the same committed configuration with its corpus
+ * flag flipped — the same numbers, measured against the dataset instead — so the mapping is
+ * covered without this file inventing a figure.
  *
  * The loop runs over the committed capture set with the offline deterministic provider — no
  * browser, no socket, no key — exactly as the rest of this suite does.
@@ -13,9 +20,9 @@
 import { readFile } from 'node:fs/promises';
 import { createFixtureSource } from '@personavision/browser';
 import { readRun, runPaths, validate, writeRun } from '@personavision/contract';
+import { ENGINE_VERSION, resolveEngineConfig } from '@personavision/engine';
 import { createOfflineDeterministicProvider } from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ENGINE_VERSION } from '@personavision/engine';
 import { calibrationOf, engineOnTheRecord, runSwarm } from '../src/index.js';
 import { sameCalibration } from '../src/calibration.js';
 import {
@@ -30,6 +37,7 @@ import {
 } from './harness.js';
 import type { CaptureSource } from '@personavision/browser';
 import type { Persona, Run, Violation } from '@personavision/contract';
+import type { CalibratedMetrics } from '@personavision/engine';
 import type { RunSwarmInput } from '../src/index.js';
 
 const VARIANTS: ReadonlyArray<Run['variants'][number]> = [runVariant('A'), runVariant('B')];
@@ -48,13 +56,32 @@ const NOON = '2026-10-27T12:00:00.000Z';
  */
 interface CommittedConfiguration {
   readonly engine: { readonly version: string };
-  readonly metrics: { readonly cc: number; readonly nss: number; readonly scanMatch: number };
+  readonly metrics: {
+    readonly cc: number;
+    readonly nss: number;
+    readonly scanMatch: number;
+    readonly corpus: { readonly synthetic: boolean };
+  };
 }
 
 const committedConfiguration = async (): Promise<CommittedConfiguration> =>
   JSON.parse(
     await readFile(new URL('../../engine/config/calibrated.json', import.meta.url), 'utf8'),
   ) as CommittedConfiguration;
+
+/**
+ * The committed fit as it will be once it is measured against the dataset rather than the
+ * stand-in: the same figures, the same engine, the corpus flag the only difference.
+ *
+ * It is the engine's own resolved configuration and not an object assembled here, so the
+ * figures under test are the committed ones to the last digit.
+ */
+const measuredAgainstTheBenchmark = (): CalibratedMetrics => {
+  const { metrics } = resolveEngineConfig();
+  if (metrics === null)
+    throw new Error('the committed calibrated configuration is not in this build');
+  return { ...metrics, corpus: { ...metrics.corpus, synthetic: false } };
+};
 
 let runDir: string;
 let captures: string;
@@ -83,15 +110,21 @@ const swarmOver = (over: Partial<RunSwarmInput> = {}): RunSwarmInput => ({
   ...over,
 });
 
-/** The open run its creator wrote, naming an engine of its own and no figures. */
+/** The open run its creator wrote, naming an engine of its own. */
 const open = (): Promise<Run> =>
   writeOpenRun(runDir, { personas: ONE_PERSON, variants: VARIANTS, seedGroups: SEEDS });
+
+/** That run, left carrying a block the engine never earned. */
+const openCarrying = async (calibration: Run['calibration']): Promise<void> => {
+  const opened = await readRun(runDir);
+  await writeRun(runDir, { ...opened, run: { ...opened.run, calibration } });
+};
 
 describe('the engine on the record', () => {
   it('carries the figures the committed calibrated configuration records, and no others', async () => {
     const committed = await committedConfiguration();
 
-    expect(engineOnTheRecord().calibration).toEqual({
+    expect(calibrationOf(measuredAgainstTheBenchmark())).toEqual({
       benchmark: 'UEyes',
       cc: committed.metrics.cc,
       nss: committed.metrics.nss,
@@ -101,7 +134,7 @@ describe('the engine on the record', () => {
 
   it('carries them to the last digit, because the badge rounds and this does not', async () => {
     const committed = await committedConfiguration();
-    const block = engineOnTheRecord().calibration;
+    const block = calibrationOf(measuredAgainstTheBenchmark());
 
     expect(block).not.toBeNull();
     // `Object.is` rather than equality, so a figure that arrived through a `toFixed` or a
@@ -120,6 +153,7 @@ describe('the engine on the record', () => {
     // The tie the badge rests on. `engine.version` is how a run is matched against a row of
     // `docs/calibration/report.md` (#89), so an engine that moved on without a refit has to
     // fail here rather than ship a figure another engine earned.
+    expect(engineOnTheRecord().version).toBe(ENGINE_VERSION);
     expect(ENGINE_VERSION).toBe(committed.engine.version);
     expect(ENGINE_VERSION.length).toBeGreaterThan(0);
   });
@@ -132,15 +166,30 @@ describe('the engine on the record', () => {
     });
   });
 
-  it('tells two blocks apart by their figures, so a run that agrees is left alone', async () => {
-    const mine = engineOnTheRecord().calibration;
+  it('writes nothing while the committed figures were measured over a synthetic corpus', async () => {
+    const committed = await committedConfiguration();
 
-    expect(sameCalibration(mine, engineOnTheRecord().calibration)).toBe(true);
+    // The premise, stated so this test says why it expects nothing: the committed fit was
+    // measured over the generated stand-in (#82), and `docs/calibration/report.md` forbids
+    // quoting any of its numbers as a UEyes score. The block names UEyes, so it stays empty.
+    expect(committed.metrics.corpus.synthetic).toBe(true);
+    expect(resolveEngineConfig().calibrated).toBe(true);
+    expect(engineOnTheRecord().calibration).toBeNull();
+    // Nothing fell back to a zero or to the figure the corpus did earn.
+    expect(engineOnTheRecord().calibration).not.toEqual(
+      expect.objectContaining({ cc: committed.metrics.cc }),
+    );
+  });
+
+  it('tells two blocks apart by their figures, so a run that agrees is left alone', () => {
+    const real = calibrationOf(measuredAgainstTheBenchmark());
+
+    expect(real).not.toBeNull();
+    expect(sameCalibration(real, calibrationOf(measuredAgainstTheBenchmark()))).toBe(true);
     expect(sameCalibration(null, null)).toBe(true);
-    expect(sameCalibration(null, mine)).toBe(false);
-    expect(sameCalibration(mine, null)).toBe(false);
-    expect(mine).not.toBeNull();
-    expect(sameCalibration(mine, { ...(mine as NonNullable<typeof mine>), cc: 0.1 })).toBe(false);
+    expect(sameCalibration(null, real)).toBe(false);
+    expect(sameCalibration(real, null)).toBe(false);
+    expect(sameCalibration(real, { ...(real as NonNullable<typeof real>), cc: 0.1 })).toBe(false);
   });
 });
 
@@ -148,9 +197,10 @@ describe('a run’s calibration block', () => {
   it('is on the record before the first session and never changes value mid-run', async () => {
     const created = await open();
     const engine = engineOnTheRecord();
-    // What the creator wrote, so that the correction below is a correction of something.
+    // A run that arrived naming another engine and carrying a figure that engine never
+    // earned, so that the correction below is a correction of something.
+    await openCarrying({ benchmark: 'UEyes', cc: 0.99, nss: 9, scanMatch: 0.99 });
     expect(created.engine.version).not.toBe(engine.version);
-    expect(created.calibration).toBeNull();
 
     /** `run.json` alone, which is the file the badge's two fields are written to. */
     const recorded = async (): Promise<Pick<Run, 'calibration' | 'engine'>> =>
@@ -188,17 +238,31 @@ describe('a run’s calibration block', () => {
     expect(await validate(runDir)).toEqual([]);
   });
 
-  it('reaches disk with the configuration’s own figures and nothing rounded', async () => {
+  it('reaches disk as the engine reported it, with nothing rounded on the way', async () => {
     await open();
     const committed = await committedConfiguration();
 
     await withNothingRunning(() => runSwarm(swarmOver()));
 
-    const written = await readFile(runPaths(runDir).run, 'utf8');
-    expect(written).toContain(`"cc": ${committed.metrics.cc}`);
-    expect(written).toContain(`"nss": ${committed.metrics.nss}`);
-    expect(written).toContain(`"scanMatch": ${committed.metrics.scanMatch}`);
-    expect(written).toContain('"benchmark": "UEyes"');
+    // Today's committed fit is synthetic, so what reaches disk is the honest nothing — and
+    // not a figure, which is the assertion that matters here.
+    const asRun = await readFile(runPaths(runDir).run, 'utf8');
+    expect(asRun).toContain('"calibration": null');
+    expect(asRun).not.toContain(`${committed.metrics.cc}`);
+
+    // The figures' own path to disk, through the same writer: every digit survives it, so a
+    // real fit's `cc` is not rounded between the configuration and the badge.
+    const opened = await readRun(runDir);
+    await writeRun(runDir, {
+      ...opened,
+      run: { ...opened.run, calibration: calibrationOf(measuredAgainstTheBenchmark()) },
+    });
+    const withFigures = await readFile(runPaths(runDir).run, 'utf8');
+    expect(withFigures).toContain('"benchmark": "UEyes"');
+    expect(withFigures).toContain(`"cc": ${committed.metrics.cc}`);
+    expect(withFigures).toContain(`"nss": ${committed.metrics.nss}`);
+    expect(withFigures).toContain(`"scanMatch": ${committed.metrics.scanMatch}`);
+    expect(await validate(runDir)).toEqual([]);
   });
 
   it('is `null` on an uncalibrated engine’s run, and the directory still validates', async () => {
