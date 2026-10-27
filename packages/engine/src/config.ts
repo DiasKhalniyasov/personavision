@@ -261,6 +261,53 @@ type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends number | string | boolean ? T[K] : DeepPartial<T[K]>;
 };
 
+/**
+ * The figures the fitted configuration was measured at, as the fit recorded them (#90).
+ *
+ * This is the surface the run loop (#92) writes the run artifact's calibration block from,
+ * so the badge reads a number the engine itself carries rather than a file of its own. The
+ * figures are the ones the fit maximised, on the scope and corpus named here: a figure
+ * measured over synthetic records is not a published UEyes score, which is why `corpus`
+ * travels with it and says so.
+ */
+export interface CalibratedMetrics {
+  /**
+   * The benchmark the engine is calibrated against, which is a fact about this project and
+   * not about the file: `packages/contract`'s calibration block admits this one name, and
+   * the file records which *corpus* of it the figures were measured over.
+   */
+  readonly benchmark: 'UEyes';
+  /** The category the figures are the mean over — the objective's own scope. */
+  readonly scope: string;
+  readonly corpus: {
+    readonly id: string;
+    readonly label: string;
+    /** Generated records rather than the benchmark's own: a label, never a footnote. */
+    readonly synthetic: boolean;
+    /** Records of `scope` behind the figures. */
+    readonly records: number;
+  };
+  /** The prediction seed every figure was measured at. */
+  readonly seed: number;
+  readonly cc: number;
+  readonly nss: number;
+  readonly kld: number;
+  readonly aucJudd: number;
+  readonly scanMatch: number;
+  readonly sequenceScore: number;
+  /** What the fit maximised, and the value it reached. */
+  readonly objective: {
+    readonly id: string;
+    readonly value: number;
+  };
+}
+
+/** What `config/calibrated.json` holds, of which the engine reads these two fields. */
+export interface CalibratedRecord {
+  readonly weights: EngineConfigOverrides;
+  readonly metrics: Omit<CalibratedMetrics, 'benchmark'>;
+}
+
 /** What `resolveEngineConfig` answers: the configuration, and whether it was fitted. */
 export interface ResolvedEngineConfig {
   readonly config: EngineConfig;
@@ -269,6 +316,12 @@ export interface ResolvedEngineConfig {
    * calibrated, and an absent file means defaults rather than a fabricated number.
    */
   readonly calibrated: boolean;
+  /**
+   * The figures the fitted values were measured at, and `null` when the configuration is
+   * the defaults — never a number for an uncalibrated engine, which is the honest source
+   * for the badge's "not calibrated" state (`docs/FLOW.md`).
+   */
+  readonly metrics: CalibratedMetrics | null;
 }
 
 export const defaultEngineConfig: EngineConfig = {
@@ -400,22 +453,21 @@ export const defaultEngineConfig: EngineConfig = {
 };
 
 /**
- * The calibrated-configuration seam.
+ * The calibrated-configuration seam: `packages/engine/config/calibrated.json`, imported.
  *
- * `packages/engine/config/calibrated.json` is the path the calibration step (#11) commits
- * its fitted values to. TypeScript cannot import a file that is not there, so the import
- * lands here in one place and #11 turns it on by replacing the two lines below with:
+ * The file is the calibration step's committed result (#90): the fitted values under
+ * `weights`, and under `metrics` the figures the fit measured them at. It is a **build-time
+ * import** — the engine still reads no file and opens no socket at run time — and it is the
+ * only layer between the defaults and a run's own overrides.
  *
- * ```ts
- * import calibratedJson from '../config/calibrated.json' with { type: 'json' };
- * const calibratedOverrides: EngineConfigOverrides | null = calibratedJson;
- * ```
- *
- * That is a build-time import: the engine still reads no file and opens no socket at run
- * time. Until #11 lands, this is `null`, the resolved configuration is the defaults, and
- * `calibrated` is `false` — never a fabricated number.
+ * The fitted values and the figures that earned them live in one file on purpose, so the
+ * badge's number and the configuration behind it can never disagree. The engine reads the
+ * two fields below and nothing else; the search space, the seed and the objective in the
+ * same file are the reviewer's, and `packages/calibration/docs/fitting.md` reads them.
  */
-const calibratedOverrides: EngineConfigOverrides | null = null;
+import calibratedJson from '../config/calibrated.json' with { type: 'json' };
+
+const calibrated: CalibratedRecord | null = calibratedJson;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -438,12 +490,19 @@ const mergeRecords = (
 };
 
 /**
- * Defaults, then the calibrated values, then this run's overrides — later layers win, key
- * by key, to any depth. Pure: the same overrides always produce a deeply equal result and
- * no input object is mutated, so a caller may hand in `run.engine.weights` directly.
+ * Defaults, then a calibrated record, then this run's overrides — later layers win, key by
+ * key, to any depth. Pure: the same arguments always produce a deeply equal result and no
+ * input object is mutated, so a caller may hand in `run.engine.weights` directly.
+ *
+ * Exported for the test of the uncalibrated branch and not from the package's entry point:
+ * `resolveEngineConfig` is the one callers use, and the record it layers is the committed
+ * file.
  */
-export const resolveEngineConfig = (overrides?: EngineConfigOverrides): ResolvedEngineConfig => {
-  const layers = [calibratedOverrides, overrides].filter(
+export const resolveFrom = (
+  record: CalibratedRecord | null,
+  overrides?: EngineConfigOverrides,
+): ResolvedEngineConfig => {
+  const layers = [record?.weights, overrides].filter(
     (layer): layer is EngineConfigOverrides => layer !== null && layer !== undefined,
   );
   /**
@@ -456,5 +515,22 @@ export const resolveEngineConfig = (overrides?: EngineConfigOverrides): Resolved
     structuredClone(defaultEngineConfig) as unknown as Record<string, unknown>,
   ) as unknown as EngineConfig;
 
-  return { config, calibrated: calibratedOverrides !== null };
+  return {
+    config,
+    calibrated: record !== null,
+    metrics: record === null ? null : { benchmark: 'UEyes', ...record.metrics },
+  };
 };
+
+/**
+ * Defaults, then the calibrated values, then this run's overrides.
+ *
+ * The calibrated layer is whatever `config/calibrated.json` holds, and `calibrated` reports
+ * that it was there. With the file absent the answer is the defaults, `calibrated` is
+ * `false` and `metrics` is `null` — never a fabricated number, which is the honest source
+ * for `docs/FLOW.md`'s "not calibrated" badge state. That branch is exercised by
+ * `resolveFrom(null)` in `tests/config.test.ts`, since the committed file cannot be made to
+ * disappear from a build-time import.
+ */
+export const resolveEngineConfig = (overrides?: EngineConfigOverrides): ResolvedEngineConfig =>
+  resolveFrom(calibrated, overrides);

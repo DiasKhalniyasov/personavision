@@ -67,7 +67,7 @@ they agree at 0.09 — and on this corpus both are true, of different records.
 
 `ScoreResult.provenance` carries the corpus identity (and whether its records are **synthetic**), the seed, the
 frozen metric parameters of #83 and #84, and the map kernel of every predictor. Each predictor carries its own
-version and, for the engine, whether its resolved configuration was calibrated — `false` until #90 commits
+version and, for the engine, whether its resolved configuration was calibrated — `true` since #90 committed
 `packages/engine/config/calibrated.json`, and never a fabricated number.
 
 `score()` refuses a predictor or a corpus that does not carry these, by name, at run time as well as in the type:
@@ -93,6 +93,12 @@ against 0.590 for the prior), so a sentence about *placement* quotes that column
 [`baselines.md`](./baselines.md) rather than the plain margin below.
 
 ## The figures on the committed corpus
+
+> **These are the figures of the engine's *uncalibrated* defaults.** Since #90 committed
+> `packages/engine/config/calibrated.json`, `enginePredictor()` resolves the fitted configuration, so a run of
+> `score()` today reports the fitted figures — web CC 0.897 and ScanMatch 0.414, overall CC 0.687. The table below
+> is kept as the defaults' figures, which is what the fit was measured against;
+> [`fitting.md`](./fitting.md) carries the fitted ones and the comparison.
 
 Measured at **seed 1** over the four committed synthetic records. **These records are synthetic** — generated
 rectangles and blobs in UEyes shape (#82) — so a figure here is a figure about four pictures and **not a

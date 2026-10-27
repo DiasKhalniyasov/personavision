@@ -254,8 +254,8 @@ describe('the provenance a figure is quoted with', () => {
     expect(result.predictor.provenance.version).toBe(
       (manifest as { readonly version: string }).version,
     );
-    /** False until #90 commits `config/calibrated.json`: never a fabricated number (#11). */
-    expect(result.predictor.provenance.calibrated).toBe(false);
+    /** True since #90 committed `config/calibrated.json`; never a fabricated number (#11). */
+    expect(result.predictor.provenance.calibrated).toBe(true);
     expect(result.predictor.provenance.mapKernel).toEqual({
       drawnFrom: 'fixations',
       cellPx: defaultEngineConfig.prediction.map.cellPx,

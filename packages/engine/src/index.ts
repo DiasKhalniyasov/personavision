@@ -48,6 +48,8 @@ export type {
 
 export { defaultEngineConfig, resolveEngineConfig } from './config.js';
 export type {
+  CalibratedMetrics,
+  CalibratedRecord,
   EngineConfig,
   EngineConfigOverrides,
   GoalVerbRoleWeights,

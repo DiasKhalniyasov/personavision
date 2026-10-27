@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "engine": {
+    "version": "0.0.0"
+  },
+  "weights": {
+    "alpha": 1,
+    "beta": 1,
+    "gamma": 1,
+    "fixationDuration": {
+      "medianMs": 150,
+      "logSigma": 0.25,
+      "minMs": 60,
+      "maxMs": 1200
+    },
+    "inhibitionOfReturn": {
+      "penalty": 1.5,
+      "decayPerFixation": 0.5,
+      "immediateRepeatAllowance": 1,
+      "deliberateReturnAfterFixations": 3,
+      "deliberateReturnRelevance": 0.6
+    }
+  },
+  "metrics": {
+    "scope": "webpage",
+    "corpus": {
+      "id": "committed-synthetic",
+      "label": "the committed synthetic corpus",
+      "synthetic": true,
+      "records": 1
+    },
+    "seed": 1,
+    "cc": 0.8965272061155534,
+    "nss": 2.73394539667111,
+    "kld": 2.4682671349222876,
+    "aucJudd": 0.9754010695187165,
+    "scanMatch": 0.4144070153899449,
+    "sequenceScore": 0.16666666666666666,
+    "objective": {
+      "id": "web-cc-scanmatch",
+      "value": 0.6554671107527491
+    }
+  },
+  "fit": {
+    "kind": "random",
+    "seed": 1,
+    "candidates": 128,
+    "bestCandidateIndex": 19,
+    "command": "pnpm --filter @personavision/calibration run fit",
+    "objective": {
+      "id": "web-cc-scanmatch",
+      "label": "the web category's CC plus ScanMatch, equally weighted",
+      "scope": "webpage",
+      "terms": [
+        {
+          "metric": "cc",
+          "weight": 0.5
+        },
+        {
+          "metric": "scanMatch",
+          "weight": 0.5
+        }
+      ]
+    },
+    "space": [
+      {
+        "path": "alpha",
+        "min": 0.2,
+        "max": 3,
+        "step": 0.2,
+        "reason": "the softmax weight on salience: below 0.2 the engine stops preferring salient areas at all, above 3 it fixates the single most salient one and the scanpath stops moving",
+        "default": 1
+      },
+      {
+        "path": "beta",
+        "min": 0,
+        "max": 3,
+        "step": 0.2,
+        "reason": "the softmax weight on relevance. `predict` has no goal, so relevance is neutral there and this term is expected to be inert on this objective — it is searched because #90 names it and because an inert parameter is a measured fact rather than an assumption",
+        "default": 1
+      },
+      {
+        "path": "gamma",
+        "min": 0,
+        "max": 3,
+        "step": 0.2,
+        "reason": "the softmax weight on viewing history, which is what inhibition of return acts through: at 0 the engine may fixate one area forever, and the upper bound is the same as the other two weights so no term is privileged by its range",
+        "default": 1
+      },
+      {
+        "path": "fixationDuration.medianMs",
+        "min": 150,
+        "max": 400,
+        "step": 10,
+        "reason": "the published free-viewing region is 200–300 ms; the bounds reach well past both ends so the data can argue with the literature, and the step is finer than the metrics can tell apart",
+        "default": 250
+      },
+      {
+        "path": "fixationDuration.logSigma",
+        "min": 0.2,
+        "max": 0.8,
+        "step": 0.05,
+        "reason": "the spread of the log-normal: 0.2 is near-constant dwells and 0.8 is a heavy tail of second-long looks. Dwell is what the map is weighted by, so this moves CC as well as ScanMatch",
+        "default": 0.45
+      },
+      {
+        "path": "fixationDuration.minMs",
+        "min": 60,
+        "max": 140,
+        "step": 10,
+        "reason": "the floor a dwell is clamped to, kept below the median’s own lower bound so no draw can cross it. A fixation under 60 ms is not a fixation in any published definition",
+        "default": 80
+      },
+      {
+        "path": "fixationDuration.maxMs",
+        "min": 600,
+        "max": 1600,
+        "step": 100,
+        "reason": "the ceiling a dwell is clamped to, kept above the median’s upper bound so no draw can cross it. Past 1.6 s a single look would dominate a map the humans spread over a screen",
+        "default": 1200
+      },
+      {
+        "path": "inhibitionOfReturn.penalty",
+        "min": 0,
+        "max": 4,
+        "step": 0.25,
+        "reason": "what is subtracted from the history term of an area just fixated: 0 is no inhibition at all and 4 all but forbids a return, which brackets the published effect rather than assuming it",
+        "default": 1.5
+      },
+      {
+        "path": "inhibitionOfReturn.decayPerFixation",
+        "min": 0,
+        "max": 0.95,
+        "step": 0.05,
+        "reason": "the share of the penalty surviving each further fixation: 0 forgets at once, and the top of the range stops short of 1, which would never forget and make the penalty permanent",
+        "default": 0.5
+      },
+      {
+        "path": "inhibitionOfReturn.immediateRepeatAllowance",
+        "min": 0,
+        "max": 3,
+        "step": 1,
+        "reason": "consecutive fixations one area may hold before the penalty applies. Integral by nature, so the step is 1 and the range covers none to a long dwell split across three fixations",
+        "default": 1
+      },
+      {
+        "path": "inhibitionOfReturn.deliberateReturnAfterFixations",
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "reason": "how long before a return counts as deliberate rather than an accident. Integral, and eight is past the fixation count a small screen gets at all",
+        "default": 3
+      },
+      {
+        "path": "inhibitionOfReturn.deliberateReturnRelevance",
+        "min": 0,
+        "max": 1,
+        "step": 0.1,
+        "reason": "the relevance a deliberate return needs. The whole unit interval, because relevance is a unit interval and `predict` holds it at the neutral trait",
+        "default": 0.6
+      }
+    ],
+    "values": {
+      "alpha": 1,
+      "beta": 1,
+      "gamma": 1,
+      "fixationDuration.medianMs": 150,
+      "fixationDuration.logSigma": 0.25,
+      "fixationDuration.minMs": 60,
+      "fixationDuration.maxMs": 1200,
+      "inhibitionOfReturn.penalty": 1.5,
+      "inhibitionOfReturn.decayPerFixation": 0.5,
+      "inhibitionOfReturn.immediateRepeatAllowance": 1,
+      "inhibitionOfReturn.deliberateReturnAfterFixations": 3,
+      "inhibitionOfReturn.deliberateReturnRelevance": 0.6
+    },
+    "pinnedToDefault": [
+      "alpha",
+      "beta",
+      "gamma",
+      "fixationDuration.maxMs",
+      "inhibitionOfReturn.penalty",
+      "inhibitionOfReturn.decayPerFixation",
+      "inhibitionOfReturn.immediateRepeatAllowance",
+      "inhibitionOfReturn.deliberateReturnAfterFixations",
+      "inhibitionOfReturn.deliberateReturnRelevance"
+    ],
+    "defaults": {
+      "objective": 0.5552029881043525,
+      "values": {
+        "alpha": 1,
+        "beta": 1,
+        "gamma": 1,
+        "fixationDuration.medianMs": 250,
+        "fixationDuration.logSigma": 0.45,
+        "fixationDuration.minMs": 80,
+        "fixationDuration.maxMs": 1200,
+        "inhibitionOfReturn.penalty": 1.5,
+        "inhibitionOfReturn.decayPerFixation": 0.5,
+        "inhibitionOfReturn.immediateRepeatAllowance": 1,
+        "inhibitionOfReturn.deliberateReturnAfterFixations": 3,
+        "inhibitionOfReturn.deliberateReturnRelevance": 0.6
+      }
+    },
+    "improvement": 0.10026412264839657,
+    "overall": {
+      "records": 4,
+      "cc": 0.686953651450616,
+      "nss": 2.5423341150105796,
+      "kld": 5.825325925130386,
+      "aucJudd": 0.8421983352137578,
+      "scanMatch": 0.32802390452517394,
+      "sequenceScore": 0.11944444444444445
+    }
+  }
+}
