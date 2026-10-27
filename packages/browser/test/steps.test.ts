@@ -24,7 +24,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   AutomationFailure,
   capture,
@@ -772,11 +772,19 @@ describeWithChromium('a capture of a page on a step', () => {
 
   beforeAll(async () => {
     site = await serveFixtureSite();
-    runDir = await mkdtemp(join(tmpdir(), 'personavision-steps-'));
   });
 
   afterAll(async () => {
     await site.close();
+  });
+
+  // One run directory per test, because a capture is cached inside it (`cache.ts`) and the
+  // assertions below ask different things of the same screen of the same variant.
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'personavision-steps-'));
+  });
+
+  afterEach(async () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
