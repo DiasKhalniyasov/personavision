@@ -1,0 +1,27 @@
+{
+  "name": "@personavision/improve",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Path 2's closed loop: the GitHub client, the change, the pull request, the preview and the comment",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@personavision/contract": "workspace:*",
+    "@personavision/provider": "workspace:*",
+    "@personavision/scoring": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}
