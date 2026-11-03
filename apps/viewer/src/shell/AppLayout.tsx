@@ -18,10 +18,13 @@ import { useSession } from './useSession';
  *   `/`, `/signin` and `/demo` are public and are not under it.
  * - `AppLayout` — the chrome, naming the test the route is about, or the workspace's most
  *   recent one on a route that is about no test.
- * - `RequireAudience` — a test cannot be run without an audience, so `/new` sends a
- *   workspace that has none to `/audiences`, which is the No-audience screen while there
- *   is nothing to list: the screen that asks who the customers are and offers the example
- *   test, rather than a form that cannot be submitted (#109).
+ * - `RequireAudience` — the two-URL A/B form cannot be filled in without an audience, so
+ *   `/new?step=variants` sends a workspace that has none to `/audiences`, which is the
+ *   No-audience screen while there is nothing to list: the screen that asks who the
+ *   customers are and offers the example test, rather than a form that cannot be submitted
+ *   (#109). It is mounted around that one step rather than as a layout route, because the
+ *   step is in the query and the wizard's other steps are where an audience is described
+ *   in the first place (#264).
  */
 
 export function ChromeShell({ run, children }: { run: RunState | null; children?: ReactNode }) {
@@ -55,13 +58,16 @@ export function AppLayout() {
   );
 }
 
-export function RequireAudience() {
+export function RequireAudience({ children }: { children?: ReactNode }) {
   const audiences = useAudiences();
+  // A layout route renders its `Outlet`; a guard around one step of a screen renders that
+  // step. One rule, both ways of mounting it.
+  const guarded = children ?? <Outlet />;
 
   // The form renders while the list is being read — its picker waits with a placeholder and
   // the rest of it is usable (#110's loading state) — and a workspace that turns out to
   // have no audience is sent on the moment the answer arrives.
-  if (audiences.status === 'loading') return <Outlet />;
+  if (audiences.status === 'loading') return guarded;
   if (audiences.audiences.length === 0) return <Navigate to={paths.audiences} replace />;
-  return <Outlet />;
+  return guarded;
 }

@@ -1,7 +1,7 @@
 /**
  * The route table's paths, in one place.
  *
- * `docs/FLOW.md` section 3 fixes them. `routes.tsx` mounts these patterns and every link
+ * `docs/FLOW.md` sections 3 and 13 fix them. `routes.tsx` mounts these patterns and every link
  * in the product is built from the helpers below, so no screen writes a URL of its own and
  * renaming a route is one edit here.
  */
@@ -13,16 +13,21 @@ export const NEXT_PARAM = 'next';
 export const patterns = {
   home: '/',
   signIn: '/signin',
+  signUp: '/signup',
   demo: '/demo',
   audiences: '/audiences',
   newAudience: '/audiences/new',
   audience: '/audiences/:audienceId',
+  sites: '/sites',
+  newSite: '/sites/new',
+  site: '/sites/:siteId',
   newTest: '/new',
   run: '/runs/:runId',
   breakdown: '/runs/:runId/breakdown',
   attention: '/runs/:runId/attention/:variant/:step',
   sessions: '/runs/:runId/sessions',
   session: '/runs/:runId/sessions/:sessionId',
+  githubSettings: '/settings/github',
 } as const;
 
 /**
@@ -36,6 +41,8 @@ export const matches = {
   attention: `${patterns.run}/attention/*`,
   sessions: `${patterns.sessions}/*`,
   audiences: `${patterns.audiences}/*`,
+  /** The sites of the workspace, and the one being added or proved. */
+  sites: `${patterns.sites}/*`,
 } as const;
 
 const segment = (value: string): string => encodeURIComponent(value);
@@ -44,10 +51,14 @@ const segment = (value: string): string => encodeURIComponent(value);
 export const paths = {
   home: patterns.home,
   signIn: patterns.signIn,
+  signUp: patterns.signUp,
   demo: patterns.demo,
   audiences: patterns.audiences,
   newAudience: patterns.newAudience,
   audience: (audienceId: string) => `/audiences/${segment(audienceId)}`,
+  sites: patterns.sites,
+  newSite: patterns.newSite,
+  site: (siteId: string) => `/sites/${segment(siteId)}`,
   newTest: patterns.newTest,
   run: (runId: string) => `/runs/${segment(runId)}`,
   breakdown: (runId: string) => `/runs/${segment(runId)}/breakdown`,
@@ -56,6 +67,7 @@ export const paths = {
   sessions: (runId: string) => `/runs/${segment(runId)}/sessions`,
   session: (runId: string, sessionId: string) =>
     `/runs/${segment(runId)}/sessions/${segment(sessionId)}`,
+  githubSettings: patterns.githubSettings,
 } as const;
 
 /**
@@ -92,3 +104,18 @@ export const sessionsWithArea = (runId: string, variant: string, aoi: string): s
 /** `/signin?next=…`: where sign-in sends a visitor back to once they are in. */
 export const signInWithNext = (intended: string): string =>
   `${paths.signIn}?${new URLSearchParams({ [NEXT_PARAM]: intended }).toString()}`;
+
+/**
+ * The query parameter `/new` carries its step in.
+ *
+ * The wizard is **one route with a step in the query** (`docs/FLOW.md` section 13), not a
+ * route per step, so back, reload and a shared link all land where the user was. The step
+ * vocabulary itself — which values are known, which is the default and which is an alias —
+ * is the wizard's, in `screens/newtest/wizard/steps.ts`; what lives here is the shape of
+ * the URL, with the rest of the product's URL state.
+ */
+export const STEP_PARAM = 'step';
+
+/** `/new?step=…`: one step of the New test wizard, which is where a link to one goes. */
+export const newTestStep = (step: string): string =>
+  `${paths.newTest}?${new URLSearchParams({ [STEP_PARAM]: step }).toString()}`;

@@ -131,13 +131,13 @@ describe('the simulated-audience badge', () => {
 });
 
 describe('the tabs', () => {
-  it('are links, in the prototype’s order, with Audiences at the end', async () => {
+  it('are links, in the prototype’s order, with Sites and Audiences at the end', async () => {
     const { runId, run } = await exampleRun();
     mountApp(paths.run(runId));
 
     const bar = await waitFor(() => {
       const found = document.querySelector('[data-shell="tabbar"]') as HTMLElement;
-      expect(found.querySelectorAll('a')).toHaveLength(5);
+      expect(found.querySelectorAll('a')).toHaveLength(6);
       return found;
     });
 
@@ -153,6 +153,9 @@ describe('the tabs', () => {
         paths.attention(runId, run.verdict.heroEvidence.variant, run.verdict.heroEvidence.step),
       ],
       ['Sessions', paths.sessions(runId)],
+      // About the workspace rather than about this test, which is why `#tabbar` puts them
+      // after the gap. A signed-in user reaches their sites from any screen (#264).
+      ['Sites', paths.sites],
       ['Audiences', paths.audiences],
     ]);
   });
@@ -163,13 +166,26 @@ describe('the tabs', () => {
 
     const bar = await waitFor(() => {
       const found = document.querySelector('[data-shell="tabbar"]') as HTMLElement;
-      expect(found.querySelectorAll('a')).toHaveLength(5);
+      expect(found.querySelectorAll('a')).toHaveLength(6);
       return found;
     });
     const current = [...bar.querySelectorAll('a[aria-current="page"]')].map(
       (tab) => tab.textContent,
     );
     expect(current).toEqual(['Sessions']);
+  });
+});
+
+describe('the workspace’s own screens', () => {
+  it('offers Sites, and marks it on a screen under it', async () => {
+    await serveRunData();
+    mountApp(paths.site('site-clipforge'));
+
+    const bar = within(
+      await waitFor(() => document.querySelector('[data-shell="tabbar"]') as HTMLElement),
+    );
+    expect(bar.getByRole('link', { name: 'Sites' }).getAttribute('href')).toBe(paths.sites);
+    expect(bar.getByRole('link', { name: 'Sites' }).getAttribute('aria-current')).toBe('page');
   });
 });
 

@@ -6,7 +6,14 @@ import { loadDesignTokens } from '../setup';
 import { axeViolations, describeViolations } from '../axe';
 import { demoAudienceRecord, forgetRuns, mountApp } from '../app';
 import { otherAudienceRecord, refusal, servePlatform, STARTED_RUN_ID } from './fixture';
-import { paths } from '../../src/shell/paths';
+import { newTestStep, paths } from '../../src/shell/paths';
+
+/**
+ * The form is the wizard's `?step=variants` step since #264 — the same screen, mounted at
+ * that address instead of at `/new` itself (decision 78). `VARIANTS_FORM` is where it is, so
+ * this suite is about the form and not about the route it hangs on.
+ */
+const VARIANTS_FORM = newTestStep('variants');
 
 /**
  * `/new` — the three decisions a test is started from, and the two settings that change
@@ -41,7 +48,7 @@ const START = /^Start test/;
 
 /** The form, once it is on the screen. */
 const openForm = async (options: Parameters<typeof mountApp>[1] = {}) => {
-  const mounted = mountApp(paths.newTest, options);
+  const mounted = mountApp(VARIANTS_FORM, options);
   await screen.findByRole('button', { name: START });
   return mounted;
 };
@@ -193,7 +200,7 @@ describe('the audience', () => {
 
   it('sends a workspace with no audience to the screen that asks for one', async () => {
     await servePlatform({ records: [] });
-    const { router } = mountApp(paths.newTest);
+    const { router } = mountApp(VARIANTS_FORM);
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.audiences);
