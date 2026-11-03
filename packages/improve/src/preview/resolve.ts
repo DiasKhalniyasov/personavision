@@ -122,7 +122,7 @@ const capOf = (given: number | undefined, fallback: number): number => {
   return Math.max(1, Math.floor(given));
 };
 
-const PENDING_STATES = new Set(['pending', 'queued', 'in_progress']);
+const PENDING_STATES = new Set(['pending', 'queued', 'in_progress', 'waiting']);
 const FAILED_STATES = new Set(['error', 'failure']);
 /** A deployment GitHub has marked as superseded: not this pull request's preview any more. */
 const SUPERSEDED_STATE = 'inactive';
@@ -149,16 +149,32 @@ const newestFirst = <T extends { readonly createdAt: string; readonly id: number
         : -1,
   );
 
-type Candidate =
-  | {
-      readonly kind: 'url';
-      readonly deployment: Deployment;
-      readonly url: string;
-      readonly answered: string;
-    }
-  | { readonly kind: 'pending'; readonly deployment: Deployment; readonly answered: string }
-  | { readonly kind: 'failed'; readonly deployment: Deployment; readonly answered: string }
-  | { readonly kind: 'superseded' };
+interface UrlCandidate {
+  readonly kind: 'url';
+  readonly deployment: Deployment;
+  readonly url: string;
+  readonly answered: string;
+}
+
+interface PendingCandidate {
+  readonly kind: 'pending';
+  readonly deployment: Deployment;
+  readonly answered: string;
+}
+
+interface FailedCandidate {
+  readonly kind: 'failed';
+  readonly deployment: Deployment;
+  readonly answered: string;
+}
+
+/** A deployment GitHub has marked `inactive`: torn down, or replaced by a newer one. */
+interface SupersededCandidate {
+  readonly kind: 'superseded';
+  readonly deployment: Deployment;
+}
+
+type Candidate = UrlCandidate | PendingCandidate | FailedCandidate | SupersededCandidate;
 
 /** What one deployment's newest status says about it. */
 const candidateOf = (deployment: Deployment, statuses: readonly DeploymentStatus[]): Candidate => {
@@ -170,7 +186,14 @@ const candidateOf = (deployment: Deployment, statuses: readonly DeploymentStatus
   const said = latest.description ?? latest.state;
 
   if (latest.state === 'success') {
-    return latest.environmentUrl === undefined
+    /**
+     * GitHub carries `environment_url` as an empty string when the deployment published
+     * none, rather than leaving the field out, so a blank one is **no URL** — not a URL
+     * that answers nothing. The two read alike on a screen and are different problems: one
+     * is a service that never told us where it put the change.
+     */
+    const published = latest.environmentUrl?.trim() ?? '';
+    return published === ''
       ? {
           kind: 'failed',
           deployment,
@@ -179,8 +202,8 @@ const candidateOf = (deployment: Deployment, statuses: readonly DeploymentStatus
       : {
           kind: 'url',
           deployment,
-          url: latest.environmentUrl,
-          answered: `${where} published ${latest.environmentUrl}: ${said}`,
+          url: published,
+          answered: `${where} published ${published}: ${said}`,
         };
   }
   if (PENDING_STATES.has(latest.state)) {
@@ -189,9 +212,15 @@ const candidateOf = (deployment: Deployment, statuses: readonly DeploymentStatus
   if (FAILED_STATES.has(latest.state)) {
     return { kind: 'failed', deployment, answered: `${where} is ${latest.state}: ${said}` };
   }
-  if (latest.state === SUPERSEDED_STATE) return { kind: 'superseded' };
+  if (latest.state === SUPERSEDED_STATE) return { kind: 'superseded', deployment };
+  /**
+   * A state this product has not met is **waited for**, not called a failure. GitHub adds
+   * states — `waiting` arrived with environment protection rules — and the cap bounds the
+   * wait either way, so the cost of guessing wrong is one cap rather than a change reported
+   * as broken when it was building.
+   */
   return {
-    kind: 'failed',
+    kind: 'pending',
     deployment,
     answered: `${where} answered a state this product does not know — ${latest.state}: ${said}`,
   };
@@ -235,15 +264,25 @@ const notReady = (
   waitedMs,
 });
 
-const failed = (
-  request: PreviewRequest,
-  candidate: Candidate & { readonly kind: 'failed' },
-): PreviewUnusable => ({
+const failed = (request: PreviewRequest, candidate: FailedCandidate): PreviewUnusable => ({
   kind: 'unusable',
   state: 'failed',
   reason: `The preview deployment for ${pullRequestOf(request)} failed, so there is no running version of the change to test.`,
   answered: candidate.answered,
   deploymentId: candidate.deployment.id,
+});
+
+/**
+ * The repository does publish previews and this one is not running any more. Telling such
+ * a user to add a preview deployment would be advice about infrastructure they already
+ * have, so it is its own answer.
+ */
+const deactivated = (request: PreviewRequest, deployment: Deployment): PreviewUnusable => ({
+  kind: 'unusable',
+  state: 'failed',
+  reason: `The preview deployment for ${pullRequestOf(request)} is no longer running — GitHub has marked it inactive — so there is no running version of the change to test.`,
+  answered: `the ${deployment.environment} deployment of this pull request is inactive: it was torn down or replaced by a newer one`,
+  deploymentId: deployment.id,
 });
 
 const unreachable = (
@@ -286,36 +325,58 @@ export const resolvePreview = async (
   const startedMs = nowMs();
   let pendingAnswered = `no deployment of ${pullRequestOf(request)} has reported a status`;
 
+  /** The URL is asked whether it answers, and only then is it anybody else's. */
+  const handOn = async (found: UrlCandidate): Promise<PreviewResolution> => {
+    const asked = await probe(found.url);
+    return asked.reachable
+      ? {
+          kind: 'preview',
+          url: found.url,
+          deploymentId: found.deployment.id,
+          environment: found.deployment.environment,
+          answered: found.answered,
+        }
+      : unreachable(request, found.deployment, asked.answered);
+  };
+
+  /** A URL from an older deployment of the same commit: worth having, second in line. */
+  let older: UrlCandidate | undefined;
+
   for (let read = 1; read <= reads; read += 1) {
     // Each pass is one read of the deployments and of each one's statuses.
     const candidates = await readCandidates(client, request);
 
-    const found = candidates.find((candidate) => candidate.kind === 'url');
-    if (found !== undefined) {
-      const asked = await probe(found.url);
-      return asked.reachable
-        ? {
-            kind: 'preview',
-            url: found.url,
-            deploymentId: found.deployment.id,
-            environment: found.deployment.environment,
-            answered: found.answered,
-          }
-        : unreachable(request, found.deployment, asked.answered);
-    }
+    /**
+     * The newest deployment that decides anything: a URL now, or a build still running.
+     * Taking any URL in the list instead would hand on an older deployment's host while a
+     * newer one of the same commit is still building — and that newer one, on success,
+     * marks the older `inactive` and takes its host away mid-run.
+     */
+    const decisive = candidates.find(
+      (candidate) => candidate.kind === 'url' || candidate.kind === 'pending',
+    );
 
-    const pending = candidates.find((candidate) => candidate.kind === 'pending');
-    if (pending === undefined) {
+    if (decisive === undefined) {
       const broken = candidates.find((candidate) => candidate.kind === 'failed');
-      return broken === undefined ? noPreview(request) : failed(request, broken);
+      if (broken !== undefined) return failed(request, broken);
+      const gone = candidates.find((candidate) => candidate.kind === 'superseded');
+      if (gone !== undefined) return deactivated(request, gone.deployment);
+      return noPreview(request);
     }
 
-    pendingAnswered = pending.answered;
+    if (decisive.kind === 'url') return handOn(decisive);
+
+    older =
+      candidates.find((candidate): candidate is UrlCandidate => candidate.kind === 'url') ?? older;
+    pendingAnswered = decisive.answered;
     const remainingMs = waitMs - (nowMs() - startedMs);
     if (read === reads || remainingMs <= 0) break;
     await sleep(Math.min(pollEveryMs, remainingMs));
   }
 
+  // The cap is spent with the newest deployment still building. An older URL for the same
+  // commit is the honest best answer; with none, the answer is that it is not ready.
+  if (older !== undefined) return handOn(older);
   return notReady(request, pendingAnswered, nowMs() - startedMs);
 };
 

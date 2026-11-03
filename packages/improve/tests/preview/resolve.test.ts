@@ -278,6 +278,104 @@ describe('a preview that exists but is not usable', () => {
   });
 });
 
+describe('the states GitHub actually sends', () => {
+  it('reads a success that published an empty URL as no URL, not as a dead host', async () => {
+    const asked: string[] = [];
+    const probe: PreviewProbe = (url) => {
+      asked.push(url);
+      return Promise.resolve({ reachable: true, answered: 'answered 200' });
+    };
+
+    const { resolution } = await resolve(
+      exchangesFor(
+        [deployment(11, '2026-11-03T14:04:00Z')],
+        [
+          {
+            id: 11,
+            body: [status(91, 'success', { environment_url: '', description: 'Deployed' })],
+          },
+        ],
+      ),
+      { probe },
+    );
+
+    // GitHub sends `environment_url` as "" when none was published, so nothing is probed.
+    expect(asked).toEqual([]);
+    expect(resolution.kind === 'unusable' ? resolution.state : undefined).toBe('failed');
+    expect(resolution.kind === 'unusable' ? resolution.answered : '').toContain('published no URL');
+  });
+
+  it('waits on `waiting`, which is what a deployment awaiting its approval reports', async () => {
+    const clock = fakeClock();
+    const waiting = [
+      { id: 11, body: [status(91, 'waiting', { description: 'Awaiting approval' })] },
+    ];
+
+    const { resolution } = await resolve(
+      [
+        ...exchangesFor([deployment(11, '2026-11-03T14:04:00Z')], waiting),
+        ...exchangesFor([deployment(11, '2026-11-03T14:04:00Z')], waiting),
+      ],
+      { waitMs: 10_000, pollEveryMs: 10_000, nowMs: clock.nowMs, sleep: clock.sleep },
+    );
+
+    expect(resolution.kind === 'unusable' ? resolution.state : undefined).toBe('not_ready');
+    expect(resolution.kind === 'unusable' ? resolution.answered : '').toContain(
+      'Awaiting approval',
+    );
+  });
+
+  it('waits on a state it does not know rather than calling the change broken', async () => {
+    const clock = fakeClock();
+    const unknown = [{ id: 11, body: [status(91, 'rolled_out')] }];
+
+    const { resolution } = await resolve(
+      [
+        ...exchangesFor([deployment(11, '2026-11-03T14:04:00Z')], unknown),
+        ...exchangesFor([deployment(11, '2026-11-03T14:04:00Z')], unknown),
+      ],
+      { waitMs: 10_000, pollEveryMs: 10_000, nowMs: clock.nowMs, sleep: clock.sleep },
+    );
+
+    expect(resolution.kind === 'unusable' ? resolution.state : undefined).toBe('not_ready');
+    expect(resolution.kind === 'unusable' ? resolution.answered : '').toContain('rolled_out');
+  });
+
+  it('says a torn-down preview is not running, rather than telling the user to add one', async () => {
+    const { resolution } = await resolve(
+      exchangesFor(
+        [deployment(11, '2026-11-03T14:04:00Z')],
+        [{ id: 11, body: [status(91, 'inactive')] }],
+      ),
+    );
+
+    expect(resolution.kind).toBe('unusable');
+    expect(resolution.kind === 'unusable' ? resolution.reason : '').toContain('no longer running');
+    expect(resolution.kind === 'unusable' ? resolution.reason : '').not.toContain(
+      'add a per-pull-request preview deployment',
+    );
+  });
+
+  it('waits for a newer deployment of the same commit before using an older URL', async () => {
+    const clock = fakeClock();
+    const both = [deployment(12, '2026-11-03T14:09:00Z'), deployment(11, '2026-11-03T14:04:00Z')];
+    const statuses = [
+      { id: 12, body: [status(94, 'in_progress', { description: 'Building' })] },
+      { id: 11, body: [status(91, 'success', { environment_url: PREVIEW_URL })] },
+    ];
+
+    const { resolution } = await resolve(
+      [...exchangesFor(both, statuses), ...exchangesFor(both, statuses)],
+      { waitMs: 10_000, pollEveryMs: 10_000, nowMs: clock.nowMs, sleep: clock.sleep },
+    );
+
+    // The newer deployment will mark the older one inactive the moment it succeeds, so the
+    // wait comes first — and the older URL is handed on only once the cap is spent.
+    expect(clock.slept).toEqual([10_000]);
+    expect(resolution.kind === 'preview' ? resolution.url : undefined).toBe(PREVIEW_URL);
+  });
+});
+
 describe('the three answers cannot be confused for one another', () => {
   const none: PreviewResolution = { kind: 'no_preview', reason: 'no preview deployment' };
   const notReady: PreviewResolution = {

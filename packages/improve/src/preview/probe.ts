@@ -52,21 +52,44 @@ export const createFetchProbe =
   (options: { readonly timeoutMs?: number } = {}): PreviewProbe =>
   async (url) => {
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
+    /** One deadline for the whole question, so a slow refusal and a slow retry cannot double it. */
+    const signal = AbortSignal.timeout(timeoutMs);
     const ask = (method: 'HEAD' | 'GET'): Promise<Awaited<ReturnType<typeof fetch>>> =>
-      fetch(url, { method, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+      fetch(url, { method, redirect: 'follow', signal });
 
+    /**
+     * The body is not ours to download, and a cancel that fails says nothing about the
+     * host: a connection dropped after the headers is still a host that answered.
+     */
+    const drop = async (response: Awaited<ReturnType<typeof fetch>>): Promise<void> => {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // The status is already in hand, which is the whole question.
+      }
+    };
+
+    let status: number;
     try {
-      let response = await ask('HEAD');
-      if (REFUSES_HEAD.has(response.status)) response = await ask('GET');
-      await response.body?.cancel();
-      return {
-        reachable: response.status < SERVES_BELOW,
-        answered: `the request to ${url} answered ${String(response.status)}`,
-      };
+      const first = await ask('HEAD');
+      status = first.status;
+      if (REFUSES_HEAD.has(first.status)) {
+        await drop(first);
+        const second = await ask('GET');
+        status = second.status;
+        await drop(second);
+      } else {
+        await drop(first);
+      }
     } catch (error) {
       return {
         reachable: false,
         answered: `the request to ${url} answered nothing — ${messageOf(error)}`,
       };
     }
+
+    return {
+      reachable: status < SERVES_BELOW,
+      answered: `the request to ${url} answered ${String(status)}`,
+    };
   };
