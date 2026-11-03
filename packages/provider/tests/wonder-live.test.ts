@@ -247,7 +247,9 @@ describe('the live Muse Wonder provider', () => {
       // Named, not defaulted: asked for nothing, selection is offline even with a key.
       const selected = selectWonderProvider({
         requestedMode: { mode: 'model', modelId: WONDER_MODEL_ID },
-        createModelProvider: createMetaWonderProvider,
+        // Our own timeout, inside this test's budget, so a slow ask is reported as this
+        // provider's `timeout` failure rather than killed by the test runner first.
+        createModelProvider: (built) => createMetaWonderProvider({ ...built, timeoutMs: 60_000 }),
       });
 
       expect(selected.mode).toBe('model');

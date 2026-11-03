@@ -2,7 +2,7 @@ import { META_RESPONSES_ENDPOINT } from './meta-model.js';
 import type { ModelHttpResponse } from './meta-model.js';
 import { estimateCostUsd, WONDER_MODEL_ID } from './meta-pricing.js';
 import type { WonderModelId } from './meta-pricing.js';
-import { MAX_OUTPUT_TOKENS, readResponse } from './meta-request.js';
+import { MAX_OUTPUT_TOKENS, readResponse, readTokens } from './meta-request.js';
 import type { ReportedTokens, ResponsesMessage } from './meta-request.js';
 import { MODEL_API_KEY_ENV } from './select.js';
 import type { DecisionUsage } from './types.js';
@@ -178,17 +178,49 @@ export class WonderCallError extends Error {
  * than the only one: a message this module composes never contains the key in the first
  * place, and a message thrown by `fetch` or by an injected transport is not ours to trust.
  *
- * `meta-model.ts` keeps its own copy of these two lines, private to that file. They are
- * restated here rather than shared because the one-shot seam deliberately imports nothing of
- * the decision provider's machinery beyond the protocol it shares
- * (`docs/adr/0003-the-one-shot-wonder-seam.md`), and a change to either copy is correct on
- * its own.
+ * `meta-model.ts` keeps its own copy of these two lines, private to that file. What the two
+ * seams share is the *protocol* — the endpoint, the request's message shape, the envelope
+ * reader and the token paths all come from `meta-request.ts` and from `meta-model.ts`'s
+ * published constants — and what they do not share is each other's machinery
+ * (`docs/adr/0003-the-one-shot-wonder-seam.md`). A one-line defence belongs on the side that
+ * needs it, as `wonder-offline.ts` restates its own hash rather than importing the decision
+ * policy's, and a change to either copy is correct on its own.
  */
 const redact = (text: string, apiKey: string): string =>
   apiKey === '' ? text : text.split(apiKey).join('[redacted]');
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+
+/**
+ * Why a 4xx was a 4xx, read from the one shape both models answer with:
+ * `{"error": {"type", "message", "param", "code"}}`. `docs/meta-model-api.md` records that
+ * body byte for byte on Wonder and on Spark — "so a single error reader serves both models"
+ * — and the reason is the whole value of it: `model_not_found`, `unknown parameter
+ * response_format`, and the strict-subset complaint that names the key a schema of ours
+ * forgot are each a mistake of ours that a bare status would leave us guessing at.
+ *
+ * It is capped, because a gateway that answers HTML rather than the API's JSON would
+ * otherwise put a page in an error message, and it is redacted by the caller like every
+ * other string this module did not compose itself.
+ */
+const errorReason = (body: unknown): string => {
+  if (typeof body === 'string') return body.trim().slice(0, 200);
+  const error = (body as { error?: unknown } | null)?.error;
+  if (typeof error !== 'object' || error === null) return '';
+  const { type, code, param, message } = error as Record<string, unknown>;
+  const named = [
+    typeof type === 'string' ? type : '',
+    typeof code === 'string' ? code : '',
+    typeof param === 'string' ? `param ${param}` : '',
+  ].filter((part) => part !== '');
+  return [
+    typeof message === 'string' ? message.slice(0, 200) : '',
+    named.length === 0 ? '' : `(${named.join(', ')})`,
+  ]
+    .filter((part) => part !== '')
+    .join(' ');
+};
 
 /** A timeout is told apart from a transport error, because they are different failures. */
 const isTimeout = (error: unknown, signal: AbortSignal): boolean => {
@@ -197,7 +229,16 @@ const isTimeout = (error: unknown, signal: AbortSignal): boolean => {
   return name === 'AbortError' || name === 'TimeoutError';
 };
 
-/** The default transport: `fetch`, and nothing a test ever reaches. */
+/**
+ * The default transport: `fetch`, and nothing a test ever reaches.
+ *
+ * One attempt, where the decision provider's own `fetch` waits and asks again on a 429 or a
+ * 503. A Wonder ask is a handful per test rather than one per screen per persona, and what
+ * waits on it is a person in front of a screen rather than a run loop: a rate limit comes
+ * back as `http_status` carrying the API's own reason, for the use to report, and the one
+ * retry this implementation makes on its own is the one the seam asked for — a reply that
+ * would not parse.
+ */
 const fetchTransport: WonderTransport = async (request) => {
   const response = await fetch(request.url, {
     method: request.method,
@@ -236,7 +277,7 @@ export interface MetaWonderProviderOptions {
 }
 
 /** The request one ask becomes: the document, the schema, the effort, and nothing else. */
-export const buildWonderRequest = (ask: WonderAsk<unknown>): WonderRequestBody => ({
+const buildWonderRequest = (ask: WonderAsk<unknown>): WonderRequestBody => ({
   model: WONDER_MODEL_ID,
   // One turn. The use's own wording travels inside the document, because a prompt is the
   // use's business and this file holds none (`wonder.ts`).
@@ -349,17 +390,24 @@ export const createMetaWonderProvider = (
         }
 
         if (response.status < 200 || response.status >= 300) {
+          const reason = errorReason(response.body);
           throw fail(
             'http_status',
-            `the API answered ${response.status} to the ${ask.use} ask`,
+            `the API answered ${response.status} to the ${ask.use} ask${reason === '' ? '' : `: ${reason}`}`,
             response.status,
           );
         }
 
+        // Billed before it is read, and whatever becomes of it: an answer that arrived and
+        // could not be read was still paid for, so the figures are taken off the response
+        // rather than off the happy path — which is what makes an asked-twice ask report
+        // both calls however the first one failed. A response reporting nothing reports five
+        // zeroes.
+        spent.push(readTokens((response.body as { usage?: unknown } | null)?.usage));
+
         const read = readResponse(response.body);
         if (!read.ok)
           throw fail(read.fault, `the ${ask.use} reply could not be read: ${read.detail}`);
-        spent.push(read.value.tokens);
 
         try {
           return JSON.parse(read.value.replyText) as unknown;

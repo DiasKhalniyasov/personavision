@@ -36,7 +36,7 @@ import { fakeTransport, FAKE_TOKENS, TEST_ENV, TEST_KEY } from './wonder-fake.js
 const provider = (overrides: MetaWonderProviderOptions = {}): WonderProvider =>
   createMetaWonderProvider({ env: TEST_ENV, ...overrides });
 
-const outcomeOf = async <T>(promise: Promise<T>): Promise<T | unknown> =>
+const outcomeOf = (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(
     (value) => value,
     (error: unknown) => error,
@@ -294,6 +294,43 @@ describe('a reply that will not parse', () => {
   });
 });
 
+describe('what a failed attempt still cost', () => {
+  it('bills an answer that arrived and could not be read, not only the one that could', async () => {
+    const fake = fakeTransport({
+      response: (call, request) =>
+        call === 1
+          ? // An envelope with nothing to read a reply from — the one failure asked again —
+            // and a usage block, because the call was made and therefore billed.
+            { status: 200, body: { status: 'completed', output: [], usage: FAKE_TOKENS } }
+          : {
+              status: 200,
+              body: {
+                status: 'completed',
+                output: [
+                  {
+                    type: 'message',
+                    content: [
+                      {
+                        type: 'output_text',
+                        text: JSON.stringify({ headline: `read on call ${call}`, confidence: 0.5 }),
+                      },
+                    ],
+                  },
+                ],
+                usage: FAKE_TOKENS,
+                model: request.body.model,
+              },
+            },
+    });
+
+    const reply = await provider({ transport: fake.transport }).ask(wonderProbeAsk());
+
+    expect(fake.requests).toHaveLength(2);
+    expect(reply.usage.inputTokens).toBe(FAKE_TOKENS.input_tokens * 2);
+    expect(reply.usage.outputTokens).toBe(FAKE_TOKENS.output_tokens * 2);
+  });
+});
+
 describe('a call that produced no reply at all', () => {
   const broken: readonly {
     readonly what: string;
@@ -310,6 +347,27 @@ describe('a call that produced no reply at all', () => {
       },
       asked: 1,
       says: '429',
+    },
+    {
+      // The one shape both models answer an error with, which is why one reader serves both:
+      // the status alone would leave a schema this project got wrong looking like weather.
+      what: 'the reason the API gave for refusing the request',
+      kind: 'http_status',
+      transport: {
+        response: () => ({
+          status: 400,
+          body: {
+            error: {
+              type: 'invalid_request_error',
+              code: null,
+              message: 'unknown parameter `response_format`',
+              param: 'response_format',
+            },
+          },
+        }),
+      },
+      asked: 1,
+      says: 'unknown parameter `response_format`',
     },
     {
       what: 'a refusal, which is an item on an HTTP 200',
@@ -461,11 +519,9 @@ describe('the key never leaves the closure it is read in', () => {
       vi.spyOn(console, level).mockImplementation(() => undefined),
     );
 
-    // Three ways the key could come back out at us: a transport whose own error quotes it,
-    // a response body that echoes it — a 401 page, a proxy that logs what it received — and
-    // a reply that will not parse after a request that carried it.
-    // A transport whose own error quotes it, and a model refusal that reads it straight back
-    // — both messages travel into ours, and both are redacted on the way.
+    // Three ways the key could come back out at us, and all three travel through a message
+    // of ours: a transport whose own error quotes it, a model refusal that reads it straight
+    // back, and the API's own error body — a 401 page, a proxy that logs what it received.
     const thrown = await outcomeOf(
       provider({
         transport: () => Promise.reject(new Error(`401 for Bearer ${TEST_KEY}`)),
@@ -492,11 +548,22 @@ describe('the key never leaves the closure it is read in', () => {
     // is all our message carries, and the body it came from never joins it.
     const echoed = await outcomeOf(
       provider({
-        transport: () => Promise.resolve({ status: 401, body: { seen: `Bearer ${TEST_KEY}` } }),
+        transport: () =>
+          Promise.resolve({
+            status: 401,
+            body: {
+              error: {
+                type: 'invalid_request_error',
+                message: `Bearer ${TEST_KEY} is not a valid key`,
+                param: null,
+                code: null,
+              },
+            },
+          }),
       }).ask(wonderProbeAsk()),
     );
 
-    for (const outcome of [thrown, refused]) {
+    for (const outcome of [thrown, refused, echoed]) {
       expect((outcome as Error).message).toContain('[redacted]');
     }
     for (const outcome of [thrown, refused, echoed]) {
