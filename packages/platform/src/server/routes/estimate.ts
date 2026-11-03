@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { sessionsInFlight } from '../../caps.js';
 import {
   acceptedEstimateRequest,
   EstimateNotAcceptedError,
@@ -84,7 +85,19 @@ export const estimateRoutes = ({ store, readSession, runsRoot }: EstimateRouteOp
         runsRoot,
         runIds: workspace.runIds,
       })(quotedFor.siteUrl);
-      sendJson(response, 200, estimateRun(quotedFor, history));
+      // The concurrency the estimate divides by is the one the run will really have in
+      // flight: the per-site cap, what was submitted, and our own ceiling
+      // (`PV_RUNNER_CONCURRENCY`), whichever is smallest. A screen that quoted a speed we
+      // will not run at would be a screen that is wrong rather than a ceiling that moved —
+      // `startTest` computes the same number from the same function.
+      sendJson(
+        response,
+        200,
+        estimateRun(
+          { ...quotedFor, concurrency: sessionsInFlight(quotedFor.concurrency) },
+          history,
+        ),
+      );
     },
   },
 ];

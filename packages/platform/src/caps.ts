@@ -171,6 +171,48 @@ export const concurrencyForSite = (asked?: number): ConcurrencyForSite =>
         };
 
 /**
+ * The variable that names **our own ceiling** on sessions in flight — how many we are willing
+ * to run at once, which is a fact about what we can afford and not about any site.
+ *
+ * It is spelt the same in `@personavision/swarm`'s `RUNNER_ENV.concurrency`, which is where
+ * the runner seam reads it to size a remote run (#317); `docs/deployment.md` is the one place
+ * an operator is told about it. The two packages spell it rather than share it because the
+ * swarm does not import the platform and the platform does not import the swarm.
+ */
+export const RUNNER_CONCURRENCY_ENV = 'PV_RUNNER_CONCURRENCY';
+
+/**
+ * How many of this run's sessions will really be in flight: the per-site cap, what the caller
+ * asked for, and **our own ceiling**, whichever is smallest.
+ *
+ * This is the number the estimate's arithmetic divides by — sessions ÷ concurrency is the
+ * batches, which is the first line of the time range `docs/FLOW.md` section 13 asks the launch
+ * screen to show — and the number a run is actually started at, so the screen's figure and the
+ * run's behaviour are one claim.
+ *
+ * **Raising `PV_RUNNER_CONCURRENCY` moves the estimate and moves no cap.** The three caps are
+ * `CAPS` above, they are about the site being driven, and none of them is a function of
+ * anything: raising our ceiling past ten cannot put an eleventh browser on a site, it only
+ * stops us holding ourselves below what the site already allows. Lowering it below ten makes a
+ * run genuinely slower, and the estimate says so rather than quoting a speed we will not run
+ * at — which is the whole reason this is an input to the arithmetic.
+ *
+ * An unreadable or non-positive value is nobody naming a ceiling, read the way
+ * `concurrencyForSite` reads an unreadable number asked for, and for the same reason.
+ */
+export const sessionsInFlight = (
+  asked?: number,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number => {
+  const bySite = concurrencyForSite(asked).concurrency;
+  const raw = env[RUNNER_CONCURRENCY_ENV]?.trim() ?? '';
+  if (raw === '') return bySite;
+  const ours = Number(raw);
+  if (!Number.isFinite(ours) || ours < 1) return bySite;
+  return Math.max(1, Math.min(bySite, Math.floor(ours)));
+};
+
+/**
  * The launches of the trailing hour, oldest first.
  *
  * The window is **strictly** the last hour: a launch exactly an hour old has fallen out of

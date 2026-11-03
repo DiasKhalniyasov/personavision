@@ -926,6 +926,37 @@ export const runSchema = z
           .min(1),
       })
       .optional(),
+    /**
+     * Where this run's sessions ran, and what drove them (`docs/FLOW.md` section 17, point 1;
+     * `docs/adr/0004-where-sessions-run.md`).
+     *
+     * A run is driven either by the machine that asked for it or by managed job executions,
+     * and which one is a fact about the run that no reader can recover from the sessions: the
+     * artifact is identical either way, which is the promise the runner seam makes. So it is
+     * recorded, because the first question asked of a remote run that went wrong is *which
+     * code drove it*.
+     *
+     * `concurrency` is **our own ceiling on sessions in flight and never a per-site cap**.
+     * The caps are `packages/platform`'s three numbers and are about the site being driven;
+     * this is about what we were willing to run at once. A reader comparing the two is
+     * comparing two different things on purpose.
+     *
+     * Optional with no default: a run written before this block carries none, which is a run
+     * that did not say where it ran rather than a run that ran locally.
+     */
+    runner: z
+      .strictObject({
+        where: z.enum(['local', 'cloud-run']),
+        /**
+         * The container image a remote run's tasks were started from, **tag included**, so a
+         * run can be told which code drove it. `null` for a run driven locally, where the
+         * code is the checkout the command was typed in.
+         */
+        image: name.nullable(),
+        /** How many sessions this run was willing to have in flight at once. */
+        concurrency: count,
+      })
+      .optional(),
     sessionIds: z.array(name),
     screenshots: z.array(
       z.strictObject({

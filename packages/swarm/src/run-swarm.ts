@@ -50,7 +50,6 @@ import {
   appendFinishedSession,
   readRun,
   runPaths,
-  SCHEMA_VERSION,
   writeRun,
   writeSession,
 } from '@personavision/contract';
@@ -63,8 +62,9 @@ import {
   NO_HOLDOUT,
   sameSeedsOnBothSides,
 } from './holdout.js';
-import { decideOutcome } from './outcome.js';
 import { runSession } from './run-session.js';
+import { chooseRunner } from './runner/choose.js';
+import { brokenSession, stepNamed } from './runner/session.js';
 import type { Capture, CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
 import type { Persona, Run, RunArtifact, RunUsage, Session } from '@personavision/contract';
 import type { Aoi, EngineConfigOverrides, Segmenter } from '@personavision/engine';
@@ -78,6 +78,9 @@ import type {
 import type { SwarmHoldout } from './holdout.js';
 import type { AutomationFailure, OutcomePolicy, SessionOutcome } from './outcome.js';
 import type { SessionProviders } from './run-session.js';
+import type { JobsTransport } from './runner/jobs.js';
+import type { RunnerWhere } from './runner/choose.js';
+import type { SessionRunner, WalkedSession } from './runner/types.js';
 
 /**
  * How many sessions run at once when a caller names no bound. **Not a cap on a site.**
@@ -300,6 +303,21 @@ export interface RunSwarmInput extends SwarmPlanInput {
    * a caller whose printing can fail guards it itself.
    */
   readonly onProgress?: (event: SwarmProgress) => void | Promise<void>;
+  /**
+   * The environment the **runner** is chosen from: `PV_RUNNER` unset or `local` is the
+   * swarm's own pool, which is the default everywhere, and `cloud-run` is one Cloud Run job
+   * execution per session (`runner/choose.ts`, #317). Defaults to `process.env`; a test
+   * passes its own and touches nothing global.
+   *
+   * It is read in exactly one place and nothing downstream of it branches on the answer.
+   */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The Jobs API transport a remote run goes through, for a test and for a coordinator
+   * authorised its own way. The default is built **only** when none is given, and only for a
+   * run that asked for `cloud-run`: a local run never constructs a cloud client at all.
+   */
+  readonly jobsTransport?: JobsTransport;
 }
 
 export interface SwarmResult {
@@ -341,7 +359,22 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   const concurrency = capOf(input.concurrency, DEFAULT_CONCURRENCY);
   const timeoutMs = capOf(input.sessionTimeoutMs, DEFAULT_SESSION_BUDGET.wallClockMs);
 
-  const opened = await openRun(input.runDir, planned, input.providers.decision.mode);
+  // The one place a runner is chosen, and the one place a remote run with nowhere to put its
+  // output is refused — before the run is opened, so a refusal writes nothing at all.
+  const chosen = chooseRunner(
+    {
+      ...(input.env === undefined ? {} : { env: input.env }),
+      engineMode: input.providers.decision.mode,
+    },
+    input.jobsTransport,
+  );
+  const runner: SessionRunner = chosen.runner ?? walkOne;
+
+  const opened = await openRun(input.runDir, planned, input.providers.decision.mode, {
+    where: chosen.where,
+    image: chosen.image,
+    concurrency,
+  });
   const startedAt = opened.startedAt ?? clock().toISOString();
 
   const sessions: Session[] = [];
@@ -360,7 +393,23 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
       totalSessions: planned.length,
     });
 
-    const walked = await walkOne(input, opened.runId, plan, { clock, timeoutMs });
+    const walked = await runner({
+      runDir: input.runDir,
+      runId: opened.runId,
+      sessionId: plan.sessionId,
+      persona: plan.persona,
+      variant: plan.variant,
+      seed: plan.seed,
+      task: input.task,
+      startedAt: clock().toISOString(),
+      timeoutMs,
+      source: input.source,
+      providers: input.providers,
+      outcomePolicy: input.outcomePolicy,
+      maxScreens: input.maxScreens,
+      weights: input.weights,
+      segmenter: input.segmenter,
+    });
     sessions[position] = walked.session;
 
     // `run.json` is one file every session of the swarm would have to queue at, so they do:
@@ -444,33 +493,17 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   };
 };
 
-/** What one session produced, and what of it belongs to the run. */
-interface WalkedSession {
-  readonly session: Session;
-  readonly usage: RunUsage;
-  readonly aois: readonly Aoi[];
-  readonly screenshots: Run['screenshots'];
-  readonly elapsedMs: number;
-  /**
-   * Set only for a session the race gave up on: it is still running, and `runSession` writes
-   * its own file when it lands. `null` for a session that answered, which is every session
-   * of a run that went well.
-   */
-  readonly landsLate: Promise<unknown> | null;
-}
-
-const walkOne = async (
-  input: RunSwarmInput,
-  runId: string,
-  plan: SwarmSession,
-  { clock, timeoutMs }: { clock: () => Date; timeoutMs: number },
-): Promise<WalkedSession> => {
-  const provider = input.providers.decision;
+/**
+ * The swarm's own runner: one session in this process, which is what `PV_RUNNER` unset means
+ * and what every test, the acceptance suite and the demo run on.
+ */
+const walkOne: SessionRunner = async (request) => {
+  const { timeoutMs, startedAt } = request;
+  const provider = request.providers.decision;
   const aois: Aoi[] = [];
   const captures: Capture[] = [];
   const usages: DecisionUsage[] = [];
 
-  const startedAt = clock().toISOString();
   const startedMs = Date.now();
   /** What is left of this session's own deadline, which is what a decision gets. */
   const remainingMs = (): number => Math.max(1, startedMs + timeoutMs - Date.now());
@@ -484,21 +517,21 @@ const walkOne = async (
   });
 
   const settled = runSession({
-    runDir: input.runDir,
-    runId,
-    sessionId: plan.sessionId,
-    variant: plan.variant,
-    persona: plan.persona,
-    seed: plan.seed,
-    task: input.task,
-    source: input.source,
+    runDir: request.runDir,
+    runId: request.runId,
+    sessionId: request.sessionId,
+    variant: request.variant,
+    persona: request.persona,
+    seed: request.seed,
+    task: request.task,
+    source: request.source,
     providers: { decision: answersWithin(provider, remainingMs) },
-    segmenter: input.segmenter,
+    segmenter: request.segmenter,
     budget: new SessionBudget({ wallClockMs: timeoutMs }),
-    maxScreens: input.maxScreens,
-    weights: input.weights,
+    maxScreens: request.maxScreens,
+    weights: request.weights,
     startedAt,
-    outcomePolicy: input.outcomePolicy,
+    outcomePolicy: request.outcomePolicy,
     onScreen: (screen) => {
       // The areas of interest `run.json` declares are the engine's, built from the capture
       // the session looked at: a session's fixations name these ids, and a run that
@@ -522,7 +555,7 @@ const walkOne = async (
     // own file over the one the run has just recorded. The run's index, its progress entry
     // and its declared areas are this session's, so the file has to be this one too: the
     // last word on disk is the record the rest of the artifact agrees with.
-    const ours = brokenSession(input, runId, plan, startedAt, {
+    const ours = brokenSession(request, {
       kind: 'wall_clock_timeout',
       detail: `the session passed its ${timeoutMs / 1000} s cap with no answer`,
       step: stepNamed(captures),
@@ -533,7 +566,7 @@ const walkOne = async (
   }
   if (finished.kind === 'error') {
     return {
-      session: brokenSession(input, runId, plan, startedAt, ourBreakage(finished.error, captures)),
+      session: brokenSession(request, ourBreakage(finished.error, captures)),
       usage: spent(),
       ...seen(),
       landsLate: null,
@@ -607,58 +640,6 @@ const answersWithin = (provider: DecisionProvider, remainingMs: () => number): D
 };
 
 /**
- * A session that never produced one: our own breakage, written as the session it would have
- * been. It carries no screen, no fixation and no action, because none happened, and
- * `decideOutcome` reads it as an automation failure — excluded from every score, so a
- * weakness of the simulation is never reported as a weakness of the product.
- */
-const brokenSession = (
-  input: RunSwarmInput,
-  runId: string,
-  plan: SwarmSession,
-  startedAt: string,
-  failure: AutomationFailure,
-): Session => ({
-  schemaVersion: SCHEMA_VERSION,
-  sessionId: plan.sessionId,
-  runId,
-  variant: plan.variant.id,
-  taskId: input.task.id,
-  kind: 'simulated',
-  persona: { id: plan.persona.id, traits: plan.persona.traits, device: plan.persona.device },
-  participant: null,
-  seed: plan.seed,
-  startedAt,
-  durationMs: 0,
-  screens: [],
-  fixations: [],
-  saccades: [],
-  actions: [],
-  outcome: decideOutcome(
-    {
-      screens: [],
-      fixations: [],
-      actions: [],
-      durationMs: 0,
-      taskCompleted: false,
-      primaryActionAoiId: null,
-      automationFailure: failure,
-      wallClockBudgetMs: null,
-    },
-    plan.persona,
-    input.outcomePolicy,
-  ),
-  integrity: { selectorFailures: 0, retries: 0 },
-});
-
-/** The step the session had reached when it broke, for a failure that names one. */
-const stepNamed = (captures: readonly Capture[]): string =>
-  captures.at(-1)?.step ?? FAILED_BEFORE_A_STEP;
-
-/** What a session that broke before it reached a screen says it broke on. */
-const FAILED_BEFORE_A_STEP = 'start';
-
-/**
  * A thrown session, in the shape `decideOutcome` reads.
  *
  * `runSession` already maps the driver's own failures and rethrows only what it cannot
@@ -697,10 +678,18 @@ interface OpenedRun {
   readonly startedAt: string | undefined;
 }
 
+/** Where this run's sessions ran, as `run.json`'s own `runner` block records it. */
+interface RunnerOnTheRecord {
+  readonly where: RunnerWhere;
+  readonly image: string | null;
+  readonly concurrency: number;
+}
+
 const openRun = async (
   runDir: string,
   planned: readonly SwarmSession[],
   mode: ProviderMode,
+  runner: RunnerOnTheRecord,
 ): Promise<OpenedRun> => {
   const artifact = await readRun(runDir);
   const { run } = artifact;
@@ -759,7 +748,7 @@ const openRun = async (
       );
     }
   }
-  await recordEngine(runDir, artifact);
+  await recordEngine(runDir, artifact, runner);
   return { runId: run.runId, startedAt: run.startedAt };
 };
 
@@ -784,11 +773,19 @@ const openRun = async (
  * its own and `packages/contract` is not this ticket's to change. It is reached before the
  * first session, where a run the swarm walks holds none.
  */
-const recordEngine = async (runDir: string, artifact: RunArtifact): Promise<void> => {
+const recordEngine = async (
+  runDir: string,
+  artifact: RunArtifact,
+  runner: RunnerOnTheRecord,
+): Promise<void> => {
   const { run } = artifact;
   const engine = engineOnTheRecord();
   const agrees =
-    run.engine.version === engine.version && sameCalibration(run.calibration, engine.calibration);
+    run.engine.version === engine.version &&
+    sameCalibration(run.calibration, engine.calibration) &&
+    run.runner?.where === runner.where &&
+    run.runner.image === runner.image &&
+    run.runner.concurrency === runner.concurrency;
   if (agrees) return;
   await writeRun(runDir, {
     ...artifact,
@@ -796,6 +793,7 @@ const recordEngine = async (runDir: string, artifact: RunArtifact): Promise<void
       ...run,
       engine: { ...run.engine, version: engine.version },
       calibration: engine.calibration,
+      runner,
     },
   });
 };
