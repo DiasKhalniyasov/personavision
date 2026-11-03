@@ -4,6 +4,7 @@ import { sessionGuard } from './auth/guard.js';
 import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
+import { estimateRoutes } from './server/routes/estimate.js';
 import { githubRoutes } from './server/routes/github.js';
 import type { GithubAppRegistration } from './server/routes/github.js';
 import { runRoutes } from './server/routes/runs.js';
@@ -159,6 +160,7 @@ export const createPlatform = async ({
           storedSiteConnections(store.githubInstallations),
       }),
       ...githubRoutes({ store, readSession, app: githubApp }),
+      ...estimateRoutes({ store, readSession, runsRoot: resolvedRunsRoot }),
       ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),
