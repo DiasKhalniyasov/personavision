@@ -102,6 +102,8 @@ export function SessionsScreen({ run }: { run: Run }) {
     ? rows.filter((state) => state.status === 'ready' && state.session.video?.state === 'recorded')
         .length
     : null;
+  // Whether a wall of tiles is actually on screen: the grid's view, with something to draw.
+  const drawn = grid && recorded !== 0;
 
   return (
     <div className="strip">
@@ -128,7 +130,7 @@ export function SessionsScreen({ run }: { run: Run }) {
               endedOn={endedOn}
               grid={grid}
               shown={read ? shown.length : null}
-              onPage={upTo}
+              showing={drawn ? upTo : null}
               read={read}
             />
           </div>
@@ -143,7 +145,7 @@ export function SessionsScreen({ run }: { run: Run }) {
             aoi={aoi}
             clearTo={`${paths.sessions(run.runId)}${grid ? '' : search(withView(new URLSearchParams(), true))}`}
           />
-        ) : grid && recorded === 0 ? (
+        ) : grid && !drawn ? (
           <NothingRecorded run={run} query={query} />
         ) : grid ? (
           <SessionsGrid

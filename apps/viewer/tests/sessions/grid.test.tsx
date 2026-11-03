@@ -326,6 +326,17 @@ describe('a test that recorded no videos at all', () => {
     const rows = screen.getByRole('link', { name: 'Show these as rows instead' });
     expect(rows.getAttribute('href')).toBe(`${paths.sessions(SEED)}?view=rows`);
   });
+
+  it('states the run’s totals rather than a range of tiles that are not there', async () => {
+    await serveRunData();
+    mountApp(paths.sessions(SEED));
+
+    await screen.findByRole('heading', { name: 'This test recorded no videos' });
+    expect(
+      screen.getByText('24 people · 22 scored · 2 excluded because our automation broke'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/^Showing /)).toBeNull();
+  });
 });
 
 describe('the three filters of the grid', () => {
@@ -411,12 +422,51 @@ describe('the three filters of the grid', () => {
     expect(screen.getByRole('button', { name: /^Version: B/ })).toBeTruthy();
   });
 
+  it('states one total across the three groups, so the row cannot disagree with itself', async () => {
+    await serveRecorded();
+    mountApp(`${paths.sessions(SEED)}?variant=B`);
+
+    await tiles(PAGE);
+    // Twelve people ran on the redesign. A row saying "All outcomes 12" beside "Any step
+    // 24" would be two totals for one screen, and the step the reader then picks would
+    // hand them a third figure.
+    expect(option('Filter by outcome', 'All outcomes 12')).toBeTruthy();
+    expect(option('Filter by segment', 'Every segment 12')).toBeTruthy();
+    expect(option('Filter by the step it ended on', 'Any step 12')).toBeTruthy();
+    // And each option is the version's own tally: one of the redesign's twelve people gave
+    // up at its Cart step, against three across the whole test.
+    expect(option('Filter by the step it ended on', 'Cart 1')).toBeTruthy();
+    expect(option('Filter by segment', 'mobile · in a hurry 3')).toBeTruthy();
+  });
+
   it('uses the existing no-match screen when a composition matches nobody', async () => {
     await serveRecorded();
     mountApp(`${paths.sessions(SEED)}?outcome=success&step=cart`);
 
     expect(await screen.findByRole('heading', { name: 'No session matches' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /^S-\d+ · / })).toBeNull();
+  });
+
+  it('names the segment and the step in the sentence, never "this test recorded nobody"', async () => {
+    await serveRecorded();
+    mountApp(`${paths.sessions(SEED)}?segment=mobile · in a hurry&step=cart`);
+
+    await screen.findByRole('heading', { name: 'No session matches' });
+    // The test recorded twenty-four people. Saying it recorded nobody would be false, and
+    // this screen exists to state the finding rather than to deny the run.
+    expect(prose(document.querySelector('.empty p')?.textContent ?? '')).toBe(
+      'Nobody in mobile · in a hurry ended on the Cart step.',
+    );
+  });
+
+  it('keeps the version in front of them when an evidence link carried one in', async () => {
+    await serveRecorded();
+    mountApp(`${paths.sessions(SEED)}?variant=B&outcome=success&step=cart`);
+
+    await screen.findByRole('heading', { name: 'No session matches' });
+    expect(prose(document.querySelector('.empty p')?.textContent ?? '')).toBe(
+      'On Redesign candidate, nobody finished the task on the Cart step.',
+    );
   });
 
   it('drops a segment or a step this test has no entry for', async () => {

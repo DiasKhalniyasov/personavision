@@ -1,8 +1,8 @@
 import type { Run } from '@personavision/contract';
 import { stepLabel, variantName } from '@/screens/replay/runWords';
-import type { OutcomeStatus, SessionFilter } from '@/session';
+import type { OutcomeStatus } from '@/session';
 import { aoiLabel } from './filters';
-import type { Aoi } from './filters';
+import type { Aoi, ScreenFilter } from './filters';
 
 /**
  * The words of the no-match screen — `#screen-sessions-empty` of
@@ -15,6 +15,12 @@ import type { Aoi } from './filters';
  * it. Every number in it is read from `run.json`'s `aoiMetrics`, the same row the Attention
  * screen and the scoring step read, so the screen cannot disagree with the heatmap it sends
  * the reader to.
+ *
+ * It names **every** filter the reader asked for, which is the whole point of it. The grid
+ * adds two of them (#268) — the audience segment and the step a session ended on — and a
+ * sentence that left either out would state something false about the run: "this test
+ * recorded nobody" is the honest reading of a version nobody ran on, and a flat lie about a
+ * test of twenty-four people whose mobile segment simply never reached the Cart step.
  */
 
 /** What each outcome reads as in the middle of a sentence. */
@@ -41,30 +47,37 @@ const capitalise = (sentence: string): string =>
 
 const people = (count: number): string => `${count} ${count === 1 ? 'person' : 'people'}`;
 
-export function noMatchWords(run: Run, filter: SessionFilter, aoi: Aoi | null): NoMatchWords {
+export function noMatchWords(run: Run, filter: ScreenFilter, aoi: Aoi | null): NoMatchWords {
   // An area exists on one version, so a filter naming one names its version too, whether or
   // not `?variant=` was set as well.
   const variant = filter.variant ?? aoi?.variant ?? null;
   const on = variant === null ? '' : `On ${variantName(run, variant)}, `;
   const outcome = filter.outcome ?? null;
   const did = outcome === null ? null : DID[outcome];
+  // The segment names the people and the step names where they got to, so one goes in front
+  // of the verb and the other behind it.
+  const who = filter.segment === null ? 'nobody' : `nobody in ${filter.segment}`;
+  const ended = filter.step === null ? '' : ` on the ${stepLabel(run, filter.step)} step`;
 
   const clause = (opening: string): string => (on === '' ? capitalise(opening) : `${on}${opening}`);
 
   if (aoi === null) {
-    // No area to name: the filter is a version, an outcome, or both.
+    // No area to name: a version, an outcome, a segment, a step, or any combination.
     const sentence =
-      did === null
-        ? // A version alone can only match nothing when the test ran nobody on it.
-          clause('this test recorded nobody.')
-        : clause(`nobody ${did}.`);
+      did === null && ended === ''
+        ? // Nothing was asked about what they did, so the only thing that can have emptied
+          // the list is that there is nobody to ask about.
+          clause(`this test recorded ${who}.`)
+        : // `ended` without an outcome is "where did they get to", which is what the step
+          // filter asks: a session ends somewhere whatever its outcome.
+          clause(`${who} ${did ?? 'ended'}${ended}.`);
     return { before: sentence, area: null, after: '', detail: null };
   }
 
   return {
-    before: clause(did === null ? 'nobody looked at ' : 'nobody both looked at '),
+    before: clause(did === null ? `${who} looked at ` : `${who} both looked at `),
     area: aoiLabel(aoi),
-    after: did === null ? '.' : ` and ${did}.`,
+    after: `${did === null ? '' : ` and ${did}`}${ended}.`,
     detail: areaDetail(run, aoi),
   };
 }

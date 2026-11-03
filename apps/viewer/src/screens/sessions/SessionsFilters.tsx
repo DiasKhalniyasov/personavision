@@ -40,12 +40,18 @@ import type { SessionRowState } from './useSessionRows';
  * dismissible chip: a narrowing with no control to clear it would be a list a reader cannot
  * widen again.
  *
- * **The outcome counts are the aggregate's** (`counts.ts`), which is why they are on the
- * options at all: `scores[].outcomeCounts` is a figure the pipeline stored, per version, so
- * the count beside *Success* is right before a single session has been read and cannot
- * drift from the Verdict's. The segment and the step have no such slice, so theirs are
- * tallied over the sessions and stated only once every one of them is in — a count over
- * half a run is a figure that would change under the reader while they looked at it.
+ * **Every count on the row is over one slice: the version.** The outcome's figures are the
+ * aggregate's own (`counts.ts`) — `scores[].outcomeCounts` is stored per version, so the
+ * count beside *Success* is right before a single session has been read and cannot drift
+ * from the Verdict's. The segment and the step have no such slice, so theirs are tallied
+ * over the sessions, and over the **same** version, because a row reading *All outcomes 12*
+ * beside *Any step 24* would be stating two different totals for one screen. The version is
+ * as far as the composition goes: the aggregate holds no figure for "the people in this
+ * segment who gave up", and a count the aggregate cannot answer is not one this screen
+ * invents.
+ *
+ * A tally is stated only once every session is in — a count over half a run is a figure
+ * that would change under the reader while they looked at it.
  *
  * The segments are the registry's `toggle-group` in its **multiple** mode, not its single
  * one: a single-select group is a radio group to a screen reader, and these are the
@@ -65,7 +71,7 @@ export function SessionsFilters({
   endedOn,
   grid,
   shown,
-  onPage,
+  showing,
   read,
 }: {
   run: Run;
@@ -82,8 +88,13 @@ export function SessionsFilters({
    * run's own totals, which are true at every moment of the reading.
    */
   shown: number | null;
-  /** How many tiles the grid has on screen, for its showing line. */
-  onPage: number;
+  /**
+   * How many tiles the grid has on screen, for its showing line — `null` when no grid is
+   * drawn at all, which is a run that recorded no video. Then the line is the run's own
+   * totals: "Showing 1–8 of 24" over a card saying there is nothing to watch would state a
+   * range of tiles that are not there.
+   */
+  showing: number | null;
   /** Whether every session has been read, which is what lets a tally be stated at all. */
   read: boolean;
 }) {
@@ -113,14 +124,21 @@ export function SessionsFilters({
     ],
   };
 
+  // The version's own people, which is the slice every figure on this row is over.
+  const inSlice = rows.filter(
+    (state) =>
+      state.status === 'ready' && (filter.variant === null || state.row.variant === filter.variant),
+  );
   const segments = tally(
-    rows.map((state) => (state.status === 'ready' ? state.row.segment : null)),
+    inSlice.map((state) => (state.status === 'ready' ? state.row.segment : null)),
   );
   const steps = tally(
-    rows.map((state) => (state.status === 'ready' ? state.row.endedOn.step : null)),
+    inSlice.map((state) => (state.status === 'ready' ? state.row.endedOn.step : null)),
   );
   const tallied = (counts: ReadonlyMap<string, number>, key: string): number | null =>
     read ? (counts.get(key) ?? 0) : null;
+  // The slice's own total: the aggregate's for one version, the manifest's for the test.
+  const everybody = slice?.all ?? (filter.variant === null ? run.sessionIds.length : null);
 
   return (
     <>
@@ -139,7 +157,7 @@ export function SessionsFilters({
               pick(SEGMENT_PARAM, value);
             }}
             options={[
-              { value: ALL, label: 'Every segment', count: run.sessionIds.length },
+              { value: ALL, label: 'Every segment', count: everybody },
               ...runSegments(run).map((segment) => ({
                 value: segment,
                 label: segment,
@@ -154,7 +172,7 @@ export function SessionsFilters({
               pick(STEP_PARAM, value);
             }}
             options={[
-              { value: ALL, label: 'Any step', count: run.sessionIds.length },
+              { value: ALL, label: 'Any step', count: everybody },
               ...run.steps.map((step) => ({
                 value: step.id,
                 label: step.label,
@@ -205,8 +223,8 @@ export function SessionsFilters({
       )}
       <span className="grow" />
       <span className="microlabel">
-        {grid && shown !== null
-          ? showingLine(onPage, shown)
+        {grid && showing !== null && shown !== null
+          ? showingLine(showing, shown)
           : isFiltered(filter) && shown !== null
             ? shownOfLine(shown, run.sessionIds.length)
             : countsLine(sessionCounts(run), isScored(run))}
