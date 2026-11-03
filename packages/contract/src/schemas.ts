@@ -248,6 +248,33 @@ export const runUsageSchema = z.strictObject({
 
 const frictionScoreSchema = z.strictObject({ median: points, sd: z.number().min(0) });
 
+/**
+ * The four outcomes a variant's scored sessions ended in. Declared once and used twice —
+ * by a variant's own score, and by the holdout's figures beside it — so the holdout's
+ * counts cannot be spelt a second way.
+ */
+const outcomeCountsSchema = z.strictObject({
+  success: count,
+  abandoned: count,
+  failed: count,
+  automationFailure: count,
+});
+
+/**
+ * The holdout's own figures on one score: a completion rate, the sessions behind it and
+ * the four outcomes, for the holdout people alone. Stored so that the Improve screen
+ * prints a third figure beside the baseline and the change without computing anything
+ * (`docs/FLOW.md` section 15). `runSchema` holds this rate to these counts by the same
+ * arithmetic and the same tolerance as a variant's own, so a holdout figure cannot
+ * disagree with the people behind it.
+ */
+const holdoutFiguresSchema = z.strictObject({
+  completionRate: unitInterval,
+  outcomeCounts: outcomeCountsSchema,
+  /** Automation failures are excluded here too, so a measured holdout is at least one. */
+  scoredSessionCount: z.int().positive(),
+});
+
 const scoreSchema = z.strictObject({
   variant: name,
   taskId: name,
@@ -270,12 +297,7 @@ const scoreSchema = z.strictObject({
     }),
     deadEndRevisits: unitInterval,
   }),
-  outcomeCounts: z.strictObject({
-    success: count,
-    abandoned: count,
-    failed: count,
-    automationFailure: count,
-  }),
+  outcomeCounts: outcomeCountsSchema,
   /**
    * Automation failures are excluded, so this is at least one: a variant whose every
    * session was an automation failure has no friction score and no completion rate, and
@@ -283,7 +305,22 @@ const scoreSchema = z.strictObject({
    */
   scoredSessionCount: z.int().positive(),
   perSeedGroup: z.array(z.strictObject({ seed: z.int(), frictionScore: points })),
+  /**
+   * The same three figures for the holdout people alone. Optional with no default: a score
+   * of a run that tested no change carries none, and an absent block is a score no holdout
+   * was measured on rather than a holdout that completed nothing.
+   */
+  holdout: holdoutFiguresSchema.optional(),
 });
+
+/**
+ * Whether the holdout confirmed the gain: `confirmed`, `not_confirmed`, or `none` for a
+ * path-2 test that ran no holdout. The **sentence** that states it is
+ * `@personavision/scoring`'s to write (`docs/FLOW.md` section 15); what the contract fixes
+ * is that the three states have one spelling, so the Improve screen renders its notice
+ * from data rather than by matching on prose.
+ */
+export const holdoutVerdictSchema = z.enum(['confirmed', 'not_confirmed', 'none']);
 
 /**
  * What the product leads with. All of it is produced by the scoring step and stored: the
@@ -309,6 +346,12 @@ export const verdictSchema = z.strictObject({
   headlineFindingIds: z.array(name).max(3, 'the Verdict screen shows at most three findings'),
   /** The one heatmap the verdict embeds: `aoiId` is `null` when the whole step is the evidence. */
   heroEvidence: z.strictObject({ variant: name, step: name, aoiId: name.nullable() }),
+  /**
+   * Whether the holdout confirmed the gain. Optional with no default: a run that tested no
+   * change has no holdout to report on. `runSchema` holds a run that ran one to carrying
+   * this, and holds this and the run's own record of it to saying the same thing.
+   */
+  holdout: holdoutVerdictSchema.optional(),
 });
 
 /**
@@ -317,6 +360,146 @@ export const verdictSchema = z.strictObject({
  * different claim; anything further apart is a disagreement and is reported as one.
  */
 const COMPLETION_TOLERANCE = 0.005;
+
+/**
+ * A stored `completionRate` and the outcome counts beneath it are one claim, so the rate is
+ * held to the counts wherever a score stores one: a variant's own figures, and the
+ * holdout's figures beside them. One function and one tolerance, so the two figures a
+ * screen prints side by side are never held to two different rules.
+ */
+const completionRateIssues = (
+  figures: {
+    completionRate: number;
+    scoredSessionCount: number;
+    outcomeCounts: { success: number; abandoned: number; failed: number };
+  },
+  path: PropertyKey[],
+): Array<{ path: PropertyKey[]; message: string }> => {
+  const issues: Array<{ path: PropertyKey[]; message: string }> = [];
+  const { success, abandoned, failed } = figures.outcomeCounts;
+  // The denominator is the scored sessions, and the three product outcomes are what they
+  // are made of: an automation failure is excluded from the scores, not from the run.
+  // Without this, 5 successes and 5 abandonments over 5 scored sessions would state a
+  // completion rate of 1 and agree with itself.
+  const accounted = success + abandoned + failed;
+  if (accounted !== figures.scoredSessionCount) {
+    issues.push({
+      path: [...path, 'scoredSessionCount'],
+      message: `${figures.scoredSessionCount} sessions were scored, but the outcomes account for ${accounted} of them (${success} success, ${abandoned} abandoned, ${failed} failed; automation failures are counted separately and excluded)`,
+    });
+  }
+  if (figures.scoredSessionCount <= 0) return issues;
+  const expected = success / figures.scoredSessionCount;
+  if (Math.abs(figures.completionRate - expected) > COMPLETION_TOLERANCE) {
+    issues.push({
+      path: [...path, 'completionRate'],
+      message: `completionRate ${figures.completionRate} disagrees with ${success} of ${figures.scoredSessionCount} scored sessions (${expected})`,
+    });
+  }
+  return issues;
+};
+
+/**
+ * The pull request a change was opened as, on the connected repository. The URL is
+ * recorded rather than composed from the repository and the number, because a URL built
+ * from those two is a guess at the host's layout.
+ *
+ * **Nothing here holds a credential**, and the object is closed like every other, so there
+ * is nowhere for one to hide: the installation token is read at call time and never
+ * written into a run, a log line or an error (`CONTEXT.md`, `docs/FLOW.md` section 16).
+ */
+const pullRequestSchema = z.strictObject({
+  /** `owner/name`, as GitHub spells a repository. */
+  repository: z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'a repository is owner/name'),
+  number: z.int().positive(),
+  url: z.url(),
+  title: name,
+});
+
+/**
+ * Where the changed version was reached: the pull request's own preview deployment
+ * (`docs/FLOW.md` section 15, point 3). A repository that has none is a state the product
+ * states plainly rather than guesses at (#232) — the URL is `null` and the reason is what
+ * the Improve screen prints. A URL guessed from a convention would produce a confident 404
+ * and a run against somebody else's site, so the honest nothing is writable here and the
+ * guess is unnecessary.
+ *
+ * The invariant lives on this object rather than on `runSchema`, so that the step
+ * resolving a preview on its own is held to it too, and not only once a whole run has been
+ * simulated and written.
+ */
+const previewSchema = z
+  .strictObject({
+    /** `null` when the repository has no preview deployment for this pull request. */
+    url: z.url().nullable(),
+    /** Why there is none. Carried only when there is no URL. */
+    reason: name.optional(),
+  })
+  .superRefine((preview, ctx) => {
+    if (preview.url === null && preview.reason === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message:
+          'this change was tested at no URL, so it records why there is no preview: a repository with no preview deployment is stated, never left blank',
+      });
+    }
+    if (preview.url !== null && preview.reason !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: `this change was tested at ${preview.url} and also carries a reason there is no preview: a preview is a URL or a stated nothing, never both`,
+      });
+    }
+  });
+
+/**
+ * The people the change was never chosen against: personas generated from the same
+ * audience on seeds that were not used when the change was picked. It is the only thing in
+ * the loop that stops the swarm agreeing with itself, so a change that wins on the original
+ * seeds and not on the holdout is reported as **not confirmed** (`docs/FLOW.md` section 15,
+ * point 4). `runSchema` holds the ids to the run's own personas, and `confirmed` to the
+ * holdout verdict beside it.
+ */
+const holdoutSchema = z.strictObject({
+  /** Ids of this run's own personas. Empty when no holdout ran. */
+  personaIds: z.array(name),
+  /** `true`, `false`, or `null` when no holdout ran. */
+  confirmed: z.boolean().nullable(),
+});
+
+/**
+ * How a recorded holdout reads as a verdict: the one mapping between the two, so that the
+ * record and the notice the screen renders cannot be made to disagree.
+ */
+const holdoutVerdictOf = (confirmed: boolean | null): z.infer<typeof holdoutVerdictSchema> => {
+  if (confirmed === null) return 'none';
+  return confirmed ? 'confirmed' : 'not_confirmed';
+};
+
+/**
+ * The change a run tested — the whole of what the artifact learns about path 2's closed
+ * loop (`docs/FLOW.md` section 15): the recommendation the change answers, the file it
+ * touches, the pull request it was opened as, the preview it was tested at, and the holdout
+ * it was tested against.
+ *
+ * The two variants of such a run are named here so that no screen has to guess which is
+ * which: `baselineVariant` is the site as it is, `changeVariant` is the pull request's
+ * version, both by their ids in `variants`. **Baseline** and **change** are the user's
+ * words for them; _variant_ stays the internal word the artifact uses for both
+ * (`docs/FLOW.md` section 16).
+ */
+const improveSchema = z.strictObject({
+  /** The recommendation this change answers, by its id in `recommendations.json`. */
+  recommendationId: name,
+  /** The file in the repository the change touches: one targeted change, not a list. */
+  changedFile: name,
+  pullRequest: pullRequestSchema,
+  preview: previewSchema,
+  baselineVariant: name,
+  changeVariant: name,
+  holdout: holdoutSchema,
+});
 
 export const runSchema = z
   .strictObject({
@@ -444,6 +627,12 @@ export const runSchema = z
     ),
     scores: z.array(scoreSchema),
     verdict: verdictSchema,
+    /**
+     * The change this run tested, on a path-2 run. Optional with no default: every run
+     * that exists today tested no change, and an absent block is a run that tested none
+     * rather than a change that did nothing.
+     */
+    improve: improveSchema.optional(),
     calibration: z
       .strictObject({
         benchmark: z.literal('UEyes'),
@@ -489,27 +678,16 @@ export const runSchema = z
     // `completionRate` is stored so that no screen computes it, which only works while it
     // agrees with the outcome counts underneath it.
     run.scores.forEach((score, index) => {
-      const { success, abandoned, failed } = score.outcomeCounts;
-      // The denominator is the scored sessions, and the three product outcomes are what
-      // they are made of: an automation failure is excluded from the scores, not from the
-      // run. Without this, 5 successes and 5 abandonments over 5 scored sessions would
-      // state a completion rate of 1 and agree with itself.
-      const accounted = success + abandoned + failed;
-      if (accounted !== score.scoredSessionCount) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['scores', index, 'scoredSessionCount'],
-          message: `${score.scoredSessionCount} sessions were scored, but the outcomes account for ${accounted} of them (${success} success, ${abandoned} abandoned, ${failed} failed; automation failures are counted separately and excluded)`,
-        });
+      for (const issue of completionRateIssues(score, ['scores', index])) {
+        ctx.addIssue({ code: 'custom', ...issue });
       }
-      if (score.scoredSessionCount <= 0) return;
-      const expected = success / score.scoredSessionCount;
-      if (Math.abs(score.completionRate - expected) > COMPLETION_TOLERANCE) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['scores', index, 'completionRate'],
-          message: `completionRate ${score.completionRate} disagrees with ${success} of ${score.scoredSessionCount} scored sessions (${expected})`,
-        });
+      // The holdout's figures are a third completion rate printed beside these two, so
+      // they are held to the holdout's own counts by the same arithmetic: a holdout figure
+      // that disagreed with the people behind it would print beside two that do not.
+      if (score.holdout !== undefined) {
+        for (const issue of completionRateIssues(score.holdout, ['scores', index, 'holdout'])) {
+          ctx.addIssue({ code: 'custom', ...issue });
+        }
       }
     });
 
@@ -709,6 +887,70 @@ export const runSchema = z
       }
       named.add(findingId);
     });
+
+    // Path 2's block. It is absent on every run that exists today; what is held when it is
+    // present is that a change which was tested cannot be recorded without the people it
+    // was tested against and the verdict on them.
+    const { improve } = run;
+    const verdictHoldout = run.verdict.holdout;
+    if (improve === undefined) {
+      if (verdictHoldout !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['verdict', 'holdout'],
+          message:
+            'this run tested no change, so it ran no holdout for its verdict to report on: a holdout verdict belongs to a run that carries an improve block',
+        });
+      }
+    } else {
+      const { holdout } = improve;
+      // A holdout that names people the run never generated is not a holdout: the Improve
+      // screen reads the holdout's figures as that set's, and a name nobody was is a
+      // figure about nobody.
+      const unknown = holdout.personaIds.findIndex((personaId) => !generated.has(personaId));
+      if (unknown !== -1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['improve', 'holdout', 'personaIds', unknown],
+          message: `"${holdout.personaIds[unknown]}" is not one of this run's ${run.personas.length} personas: a holdout is people the run generated`,
+        });
+      }
+      // "A change that wins on the original seeds and not on the holdout is reported as
+      // not confirmed, and says so in the sentence" — which is only renderable from data.
+      // So a run that ran a holdout records whether it held, in both places, and the two
+      // cannot say different things.
+      const ran = holdout.personaIds.length > 0;
+      if (ran && holdout.confirmed === null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['improve', 'holdout', 'confirmed'],
+          message: `this run ran a holdout of ${holdout.personaIds.length} ${holdout.personaIds.length === 1 ? 'person' : 'people'}, so it records whether the holdout confirmed the gain`,
+        });
+      }
+      if (!ran && holdout.confirmed !== null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['improve', 'holdout', 'confirmed'],
+          message: `this holdout names nobody, so nothing confirmed or failed to confirm the gain, but it records ${holdout.confirmed}`,
+        });
+      }
+      const recorded = holdoutVerdictOf(holdout.confirmed);
+      if (verdictHoldout === undefined) {
+        if (ran) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['verdict', 'holdout'],
+            message: `this run ran a holdout, so its verdict says whether it was confirmed: ${holdoutVerdictSchema.options.join(', ')}`,
+          });
+        }
+      } else if (verdictHoldout !== recorded) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['verdict', 'holdout'],
+          message: `the verdict reports the holdout as "${verdictHoldout}" but the run records it as "${recorded}": the notice and the record are one claim`,
+        });
+      }
+    }
   });
 
 /** One shape for a simulated and a real session, told apart by `kind`. */
@@ -1052,6 +1294,12 @@ export type AudienceDevice = z.infer<typeof audienceDeviceSchema>;
 export type Persona = z.infer<typeof personaSchema>;
 export type Verdict = z.infer<typeof verdictSchema>;
 export type Score = z.infer<typeof scoreSchema>;
+export type HoldoutFigures = z.infer<typeof holdoutFiguresSchema>;
+export type HoldoutVerdict = z.infer<typeof holdoutVerdictSchema>;
+export type Improve = z.infer<typeof improveSchema>;
+export type PullRequest = z.infer<typeof pullRequestSchema>;
+export type Preview = z.infer<typeof previewSchema>;
+export type Holdout = z.infer<typeof holdoutSchema>;
 export type Run = z.infer<typeof runSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunProgress = z.infer<typeof runProgressSchema>;
