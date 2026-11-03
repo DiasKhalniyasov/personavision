@@ -2,7 +2,7 @@ import { personaSchema } from '@personavision/contract';
 import type { Audience, AudienceDevice } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import { concreteDeviceFor, deviceQuota } from '../src/devices.js';
-import { HOLDOUT_FLOOR, HOLDOUT_SHARE } from '../src/generate.js';
+import { HOLDOUT_DEFAULT_SIZE } from '../src/generate.js';
 import { holdoutCandidates } from '../src/holdout.js';
 import { GENERATOR_VERSION, generateHoldout, generatePersonas, holdoutSize } from '../src/index.js';
 import { DESKTOP_CLASS, MOBILE_CLASS, audienceWith, withShare } from './helpers.js';
@@ -294,27 +294,107 @@ describe('generateHoldout: the same kind of person', () => {
   });
 });
 
+/**
+ * The default size: a fixed twenty, whatever the participant count.
+ *
+ * It was forty per cent of the participants, floored at ten — auto-decision 83, option a, and
+ * what the prototype printed. On 2026-11-03 the owner overrode it with option b, a fixed 20
+ * (#318). What that changes is the *shape* of the rule: the figure no longer grows with the
+ * audience, so a path-2 test costs the same twenty extra readings at forty participants as at a
+ * thousand. What it does not change is the cap at the audience, which is why the counts below
+ * twenty have their own cases here rather than being left to chance.
+ */
 describe('holdoutSize: the default beside the generator in `src/generate.ts`', () => {
-  it('is forty per cent, floored at ten, as one named value each', () => {
-    expect([HOLDOUT_SHARE, HOLDOUT_FLOOR]).toStrictEqual([0.4, 10]);
+  it('is a fixed twenty, as one named value', () => {
+    expect(HOLDOUT_DEFAULT_SIZE).toBe(20);
   });
 
-  it('holds a hundred participants to the forty the design contract prints', () => {
-    expect(holdoutSize(100)).toBe(40);
-  });
+  /**
+   * The three counts #318 names. A hundred and forty participants both get the flat twenty —
+   * under the old share rule they got forty and sixteen, so this is the assertion that the
+   * default stopped scaling. Twelve is the edge below the default: the cap holds the holdout to
+   * the audience it is drawn from, so twelve participants get twelve rather than twenty people
+   * to check twelve.
+   */
+  it.each([
+    [100, 20],
+    [40, 20],
+    [12, 12],
+  ])(
+    'holds the counts #318 names: %i participants to a holdout of %i',
+    (participants, expected) => {
+      expect(holdoutSize(participants)).toBe(expected);
+    },
+  );
 
   it.each([
     [1, 1],
     [4, 4],
-    [10, 10],
-    [12, 10],
-    [24, 10],
-    [25, 10],
-    [30, 12],
-    [100, 40],
-    [250, 100],
+    [12, 12],
+    [19, 19],
+    [20, 20],
+    [21, 20],
+    [30, 20],
+    [40, 20],
+    [100, 20],
+    [250, 20],
   ])('gives %i participants a holdout of %i', (participants, expected) => {
     expect(holdoutSize(participants)).toBe(expected);
+  });
+
+  /**
+   * The flat default is the whole point of the override, so it is asserted as the property it
+   * is rather than only at the sampled counts above: every audience at or above twenty people
+   * gets the same twenty.
+   */
+  it('is the same twenty at every participant count at or above it', () => {
+    const counts = [20, 21, 37, 40, 99, 100, 250, 1_000, 10_000];
+
+    expect(counts.map((participants) => holdoutSize(participants))).toStrictEqual(
+      counts.map(() => 20),
+    );
+  });
+
+  /**
+   * Below twenty the default is the audience itself, and this is the edge #318 asks to have
+   * asserted rather than left to chance. The holdout is drawn from the audience's own
+   * apportionment, so a default larger than the set it checks would be the comparison the wrong
+   * way round — twenty holdout people to check the demo's four. The cap is what prevents it, and
+   * a holdout asked for without a size at those counts really does come back at the audience's
+   * own size, people and all.
+   */
+  it.each([
+    ['the demo at four people', 4],
+    ['a dozen', 12],
+    ['one short of the default', 19],
+  ])('never asks %s for more holdout people than it has participants', (_what, participants) => {
+    const audience = audienceOf(`below-default-${participants}`, participants);
+
+    expect(holdoutSize(participants)).toBe(participants);
+
+    const holdout = generateHoldout({ audience, spentSeeds: SPENT });
+
+    expect(holdout.personas).toHaveLength(participants);
+    expect(holdout.seeds).toHaveLength(participants);
+    expect(new Set(holdout.seeds).size).toBe(participants);
+  });
+
+  /**
+   * The honest consequence of a fixed twenty, named here so that nobody reading a run later
+   * files it as a defect.
+   *
+   * Because the default no longer grows with the audience, a hundred participants are checked by
+   * twenty holdout people rather than forty, and a thousand by the same twenty. Twenty readings
+   * often cannot separate the bands, so **"the holdout could not judge"** — `null` with the
+   * reason, never `false` — becomes a common answer rather than a rare one. That answer belongs
+   * to the verdict (#304) and not to this package, which is why nothing here asserts it; what is
+   * asserted here is the arithmetic that makes it common. A twenty-person holdout that cannot
+   * judge is the product working as decision 83 option b specifies.
+   */
+  it('does not grow with the audience, which is why the holdout often cannot judge', () => {
+    expect([holdoutSize(100), holdoutSize(1_000)]).toStrictEqual([20, 20]);
+    // A fifth of the people the change was chosen on, where the share rule read two fifths.
+    expect(holdoutSize(100) / 100).toBe(0.2);
   });
 
   it.each([0, -1, 1.5, Number.NaN])('refuses %s as a participant count', (participants) => {
@@ -324,13 +404,18 @@ describe('holdoutSize: the default beside the generator in `src/generate.ts`', (
   it('is what a holdout asked for without a size gets', () => {
     const audience = audienceOf('defaulted', 100);
 
-    expect(generateHoldout({ audience, spentSeeds: SPENT }).personas).toHaveLength(40);
+    expect(generateHoldout({ audience, spentSeeds: SPENT }).personas).toHaveLength(20);
   });
 
-  it('is overridable by the caller', () => {
-    const audience = audienceOf('overridden', 100);
+  /**
+   * The override is untouched by #318: the run records the size it used and the screens read the
+   * figure from there, so a caller who wants another number still gets it — above the default as
+   * well as below, since the cap is the default's and not a limit on what may be asked for.
+   */
+  it.each([7, 30])('is overridable by the caller, who gets the %i they asked for', (size) => {
+    const audience = audienceOf(`overridden-${size}`, 100);
 
-    expect(generateHoldout({ audience, spentSeeds: SPENT, size: 7 }).personas).toHaveLength(7);
+    expect(generateHoldout({ audience, spentSeeds: SPENT, size }).personas).toHaveLength(size);
   });
 
   it.each([0, -1, 2.5])('refuses a holdout of %s people', (size) => {
