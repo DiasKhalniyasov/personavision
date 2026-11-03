@@ -317,26 +317,79 @@ const outcomeCountsOf = (
 };
 
 /**
+ * The holdout's own figures on one variant: a completion rate, the sessions behind it and
+ * the four outcomes, for the holdout people alone (`docs/FLOW.md` section 15, point 4).
+ *
+ * The same arithmetic as the figures beside them, from the same two functions, because the
+ * Improve screen prints them side by side and the contract holds both to the same rule: the
+ * rate is the successes over the **scored** sessions, and an automation failure among the
+ * holdout is excluded from the holdout exactly as it is excluded everywhere else. The share
+ * that were automation failures stays readable from the two counts, which is how a holdout
+ * that is more than a fifth our own harness is reported at all.
+ *
+ * `undefined` when the holdout has no scored session on this variant — a figure about
+ * nobody is not a figure, and the contract types `scoredSessionCount` as positive for that
+ * reason.
+ */
+const holdoutFiguresOf = (ofVariant: readonly Session[]): Score['holdout'] => {
+  const scoredSessions = ofVariant.filter(scored);
+  if (scoredSessions.length === 0) return undefined;
+  const outcomeCounts = outcomeCountsOf(
+    scoredSessions,
+    ofVariant.filter((session) => !scored(session)),
+  );
+  return {
+    completionRate: outcomeCounts.success / scoredSessions.length,
+    outcomeCounts,
+    scoredSessionCount: scoredSessions.length,
+  };
+};
+
+/**
  * One `scores` row per variant that has at least one scored session, ordered by variant id
  * so the answer does not depend on the order the sessions arrived in.
  *
  * A variant whose every session was an automation failure gets no row: it has no friction
  * score and no completion rate, and the contract types `scoredSessionCount` as positive
  * for exactly that reason — a zero there would report a number nobody measured.
+ *
+ * **A run that ran a holdout is scored twice over.** The row's own figures are the main
+ * set's — the people the change was chosen on, which is what "did it get better" asks about
+ * — and `holdout` carries the same figures for the people it was never chosen against. A row
+ * that pooled the two would compare a set against a superset containing it, and the one
+ * reading that cannot agree with itself would be averaged into the one that can.
  */
 export const score = (
   sessions: readonly Session[],
   aois: readonly Aoi[],
   aoiMetrics: readonly AoiMetric[],
   task: Task,
+  /**
+   * The run's holdout list, as `improve.holdout.personaIds` records it. Empty on a path-1
+   * run, which is every run that exists today: no holdout people, no holdout figures, and a
+   * row identical to the one this function has always produced.
+   */
+  holdoutPersonaIds: readonly string[] = [],
 ): VariantScore[] => {
+  const heldOut = new Set(holdoutPersonaIds);
+  const isHeldOut = (session: Session): boolean =>
+    session.persona !== null && heldOut.has(session.persona.id);
   const forTask = sessions.filter((session) => session.taskId === task.id);
   const variants = [...new Set(forTask.map((session) => session.variant))].sort();
 
   return variants.flatMap((variant): VariantScore[] => {
-    const ofVariant = forTask.filter((session) => session.variant === variant);
+    const ofVariant = forTask
+      .filter((session) => session.variant === variant)
+      .filter((session) => !isHeldOut(session));
     const scoredSessions = ofVariant.filter(scored);
+    // No reading of the main set is no row at all, which is this function's rule and not the
+    // holdout's: the holdout's figures sit on a variant's row, so a variant whose own
+    // sessions were all automation failures publishes neither. Computed after the return for
+    // that reason — figures for a row nobody keeps are work nobody reads.
     if (scoredSessions.length === 0) return [];
+    const holdout = holdoutFiguresOf(
+      forTask.filter((session) => session.variant === variant && isHeldOut(session)),
+    );
 
     const variantAois = aois.filter((aoi) => aoi.variant === variant);
     const components = componentsOf(scoredSessions, variantAois, aoiMetrics);
@@ -395,6 +448,9 @@ export const score = (
         outcomeCounts,
         scoredSessionCount: scoredSessions.length,
         perSeedGroup,
+        // Absent rather than `undefined`: the contract's object is closed, and a run that
+        // ran no holdout carries no holdout key at all.
+        ...(holdout === undefined ? {} : { holdout }),
       },
     ];
   });

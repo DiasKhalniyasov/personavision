@@ -4,9 +4,12 @@
  * Every persona the audience generated, each on every seed group, against every variant —
  * four people × three seeds × two variants is the demo's twenty-four sessions — with **the
  * same people and the same seeds on both variants**, so the comparison is never confounded
- * by who was tested. The plan is `planSwarm`'s and is a value a caller can count before
- * anything runs: `packages/cli` writes the open run's per-variant totals from it rather
- * than restating the arithmetic.
+ * by who was tested. A path-2 run drives a **holdout** besides: more people, on seeds of
+ * their own, through both sides (`holdout.ts`). Both of those promises are checked on the
+ * plan before anything is written, rather than rested on a planner that happens not to break
+ * them. The plan is `planSwarm`'s and is a value a caller can count before anything runs:
+ * `packages/cli` writes the open run's per-variant totals from it rather than restating the
+ * arithmetic.
  *
  * What this module owns, and what it leaves alone:
  *
@@ -53,6 +56,13 @@ import {
 } from '@personavision/contract';
 import { totalUsage } from '@personavision/provider';
 import { engineOnTheRecord, sameCalibration } from './calibration.js';
+import {
+  holdoutDrives,
+  holdoutPersonaIds,
+  holdoutRefusal,
+  NO_HOLDOUT,
+  sameSeedsOnBothSides,
+} from './holdout.js';
 import { decideOutcome } from './outcome.js';
 import { runSession } from './run-session.js';
 import type { Capture, CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
@@ -65,6 +75,7 @@ import type {
   DecisionUsage,
   ProviderMode,
 } from '@personavision/provider';
+import type { SwarmHoldout } from './holdout.js';
 import type { AutomationFailure, OutcomePolicy, SessionOutcome } from './outcome.js';
 import type { SessionProviders } from './run-session.js';
 
@@ -148,6 +159,13 @@ export interface SwarmPlanInput {
   /** Generated from the run's audience, and recorded in `run.json` by value (#31). */
   readonly personas: readonly Persona[];
   readonly seedGroups: readonly number[];
+  /**
+   * The people the change was never chosen against, on the seeds they were sampled on
+   * (`holdout.ts`, `docs/FLOW.md` section 15, point 4). Absent on a path-1 run, which is
+   * every run the swarm drove before this: no holdout people, no holdout sessions, and a
+   * plan identical to the one this planner has always produced.
+   */
+  readonly holdout?: SwarmHoldout;
 }
 
 /**
@@ -166,14 +184,22 @@ export const planSwarm = ({
   variants,
   personas,
   seedGroups,
+  holdout = NO_HOLDOUT,
 }: SwarmPlanInput): readonly SwarmSession[] => {
   const planned: SwarmSession[] = [];
+  const take = (persona: Persona, variant: Variant, seed: number): void => {
+    planned.push({ sessionId: sessionIdAt(planned.length + 1), persona, variant, seed });
+  };
   for (const variant of variants) {
     for (const persona of personas) {
-      for (const seed of seedGroups) {
-        planned.push({ sessionId: sessionIdAt(planned.length + 1), persona, variant, seed });
-      }
+      for (const seed of seedGroups) take(persona, variant, seed);
     }
+    // The holdout's people come after the main set's, inside the same variant: a variant's
+    // sessions stay one contiguous block of ids, which is what the committed example run's
+    // numbering promises and what a reader counting `S-13 … S-28` reads. Each of them is
+    // driven once, on the seed they were sampled on, rather than on every seed group — the
+    // seed is the unspent thing about a holdout person (`holdout.ts`).
+    for (const { persona, seed } of holdoutDrives(holdout)) take(persona, variant, seed);
   }
   return planned;
 };
@@ -281,15 +307,35 @@ export interface SwarmResult {
   readonly sessions: readonly Session[];
   /** The run as it now stands: finished, with its counts, its log and its totals. */
   readonly run: Run;
+  /**
+   * The run's holdout list: exactly the people this run drove as the holdout, in the order
+   * the generator drew them, and empty on a run that drove none.
+   *
+   * It is the people the swarm was handed, which is the people it drove: the plan is this
+   * module's own, so there is no path by which a name here has no sessions behind it.
+   *
+   * It is handed back rather than written, because the one field that records it —
+   * `improve.holdout.personaIds` — sits in the block that names the pull request, the
+   * preview and the recommendation, and the contract holds a recorded holdout to also
+   * recording whether it confirmed the gain. The swarm knows none of that: it knows who ran.
+   * The loop (#306) writes the block once scoring has judged it (#304).
+   */
+  readonly holdoutPersonaIds: readonly string[];
 }
 
 export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
+  const holdout = input.holdout ?? NO_HOLDOUT;
   const planned = planSwarm(input);
   if (planned.length === 0) {
     throw new Error(
       `${input.runDir}: this swarm plans no sessions (${input.personas.length} ${input.personas.length === 1 ? 'person' : 'people'}, ${input.seedGroups.length} seed groups, ${input.variants.length} variants), so there is no run to make`,
     );
   }
+
+  // Refused before the run is opened, so a refusal writes nothing at all: what is being
+  // refused is a comparison, and a directory half-written from one is worse than none.
+  const refused = holdoutRefusal(holdout, input) ?? sameSeedsOnBothSides(planned);
+  if (refused !== null) throw new Error(`${input.runDir}: ${refused}`);
 
   const clock = input.now ?? ((): Date => new Date());
   const concurrency = capOf(input.concurrency, DEFAULT_CONCURRENCY);
@@ -391,7 +437,11 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   await Promise.allSettled(workers);
   if (stoppedBy.length > 0) throw stoppedBy[0];
 
-  return { sessions, run: await closeRun(input.runDir, planned, startedAt, clock) };
+  return {
+    sessions,
+    run: await closeRun(input.runDir, planned, startedAt, clock),
+    holdoutPersonaIds: holdoutPersonaIds(holdout),
+  };
 };
 
 /** What one session produced, and what of it belongs to the run. */
@@ -668,6 +718,20 @@ const openRun = async (
   if (run.engine.mode !== mode) {
     throw new Error(
       `${runDir}: this run records the ${run.engine.mode} engine and the swarm was handed a ${mode} decision layer`,
+    );
+  }
+  // A run records by value every person it drove, and the session log the writer derives is
+  // written from that list: a session whose person the run never recorded is refused by
+  // `appendFinishedSession` mid-run, which leaves the half-written directory writing a
+  // session at a time exists to avoid. So it is refused here, before anything runs. The
+  // holdout is the new way to get it wrong — its people are recorded as ids into the same
+  // list, which is what the contract means by "a holdout is people the run generated" —
+  // and the check is over everybody planned, because the main set can be wrong the same way.
+  const generated = new Set(run.personas.map((persona) => persona.id));
+  const stranger = planned.find((plan) => !generated.has(plan.persona.id));
+  if (stranger !== undefined) {
+    throw new Error(
+      `${runDir}: this run records ${run.personas.length} personas and "${stranger.persona.id}" is not one of them: a run carries by value every person it drove, the holdout included, and its session log is written from them`,
     );
   }
   // Checked here rather than discovered on the session that overruns the plan: the writer
