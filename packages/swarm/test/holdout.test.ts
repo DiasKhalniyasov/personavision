@@ -12,7 +12,13 @@
 
 import { readdir } from 'node:fs/promises';
 import { createFixtureSource } from '@personavision/browser';
-import { readRun, runPaths, runSchema, writeRun } from '@personavision/contract';
+import {
+  AUTOMATION_FAILURE_NOTICE_SHARE,
+  readRun,
+  runPaths,
+  runSchema,
+  writeRun,
+} from '@personavision/contract';
 import { createOfflineDeterministicProvider } from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { planSwarm, runSwarm, sameSeedsOnBothSides } from '../src/index.js';
@@ -329,10 +335,11 @@ describe('a run driven with a holdout', () => {
     await open();
 
     // One holdout person, broken on both sides: two of the holdout's four sessions, which
-    // is half and well over a fifth. What the threshold is, and what is said above the
-    // summary about a run that crosses it, belong to `@personavision/contract` and to its
-    // own ticket — as they do for the run as a whole (`run-swarm.test.ts`). What this
-    // asserts is that the holdout's own two counters are there to compute the share from.
+    // is half and well over the share above which a run says it is about our own harness.
+    // That share is `@personavision/contract`'s and is imported rather than restated; what
+    // is said above the summary about a run that crosses it belongs to the results screen,
+    // as it does for the run as a whole (`run-swarm.test.ts`). What this asserts is that
+    // the holdout's own two counters are there to compute the share from.
     const { sessions } = await runSwarm(swarmOver({ source: breaksFor(source, 'holdout-rushed') }));
 
     const ours = heldOut(sessions);
@@ -344,7 +351,7 @@ describe('a run driven with a holdout', () => {
     }
     // The holdout's figures are the holdout's people, and the failures are not among them.
     expect(ours.length - excluded.length).toBe(2);
-    expect(excluded.length / ours.length).toBeGreaterThan(0.2);
+    expect(excluded.length / ours.length).toBeGreaterThan(AUTOMATION_FAILURE_NOTICE_SHARE);
 
     // The run says whose failure it was, for the holdout as for anybody else.
     const { run } = await readRun(runDir);

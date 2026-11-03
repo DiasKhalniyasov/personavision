@@ -9,6 +9,8 @@
 
 export {
   audienceSchema,
+  AUTOMATION_FAILURE_NOTICE_SHARE,
+  automationFailureNoticeIsDue,
   changeSchema,
   EVIDENCE_LINK_PARAMS,
   findingsSchema,
@@ -39,6 +41,7 @@ export type {
   Citation,
   EvidenceLinkParam,
   Findings,
+  Gender,
   GenderSplit,
   Goal,
   GoalAuthor,
