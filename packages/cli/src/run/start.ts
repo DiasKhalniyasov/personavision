@@ -236,6 +236,8 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
     audience,
     personas,
     seedGroups,
+    ...(request.feature === undefined ? {} : { feature: request.feature }),
+    ...(request.goal === undefined ? {} : { goal: request.goal }),
   };
   const planned = {
     totalSessions: plan.length,

@@ -58,6 +58,13 @@ export interface RunRecord {
   readonly personas: readonly Persona[];
   readonly seedGroups: readonly number[];
   readonly engine: Run['engine'];
+  /**
+   * The feature the test was asked about, in the user's words, and the goal it attempted
+   * with whoever last wrote it — a one-URL test's two blocks (`docs/FLOW.md` section 11).
+   * Absent on an A/B run, which is asked about no one feature.
+   */
+  readonly feature?: Run['feature'];
+  readonly goal?: Run['goal'];
 }
 
 /** What the swarm plans, as `planSwarm` counts it: the total and the split per version. */
@@ -100,6 +107,11 @@ export const openRunRecord = (record: RunRecord, planned: PlannedSessions): Run 
     personas: [...record.personas],
     seedGroups: [...record.seedGroups],
     engine: record.engine,
+    // Carried as they were given, so that a reader a month later can see what was asked
+    // about and who wrote the criterion the completion rate was measured against. Left out
+    // rather than written empty where there is none, which is what the schema asks for.
+    ...(record.feature === undefined ? {} : { feature: record.feature }),
+    ...(record.goal === undefined ? {} : { goal: record.goal }),
     sessionIds: [],
     screenshots: [
       {
