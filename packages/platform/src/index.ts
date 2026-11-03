@@ -73,6 +73,39 @@ export type {
 } from './server/routes/github.js';
 
 export {
+  acceptedEstimateRequest,
+  EstimateNotAcceptedError,
+  estimateRun,
+  measuredHistoryOfRuns,
+  providerPrices,
+} from './run/estimate.js';
+export type {
+  AgentsFigures,
+  CostEstimate,
+  CostFigures,
+  EstimateDraft,
+  EstimateIssue,
+  EstimateRequest,
+  MeasuredFrom,
+  MeasuredHistory,
+  MeasuredHistoryReader,
+  MeasuredRun,
+  NothingToPay,
+  PriceTable,
+  Range,
+  RunEstimate,
+  RunHistorySource,
+  StorageEstimate,
+  StorageFigures,
+  TimeEstimate,
+  TimeFigures,
+  UnknownFigure,
+} from './run/estimate.js';
+
+export { estimateRoutes } from './server/routes/estimate.js';
+export type { EstimateRouteOptions } from './server/routes/estimate.js';
+
+export {
   addSite,
   AVAILABLE_SITE_VERIFICATION_METHODS,
   checkConnectedRepository,
