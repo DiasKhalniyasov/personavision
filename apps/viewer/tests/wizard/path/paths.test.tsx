@@ -159,6 +159,23 @@ describe('path 2 is shown and locked', () => {
     expect(group.querySelector('h2')?.textContent).toBe('Improve my site · locked');
   });
 
+  it('leaves its one control operable, not announced as disabled with the card', async () => {
+    await serveConnection({ registered: true, repository: null });
+    const { router } = await open();
+    await waitFor(() => {
+      expect(pathTwo().getAttribute('aria-disabled')).toBe('true');
+    });
+
+    // A container's `aria-disabled` is inherited by its focusable descendants, so the one
+    // control the locked card exists for takes it back: the lock is the card, not the way out.
+    const control = within(pathTwo()).getByRole('link', { name: 'Connect GitHub' });
+    expect(control.getAttribute('aria-disabled')).toBe('false');
+    await userEvent.click(control);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.githubSettings);
+    });
+  });
+
   it('does not trap focus: the card itself is not a stop, and its one control is', async () => {
     await serveConnection({ registered: true, repository: null });
     await open();

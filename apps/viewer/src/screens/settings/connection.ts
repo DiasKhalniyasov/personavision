@@ -101,7 +101,15 @@ const load = (): Promise<GithubConnectionState> => {
   return read;
 };
 
-/** Forget what has been read — a connection has been made or broken, or a test is starting. */
+/**
+ * Forget what has been read.
+ *
+ * Nothing in this build can change the connection — `/settings/github` is the entry point
+ * and nothing more — so the caller is whoever builds the connect flow (#299, #227), the way
+ * a save calls `refreshAudiences`. Until then it is what a test resets between cases, and
+ * there is no stale state a user can reach: a connection made in another tab is read on the
+ * next load, and a state that could not be read was never cached.
+ */
 export const forgetGithubConnection = (): void => {
   read = null;
 };

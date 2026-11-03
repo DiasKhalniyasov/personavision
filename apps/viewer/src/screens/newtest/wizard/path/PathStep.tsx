@@ -91,7 +91,8 @@ function TestMySite() {
  * repository, and a state that could not be read — because an unlocked path that cannot open
  * a pull request is the one mistake this card must not make. The lock's reason sits beside
  * it rather than in a tooltip, and is named by `aria-describedby` so it is read out with the
- * card rather than only seen.
+ * card rather than only seen. The card is `aria-disabled`; its one control states
+ * `aria-disabled="false"`, because the lock is the card and not the way out of it.
  *
  * Connected, the card names the repository and **still starts nothing here**: the test that
  * uses it is path 2's own step.
@@ -133,7 +134,13 @@ function ImproveMySite({ connection }: { connection: GithubConnectionState }) {
         )}
       </span>
       <Button size="sm" variant="outline" className={styles.control} asChild>
-        <Link to={paths.githubSettings}>
+        {/*
+         * `aria-disabled` on a container is inherited by its focusable descendants, and a
+         * descendant takes it back by stating `false`. Without that, the one control the
+         * locked card exists for — the way to the connection screen — would be announced as
+         * unavailable, which is the control that does nothing this card is written to avoid.
+         */}
+        <Link to={paths.githubSettings} aria-disabled="false">
           {connection.status === 'connected' ? 'GitHub connection' : 'Connect GitHub'}
         </Link>
       </Button>
