@@ -438,4 +438,43 @@ describeWithChromium('a live walk of the fixture task', () => {
     },
     WALK_TIMEOUT_MS,
   );
+
+  it(
+    'records the session its caller names, and a second session into a file of its own',
+    async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'personavision-walk-recorded-'));
+      const source = createLiveSource();
+
+      try {
+        // One source, one session at a time, each naming the file it is recorded into: the
+        // shape the swarm drives, because a request names the session the file belongs to
+        // and one file cannot be two sessions.
+        for (const sessionId of ['S-01', 'S-02']) {
+          const page = await source.openSession(variantAt(MOBILE), MOBILE, {
+            video: { runDir, sessionId },
+          });
+          const screen = await source.capture(page, {
+            variant: 'v-mobile',
+            device: MOBILE,
+            task: TASK,
+            runDir,
+          });
+          page.video?.screen();
+          const video = await page.video?.finish();
+          await source.close(page);
+
+          expect(screen.step).toBe('cart');
+          expect(video?.state).toBe('recorded');
+          if (video?.state !== 'recorded') return;
+          expect(video.path).toBe(runPaths('').video(sessionId));
+          expect(readFileSync(join(runDir, video.path)).length).toBeGreaterThan(0);
+          expect(video.screenOffsetsMs).toHaveLength(1);
+          expect(video.actionOffsetsMs).toEqual([]);
+        }
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    },
+    WALK_TIMEOUT_MS,
+  );
 });

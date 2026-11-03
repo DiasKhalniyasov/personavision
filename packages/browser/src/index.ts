@@ -89,6 +89,7 @@ export type {
   Device,
   Geometry,
   PageHandle,
+  SessionRequest,
   TaskDefinition,
   TaskStep,
   Variant,

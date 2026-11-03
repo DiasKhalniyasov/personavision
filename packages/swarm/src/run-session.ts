@@ -33,9 +33,19 @@
  * module hands it facts — the screens, the fixations, the actions, and whether our own
  * browsing broke — and reads nothing back out of them.
  *
+ * **The session names its own recording, and where it is in it.** A session opens asking to
+ * be recorded as `videos/S-NN.webm`, and the recording is what knows both clocks: this loop
+ * marks where each screen it keeps was captured and where each action it records happened,
+ * so the offsets the session JSON carries are **measured against the recording** rather than
+ * inferred from `startedAt` and a duration — which is what lets a recommendation citing
+ * `S-62 · 0:48` open on the frame it means. A source that opens no browser has nothing to
+ * record and the session carries no video at all; a recording that failed is carried as
+ * absent with its reason, and the session is otherwise complete and scored like any other.
+ *
  * **The same persona, seed and page produce the same session.** Every draw is seeded from
- * the session's seed and the screen's position; the one value that is not derived is
- * `startedAt`, which is the wall clock and is therefore an input.
+ * the session's seed and the screen's position; the two values that are not derived are
+ * `startedAt`, which is the wall clock and is therefore an input, and the recording — its
+ * bytes and its wall-clock offsets, which are what a real browser took.
  *
  * What it does not carry: the run's own index, counters and totals (#49 appends those as
  * each session lands), and the trajectory sink (#139 opens one around the decider).
@@ -67,10 +77,11 @@ import type {
   CaptureElement,
   CaptureSource,
   PageHandle,
+  SessionRecording,
   TaskDefinition,
   Variant,
 } from '@personavision/browser';
-import type { Persona, Session } from '@personavision/contract';
+import type { Persona, Session, SessionVideo } from '@personavision/contract';
 import type {
   Aoi,
   Capture as EngineCapture,
@@ -453,6 +464,18 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   const actions: Session['actions'] = [];
   const history: PastAction[] = [];
 
+  /**
+   * The session's recording — `of` — bound once the browser has opened one, and what it came
+   * to — `video`, the file and its offsets or the stated absence of one.
+   *
+   * `of` is `undefined` on a source that opens no browser: a run directory replayed from disk
+   * has nothing to record, which is what leaves a fixture-mode session carrying no video at
+   * all rather than an absence it would have to explain. Both are held on an object rather
+   * than in variables because the marks below are made from a closure, and what a closure
+   * assigns is not what the compiler reads afterwards.
+   */
+  const recorded: { of?: SessionRecording; video?: SessionVideo } = {};
+
   let scrollY = 0;
   let clockMs = 0;
   let completed = false;
@@ -489,10 +512,15 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       value,
       ok,
     });
+    // Where this action is in the recording, marked here because this is the one place an
+    // action is recorded: an offset list has to be exactly as long as the array it indexes,
+    // and the contract rejects a session whose two disagree.
+    recorded.of?.action();
   };
 
   const page = await open(input, budget);
   if (page.handle === null) failure = page.failure;
+  recorded.of = page.handle?.video;
 
   try {
     for (
@@ -517,6 +545,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         };
         break;
       }
+      // Where this screen is in the recording, measured now and marked when the screen is
+      // kept: what follows is a model call that can take seconds, and a screen's offset is
+      // where it was captured and not where the answer about it arrived.
+      const capturedAtMs = recorded.of?.at();
       const step = capture.step;
       const screenshot = capture.screenshot ?? runPaths('').screenshot(variant.id, step);
 
@@ -690,6 +722,9 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         decidedAction:
           kind === null ? NO_USABLE_DECISION : decidedActionText(kind, aoi?.label ?? null),
       });
+      // A screen captured twice — scroll, then click — is two screens of the session and two
+      // offsets, because the agent saw two different things at two moments of the recording.
+      recorded.of?.screen(capturedAtMs);
 
       let executed: ActResult | null = null;
       if (violations.length > 0) {
@@ -766,6 +801,13 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     // write-through, so this flushes what is already on its way and nothing more — a line
     // that could not be written came back to the provider as a typed failure at the time.
     await trajectory.close();
+    // The recording is finished before the browser goes, because finishing is what closes
+    // the context, saves the file at the contract's path and measures it. It reports its own
+    // failures as an absent recording rather than throwing, and the `catch` is for the
+    // impossible one: the session has its answer, and a recording may not cost it.
+    recorded.video = await recorded.of
+      ?.finish()
+      .catch((error: unknown) => ({ state: 'absent' as const, reason: String(error) }));
     // A browser that will not close is a leaked process, not a session that did not happen:
     // the session has its answer, and throwing here would throw that answer away.
     if (page.handle !== null) await input.source.close(page.handle).catch(() => undefined);
@@ -814,6 +856,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       ...budget.sessionIntegrity(),
       selectorFailures: budget.sessionIntegrity().selectorFailures + reportedSelectorFailures,
     },
+    // Absent when nothing was recording: a session nobody could record names no video at
+    // all, which is the contract's difference between a session that recorded none and one
+    // that lost one. A recording that failed is here, with its reason in words.
+    ...(recorded.video === undefined ? {} : { video: recorded.video }),
   };
 
   await writeSession(input.runDir, session);
@@ -832,7 +878,12 @@ const open = async (input: RunSessionInput, budget: SessionBudget): Promise<Open
   const started = { inFlight: null as Promise<PageHandle> | null };
   try {
     const handle = await budget.attempt(() => {
-      started.inFlight = input.source.openSession(input.variant, input.persona.device);
+      started.inFlight = input.source.openSession(input.variant, input.persona.device, {
+        // The session's own recording, named by the session it belongs to: one source drives
+        // every session of a run and one file cannot be two sessions. A source that opens no
+        // browser has nothing to record and ignores it.
+        video: { runDir: input.runDir, sessionId: input.sessionId },
+      });
       return started.inFlight;
     }, attempting);
     return { handle, failure: null };
