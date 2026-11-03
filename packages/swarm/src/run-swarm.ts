@@ -717,6 +717,28 @@ const sameSite = (recorded: Run['site'], handed: Run['site']): boolean =>
   handed === undefined ||
   (recorded?.url === handed.url && recorded.verifiedAtLaunch === handed.verifiedAtLaunch);
 
+/**
+ * The site as the artifact declares it: the two fields, and whatever else came with them
+ * left behind.
+ *
+ * The caller hands over what it resolved, and what it resolved is likely to be bigger than
+ * this — the platform's own `SiteAtLaunch` carries the stored record's `id` beside the URL,
+ * and a run directory names no row in anybody's database (`docs/FLOW.md` section 8). Such an
+ * object is **structurally assignable** to this input and TypeScript checks excess properties
+ * only on object literals, so a caller passing its own value straight through compiles. If it
+ * reached the writer, `writeRun`'s strict parse would refuse the whole artifact at `site/id`
+ * and lose the run over a field nobody wanted on it.
+ *
+ * So the block is rebuilt from its declared fields at the one place that writes it. That
+ * makes "a run directory carries no platform record id" a property of this seam rather than
+ * something every caller has to remember, and it holds for a caller this package has never
+ * seen.
+ */
+const siteOnTheRecord = (site: NonNullable<Run['site']>): NonNullable<Run['site']> => ({
+  url: site.url,
+  verifiedAtLaunch: site.verifiedAtLaunch,
+});
+
 const openRun = async (
   runDir: string,
   planned: readonly SwarmSession[],
@@ -845,7 +867,7 @@ const recordEngine = async (
       // Spread conditionally rather than assigned, so that a caller with no site leaves the
       // field exactly as it found it instead of writing `site: undefined` over a block
       // somebody else put there.
-      ...(site === undefined ? {} : { site }),
+      ...(site === undefined ? {} : { site: siteOnTheRecord(site) }),
     },
   });
 };

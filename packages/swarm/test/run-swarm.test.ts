@@ -982,6 +982,30 @@ describe('the site on the record', () => {
     expect((await readRun(runDir)).run.site).toEqual(NORTHWIND);
   });
 
+  /**
+   * The id is dropped by the writer, not by whoever calls it.
+   *
+   * The platform's `SiteAtLaunch` — `{ id, url, verifiedAtLaunch }` — is structurally
+   * assignable to this input, and TypeScript checks excess properties only on object
+   * literals, so a caller passing its own resolved site straight through compiles. If the id
+   * travelled to the writer, `writeRun`'s strict parse would refuse the whole artifact at
+   * `site/id` and lose a run that ran, over a field nobody wanted on it.
+   */
+  it('writes only the fields the artifact declares, whatever it was handed', async () => {
+    await open();
+    const asThePlatformResolvesIt = {
+      id: 'site_01JQ8Z',
+      url: 'https://northwind.example/cart',
+      verifiedAtLaunch: true,
+    };
+
+    const { run } = await runSwarm(swarmOver({ site: asThePlatformResolvesIt }));
+
+    expect(run.site).toStrictEqual(NORTHWIND);
+    expect(await validate(runDir)).toEqual([]);
+    expect(await readFile(runPaths(runDir).run, 'utf8')).not.toContain(asThePlatformResolvesIt.id);
+  });
+
   it('drives the same sessions whether the site was verified or not', async () => {
     const sessionsOf = async (site: Run['site']): Promise<unknown> => {
       await sweep(runDir);
