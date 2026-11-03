@@ -36,6 +36,7 @@ export const patterns = {
   session: '/runs/:runId/sessions/:sessionId',
   funnel: '/runs/:runId/funnel',
   analysis: '/runs/:runId/analysis',
+  improve: '/runs/:runId/improve',
   githubSettings: '/settings/github',
 } as const;
 
@@ -80,6 +81,8 @@ export const paths = {
   funnel: (runId: string) => `/runs/${segment(runId)}/funnel`,
   /** The model's full write-up, every claim cited (`docs/FLOW.md` section 14.6). */
   analysis: (runId: string) => `/runs/${segment(runId)}/analysis`,
+  /** The change written for this run, or the lock (`docs/FLOW.md` sections 11 and 15). */
+  improve: (runId: string) => `/runs/${segment(runId)}/improve`,
   githubSettings: patterns.githubSettings,
 } as const;
 

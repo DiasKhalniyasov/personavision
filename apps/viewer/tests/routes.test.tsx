@@ -269,6 +269,9 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       '/runs/:runId/sessions/:sessionId',
       '/runs/:runId/funnel',
       '/runs/:runId/analysis',
+      // Path 2's own screen, mounted by #305: the lock, the pull request it wrote and the
+      // before/after with the holdout (`docs/FLOW.md` sections 11 and 15).
+      '/runs/:runId/improve',
       '/settings/github',
     ]);
   });
