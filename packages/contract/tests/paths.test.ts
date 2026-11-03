@@ -11,14 +11,16 @@ import { temporaryRunDir } from './fixtures.js';
 describe('the run-directory layout', () => {
   const layout = runPaths('');
 
-  it('is run.json, findings.json, recommendations.json, sessions/S-NN.json and screenshots/<variant>/<step>.png', () => {
+  it('is run.json, findings.json, recommendations.json, sessions/S-NN.json, screenshots/<variant>/<step>.png and videos/S-NN.webm', () => {
     expect(layout.run).toBe('run.json');
     expect(layout.findings).toBe('findings.json');
     expect(layout.recommendations).toBe('recommendations.json');
     expect(layout.sessionsDir).toBe('sessions');
     expect(layout.screenshotsDir).toBe('screenshots');
+    expect(layout.videosDir).toBe('videos');
     expect(layout.session('S-01')).toBe('sessions/S-01.json');
     expect(layout.screenshot('A', 'cart')).toBe('screenshots/A/cart.png');
+    expect(layout.video('S-01')).toBe('videos/S-01.webm');
   });
 
   it('hangs the same layout off a run directory', () => {
@@ -28,6 +30,9 @@ describe('the run-directory layout', () => {
     expect(paths.run).toBe(`/tmp/runs/2026-10-24-1402-northwind-demo/${layout.run}`);
     expect(paths.session('S-02')).toBe(
       `/tmp/runs/2026-10-24-1402-northwind-demo/${layout.session('S-02')}`,
+    );
+    expect(paths.video('S-02')).toBe(
+      `/tmp/runs/2026-10-24-1402-northwind-demo/${layout.video('S-02')}`,
     );
   });
 

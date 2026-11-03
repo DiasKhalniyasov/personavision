@@ -24,7 +24,10 @@ export {
   runUsageSchema,
   SCHEMA_VERSION,
   sessionSchema,
+  sessionVideoSchema,
   verdictSchema,
+  VIDEO_CAP_MS,
+  videoCapSchema,
   ZERO_USAGE,
 } from './schemas.js';
 export type {
@@ -59,8 +62,10 @@ export type {
   Score,
   Session,
   SessionProgress,
+  SessionVideo,
   Verdict,
   VariantProgress,
+  VideoCap,
   WriteUpClaim,
 } from './schemas.js';
 
