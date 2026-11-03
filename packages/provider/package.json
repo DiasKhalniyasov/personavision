@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "@personavision/contract": "workspace:*",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "vitest": "^5.0.5"
