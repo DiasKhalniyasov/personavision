@@ -710,10 +710,14 @@ Everything in path 1, and then:
   mirrored, with no server-side computation.
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
-- **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded
-  like Playwright's own browsers — **never from a `postinstall`** — and a test that needs it **skips visibly, with the
-  reason in its name**, when it is absent. How it installs and runs is written down in `packages/browser/README.md` by
-  the first ticket that touches it. Video recording survives the swap; that is the one behaviour that is not optional.
+- **The browser stays Playwright Chromium**, which `packages/browser` already drives. **CloakBrowser was considered
+  and dropped** on 2026-11-03: every launch validates a license key against its vendor's server, and the free key
+  allows one concurrent browser — which cannot serve a hundred agents run ten at a time. What this revision adds behind
+  `packages/browser`'s existing interface is **per-session video recording**: Playwright's own `recordVideo` on the
+  session context, flushed when the context closes, written into the run directory as `videos/S-NN.webm`. The install
+  rule is unchanged — the browser is fetched by the explicit `playwright install chromium` command, **never from a
+  `postinstall`** — and a test that needs it **skips visibly, with the reason in its name**, when it is absent. Video
+  recording is the one behaviour of this step that is not optional.
 - **Muse Wonder goes through `@personavision/provider`**, like every other model call, with an offline deterministic
   implementation behind the same interface. The first Wonder ticket **calls it live on the owner's key
   (`MODEL_API_KEY`)** and documents the model id, the request and response shape and the cost in

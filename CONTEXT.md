@@ -50,8 +50,8 @@ GitHub App client, the change Muse Wonder decides, the pull request it opens, th
 comment it posts back. It depends on `@personavision/contract`, `@personavision/provider` and `@personavision/scoring`,
 and nothing depends on it. The step that owns path 2 is the only one permitted to add it to `pnpm-workspace.yaml`.
 Everything else that direction needs is filled into packages that already exist: the sites, their ownership
-verification and the per-site caps in `@personavision/platform`; CloakBrowser and session video in
-`@personavision/browser`, behind the interface it already publishes; Muse Wonder in `@personavision/provider`; the
+verification and the per-site caps in `@personavision/platform`; session video in
+`@personavision/browser`, behind the interface it already publishes and on the Playwright Chromium it already drives; Muse Wonder in `@personavision/provider`; the
 aggregate and the recommendations in `@personavision/scoring`; the new screens in `apps/viewer`.
 
 The binary is `personavision`. The library packages above exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml` — `packages/*` already covers a new one. Three packages are the exceptions, each created by the one step that needs it: `@personavision/calibration` (step #11, because nothing before it needed a home for the human-likeness figure; it depends on `@personavision/contract` and may depend on `@personavision/engine`, and nothing depends on it), `@personavision/platform` (the hosted-platform step, which arrived with the owner's direction change) and `@personavision/provider` (#33, which is where step #8 decided the decision layer lives rather than inside `personas`; it depends on `@personavision/contract` only).
