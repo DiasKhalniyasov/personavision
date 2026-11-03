@@ -41,9 +41,9 @@ export { DEFAULT_CONCURRENCY, planSwarm, runSwarm } from './run-swarm.js';
 export {
   chooseRunner,
   DEFAULT_JOB,
+  DEFAULT_START_ALLOWANCE_MS,
   RUNNER_ENV,
   RunnerNotConfiguredError,
-  runnerConcurrencyAsked,
 } from './runner/choose.js';
 export type { ChosenRunner, RunnerWhere } from './runner/choose.js';
 export { createCloudRunJobsTransport, JobsRefused } from './runner/jobs.js';

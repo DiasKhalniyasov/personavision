@@ -13,7 +13,7 @@
  */
 
 import { readdir, readFile, rm } from 'node:fs/promises';
-import { createFixtureSource } from '@personavision/browser';
+import { createFixtureSource, DEFAULT_SESSION_BUDGET } from '@personavision/browser';
 import { readRun, runPaths, runSchema, validate } from '@personavision/contract';
 import { createOfflineDeterministicProvider } from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -22,6 +22,7 @@ import {
   contributionsPath,
   createCloudRunJobsTransport,
   createCloudRunRunner,
+  DEFAULT_START_ALLOWANCE_MS,
   JobsRefused,
   readSessionTaskEnvironment,
   RunnerNotConfiguredError,
@@ -217,6 +218,7 @@ describe('the runner seam, chosen by one variable', () => {
       where: 'local',
       runner: null,
       image: null,
+      startAllowanceMs: null,
     });
     expect(chooseRunner({ env: { PV_RUNNER: '' }, engineMode: 'offline' }).where).toBe('local');
     expect(chooseRunner({ env: { PV_RUNNER: 'local' }, engineMode: 'offline' }).where).toBe(
@@ -512,7 +514,16 @@ describe('an execution that goes wrong costs one session', () => {
     const started = Date.now();
     const { run, sessions } = await withNothingRunning(() =>
       runSwarm(
-        swarmOver({ env: CLOUD_RUN, jobsTransport: jobs.transport, sessionTimeoutMs: 300 }, people),
+        swarmOver(
+          {
+            // No allowance for getting started, because nothing here is scheduled or pulls an
+            // image: the wait is then the session's own cap and the write-up grace.
+            env: { ...CLOUD_RUN, PV_RUNNER_START_ALLOWANCE_MS: '0' },
+            jobsTransport: jobs.transport,
+            sessionTimeoutMs: 300,
+          },
+          people,
+        ),
       ),
     );
 
@@ -521,7 +532,7 @@ describe('an execution that goes wrong costs one session', () => {
     const broke = sessions.find((session) => session.sessionId === 'S-02') as Session;
     expect(broke.outcome.status).toBe('automation_failure');
     expect(broke.outcome.reason).toContain('was cancelled');
-    expect(broke.outcome.reason).toContain('still running after the 0.3 s');
+    expect(broke.outcome.reason).toContain('still running after the 1.3 s');
     // And it really was cancelled, by name, rather than abandoned.
     expect(jobs.cancelled).toHaveLength(1);
     expect(jobs.cancelled[0]).toContain('/executions/');
@@ -713,6 +724,37 @@ describe('the default Jobs transport, without a socket', () => {
   });
 });
 
+describe('the clock a remote session is held to', () => {
+  /**
+   * The failure the start allowance exists to prevent: the coordinator's clock starts when the
+   * execution is created and the task's own timeout starts when it begins running, so a wait
+   * equal to the session's cap is always the earlier of the two. A first pull of an image
+   * carrying Chromium takes longer than a session's whole budget, so without an allowance a
+   * cold run of a hundred sessions would cancel every one of them before it had done anything
+   * and record a hundred sessions that never ran.
+   */
+  it('allows an execution longer to start than a session is allowed to run', () => {
+    expect(DEFAULT_START_ALLOWANCE_MS).toBeGreaterThan(DEFAULT_SESSION_BUDGET.wallClockMs);
+  });
+
+  it('takes an allowance from the environment, and ignores one it cannot read', () => {
+    for (const [named, expected] of [
+      ['0', 0],
+      ['90000', 90_000],
+      ['', DEFAULT_START_ALLOWANCE_MS],
+      ['soon', DEFAULT_START_ALLOWANCE_MS],
+      ['-1', DEFAULT_START_ALLOWANCE_MS],
+    ] as const) {
+      const chosen = chooseRunner({
+        env: { ...CLOUD_RUN, PV_RUNNER_START_ALLOWANCE_MS: named },
+        engineMode: 'offline',
+      });
+      expect(chosen.where).toBe('cloud-run');
+      expect(chosen.startAllowanceMs).toBe(expected);
+    }
+  });
+});
+
 describe('collecting what a task wrote', () => {
   /**
    * The second half of a remote session is a download, and the session's cap is about the
@@ -732,6 +774,7 @@ describe('collecting what a task wrote', () => {
         image: IMAGE,
         videoBucket: 'pv-test-session-videos',
         engineMode: 'offline',
+        startAllowanceMs: 0,
       },
       {
         transport: {

@@ -95,6 +95,7 @@ from the session-video step this page depends on.
 | `PV_RUNNER_JOB`          | the job's name. Optional; defaults to `personavision-session-runner`              |
 | `PV_RUNNER_IMAGE`        | the image the job runs, **tag included**. Recorded on the run                     |
 | `PV_RUNNER_CONCURRENCY`  | **our own** ceiling on sessions in flight. Never a per-site cap — see below       |
+| `PV_RUNNER_START_ALLOWANCE_MS` | how long an execution may take to be scheduled and pull the image before the wait counts against the session. Optional; five minutes |
 | `PV_VIDEO_BUCKET`        | where a remote session's output comes back through (#316). Required for `cloud-run` |
 
 **Not one of them is a credential**, and this repository reads no variable whose name is key-,
@@ -103,6 +104,20 @@ token-, secret- or credential-shaped except the one sanctioned model-key read in
 coordinator's own access token comes from the metadata server of the machine it runs on; a
 coordinator hosted anywhere else injects a `JobsTransport` that knows how it is authorised, and
 the default transport is built only when none is given.
+
+### Two clocks, and why there is an allowance
+
+Cloud Run's `--task-timeout` starts when the **task begins running**. The coordinator's own
+wait starts when the **execution is created**, which is earlier by however long scheduling and
+the image pull take. So the coordinator waits the session's cap *plus*
+`PV_RUNNER_START_ALLOWANCE_MS` *plus* a second's write-up grace, and is never the first clock
+to fire on a session that is still working.
+
+Five minutes by default, which is longer than a session's own budget on purpose: the cost of
+too much is that a genuinely hung execution is cancelled later than it could have been, and the
+cost of too little is a cold run of a hundred sessions every one of which is cancelled before
+its container started and recorded as having passed its cap without running. Lower it once you
+know what a warm pull of your image costs.
 
 ### `PV_RUNNER_CONCURRENCY` moves the estimate and moves no cap
 
@@ -116,6 +131,11 @@ what the caller asked for and this number, and that is the figure the estimate d
 sessions by to get its batches — so the launch screen quotes the speed the run will really run
 at. Lowering it to 2 makes a hundred sessions fifty batches and the estimate says so. Raising it
 to 1000 changes nothing, because the site's cap is still ten.
+
+**It is read by the platform, not by the runner.** `@personavision/platform` computes the
+number and hands it to the swarm, which holds whatever bound it is given. A run driven from the
+command line does not go through the platform, so `personavision run` takes its bound from its
+own `--concurrency` flag and this variable does not reach it.
 
 ## What a remote run needs that this does not provide
 

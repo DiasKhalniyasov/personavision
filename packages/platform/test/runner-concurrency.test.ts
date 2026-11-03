@@ -11,7 +11,9 @@
  * cap answers the same whatever this variable says — **asserted at a thousand**, which is the
  * value that would be visible on every one of them if any of them read it.
  *
- * It touches nothing global: every call is handed its own environment.
+ * Every assertion about a figure hands `sessionsInFlight` its own environment, so the suite
+ * passes on a machine configured the way `docs/deployment.md` instructs. The two tests that do
+ * read `process.env` set it themselves and put it back.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -69,6 +71,17 @@ describe('our own concurrency ceiling', () => {
     expect(sessionsInFlight(undefined, {})).toBe(CAPS.concurrentSessionsPerSite);
   });
 
+  it('reads the process environment when no environment is handed to it', () => {
+    const saved = process.env[RUNNER_CONCURRENCY_ENV];
+    process.env[RUNNER_CONCURRENCY_ENV] = '3';
+    try {
+      expect(sessionsInFlight()).toBe(3);
+    } finally {
+      if (saved === undefined) delete process.env[RUNNER_CONCURRENCY_ENV];
+      else process.env[RUNNER_CONCURRENCY_ENV] = saved;
+    }
+  });
+
   it('holds a run below the cap when the environment names a smaller ceiling', () => {
     expect(sessionsInFlight(undefined, { [RUNNER_CONCURRENCY_ENV]: '2' })).toBe(2);
     expect(sessionsInFlight(undefined, { [RUNNER_CONCURRENCY_ENV]: '1' })).toBe(1);
@@ -107,7 +120,10 @@ describe('raising it moves the estimate', () => {
       { ...asked(10), concurrency: sessionsInFlight(undefined, { [RUNNER_CONCURRENCY_ENV]: '2' }) },
       HISTORY,
     );
-    const atTheCap = estimateRun({ ...asked(10), concurrency: sessionsInFlight() }, HISTORY);
+    const atTheCap = estimateRun(
+      { ...asked(10), concurrency: sessionsInFlight(undefined, {}) },
+      HISTORY,
+    );
     if (slower.time.state !== 'known' || atTheCap.time.state !== 'known') {
       throw new Error('both estimates are quoted from the same measured history');
     }

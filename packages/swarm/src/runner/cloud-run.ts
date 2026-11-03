@@ -18,9 +18,11 @@
  *   held here, over both halves of a remote session: the execution, and the collection of what
  *   it wrote. Either one still going at the cap is given up on — the execution **cancelled**,
  *   by name — and reported, never waited on, and `landsLate` is always `null` because there is
- *   nothing left to land. The cap is measured from the moment the execution was created rather
- *   than from the moment it started running, which is deliberate: an execution that queued for
- *   five minutes cost the session five minutes, whoever was at fault.
+ *   nothing left to land. The coordinator's clock starts when the execution is **created** and
+ *   the task's own timeout starts when it begins **running**, so the wait held here is the
+ *   session's cap plus what an execution is allowed for being scheduled and pulling the image
+ *   plus a write-up grace — otherwise the coordinator would always be the first clock to fire,
+ *   and a cold run of a hundred sessions would cancel every one of them before it started.
  * - **The output comes back through the object store** (#316), which is why a remote run
  *   without a bucket is refused before any execution is created (`choose.ts`): a Cloud Run
  *   task cannot write to the owner's disk, so a run with nowhere to put a session is a run
@@ -59,6 +61,16 @@ export interface CloudRunRunnerConfig {
   readonly videoBucket: string;
   /** The engine mode the run records, passed on so the task selects the same provider. */
   readonly engineMode: ProviderMode;
+  /**
+   * How long an execution may take to be scheduled, pull the image and start before the wait
+   * begins to count against the session (`choose.ts`, `PV_RUNNER_START_ALLOWANCE_MS`).
+   *
+   * The two clocks start at different moments: the task's own timeout starts when the task
+   * begins running, and this coordinator's starts when the execution is created. Without an
+   * allowance the coordinator's deadline is always the earlier of the two, by the whole of the
+   * provisioning time, so a cold run would cancel every session before its task started.
+   */
+  readonly startAllowanceMs: number;
 }
 
 export interface CloudRunRunnerDeps {
@@ -106,6 +118,13 @@ const asAnswered = (error: unknown): Answered =>
     ? { status: error.status, said: error.said }
     : { status: '', said: error instanceof Error ? error.message : String(error) };
 
+/**
+ * The grace a session gets to write itself up after its own cap has fired, which is the local
+ * runner's own figure and is here for the same reason: a cap that fires while a session is
+ * writing costs a record that exists.
+ */
+const WRITE_UP_GRACE_MS = 1_000;
+
 /** A session that produced nothing produced nothing: no cost, no areas, no screens. */
 const nothing = (
   request: Parameters<SessionRunner>[0],
@@ -150,8 +169,15 @@ export const createCloudRunRunner = (
 
     const startedMs = Date.now();
     const since = (): number => Math.max(0, Date.now() - startedMs);
+    /**
+     * The session's own cap, plus what the execution is allowed for getting itself started and
+     * a grace for writing itself up — so this is never the clock that fires first on a session
+     * that is still working. The same reasoning the local runner's race uses, with one term
+     * more, because a container has to exist before it can be slow.
+     */
+    const waitMs = request.timeoutMs + config.startAllowanceMs + WRITE_UP_GRACE_MS;
     const stop = new AbortController();
-    const cap = setTimeout(() => stop.abort(), request.timeoutMs);
+    const cap = setTimeout(() => stop.abort(), waitMs);
     // Unreferenced, so a hundred sessions' caps do not hold the process open by themselves.
     cap.unref?.();
     try {
@@ -169,7 +195,7 @@ export const createCloudRunRunner = (
           mine,
           {
             status: 'CANCELLED',
-            said: `${execution.name} was still running after the ${String(request.timeoutMs / 1000)} s this session had, and was cancelled`,
+            said: `${execution.name} was still running after the ${String(waitMs / 1000)} s this session had, and was cancelled`,
           },
           FAILED_BEFORE_A_STEP,
         ),
@@ -189,7 +215,7 @@ export const createCloudRunRunner = (
     try {
       const collected = await withinTimeout(
         collect(request.runDir, request.sessionId),
-        Math.max(1, request.timeoutMs - since()),
+        Math.max(1, waitMs - since()),
       );
       if (collected === EXPIRED) {
         return nothing(
@@ -199,7 +225,7 @@ export const createCloudRunRunner = (
             mine,
             {
               status: 'CANCELLED',
-              said: `${execution.name} finished and its session had still not come back after the ${String(request.timeoutMs / 1000)} s this session had`,
+              said: `${execution.name} finished and its session had still not come back after the ${String(waitMs / 1000)} s this session had`,
             },
             FAILED_BEFORE_A_STEP,
           ),

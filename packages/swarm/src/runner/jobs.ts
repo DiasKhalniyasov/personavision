@@ -183,13 +183,21 @@ export const createCloudRunJobsTransport = ({
     return answered;
   };
 
+  /**
+   * A wait that ends early when nobody is listening any more. The listener is taken off the
+   * signal either way: a ten-minute session polls three hundred times, and three hundred
+   * listeners on one signal is Node's own "possible EventTarget memory leak" warning plus a
+   * retained closure per poll.
+   */
   const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
     new Promise((settle) => {
-      const timer = setTimeout(settle, ms);
-      signal.addEventListener('abort', () => {
+      const done = (): void => {
         clearTimeout(timer);
+        signal.removeEventListener('abort', done);
         settle();
-      });
+      };
+      const timer = setTimeout(done, ms);
+      signal.addEventListener('abort', done, { once: true });
     });
 
   return {

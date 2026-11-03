@@ -62,9 +62,16 @@ const QUOTA_WORDS = /quota|rate limit|exceeded the maximum number|too many reque
  * registry that will not serve it to this service account, or a container that exited before
  * it listened. All three are "the image does not start here", and all three are fixed by
  * building and pushing the image again rather than by re-running the session.
+ *
+ * **Every alternative names an image or a registry.** A bare `denied:` would be the obvious
+ * thing to match and would be wrong: the Jobs API answers a service account missing
+ * `roles/run.developer` with "Permission denied: the caller does not have permission", and
+ * reporting that as an image that would not start sends an operator to rebuild and push an
+ * image when what is wrong is one IAM binding. An IAM refusal falls through to `task_died`
+ * instead, whose sentence quotes the API's status and its words verbatim.
  */
 const IMAGE_WORDS =
-  /image .*not found|manifest unknown|denied: |permission .*(?:artifactregistry|registry)|failed to (?:start|pull)|unable to (?:pull|retrieve) image|no such image|exec format error|ImagePull/i;
+  /image .*not found|manifest unknown|denied:.*(?:image|docker|artifactregistry|registry)|permission .*(?:artifactregistry|registry|image)|failed to (?:start|pull)|unable to (?:pull|retrieve) image|no such image|exec format error|ImagePull/i;
 
 export const readBreakage = ({ status, said }: Answered): RemoteBreakage => {
   if (QUOTA_STATUS.has(status) || QUOTA_WORDS.test(said)) return 'quota_refused';

@@ -24,12 +24,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { toScreenshotEntries } from '@personavision/browser';
-import { ZERO_USAGE } from '@personavision/contract';
+import { runSchema, runUsageSchema, ZERO_USAGE } from '@personavision/contract';
 import { totalUsage } from '@personavision/provider';
 import { runSession } from '../run-session.js';
 import type { CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
 import type { Persona, Run, RunUsage } from '@personavision/contract';
-import type { Aoi } from '@personavision/engine';
+import type { Aoi, EngineConfigOverrides } from '@personavision/engine';
 import type { DecisionUsage, ProviderMode } from '@personavision/provider';
 import type { OutcomePolicy } from '../outcome.js';
 import type { SessionProviders } from '../run-session.js';
@@ -66,6 +66,11 @@ export const TASK_ENV = {
   maxScreens: 'PV_MAX_SCREENS',
   outcomePolicy: 'PV_OUTCOME_POLICY',
   engineMode: 'PV_ENGINE_MODE',
+  /** The engine's weight overrides, when the run was given any, so a remote session is the
+   * same session: the attention engine at its defaults produces different fixations, and a
+   * run that differed in them and said nothing would be the one thing this seam promises not
+   * to do. */
+  weights: 'PV_ENGINE_WEIGHTS',
   /**
    * The bucket a task uploads its session, its contributions and its video to (#316). It is
    * passed on rather than read here: the object store reads it, and a remote run with none
@@ -112,6 +117,7 @@ export const sessionTaskEnvironment = (
   ...(request.outcomePolicy === undefined
     ? {}
     : { [TASK_ENV.outcomePolicy]: JSON.stringify(request.outcomePolicy) }),
+  ...(request.weights === undefined ? {} : { [TASK_ENV.weights]: JSON.stringify(request.weights) }),
 });
 
 const required = (env: Readonly<Record<string, string | undefined>>, key: string): string => {
@@ -160,14 +166,21 @@ export const readSessionTaskEnvironment = (
     throw new Error(`${TASK_ENV.timeoutMs} caps this session, and it is not set`);
   }
   const maxScreens = asNumber(env, TASK_ENV.maxScreens);
+  const seed = asNumber(env, TASK_ENV.seed);
+  if (seed === undefined) {
+    throw new Error(
+      `${TASK_ENV.seed} names the seed this session is drawn from, and it is not set`,
+    );
+  }
   const policy = env[TASK_ENV.outcomePolicy]?.trim() ?? '';
+  const weights = env[TASK_ENV.weights]?.trim() ?? '';
   return {
     runDir,
     runId: required(env, TASK_ENV.runId),
     sessionId: required(env, TASK_ENV.sessionId),
     persona: asJson<Persona>(env, TASK_ENV.persona),
     variant: asJson<Variant>(env, TASK_ENV.variant),
-    seed: Number(required(env, TASK_ENV.seed)),
+    seed,
     task: asJson<TaskDefinition>(env, TASK_ENV.task),
     startedAt: required(env, TASK_ENV.startedAt),
     timeoutMs,
@@ -175,6 +188,7 @@ export const readSessionTaskEnvironment = (
     providers,
     ...(maxScreens === undefined ? {} : { maxScreens }),
     ...(policy === '' ? {} : { outcomePolicy: JSON.parse(policy) as OutcomePolicy }),
+    ...(weights === '' ? {} : { weights: JSON.parse(weights) as EngineConfigOverrides }),
   };
 };
 
@@ -226,13 +240,16 @@ export const runSessionTask = async (request: SessionRunRequest): Promise<void> 
 };
 
 /**
- * The contributions a finished task left, read back at the trust boundary.
+ * The contributions a finished task left, read back at the trust boundary — **through the
+ * contract's own schemas**, not through checks of our own.
  *
- * Every field is rebuilt by hand rather than trusted as parsed: the file crossed a process
- * boundary, and a malformed area of interest reaching `appendFinishedSession` would fail the
- * run's own write, which is the one failure that stops a swarm. Rebuilding also makes drift
- * a **compile** error — a field added to `Run['aois'][number]` stops this file building
- * until it is read here too.
+ * The file crossed a process boundary, and the reason this parses at all is that a malformed
+ * area of interest reaching `appendFinishedSession` would fail the run's own write, which is
+ * the one failure that stops a swarm. So the bar has to be the artifact's own bar and not
+ * "looks like a string": `runSchema`'s `aois` rejects a `source` outside its three words, an
+ * empty `label` and a negative width, where a hand-written type check would pass all three and
+ * take the run down one write later. Reading them off `runSchema` also means there is nothing
+ * here to keep in step with the contract.
  */
 export const readContributions = async (
   runDir: string,
@@ -243,67 +260,15 @@ export const readContributions = async (
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error(`${path} is not an object, so this session's contributions cannot be read`);
   }
-  const held = parsed as Partial<SessionContributions>;
-  return {
-    usage: readUsage(held.usage, path),
-    aois: (held.aois ?? []).map((aoi) => readAoi(aoi, path)),
-    screenshots: (held.screenshots ?? []).map((screen) => readScreenshot(screen, path)),
-    elapsedMs: readNumber(held.elapsedMs, 'elapsedMs', path),
-  };
-};
-
-const readNumber = (value: unknown, field: string, path: string): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`${path}: ${field} is not a number`);
+  const held = parsed as Record<string, unknown>;
+  const elapsedMs = held.elapsedMs;
+  if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    throw new Error(`${path}: elapsedMs is not a number of milliseconds`);
   }
-  return value;
-};
-
-const readString = (value: unknown, field: string, path: string): string => {
-  if (typeof value !== 'string') throw new Error(`${path}: ${field} is not a string`);
-  return value;
-};
-
-const readUsage = (value: SessionContributions['usage'] | undefined, path: string): RunUsage => {
-  if (value === undefined) return { ...ZERO_USAGE };
   return {
-    calls: readNumber(value.calls, 'usage.calls', path),
-    inputTokens: readNumber(value.inputTokens, 'usage.inputTokens', path),
-    cachedInputTokens: readNumber(value.cachedInputTokens, 'usage.cachedInputTokens', path),
-    outputTokens: readNumber(value.outputTokens, 'usage.outputTokens', path),
-    reasoningTokens: readNumber(value.reasoningTokens, 'usage.reasoningTokens', path),
-    estimatedCostUsd: readNumber(value.estimatedCostUsd, 'usage.estimatedCostUsd', path),
+    usage: held.usage === undefined ? { ...ZERO_USAGE } : runUsageSchema.parse(held.usage),
+    aois: runSchema.shape.aois.parse(held.aois ?? []),
+    screenshots: runSchema.shape.screenshots.parse(held.screenshots ?? []),
+    elapsedMs,
   };
 };
-
-const readAoi = (value: Aoi, path: string): Aoi => ({
-  id: readString(value.id, 'aois[].id', path),
-  variant: readString(value.variant, 'aois[].variant', path),
-  step: readString(value.step, 'aois[].step', path),
-  label: readString(value.label, 'aois[].label', path),
-  source: value.source,
-  role: value.role === null ? null : readString(value.role, 'aois[].role', path),
-  bbox: {
-    x: readNumber(value.bbox?.x, 'aois[].bbox.x', path),
-    y: readNumber(value.bbox?.y, 'aois[].bbox.y', path),
-    width: readNumber(value.bbox?.width, 'aois[].bbox.width', path),
-    height: readNumber(value.bbox?.height, 'aois[].bbox.height', path),
-  },
-  isPrimaryAction: value.isPrimaryAction === true,
-  belowFold: value.belowFold === true,
-});
-
-const readScreenshot = (
-  value: Run['screenshots'][number],
-  path: string,
-): Run['screenshots'][number] => ({
-  variant: readString(value.variant, 'screenshots[].variant', path),
-  step: readString(value.step, 'screenshots[].step', path),
-  path: readString(value.path, 'screenshots[].path', path),
-  viewport: {
-    width: readNumber(value.viewport?.width, 'screenshots[].viewport.width', path),
-    height: readNumber(value.viewport?.height, 'screenshots[].viewport.height', path),
-  },
-  pageHeight: readNumber(value.pageHeight, 'screenshots[].pageHeight', path),
-  foldY: readNumber(value.foldY, 'screenshots[].foldY', path),
-});

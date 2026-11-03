@@ -85,18 +85,16 @@ export const estimateRoutes = ({ store, readSession, runsRoot }: EstimateRouteOp
         runsRoot,
         runIds: workspace.runIds,
       })(quotedFor.siteUrl);
-      // The concurrency the estimate divides by is the one the run will really have in
-      // flight: the per-site cap, what was submitted, and our own ceiling
-      // (`PV_RUNNER_CONCURRENCY`), whichever is smallest. A screen that quoted a speed we
-      // will not run at would be a screen that is wrong rather than a ceiling that moved —
-      // `startTest` computes the same number from the same function.
+      // The concurrency the estimate divides by is **computed here**, exactly as the model
+      // mode above is. A launch ignores a concurrency named in the body and runs at
+      // `sessionsInFlight()` (`run/start.ts`), so an estimate that honoured the body would
+      // quote a speed the launch will not keep — which is the one figure on this card a reader
+      // plans an afternoon around. The field stays required: a caller still has to state what
+      // it believes the number is, and a request naming none is still refused by name.
       sendJson(
         response,
         200,
-        estimateRun(
-          { ...quotedFor, concurrency: sessionsInFlight(quotedFor.concurrency) },
-          history,
-        ),
+        estimateRun({ ...quotedFor, concurrency: sessionsInFlight() }, history),
       );
     },
   },
