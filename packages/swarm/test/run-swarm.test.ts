@@ -567,11 +567,18 @@ describe('runSwarm', () => {
 const TEN_AT_A_TIME = 10;
 
 /**
- * A hundred sessions: fifty generated people on one seed, against both variants.
+ * A hundred *sessions*: fifty generated people on one seed, against both variants.
  *
- * Fifty rather than a hundred people, because a swarm runs every person against every
- * variant — the comparison is the point — so a hundred sessions over two variants is fifty
- * people, and `progress` then has two per-variant totals to agree with rather than one.
+ * A swarm runs every person against every variant — the comparison is the point — so a
+ * hundred sessions over two variants is fifty people, and `progress` then has two
+ * per-variant totals to agree with rather than one, which is what #275 asks it to agree on.
+ *
+ * **A hundred sessions is not the same number as `docs/FLOW.md` section 13's hundred
+ * agents.** An agent is a person, section 13 caps a verified site's run at the audience's
+ * `size` and at most a hundred of them, and section 11 puts path 1 on one variant and path 2
+ * on two — so the documented maximum is a hundred sessions on path 1 and **two hundred** on
+ * path 2. What is proved here is the hundred this ticket asked for. Two hundred sessions, and
+ * in particular the one queue at `run.json` under that many, is not proved by this file.
  */
 const FIFTY_PEOPLE: readonly Persona[] = peopleOnMobile(50);
 
@@ -609,13 +616,20 @@ const sessionFileOnDisk = async (sessionId: string): Promise<Session> =>
 /**
  * How long a hundred-session test is given before it is called hung.
  *
- * Far above what either of them costs, and deliberately: the figures below are what an idle
- * machine measures, and both tests have been seen to take four times as long on a laptop
- * running a dozen other things — at which point vitest's own five-second default killed one
- * of them and reported a failure that was the machine's, not the swarm's. A hundred sessions
- * that genuinely stall do not need this cap to be caught: each session has a one-minute cap
- * of its own (`DEFAULT_SESSION_BUDGET.wallClockMs`) and records itself when it fires, so a
- * stuck run fails on its assertions rather than here. This is only the backstop.
+ * Thirty seconds, which is about thirty-five times what either test costs on an idle
+ * machine, because what it has to tolerate is not the work but the machine: both have been
+ * seen to take four times as long on a laptop running a dozen other things, and at that
+ * point vitest's own five-second default killed one of them and reported a failure that was
+ * the machine's load and not the swarm.
+ *
+ * It is a real cap and not only a formality. These tests name no `sessionTimeoutMs`, so each
+ * session gets `DEFAULT_SESSION_BUDGET.wallClockMs` — a minute — and the swarm's race around
+ * it a second longer still; one genuinely hung session therefore trips *this* cap long before
+ * its own, and a hundred of them would be ten minutes. So a swarm that stalls is reported
+ * here, as a timeout, with nothing said about which session stalled. That is the trade: a
+ * timeout at thirty seconds means something is wrong, where a timeout at five meant only
+ * that the machine was busy. A stall diagnosed from a bare timeout is the one case worth
+ * re-running under `--maxWorkers=2` before believing.
  */
 const A_HUNDRED_SESSIONS_TIMEOUT_MS = 30_000;
 
@@ -786,7 +800,15 @@ describe('runSwarm at a hundred sessions', () => {
     },
     A_HUNDRED_SESSIONS_TIMEOUT_MS,
   );
+});
 
+/**
+ * What the pool is bounded by, and what a run's counters add up to — both over the
+ * eight-session default above rather than a hundred, because neither question needs a
+ * hundred sessions to answer and a reader debugging a failure here should not go looking
+ * for a problem of scale.
+ */
+describe('the bound, and the counters a run leaves behind', () => {
   it('leaves counters a reader can compute the automation-failure share from', async () => {
     await open();
 
