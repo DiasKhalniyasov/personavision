@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { fixationLabel } from './position';
+import { clockLabel, fixationLabel } from './position';
 import styles from './replay.module.css';
 
 /**
@@ -93,6 +93,76 @@ export function Scrubber({
           screen above is the one they started on.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * `.vidbar`: the one control over the recording.
+ *
+ * It is the same idea as the `Scrubber` above and a different unit. Over a screenshot the
+ * position a reader talks in is a **fixation**; over a recording it is a **second**, which
+ * is what a citation carries (`?t=`), what the clock reads and what the range runs over —
+ * so dragging it moves the video, the gaze, the highlighted screen, the active row of the
+ * log and the fixation counter, because all of them are read off the second it reports.
+ *
+ * The range is the registry's slider, so the arrow keys step it a second at a time and it
+ * announces where it is; Play is a labelled button that says which of the two it will do.
+ * Whole seconds are the step because a link carries whole seconds: a frame a reader can
+ * reach is a frame a reader can cite.
+ */
+export function VideoBar({
+  playing,
+  videoMs,
+  durationMs,
+  fixation,
+  position,
+  onPlayPause,
+  onSeek,
+}: {
+  playing: boolean;
+  /** Where the playhead is, in milliseconds into the recording. */
+  videoMs: number;
+  durationMs: number;
+  /** `fixation 21 of 29`, as the prototype's faint half reads it. */
+  fixation: string;
+  /** The whole position in words, for a reader who cannot see the stage. */
+  position: string;
+  onPlayPause: () => void;
+  /** Seconds into the recording. */
+  onSeek: (seconds: number) => void;
+}) {
+  const seconds = Math.round(durationMs / 1000);
+
+  return (
+    <div className={styles.vidbar}>
+      <Button
+        id="rp-play"
+        variant="outline"
+        size="sm"
+        aria-label={playing ? 'Pause the recording' : 'Play the recording'}
+        onClick={onPlayPause}
+      >
+        {playing ? 'Pause' : 'Play'}
+      </Button>
+      <Slider
+        id="rp-range"
+        min={0}
+        max={Math.max(seconds, 1)}
+        step={1}
+        value={[Math.min(Math.round(videoMs / 1000), Math.max(seconds, 1))]}
+        aria-label="Scrub the recording"
+        aria-valuetext={position}
+        onValueChange={([next]) => {
+          if (next !== undefined) onSeek(next);
+        }}
+      />
+      <span className={`${styles.clock} num`} id="rp-clock">
+        {clockLabel(videoMs, durationMs)}
+      </span>
+      <span className="faint" id="rp-fixlabel">
+        {fixation}
+      </span>
     </div>
   );
 }

@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMatch } from 'react-router';
-import { findingsSchema, runPaths, runSchema, sessionSchema } from '@personavision/contract';
-import type { Findings, Run, Session } from '@personavision/contract';
+import {
+  findingsSchema,
+  recommendationsSchema,
+  runPaths,
+  runSchema,
+  sessionSchema,
+} from '@personavision/contract';
+import type { Findings, Recommendations, Run, Session } from '@personavision/contract';
 // Type-only, and therefore erased: the listing's shape is `readRunIndex`'s own, so the
 // viewer does not restate the three field names it answers with. `@personavision/cli`
 // reads files and never reaches the browser bundle.
@@ -23,6 +29,8 @@ import { matches, patterns } from './paths';
  * - `GET /runs/index.json` → the workspace's tests, newest first
  * - `GET /runs/<runId>/run.json` → one run, byte for byte as the pipeline wrote it
  * - `GET /runs/<runId>/findings.json` → that run's ranked findings
+ * - `GET /runs/<runId>/recommendations.json` → what to change, when the run produced any
+ * - `HEAD /runs/<runId>/videos/<id>.webm` → how big one session's recording is
  *
  * The session files of a run are read by `src/session/` (#20), through this same interface
  * and the same contract. What is read here instead is the one figure no run-level field
@@ -45,6 +53,7 @@ export const runDataBase = (runId: string): string => `${RUNS}/${encodeURICompon
 const runFile = (runId: string, file: string): string => `${runDataBase(runId)}${file}`;
 const runUrl = (runId: string): string => runFile(runId, layout.run);
 const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
+const recommendationsUrl = (runId: string): string => runFile(runId, layout.recommendations);
 const sessionUrl = (runId: string, sessionId: string): string =>
   runFile(runId, layout.session(sessionId));
 
@@ -133,6 +142,28 @@ const readFindings = async (runId: string): Promise<FindingsState> => {
 };
 
 /**
+ * What this run says to change, or the stated absence of it.
+ *
+ * `recommendations.json` is **optional** in a run directory: a run that produced none has
+ * no file, which is not an empty list somebody wrote. A 404 is therefore `none` and not a
+ * problem — every other failure is still named, because a file that is there and will not
+ * parse is a broken run and not a run without recommendations.
+ */
+const readRecommendations = async (runId: string): Promise<RecommendationsState> => {
+  const url = recommendationsUrl(runId);
+  const answer = await readJson(url);
+  if (!answer.ok) {
+    return answer.status === 404
+      ? { status: 'none' }
+      : { status: 'unreadable', runId, url, problem: answer.problem };
+  }
+  const parsed = recommendationsSchema.safeParse(answer.body);
+  return parsed.success
+    ? { status: 'ready', recommendations: parsed.data }
+    : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
+};
+
+/**
  * One person a run excluded from its figures.
  *
  * `excludedFromScores` and `attribution` are stored on each session and were decided once,
@@ -215,6 +246,7 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
 const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
 const excludedCache = new Map<string, Promise<ExcludedState>>();
+const recommendationsCache = new Map<string, Promise<RecommendationsState>>();
 let latestRun: Promise<LatestRunState> | null = null;
 
 const keep = <State extends { status: string }>(
@@ -239,6 +271,9 @@ const loadFindings = (runId: string): Promise<FindingsState> =>
 const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<ExcludedState> =>
   excludedCache.get(runId) ?? keep(runId, excludedCache, readExcluded(runId, sessionIds));
 
+const loadRecommendations = (runId: string): Promise<RecommendationsState> =>
+  recommendationsCache.get(runId) ?? keep(runId, recommendationsCache, readRecommendations(runId));
+
 const loadLatestRunId = (): Promise<LatestRunState> => {
   latestRun ??= readLatestRunId().then((state) => {
     if (state.status === 'unreadable') latestRun = null;
@@ -252,6 +287,7 @@ export const refreshRun = (runId: string): void => {
   cache.delete(runId);
   findingsCache.delete(runId);
   excludedCache.delete(runId);
+  recommendationsCache.delete(runId);
   latestRun = null;
 };
 
@@ -260,12 +296,25 @@ export const clearRunCache = (): void => {
   cache.clear();
   findingsCache.clear();
   excludedCache.clear();
+  recommendationsCache.clear();
   latestRun = null;
 };
 
 export type FindingsState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly findings: Findings }
+  | {
+      readonly status: 'unreadable';
+      readonly runId: string;
+      readonly url: string;
+      readonly problem: string;
+    };
+
+export type RecommendationsState =
+  | { readonly status: 'loading' }
+  /** The run produced none: there is no file, which is an absence and not a failure. */
+  | { readonly status: 'none' }
+  | { readonly status: 'ready'; readonly recommendations: Recommendations }
   | {
       readonly status: 'unreadable';
       readonly runId: string;
@@ -412,4 +461,67 @@ export function useOptionalRun(runId: string | null): RunState | null {
   }, [runId]);
 
   return state;
+}
+
+/**
+ * What this run says to change: read once per run while the app is open.
+ *
+ * The replay's outcome card names the recommendations one session is evidence for, which is
+ * a lookup over the citations stored in this file. A run that produced none answers `none`,
+ * and the card says so rather than showing a row that reads as *supports nothing*.
+ */
+export function useRecommendations(runId: string): RecommendationsState {
+  const [state, setState] = useState<RecommendationsState>({ status: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    setState({ status: 'loading' });
+    void loadRecommendations(runId).then((next) => {
+      if (live) setState(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+
+  return state;
+}
+
+/**
+ * How big one session's recording is, asked of the mount rather than of the artifact.
+ *
+ * The replay's outcome card states the file's size, and nothing in a run directory records
+ * it: the contract stores the recording's path, its duration and its offsets, which are
+ * what the recorder measured. The size is a fact of **the file**, so it is read from the
+ * file — one `HEAD` over the same read-only run mount the stage plays from, which answers
+ * `content-length` for every file it serves and computes nothing to do it. It is read here
+ * because this module is where this app asks a server about a run.
+ *
+ * `null` until it is known, and `null` for a mount that does not say: a card that cannot
+ * read the size says so in words rather than printing a zero somebody might believe.
+ */
+export function useRecordingSize(runId: string, path: string | null): number | null {
+  const [bytes, setBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setBytes(null);
+    if (path === null) return;
+
+    void fetch(absolute(runFile(runId, path)), { method: 'HEAD' })
+      .then((response) => {
+        const length = response.ok ? Number(response.headers.get('content-length')) : Number.NaN;
+        if (live && Number.isFinite(length) && length > 0) setBytes(length);
+      })
+      .catch(() => {
+        // A size that could not be read is a size the card does not state. It is not an
+        // error about the session: the recording itself may well play.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [runId, path]);
+
+  return bytes;
 }
