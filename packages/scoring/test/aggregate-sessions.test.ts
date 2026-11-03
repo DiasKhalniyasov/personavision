@@ -75,6 +75,48 @@ describe('the step walk', () => {
     ]);
   });
 
+  it('counts the time before the first fixation against the screen it was spent on', () => {
+    // A session whose gaze model emitted nothing on the first screen: it was still reached,
+    // it was still on the clock, and those seconds belong to it rather than to nobody.
+    const session = sessionOf('S-01');
+    const unwatchedFirstScreen: Session = {
+      ...session,
+      fixations: session.fixations
+        .filter((fixation) => fixation.screenIndex > 0)
+        .map((fixation, index) => ({ ...fixation, index })),
+    };
+
+    expect(stepWalk(unwatchedFirstScreen)).toEqual([
+      { screenIndex: 0, step: 'landing', startMs: 0, endMs: 4000, durationMs: 4000 },
+      { screenIndex: 1, step: 'prompt', startMs: 4000, endMs: 9000, durationMs: 5000 },
+      { screenIndex: 2, step: 'generate', startMs: 9000, endMs: 15_000, durationMs: 6000 },
+      { screenIndex: 3, step: 'preview', startMs: 15_000, endMs: 20_000, durationMs: 5000 },
+    ]);
+  });
+
+  it('never gives a screen a span that ends before it starts', () => {
+    // A stored session whose fixations are out of order: the one on the third screen lands
+    // after the one on the fourth. Nothing in the session schema forbids it, and a span of
+    // 9000 to 8000 would report a negative stretch as zero and swallow every later action.
+    const session = sessionOf('S-01');
+    const outOfOrder: Session = {
+      ...session,
+      fixations: session.fixations.map((fixation) =>
+        fixation.screenIndex === 2 ? { ...fixation, tMs: 18_000 } : fixation,
+      ),
+    };
+    const walk = stepWalk(outOfOrder);
+
+    expect(walk.map((span) => [span.startMs, span.endMs, span.durationMs])).toEqual([
+      [0, 4000, 4000],
+      [4000, 15_000, 11_000],
+      // Squeezed to nothing by the screen after it, which is nothing measured and not a zero.
+      [15_000, 15_000, null],
+      [15_000, 20_000, 5000],
+    ]);
+    expect(screenIndexAt(walk, 16_000)).toBe(3);
+  });
+
   it('keeps a revisit as two spans of its own step', () => {
     const walk = stepWalk(sessionOf('S-04'));
 

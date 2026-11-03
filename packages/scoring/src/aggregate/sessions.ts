@@ -78,7 +78,7 @@ export interface StepSpan {
   /** Where it ends: the next screen's start, or the session's duration for the last one. */
   readonly endMs: number;
   /**
-   * How long was spent on it, or **`null` for a screen nobody looked at** — which is a
+   * How long was spent on it: its span, or **`null` when that span is empty** — which is a
    * screen that was reached with nothing measured on it, and never zero seconds.
    */
   readonly durationMs: number | null;
@@ -93,9 +93,14 @@ export interface StepSpan {
  * - screen `i`'s span is `[startMs(i), startMs(i + 1))`, with `startMs(0) = 0` and the last
  *   screen ending at `session.durationMs`;
  * - `startMs(i)` for `i > 0` is the `tMs` of the first fixation whose `screenIndex === i`;
- *   where that screen has no fixation of its own it takes the next screen's start, so the
- *   span is empty and the screen is **reached with no time measured** rather than timed at
- *   zero — `durationMs` is `null` there;
+ *   where that screen has no fixation of its own it takes the next screen's start, so its
+ *   span is empty;
+ * - **a screen's time is its span, and an empty span is nothing measured** — `durationMs`
+ *   is `null` exactly when the span is empty, which is what a screen nobody looked at
+ *   collapses to: **reached with no time measured** rather than timed at zero. The first
+ *   screen is pinned to zero whether anybody looked at it or not, so the seconds before the
+ *   first fixation of a session belong to the screen they were spent on and the per-step
+ *   times still add up to the session;
  * - an action belongs to the screen whose span contains its `tMs` (`screenIndexAt`).
  *
  * When the video block of a session (`sessionVideo.screenOffsetsMs`) is recorded for every
@@ -110,11 +115,13 @@ export const stepWalk = (session: Session): readonly StepSpan[] => {
   }
 
   // Right to left, so that a screen nobody looked at can take the start of the screen after
-  // it — and a trailing run of them takes the end of the session.
+  // it — and a trailing run of them takes the end of the session. No screen starts after the
+  // one that follows it: a session whose stored fixations are out of order would otherwise
+  // get a span that ends before it begins, and every later action read off the wrong screen.
   const starts: number[] = new Array<number>(session.screens.length);
   let next = session.durationMs;
   for (let index = session.screens.length - 1; index >= 0; index -= 1) {
-    starts[index] = index === 0 ? 0 : (firstLookMs.get(index) ?? next);
+    starts[index] = index === 0 ? 0 : Math.min(firstLookMs.get(index) ?? next, next);
     next = starts[index];
   }
 
@@ -126,7 +133,7 @@ export const stepWalk = (session: Session): readonly StepSpan[] => {
       step: screen.step,
       startMs,
       endMs,
-      durationMs: firstLookMs.has(index) ? Math.max(0, endMs - startMs) : null,
+      durationMs: endMs > startMs ? endMs - startMs : null,
     };
   });
 };
