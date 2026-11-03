@@ -1,13 +1,7 @@
 import { createSeededRandom, personaSchema } from '@personavision/contract';
 import type { Audience, Persona } from '@personavision/contract';
 import { parseAudience } from './audience.js';
-import {
-  HOLDOUT_FLOOR,
-  HOLDOUT_SHARE,
-  checkSeed,
-  generatePersonas,
-  streamOfSeed,
-} from './generate.js';
+import { HOLDOUT_DEFAULT_SIZE, checkSeed, generatePersonas, streamOfSeed } from './generate.js';
 
 /**
  * The holdout: people from the same audience, on seeds the change was never chosen against.
@@ -67,13 +61,19 @@ const FNV_OFFSET = 0x811c_9dc5;
 const FNV_PRIME = 0x0100_0193;
 
 /**
- * How many holdout people an audience of `participants` gets by default: `HOLDOUT_SHARE` of
- * them, floored at `HOLDOUT_FLOOR` and capped at the audience itself. A hundred participants
- * give the forty the design contract prints; the demo's four give four.
+ * How many holdout people an audience of `participants` gets by default:
+ * `HOLDOUT_DEFAULT_SIZE` of them, capped at the audience itself.
  *
- * It is exported because the loop and the Improve screen say how many holdout people a run
- * will have before anybody generates them, and two places computing 40 per cent of something
- * is how two places come to disagree about it.
+ * The figure does not scale with the audience — a hundred participants get twenty and so do
+ * forty — because the owner's choice on decision 83 is a fixed twenty whatever the participant
+ * count (#318). The cap is what the audience below that size gets instead: the holdout is drawn
+ * from the audience's own apportionment, so the demo's four participants get four holdout
+ * people rather than twenty to check four. `HOLDOUT_DEFAULT_SIZE` in `generate.ts` says why
+ * twenty, and what it costs in holdouts that cannot judge.
+ *
+ * It is exported because the loop and the Improve screen say how many holdout people a run will
+ * have before anybody generates them, and two places carrying the same rule is how two places
+ * come to disagree about it.
  */
 export const holdoutSize = (participants: number): number => {
   if (!Number.isSafeInteger(participants) || participants < 1) {
@@ -81,7 +81,7 @@ export const holdoutSize = (participants: number): number => {
       `a participant count is a whole number of people, at least one: received ${String(participants)}`,
     );
   }
-  return Math.min(participants, Math.max(HOLDOUT_FLOOR, Math.round(participants * HOLDOUT_SHARE)));
+  return Math.min(participants, HOLDOUT_DEFAULT_SIZE);
 };
 
 export interface GenerateHoldoutRequest {

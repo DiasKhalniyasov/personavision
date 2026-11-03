@@ -219,11 +219,16 @@ const holdout = generateHoldout({ audience, spentSeeds: run.seedGroups });
   rather than a second apportionment. Only the ids and names differ — `holdout-rushed-buyer`,
   `Rushed buyer (holdout)` — because a run carries the holdout people in its own `personas[]`,
   where a persona id names one simulated person.
-- **The size.** `holdoutSize(participants)` is `HOLDOUT_SHARE` of them, floored at
-  `HOLDOUT_FLOOR` and capped at the audience: 40 per cent, at least 10, so a hundred
-  participants give the forty the design contract prints and the demo's four give four. Both are
-  named constants in `src/generate.ts`, beside the generator's other defaults, and a caller who
-  wants another number passes `size`.
+- **The size.** `holdoutSize(participants)` is `HOLDOUT_DEFAULT_SIZE`, capped at the audience: a
+  fixed 20 whatever the participant count, so a hundred participants give twenty and so do forty,
+  and the demo's four give four. It is one named constant in `src/generate.ts`, beside the
+  generator's other defaults, and a caller who wants another number passes `size`. It was a share
+  — 40 per cent, at least 10 — until the owner's choice on decision 83 made it flat (#318); the
+  cap is the part of the share rule that survives, because a holdout larger than the set it
+  checks is the comparison the wrong way round. Twenty is a cheap reading and an often
+  inconclusive one: the bands frequently cannot separate on twenty people, so "the holdout could
+  not judge" is a common answer rather than a rare one, and that is the decision working rather
+  than a defect.
 
 Running these people is `@personavision/swarm`'s and recording them is the contract's. Nothing
 here knows what a pull request is, and nothing here reads a run.

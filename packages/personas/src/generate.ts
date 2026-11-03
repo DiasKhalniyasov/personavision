@@ -35,23 +35,32 @@ const MAX_DISPLACEMENT = MAX_OFFSET + JITTER;
 const TRAIT_PRECISION = 1000;
 
 /**
- * The holdout's default size: this share of the people the audience generates, never fewer
- * than `HOLDOUT_FLOOR` of them and never more than the audience itself. At a hundred
- * participants that is the forty the design contract prints (`docs/FLOW.md` section 15,
- * `docs/design/prototype.html` `#screen-improve`); at the demo's four it is four.
+ * The holdout's default size: a fixed twenty people, whatever the participant count, and never
+ * more than the audience itself.
  *
- * It is a share and not a count because the holdout is a second reading of the same audience,
- * and how much of one that takes scales with the audience. The floor is there because a share
- * of a small audience stops being a reading at all — four holdout people cannot disagree with
- * forty, and a holdout that cannot disagree confirms everything. The cap is there because the
- * holdout is drawn from the audience's own apportionment, and a holdout larger than the set it
- * checks is the comparison the wrong way round.
+ * It was a share — forty per cent of the participants, floored at ten — which is what
+ * auto-decision 83 picked and what `docs/design/prototype.html` `#screen-improve` printed. On
+ * 2026-11-03 the owner overrode that with option b of the same decision, **a fixed 20, whatever
+ * the participant count**, on the ground that it costs the same at every size (#318). A share
+ * made a path-2 test more expensive the larger the audience; the holdout is a second reading
+ * rather than a second audience, and twenty people on seeds the change was never chosen against
+ * either move with it or they do not.
  *
- * `holdoutSize` in `holdout.ts` is the rule these two make, and a caller who wants another
- * number passes one: nothing but that function reads them.
+ * The cap at the audience is the one part of the share rule that survives, and `holdoutSize`
+ * applies it. The holdout is drawn from the audience's own apportionment, so a default larger
+ * than the set it checks would be the comparison the wrong way round: the demo's four
+ * participants get four holdout people, not twenty to check four.
+ *
+ * Twenty is a cheap reading and an often inconclusive one. At a hundred participants the bands
+ * frequently cannot separate on twenty people, so *"the holdout could not judge"* — `null` with
+ * the reason, never `false` — is a common answer rather than a rare one. That is the decision
+ * working and not a defect; `tests/holdout.test.ts` names the case, and the answer itself
+ * belongs to the verdict rather than to this package.
+ *
+ * `holdoutSize` in `holdout.ts` is the rule this makes, and a caller who wants another number
+ * passes one: nothing but that function reads it.
  */
-export const HOLDOUT_SHARE = 0.4;
-export const HOLDOUT_FLOOR = 10;
+export const HOLDOUT_DEFAULT_SIZE = 20;
 
 /**
  * The stream a seed names. `createSeededRandom` starts from `seed >>> 0`, so two seeds that
