@@ -13,7 +13,9 @@
 // The callbacks below run inside the page, not in Node: this module needs the DOM
 // types, and the reference travels with the file (see `geometry.ts`).
 import { chromium, devices, errors } from 'playwright';
+import { prepareRecording, videoFrame } from './video.js';
 import type { Device, PageHandle, Variant, Viewport } from './types.js';
+import type { VideoRequest } from './video.js';
 
 export interface OpenSessionOptions {
   /** `false` opens a visible window. Defaults to `true`. */
@@ -25,6 +27,15 @@ export interface OpenSessionOptions {
    * never fires it, so such a page is opened with `domcontentloaded`.
    */
   readonly waitUntil?: 'load' | 'domcontentloaded' | 'commit';
+  /**
+   * Record the session into the run directory, as `videos/S-NN.webm`. Omitted, nothing is
+   * recorded and the handle carries no recording — which is how every suite that is not
+   * about video opens a session.
+   *
+   * A recording that cannot start does not stop the session: it opens without one, and
+   * `handle.video.finish()` reports in words why there is none (`video.ts`).
+   */
+  readonly video?: VideoRequest;
 }
 
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
@@ -63,6 +74,9 @@ export const openSession = async (
   options: OpenSessionOptions = {},
 ): Promise<PageHandle> => {
   const headless = options.headless ?? process.env.PV_HEADED !== '1'; // local only: PV_HEADED=1 shows the window
+  // Before the launch: a videos directory that cannot be made is then a session that opens
+  // without a recording rather than a browser nobody closes (`video.ts`).
+  const recording = options.video === undefined ? null : await prepareRecording(options.video);
   const browser = await chromium.launch({ headless });
 
   let context;
@@ -71,6 +85,11 @@ export const openSession = async (
       viewport: { width: device.viewport.width, height: device.viewport.height },
       deviceScaleFactor: device.deviceScaleFactor,
       hasTouch: device.touch,
+      // Recording is declared on the context and flushed when it closes; the frame is the
+      // device's viewport inside 720p, which is the cap the project records at.
+      ...(recording?.dir === null || recording?.dir === undefined
+        ? {}
+        : { recordVideo: { dir: recording.dir, size: videoFrame(device.viewport) } }),
       // A touch device is a phone or a tablet, and the site is told so.
       ...(device.touch ? { isMobile: true, userAgent: mobileUserAgent(device) } : {}),
       // Every session is a first visit, so a site's service worker installs every time, and a
@@ -83,8 +102,15 @@ export const openSession = async (
     throw error;
   }
 
+  // Kept out of the try so that a session which never opened can still throw away the
+  // recording it started.
+  let opened;
   try {
     const page = await context.newPage();
+    opened = page;
+    // The recording's clock starts with the page, which is when the browser starts recording
+    // it — before the opening navigation, so the first screen's offset is inside the video.
+    const video = recording?.start(page);
     // A string, not a function: a bundler's helpers would not exist inside the page.
     await page.addInitScript(
       "document.addEventListener('click', (e) => { const a = e.target instanceof Element && e.target.closest('a[target]'); if (a) a.target = '_self'; }, true);",
@@ -101,8 +127,19 @@ export const openSession = async (
           (await page.evaluate(() => document.readyState !== 'loading').catch(() => false));
         if (!(error instanceof errors.TimeoutError) || !parsed) throw error;
       });
-    return { variant, device, headless, browser, context, page };
+    return { variant, device, headless, browser, context, page, ...(video ? { video } : {}) };
   } catch (error) {
+    // A session that never opened has no recording to keep, and the partial file Playwright
+    // flushes when the context closes belongs to nothing: it is deleted rather than left in
+    // the run directory under the name Playwright chose, which nothing would ever ask for.
+    // The context is closed first because that is what finishes the file `delete()` removes.
+    if (opened !== undefined) {
+      await context.close().catch(() => undefined);
+      await opened
+        .video()
+        ?.delete()
+        .catch(() => undefined);
+    }
     await browser.close();
     throw error;
   }
@@ -135,7 +172,15 @@ export const readSessionState = async (handle: PageHandle): Promise<SessionState
   };
 };
 
-/** Closes the browser the session owns. Closing twice is not an error. */
+/**
+ * Closes the browser the session owns. Closing twice is not an error.
+ *
+ * A recorded session finishes its recording **first** — `await handle.video?.finish()` —
+ * because that is what closes the context, saves the file at the contract's path and reports
+ * what is on disk. `walkTask` does it in that order; a caller driving sessions itself does
+ * the same, and closing the browser on an unfinished recording leaves the file where
+ * Playwright chose to put it.
+ */
 export const closeSession = async (handle: PageHandle): Promise<void> => {
   await handle.browser.close();
 };

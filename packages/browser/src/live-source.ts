@@ -47,8 +47,10 @@ import { AutomationFailure } from './errors.js';
 import { toAutomationFailure, toAutomationFailureOutcome } from './failure-mapping.js';
 import { closeSession, openSession } from './session.js';
 import { taskStep } from './steps.js';
+import type { SessionVideo } from '@personavision/contract';
 import type { SessionBudgetLimits, SessionIntegrity } from './budget.js';
 import type { AutomationFailureOutcome } from './failure-mapping.js';
+import type { OpenSessionOptions } from './session.js';
 import type {
   ActResult,
   Action,
@@ -142,6 +144,20 @@ export interface TaskWalkResult {
    * never rendered its own required element is named by the step it failed to be.
    */
   readonly outcome: AutomationFailureOutcome | null;
+  /**
+   * The session's recording, when the source was created with one
+   * (`createLiveSource({ video })`), and absent on a walk nobody asked to record.
+   *
+   * It is either the file on disk — its path, its duration, the cap it hit and the offset of
+   * every screen and action — or the stated absence of one with the reason in words. **A
+   * failed recording is never a failed walk**: `failure` and `outcome` say nothing about it.
+   *
+   * Its two offset lists are positional, one entry per screen and one per action the walk
+   * took, in the order `screens` records them: the screen offsets line up with
+   * `screens.map((screen) => screen.capture)` and the action offsets with the `action` of
+   * each screen that has one.
+   */
+  readonly video?: SessionVideo;
 }
 
 export type WalkTask = (source: CaptureSource, walk: TaskWalk) => Promise<TaskWalkResult>;
@@ -190,13 +206,35 @@ const captureOnce: CaptureSource['capture'] = async (page, ctx) => {
 /**
  * Chromium over a URL: the module's own seams, behind the interface the engine, the swarm
  * and the tests are written against.
+ *
+ * `options` is what every session this source opens is opened with — the navigation cap, the
+ * load state, and `video` to record one into the run directory as `videos/S-NN.webm`.
+ * `CaptureSource.openSession` takes a variant and a device and nothing else, by design, so
+ * what a session is opened *with* is declared once, here.
+ *
+ * **A source with `video` records one session**, because a `video` request names the session
+ * the file belongs to and one file cannot be two sessions. A source opened a second time
+ * records nothing rather than writing over the first recording and reporting its path twice —
+ * two sessions claiming one file is a run nothing can read. A caller recording many sessions
+ * therefore builds a source per session (it is an object literal) or opens them itself with
+ * `openSession(variant, device, { video })`, which is what the swarm does.
  */
-export const createLiveSource = (): CaptureSource => ({
-  openSession,
-  capture: captureOnce,
-  act,
-  close: closeSession,
-});
+export const createLiveSource = (options: OpenSessionOptions = {}): CaptureSource => {
+  const recorded = { already: false };
+  return {
+    openSession: (variant, device) => {
+      if (options.video === undefined) return openSession(variant, device, options);
+      if (recorded.already) {
+        return openSession(variant, device, { ...options, video: undefined });
+      }
+      recorded.already = true;
+      return openSession(variant, device, options);
+    },
+    capture: captureOnce,
+    act,
+    close: closeSession,
+  };
+};
 
 /** A capture of a screen the task declares: the only kind a walk can go on from. */
 type OnAStep = Capture & { step: string };
@@ -246,7 +284,16 @@ const actionFailure = (action: Action, step: string, result: ActResult): Automat
     `the ${action.type} on the ${step} step did not work (${result.failure ?? 'no reason given'})`,
   );
 
-export const walkTask: WalkTask = async (source, walk) => {
+/**
+ * The walk itself. `recorded` is where the session's recording lands: it is finished in the
+ * `finally` below, after the walk already has its answer, so it is carried out rather than
+ * returned.
+ */
+const walkSession = async (
+  source: CaptureSource,
+  walk: TaskWalk,
+  recorded: { video?: SessionVideo },
+): Promise<TaskWalkResult> => {
   const budget = walk.budget ?? new SessionBudget();
   const decide = walk.decide ?? advance;
   const ctx: CaptureContext = {
@@ -324,6 +371,10 @@ export const walkTask: WalkTask = async (source, walk) => {
       } catch (error) {
         return broke(error, capturing, expected?.id ?? null);
       }
+      // Where this screen is in the recording, measured now and marked when the screen is
+      // kept: an action that breaks on the way leaves its screen out of the walk's own
+      // `screens`, and an offset list has to be exactly as long as the array it indexes.
+      const capturedAt = page.video?.at();
       reached = screen.step;
 
       const declared = taskStep(walk.task, screen.step);
@@ -332,6 +383,7 @@ export const walkTask: WalkTask = async (source, walk) => {
         // The task's last step, or a decision layer that stopped here: either way nothing
         // was done to this screen.
         screens.push({ capture: screen, action: null });
+        page.video?.screen(capturedAt);
         return report(null, null);
       }
 
@@ -350,13 +402,32 @@ export const walkTask: WalkTask = async (source, walk) => {
       // navigated before it failed, and a second attempt at the same target would act on a
       // screen no capture covers and be classified by whatever that screen made of it.
       screens.push({ capture: screen, action: acted });
+      page.video?.screen(capturedAt);
+      // An action that did not work still happened, and the session records it: it is marked
+      // like any other, which is what keeps the offsets aligned with the actions.
+      page.video?.action();
       if (!acted.ok) {
         return broke(actionFailure(action, screen.step, acted), acting, screen.step);
       }
     }
   } finally {
+    // The recording is finished before the browser goes: finishing is what closes the
+    // context, saves the file at the contract's path and measures it. It reports its own
+    // failures as an absent recording rather than throwing, and the `catch` is for the
+    // impossible one — the walk has its answer, and a recording may not cost it.
+    recorded.video = await page.video
+      ?.finish()
+      .catch((error: unknown) => ({ state: 'absent' as const, reason: String(error) }));
     // A browser that will not close is a leaked process, not a session that did not happen:
     // the walk has its answer, and throwing here would throw that answer away.
     await source.close(page).catch(() => undefined);
   }
+};
+
+export const walkTask: WalkTask = async (source, walk) => {
+  const recorded: { video?: SessionVideo } = {};
+  const walked = await walkSession(source, walk, recorded);
+  // Absent when nothing was recording: a walk nobody asked to record names no video at all,
+  // which is the contract's difference between a run that recorded none and one that lost one.
+  return recorded.video === undefined ? walked : { ...walked, video: recorded.video };
 };

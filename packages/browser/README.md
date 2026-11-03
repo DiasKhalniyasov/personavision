@@ -86,6 +86,96 @@ or failed is `packages/swarm`'s `decideOutcome` to decide from that trace and th
 single `SessionBudget`, so the caps and the counters are the session's rather than one
 operation's. A caller that holds one — the swarm holds one per session — passes it as `budget`.
 
+## Recording a session
+
+Recording is **off unless a session asks for it**, and asking for it is one option:
+
+```ts
+const walked = await walkTask(
+  createLiveSource({ video: { runDir: 'runs/2026-10-27-1012-shop', sessionId: 'S-01' } }),
+  { variant, device: mobile, task, runDir: 'runs/2026-10-27-1012-shop' },
+);
+
+walked.video; // the contract's session video block, or undefined when nothing recorded
+```
+
+The file is the browser's own: the context is opened with `recordVideo`, so recording needs no
+dependency, no binary and no second install command — the Chromium above is all of it. It lands
+at `videos/S-NN.webm` inside the run directory, which is `@personavision/contract`'s spelling and
+is produced nowhere else, and `walked.video` is the block a session JSON records: the path, the
+duration the file has, the cap it hit, and the millisecond offset of every screen and every
+action, so that a recommendation citing `S-62 · 0:48` opens on the frame it means.
+
+**A source with `video` records one session.** The request names the session the file belongs to,
+and one file cannot be two sessions, so a source opened a second time records nothing rather than
+writing over the first recording and reporting its path twice. A caller recording many sessions
+builds a source per session — it is an object literal — or opens them itself.
+
+A caller that drives sessions itself — the swarm does — opens with `openSession(variant, device,
+{ video })`, marks its own entries with `handle.video?.screen()` and `handle.video?.action()` in
+the order its own `screens` and `actions` arrays record them, and **finishes before closing**:
+
+```ts
+const session = await openSession(variant, device, { video: { runDir, sessionId: 'S-01' } });
+// … capture, act, capture …
+const video = await session.video?.finish(); // closes the context and saves the file
+await closeSession(session);
+```
+
+`finish()` is what closes the context, saves the recording at the contract's path and measures
+it, so nothing ever reads a file that is still being written. Closing the browser first leaves
+the file where Playwright chose to put it instead.
+
+An **offset is measured when the entry it belongs to is recorded, and marked when the entry is
+kept** — `video.at()` gives the moment, `video.screen(atMs)` marks it — because an offset list
+has to be exactly as long as the array it indexes, and a screen whose action breaks on the way
+never becomes an entry of the session at all.
+
+**A recording is 720p.** The frame is the device's own viewport scaled to fit inside
+1280 × 720 — a 390 × 844 phone records at 332 × 720 — so the cap is on the pixels while the
+aspect ratio stays the device's, rather than a tall strip in the middle of a landscape frame.
+
+**The caps are the contract's: 30 seconds a screen, 10 minutes a session.** Playwright cannot
+stop recording a page it is still showing, so a cap is enforced on the file: the recording is cut
+at it as it is saved, `truncated` names the cap it hit, `durationMs` is the duration it reached,
+and the screens and actions that happened after it carry **no offset** rather than one pointing
+at a frame showing something else. A cap does not touch the session, which keeps going and is
+still scored.
+
+**A recording that fails is not a failed session.** A videos directory that cannot be made, a
+context that opened no recording, a file that cannot be saved or measured: each comes back as
+`{ state: 'absent', reason }` with the reason in words, the session otherwise complete, and no
+automation failure anywhere. The one failure that is known before a browser is launched — the
+directory — is found there, so a session whose recording cannot start never leaks a browser.
+
+A recording outlasts its session by about a second, because Playwright holds the last frame when
+it stops recording. The duration reported is the file's own, read back off the bytes rather than
+echoed from the clock that marked the offsets.
+
+### What one recording session costs
+
+Measured here on **plain Playwright Chromium 1.64.1, headless, macOS arm64**, walking the
+four-step fixture task at the 390 × 844 mobile device, one session at a time, recording to local
+disk. These are the figures #222's concurrency arithmetic and #230's Cloud Run task sizing quote;
+the 742–792 MB the dropped CloakBrowser spike measured against a patched build is not this
+number.
+
+| What                                       | Measured                                            |
+| ------------------------------------------ | --------------------------------------------------- |
+| Peak resident memory, Chromium's processes | **0.40 GB**                                         |
+| Peak resident memory, with the Node driver | **0.60 GB**                                         |
+| Wall clock, one recorded session           | **0.79 s** (0.77 s unrecorded: recording costs ~4%) |
+| One session's video                        | **71 KB** for a 1.4 s recording (≈ 25–45 KB/s)      |
+| A hundred of them                          | **≈ 7 MB** of these; **≈ 100 MB** at 30 s each      |
+
+Peak memory is the highest summed resident set size of the whole process tree, sampled ten times
+a second while the session ran. It is an upper bound: macOS counts shared framework pages once
+per Chromium process. The wall clock is a warm process against a fixture site on loopback, so it
+is the floor a real site is measured against rather than what a real session costs. Size scales
+with how much of the page moves rather than with how long the task is — a 10.5-second session of
+the same walk is 262 KB — so a hundred thirty-second sessions are around 100 MB on disk, which is
+why the caps exist and why the bucket in #228 has a lifecycle rule.
+
 ## The fold, and the space everything is in
 
 Every box this module produces is in **page space** and in CSS pixels: the origin is the
@@ -141,6 +231,8 @@ function each behind it without changing a name.
 | `toAutomationFailureOutcome`         | The session outcome a failure of ours produces                       |
 | `withCache`                          | Capture caching, keyed on content                                    |
 | `createLiveSource` `walkTask`        | The `CaptureSource` over Chromium, and the walk above it             |
+| `prepareRecording` `videoFrame`      | A session's recording, and the 720p frame it is recorded at          |
+| `readRecording` `cutRecording`       | A recording's own duration and frame; the same file cut at a cap     |
 | `createFixtureSource`                | The `CaptureSource` that replays captures from disk                  |
 
 ### Which of them are neutral
@@ -236,6 +328,13 @@ serves it from disk, with no dependency of its own):
   failed session. The screenshot is deleted between two captures, because that is the one thing
   a hit and a miss leave differently on disk; where a hit would be wrong, the image's own
   pixel dimensions are read instead.
+- `test/video.test.ts` — one recorded walk per assertion, each read back off disk: the
+  non-empty WebM at the contract's path whose measured duration is the one the session
+  reports, the 720p frame, the offsets of every screen and action parsed against the
+  contract's session schema, the two caps cutting the file and leaving the entries past them
+  without an offset, and the unwritable videos directory that leaves the session complete with
+  its video absent and no automation failure. The frame arithmetic and bytes that are not a
+  WebM need no browser.
 - `test/budget.test.ts` — the retry and wall-clock caps and the integrity counters. No browser.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
