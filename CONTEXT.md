@@ -26,7 +26,9 @@ because section 8 predates them:
   is never another's proof.
 - A site's **verification state** is `unverified` or `verified`, with the method that proved it and the moment it was
   proved. **Only a check the platform ran itself may move it** — never a submitted field, and never a box a user ticks.
-  The state gates scale rather than trying: an unverified site is testable, with fewer agents and fewer runs an hour.
+  The state **gates nothing about testing**: any site may be tested at full size, verified or not (the owner's answer of
+  2026-11-03). What it gates is **path 2** — PersonaVision writes code against a repository only for a proved site. The
+  per-site caps, 10 browsers at a time and 4 runs an hour, hold for every site either way.
 
 ## Module map
 
