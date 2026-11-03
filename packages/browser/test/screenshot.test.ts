@@ -148,7 +148,10 @@ describeWithChromium('writeScreenshot', () => {
         const again = await writeScreenshot(handle, { runDir, variant: 'A', step: 'cart' });
 
         expect(again).toBe(first);
-        await expect(readdir(join(runDir, 'screenshots', 'A'))).resolves.toEqual(['cart.png', 'cart.view.png']);
+        await expect(readdir(join(runDir, 'screenshots', 'A'))).resolves.toEqual([
+          'cart.png',
+          'cart.view.png',
+        ]);
       } finally {
         await closeSession(handle);
       }

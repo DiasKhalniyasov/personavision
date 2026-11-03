@@ -214,21 +214,21 @@ describe('choosing which model tier a run decides on', () => {
   it('refuses a contributor request with no key', () => {
     expect(() =>
       selectDecisionProvider({
-      seed: 1,
-      env: {},
-      requestedMode: { mode: 'model', modelMode: 'contributor' },
-      createModelProvider: () => fakeModelProvider,
-    }),
+        seed: 1,
+        env: {},
+        requestedMode: { mode: 'model', modelMode: 'contributor' },
+        createModelProvider: () => fakeModelProvider,
+      }),
     ).toThrow(ModelModeUnavailableError);
   });
 
   it('refuses a contributor request with a key but no model provider', () => {
     expect(() =>
       selectDecisionProvider({
-      seed: 1,
-      env: withKey,
-      requestedMode: { mode: 'model', modelMode: 'contributor' },
-    }),
+        seed: 1,
+        env: withKey,
+        requestedMode: { mode: 'model', modelMode: 'contributor' },
+      }),
     ).toThrow(ModelModeUnavailableError);
   });
 
@@ -331,11 +331,11 @@ describe('choosing which model tier a run decides on', () => {
   it('refuses when a contributor factory answers with a provider that is not a model', () => {
     expect(() =>
       selectDecisionProvider({
-      seed: 1,
-      env: withKey,
-      requestedMode: { mode: 'model', modelMode: 'contributor' },
-      createModelProvider: () => createOfflineDeterministicProvider({ seed: 1 }),
-    }),
+        seed: 1,
+        env: withKey,
+        requestedMode: { mode: 'model', modelMode: 'contributor' },
+        createModelProvider: () => createOfflineDeterministicProvider({ seed: 1 }),
+      }),
     ).toThrow(ModelModeUnavailableError);
   });
 

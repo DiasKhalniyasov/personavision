@@ -9,7 +9,13 @@ import {
   ModelDecisionError,
 } from '../src/meta-model.js';
 import type { ModelTransport, TrajectoryRecord } from '../src/meta-model.js';
-import { buildScreenMessage, INSTRUCTIONS, readReply, readTokens, TOOLS } from '../src/meta-request.js';
+import {
+  buildScreenMessage,
+  INSTRUCTIONS,
+  readReply,
+  readTokens,
+  TOOLS,
+} from '../src/meta-request.js';
 import type { ResponsesMessage, ResponsesRequestBody } from '../src/meta-request.js';
 import { estimateCostUsd, MODEL_ID_BY_MODE } from '../src/meta-pricing.js';
 import {
@@ -289,7 +295,11 @@ describe('the Meta Model API provider', () => {
         requests.push(request.body);
         return requests.length === 1 ? garbled(request) : fakeTransport().transport(request);
       };
-      const provider = createMetaModelApiProvider({ mode: 'contributor', env: TEST_ENV, transport });
+      const provider = createMetaModelApiProvider({
+        mode: 'contributor',
+        env: TEST_ENV,
+        transport,
+      });
       const session = provider.beginSession(anna);
 
       await expect(session.decide(contextOf({ step: SESSION_STEPS[0] }))).resolves.toBeDefined();

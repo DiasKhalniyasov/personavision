@@ -41,7 +41,12 @@
  * each session lands), and the trajectory sink (#139 opens one around the decider).
  */
 
-import { SessionBudget, taskStep, toAutomationFailure, viewScreenshotPath } from '@personavision/browser';
+import {
+  SessionBudget,
+  taskStep,
+  toAutomationFailure,
+  viewScreenshotPath,
+} from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeSession } from '@personavision/contract';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -527,26 +532,26 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       const scan = modelGaze
         ? { fixations: [], saccades: [] }
         : sampleFixations({
-        // Only what is on the agent's screen. The sampler draws over the areas it is handed
-        // and takes no viewport, so this is where the page's own extent becomes a limit on
-        // where a look can land: handed every area of the page it puts fixations on content
-        // three screens down, and a control below the fold is then "looked at" without
-        // anybody having scrolled to it — which makes the defect the demo leads with
-        // undiscoverable (#78; `docs/FLOW.md` section 8: a control below the fold is a
-        // finding waiting to happen).
-        //
-        // The run's own `aois` stay the whole screen's, so an area nobody could see is still
-        // declared and still carries its honest zero in `aoiMetrics` rather than going
-        // missing from the artifact.
-        aois: onScreen(aois, scrollY, capture.viewport.height),
-        goal,
-        persona: persona.traits,
-        history: fixations,
-        seed: screenSeed(seed, screenIndex),
-        weights: input.weights,
-        screenIndex,
-        scrollY,
-        });
+            // Only what is on the agent's screen. The sampler draws over the areas it is handed
+            // and takes no viewport, so this is where the page's own extent becomes a limit on
+            // where a look can land: handed every area of the page it puts fixations on content
+            // three screens down, and a control below the fold is then "looked at" without
+            // anybody having scrolled to it — which makes the defect the demo leads with
+            // undiscoverable (#78; `docs/FLOW.md` section 8: a control below the fold is a
+            // finding waiting to happen).
+            //
+            // The run's own `aois` stay the whole screen's, so an area nobody could see is still
+            // declared and still carries its honest zero in `aoiMetrics` rather than going
+            // missing from the artifact.
+            aois: onScreen(aois, scrollY, capture.viewport.height),
+            goal,
+            persona: persona.traits,
+            history: fixations,
+            seed: screenSeed(seed, screenIndex),
+            weights: input.weights,
+            screenIndex,
+            scrollY,
+          });
       fixations.push(...scan.fixations);
       saccades.push(...scan.saccades);
       const lastLook = scan.fixations.at(-1);
@@ -575,13 +580,18 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
                 ? { path: resolve(input.runDir, viewScreenshotPath(screenshot)) }
                 : {
                     path: resolve(input.runDir, screenshot),
-                    view: { top: scrollY, width: capture.viewport.width, height: capture.viewport.height },
+                    view: {
+                      top: scrollY,
+                      width: capture.viewport.width,
+                      height: capture.viewport.height,
+                    },
                   },
               // Only what the screenshot shows: an element left or right of the viewport is
               // one nobody could click, and the model picks it as readily as the real one.
               screenElements: screenElementsOf(
                 onScreen(aois, scrollY, capture.viewport.height).filter(
-                  (area) => area.bbox.x < capture.viewport.width && area.bbox.x + area.bbox.width > 0,
+                  (area) =>
+                    area.bbox.x < capture.viewport.width && area.bbox.x + area.bbox.width > 0,
                 ),
                 capture,
               ),
@@ -617,7 +627,12 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           aoiId: area.id,
         };
         if (previous !== undefined && previous.screenIndex === screenIndex) {
-          saccades.push({ fromFixation: previous.index, toFixation: look.index, amplitudePx, durationMs: gapMs });
+          saccades.push({
+            fromFixation: previous.index,
+            toFixation: look.index,
+            amplitudePx,
+            durationMs: gapMs,
+          });
         }
         fixations.push(look);
         clockMs = look.tMs + look.durationMs;
