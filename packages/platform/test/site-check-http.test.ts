@@ -37,8 +37,17 @@ const CHECKED_AT = '2026-11-03T09:04:00.000Z';
 const TAG = `<meta name="personavision-site-verification" content="${TOKEN}">`;
 const FILE_PATH = '/.well-known/personavision-site-verification.txt';
 
-/** Short, so the timeout's own sentence is assertable without waiting five seconds for it. */
-const SHORT_TIMEOUT_MS = 120;
+/**
+ * The bound every test that expects an answer runs with.
+ *
+ * Generous, and deliberately not the few hundred milliseconds a fixture on loopback needs:
+ * these suites run beside a hundred others, and a bound tight enough to be tidy is a bound
+ * that fires under load and turns an assertion about a sentence into a flake.
+ */
+const PATIENT_TIMEOUT_MS = 10_000;
+
+/** The bound the one test that waits for the timeout runs with, so it waits this long and no longer. */
+const IMPATIENT_TIMEOUT_MS = 250;
 
 /** What a fixture answers one request with. */
 interface Answer {
@@ -153,7 +162,7 @@ describe('the two HTTP verification checks', () => {
   const run = async (
     check: SiteCheck,
     site: CheckedSite,
-    timeoutMs = SHORT_TIMEOUT_MS,
+    timeoutMs = PATIENT_TIMEOUT_MS,
   ): Promise<SiteCheckResult> =>
     check(site, {
       // The real `fetch`, pointed at the fixture: the policy is what is under test, so
@@ -400,12 +409,12 @@ describe('the two HTTP verification checks', () => {
     it('gives up at its own timeout, and says how long it waited', async () => {
       fixture.answers.set(PAGE, { stall: true });
 
-      const result = await run(checkMetaTag, siteAt(PAGE), SHORT_TIMEOUT_MS);
+      const result = await run(checkMetaTag, siteAt(PAGE), IMPATIENT_TIMEOUT_MS);
 
       expect(result.passed).toBe(false);
       expect(result.found.outcome).toBe('no-answer');
       expect(result.sentence).toContain('timed out');
-      expect(result.sentence).toContain(`${SHORT_TIMEOUT_MS}ms`);
+      expect(result.sentence).toContain(`${IMPATIENT_TIMEOUT_MS}ms`);
       expect(fixture.asked).toEqual([PAGE]);
     });
 
@@ -511,7 +520,7 @@ describe('POST /sites/:siteId/verify, by meta tag and by well-known file', () =>
       siteChecks: {
         resolveTxt,
         now: () => new Date(CHECKED_AT),
-        fetchTimeoutMs: SHORT_TIMEOUT_MS,
+        fetchTimeoutMs: PATIENT_TIMEOUT_MS,
       },
     });
     const signedIn = await served.signIn({
