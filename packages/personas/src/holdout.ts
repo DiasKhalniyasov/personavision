@@ -1,7 +1,13 @@
 import { createSeededRandom, personaSchema } from '@personavision/contract';
 import type { Audience, Persona } from '@personavision/contract';
 import { parseAudience } from './audience.js';
-import { HOLDOUT_FLOOR, HOLDOUT_SHARE, generatePersonas, streamOfSeed } from './generate.js';
+import {
+  HOLDOUT_FLOOR,
+  HOLDOUT_SHARE,
+  checkSeed,
+  generatePersonas,
+  streamOfSeed,
+} from './generate.js';
 
 /**
  * The holdout: people from the same audience, on seeds the change was never chosen against.
@@ -23,10 +29,35 @@ import { HOLDOUT_FLOOR, HOLDOUT_SHARE, generatePersonas, streamOfSeed } from './
  * candidate sequence and every candidate already spent is stepped over, so the answer cannot
  * contain a spent seed — there is no path through this file that reuses one. A request that
  * cannot be met that way is refused with the reason instead.
+ *
+ * That promise is about the **seed**, which is where a stream starts, and it is the promise
+ * the product rests on: these people were not read when the change was chosen. It is worth
+ * being exact about what it does not cover. `createSeededRandom` advances its state by a fixed
+ * step per draw, so a seed a fixed multiple of that step above a spent one starts part-way
+ * through the run of draws that spent seed consumed; a holdout seed could in principle land
+ * there and sample a person the main set already holds. The chance is the main set's draws
+ * over the 2³² streams — about one in ten million for a hundred people — and closing it would
+ * mean restating `@personavision/contract`'s generator step in this file, where a later change
+ * to that generator would leave it quietly wrong. The seed-level promise is enforced; this
+ * paragraph is the part that is arithmetic rather than construction.
  */
 
-/** How many candidate seeds the search may walk per person before it refuses. */
-const CANDIDATES_PER_PERSON = 16;
+/**
+ * How many candidates the audience's sequence offers per person wanted — the window the
+ * search walks before it refuses.
+ *
+ * There has to be a window. Without one, "there is no holdout left here" could only be said
+ * after walking 2³² candidates, so a request that cannot be met disjointly would hang rather
+ * than say so. With one, the refusal is a statement about a stated window.
+ *
+ * The window is also the ceiling on one audience: the sequence is the audience's own, so a
+ * caller that hands back every seed it has *ever* spent on this audience — rather than the
+ * seeds the change in front of it was chosen on — can spend the window, and gets the refusal
+ * when it does. 256 per person means 256 holdouts of a given size with no seed repeated
+ * between them, which is far more path-2 comparisons than one audience will see; the loop
+ * (#306) passes a run's own seed groups, which is a handful.
+ */
+const CANDIDATES_PER_PERSON = 256;
 
 /** `createSeededRandom` reduces a seed into this many streams, and `draw()` divides by it. */
 const SEED_SPACE = 2 ** 32;
@@ -106,6 +137,22 @@ const candidateSequenceSeed = (audience: Audience, size: number): number => {
 };
 
 /**
+ * The candidates this audience's sequence offers for a holdout of `size`, in the order the
+ * search walks them: `size * CANDIDATES_PER_PERSON` of them, each a seed in `[0, 2³²)`.
+ *
+ * `generateHoldout` is the only caller. It is exported so that `tests/` can hold the window
+ * itself to what this file claims about it — that it is the same window every time, and that
+ * a spent set covering it is refused rather than answered with a reused seed — without having
+ * to rediscover the sequence by generating holdouts until one runs out.
+ */
+export const holdoutCandidates = (audience: Audience, size: number): number[] => {
+  const draw = createSeededRandom(candidateSequenceSeed(audience, size));
+  return Array.from({ length: size * CANDIDATES_PER_PERSON }, () =>
+    Math.floor(draw() * SEED_SPACE),
+  );
+};
+
+/**
  * The same person, named as one of the holdout.
  *
  * The id has to differ from the main set's, because a run carries the holdout people in its
@@ -137,28 +184,31 @@ export const generateHoldout = (request: GenerateHoldoutRequest): Holdout => {
     );
   }
 
-  // Seeds are compared as the stream they name, not as the integer they were written as:
-  // `createSeededRandom` starts from `seed >>> 0`, so a spent seed and a candidate that differ
-  // only above the 32nd bit are the same people, and a holdout that called them two would hand
-  // back a person it promised was new.
-  const spent = new Set(request.spentSeeds.map(streamOfSeed));
+  // Every spent seed is held to being an integer, like every other seed here. A spent seed
+  // that is not one names a stream nobody spent — `undefined >>> 0` and `{} >>> 0` are both 0,
+  // and `"3"` is 3 — and the holdout would step over the wrong candidates and hand back seeds
+  // the change was chosen on, which is the one thing this file exists not to do.
+  //
+  // Seeds are compared as the stream they name rather than as the integer they were written
+  // as: `createSeededRandom` starts from `seed >>> 0`, so a spent seed and a candidate that
+  // differ only above the 32nd bit are the same people.
+  const spent = new Set(request.spentSeeds.map((seed) => streamOfSeed(checkSeed(seed))));
   spent.add(streamOfSeed(audience.generatedFrom.seed));
 
-  const draw = createSeededRandom(candidateSequenceSeed(audience, size));
-  const limit = size * CANDIDATES_PER_PERSON;
+  const candidates = holdoutCandidates(audience, size);
   const seeds: number[] = [];
-  for (let walked = 0; seeds.length < size; walked += 1) {
-    if (walked === limit) {
-      throw new Error(
-        `this audience has no holdout of ${size} left: ${limit} candidate seeds from its own sequence yielded ${seeds.length}, because ${spent.size} seeds are already spent — a holdout that reused one of them would be the people the change was chosen on under another name`,
-      );
-    }
-    const candidate = Math.floor(draw() * SEED_SPACE);
+  for (const candidate of candidates) {
+    if (seeds.length === size) break;
     if (spent.has(candidate)) continue;
     // Spent from here on, so the holdout cannot draw one of its own seeds twice either: two
     // people sampled from one seed are one person twice.
     spent.add(candidate);
     seeds.push(candidate);
+  }
+  if (seeds.length < size) {
+    throw new Error(
+      `this audience cannot answer a holdout of ${size} without reusing a seed the change was chosen on: of the ${candidates.length} candidates its own sequence offers for a holdout of this size, all but ${seeds.length} are already spent, and a holdout that reused one of them would be the people the change was chosen on under another name`,
+    );
   }
 
   // The same audience with the holdout's size, so the device mix, the segments and the trait

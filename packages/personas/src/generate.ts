@@ -48,7 +48,7 @@ const TRAIT_PRECISION = 1000;
  * checks is the comparison the wrong way round.
  *
  * `holdoutSize` in `holdout.ts` is the rule these two make, and a caller who wants another
- * number passes one: nothing else in this package reads them.
+ * number passes one: nothing but that function reads them.
  */
 export const HOLDOUT_SHARE = 0.4;
 export const HOLDOUT_FLOOR = 10;
@@ -85,8 +85,14 @@ export interface GeneratePersonasOptions {
   readonly seeds?: readonly number[];
 }
 
-/** A seed is an integer, so that it round-trips through the run artifact. */
-const checkSeed = (seed: number): number => {
+/**
+ * A seed is an integer, so that it round-trips through the run artifact.
+ *
+ * Exported because the holdout holds the seeds a change was *chosen* on to the same rule: a
+ * spent seed that is not an integer silently names a stream nobody spent — `undefined >>> 0`
+ * is 0 — and the holdout would then hand back seeds the change was chosen on.
+ */
+export const checkSeed = (seed: number): number => {
   if (!Number.isSafeInteger(seed)) {
     throw new TypeError(
       `a seed is an integer, so that it round-trips through the run artifact: received ${String(seed)}`,
@@ -227,7 +233,16 @@ export const generatePersonas = (
     // the archetype's own offsets gives the object every trait the contract declares without
     // a cast that would survive a trait being added to it.
     const traits = { ...archetype.offsets };
-    const random = streams?.[index] ?? shared;
+    // The per-person seeds are checked to be one for each person, so a list always has a
+    // stream here. Saying so by name matters more here than anywhere else in this file: a
+    // fallback to the shared stream would sample this person from the audience's own seed —
+    // a seed the holdout was asked to avoid — and hand back somebody it promised was new.
+    const random = streams === undefined ? shared : streams[index];
+    if (random === undefined) {
+      throw new Error(
+        `a seed was named for each of the ${parsed.size} people, so person ${index + 1} has a stream of their own`,
+      );
+    }
     for (const trait of TRAIT_NAMES) {
       traits[trait] = displace(
         centre[trait],

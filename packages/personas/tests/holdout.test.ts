@@ -3,6 +3,7 @@ import type { Audience, AudienceDevice } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import { concreteDeviceFor, deviceQuota } from '../src/devices.js';
 import { HOLDOUT_FLOOR, HOLDOUT_SHARE } from '../src/generate.js';
+import { holdoutCandidates } from '../src/holdout.js';
 import { GENERATOR_VERSION, generateHoldout, generatePersonas, holdoutSize } from '../src/index.js';
 import { DESKTOP_CLASS, MOBILE_CLASS, audienceWith, withShare } from './helpers.js';
 
@@ -99,29 +100,89 @@ describe('generateHoldout: the seeds are disjoint by construction', () => {
     expect(second.seeds).not.toContain(reused);
   });
 
-  it('refuses a holdout it cannot draw disjointly, and reuses no seed getting there', () => {
+  it('refuses a holdout it cannot draw disjointly, rather than reusing a seed', () => {
     const audience = audienceOf('exhausted', 20);
     const size = 10;
-    const spent = new Set<number>();
-    let refusal: Error | undefined;
+    // Every candidate this audience's sequence offers for a holdout of ten, spent but for
+    // nine of them. There is no tenth seed left that the change was never chosen against, and
+    // the one thing the generator may not do is make the tenth person up out of a spent one.
+    const window = holdoutCandidates(audience, size);
+    const spentSeeds = window.slice(0, window.length - (size - 1));
 
-    // Spend every seed the holdout hands back, round after round, until there are none of its
-    // own candidates left. The acceptance is that it says so rather than repeating itself.
-    for (let round = 0; round < 64 && refusal === undefined; round += 1) {
-      try {
-        const holdout = generateHoldout({ audience, spentSeeds: [...spent], size });
-        for (const seed of holdout.seeds) {
-          expect(spent.has(seed)).toBe(false);
-          spent.add(seed);
-        }
-      } catch (error) {
-        refusal = error as Error;
+    expect(() => generateHoldout({ audience, spentSeeds, size })).toThrow(
+      /without reusing a seed the change was chosen on/,
+    );
+    expect(() => generateHoldout({ audience, spentSeeds, size })).toThrow(/already spent/);
+  });
+
+  it('answers the same request the moment one more seed is free', () => {
+    const audience = audienceOf('exhausted', 20);
+    const size = 10;
+    const window = holdoutCandidates(audience, size);
+    const spentSeeds = window.slice(0, window.length - size);
+
+    // One candidate more than the refusal above, and the holdout is generated from exactly
+    // the seeds left: the refusal is the window running out, not a margin somebody guessed.
+    expect(generateHoldout({ audience, spentSeeds, size }).seeds).toStrictEqual(
+      window.slice(window.length - size),
+    );
+  });
+
+  it('reuses no seed across rounds that spend everything it hands back', () => {
+    const audience = audienceOf('rounds', 20);
+    const size = 10;
+    const spent = new Set<number>();
+
+    // What a loop re-running a path-2 comparison does: every seed the last holdout spent is a
+    // seed the next change may have been chosen on, so it is spent from then on.
+    for (let round = 0; round < 8; round += 1) {
+      for (const seed of generateHoldout({ audience, spentSeeds: [...spent], size }).seeds) {
+        expect(spent.has(seed)).toBe(false);
+        spent.add(seed);
       }
     }
 
-    expect(refusal?.message).toMatch(/no holdout of 10 left/);
-    expect(refusal?.message).toMatch(/already spent/);
-    expect(spent.size).toBeGreaterThan(size);
+    expect(spent.size).toBe(size * 8);
+  });
+
+  it.each([
+    ['a seed that is not a whole number', [1, 2.5]],
+    ['a value that is not a seed at all', [1, undefined as unknown as number]],
+    ['a seed written as a string', [1, '3' as unknown as number]],
+  ])('refuses %s among the spent seeds', (_what, spentSeeds) => {
+    // `undefined >>> 0` is 0 and `"3" >>> 0` is 3, so a spent seed taken on trust would mark
+    // the wrong stream as spent and the answer would quietly stop being a holdout.
+    expect(() =>
+      generateHoldout({ audience: audienceOf('bad-spent', 20), spentSeeds, size: 10 }),
+    ).toThrow(/a seed is an integer/);
+  });
+});
+
+describe('holdoutCandidates: the window the search walks', () => {
+  it.each(CASES)('%s: offers the same candidates every time', (_what, audience, size) => {
+    expect(holdoutCandidates(audience, size)).toStrictEqual(holdoutCandidates(audience, size));
+  });
+
+  it.each(CASES)(
+    '%s: offers seeds that round-trip through the artifact',
+    (_what, audience, size) => {
+      for (const candidate of holdoutCandidates(audience, size)) {
+        expect(Number.isSafeInteger(candidate)).toBe(true);
+        expect(candidate).toBeGreaterThanOrEqual(0);
+        expect(candidate).toBeLessThan(2 ** 32);
+      }
+    },
+  );
+
+  it('is the window a holdout is drawn from, in order', () => {
+    const audience = audienceOf('in-order', 20);
+
+    // Nothing is spent but the audience's own seed, so the holdout is the front of the window.
+    expect(generateHoldout({ audience, spentSeeds: [], size: 10 }).seeds).toStrictEqual(
+      holdoutCandidates(audience, 10)
+        .filter((candidate) => candidate !== audience.generatedFrom.seed >>> 0)
+        .slice(0, 10),
+    );
   });
 });
 

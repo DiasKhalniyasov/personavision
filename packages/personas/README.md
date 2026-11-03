@@ -200,8 +200,17 @@ const holdout = generateHoldout({ audience, spentSeeds: run.seedGroups });
   every spent candidate stepped over, so no path through the file returns a spent one; a request
   that cannot be met that way is refused with the reason instead of quietly reusing a seed. The
   audience's own `generatedFrom.seed` is spent by definition, because the main set is generated
-  from it. Seeds are compared as the **stream** they name — `createSeededRandom` starts from
-  `seed >>> 0` — so two integers a multiple of 2³² apart are one seed here, not two.
+  from it, and every spent seed is held to being an integer — `undefined >>> 0` is 0, and a spent
+  seed taken on trust would mark the wrong stream as spent. Seeds are compared as the **stream**
+  they name — `createSeededRandom` starts from `seed >>> 0` — so two integers a multiple of 2³²
+  apart are one seed here, not two.
+- **The window, and what it means to run out.** The sequence is walked 256 candidates per person
+  wanted; without a window, "there is no holdout left here" could only be said after walking 2³²
+  candidates. The window is therefore also the ceiling on one audience: a caller that hands back
+  every seed it has ever spent on it, rather than the seeds the change in front of it was chosen
+  on, can spend the window, and is refused when it does. 256 per person is 256 holdouts of a
+  given size with no seed repeated between them. The promise is about the seed, which is where a
+  stream starts; `src/holdout.ts` states precisely what that does and does not cover.
 - **One seed per person.** `generatePersonas(audience, { seeds })` samples person _i_ from
   `seeds[i]`'s own stream, and refuses two seeds that name one stream: two people sampled from
   one seed are one person twice. It is the only caller of that option.
