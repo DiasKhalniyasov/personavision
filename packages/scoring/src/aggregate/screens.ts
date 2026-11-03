@@ -23,12 +23,17 @@ import { quantileMs, screenIndexAt, stepWalk, type ScreenSliceSpec } from './ses
  *   DOM explained counted together under no area: the prototype's *9 landed on empty space
  *   where a progress indicator would be*. An area nobody clicked keeps its row at zero,
  *   because the areas-of-interest table reads `never` and `0%` off figures like these.
- * - **How far down they got is where the page was scrolled to**, as a share of that
- *   screenshot's own `pageHeight`, in ten bins: a session that never scrolled is in the
- *   first bin. **Past the fold is what they saw** — the position plus the viewport they were
- *   on, against the screenshot's `foldY` — and it takes a scroll, so a person whose own
- *   screen is taller than the captured fold line is not counted as having scrolled past a
- *   fold they never scrolled to.
+ * - **How far down they got is the deepest point they saw**, in ten equal bins from the top
+ *   of the page: the page is scrolled to a position, and what they saw is that position plus
+ *   the screen they were on, as a share of that screenshot's own `pageHeight`. So every bin
+ *   is reachable — somebody who read to the bottom of the page is in the last one — and the
+ *   share is clamped, because a page shorter than the screen it was read on is a page
+ *   somebody saw all of and never more than all of.
+ * - **Past the fold takes a scroll**: they are past it when they scrolled beyond the bottom
+ *   of the first screen, which is the fold line the screenshot records, or their own screen's
+ *   bottom where that is further down the page. A session that never scrolled is past no
+ *   fold, whatever screen it was on — and a person on a screen taller than the captured fold
+ *   line has to scroll further than the screenshot's own reader did to pass it.
  */
 
 /**
@@ -86,8 +91,11 @@ interface SessionReading {
   readonly clicks: ReadonlyArray<{ readonly step: string; readonly aoiId: string | null }>;
 }
 
-const readSession = (session: Session): SessionReading => {
+const readSession = (run: Run, session: Session): SessionReading => {
   const walk = stepWalk(session);
+  /** The step the run declares an area on, or `null` for a click that named no area. */
+  const declaredStep = (aoiId: string | null): string | null =>
+    aoiId === null ? null : (run.aois.find((aoi) => aoi.id === aoiId)?.step ?? null);
   const stepAt = (tMs: number): string | null => {
     const screenIndex = screenIndexAt(walk, tMs);
     return screenIndex === null ? null : (walk[screenIndex]?.step ?? null);
@@ -127,7 +135,13 @@ const readSession = (session: Session): SessionReading => {
     lastStep: walk[walk.length - 1]?.step ?? null,
     clicks: session.actions.flatMap((action) => {
       if (action.type !== 'click') return [];
-      const step = stepAt(action.tMs);
+      // The screen a click was made on is the screen the area it landed on is **on**, which
+      // the run declares. The span is the fallback, for a click that landed on nothing the
+      // DOM explained and so names no area to place it by: a session's clock only moves on
+      // its fixations, so an action made on a screen nobody looked at falls in the span of
+      // the screen before it, and would otherwise be counted against a control that is not
+      // there while the screen it was really on read "never clicked".
+      const step = declaredStep(action.aoiId) ?? stepAt(action.tMs);
       return step === null ? [] : [{ step, aoiId: action.aoiId }];
     }),
   };
@@ -153,8 +167,8 @@ const clicksByAoiOf = (
     .filter((aoi) => aoi.variant === variant && aoi.step === step)
     .map((aoi) => aoi.id);
   // The areas the run declares for this screen, in the order it declares them, and then any
-  // area a click named that this screen does not declare — which is a run whose sessions and
-  // whose `aois` disagree, and is reported as that by `readRun` rather than dropped here.
+  // area a click named that the run declares nowhere — which is a run whose sessions and
+  // whose `aois` disagree, reported as that by `readRun` rather than dropped here.
   const ids = [...new Set([...declared, ...counted.keys()])];
   return [
     ...ids.map((aoiId) => ({ aoiId, clicks: counted.get(aoiId) ?? 0 })),
@@ -174,20 +188,23 @@ const scrollDepthOf = (
   const bins = new Array<number>(SCROLL_BIN_COUNT).fill(0);
   let pastFoldSessions = 0;
   onIt.forEach((reading, index) => {
+    // The screen they read the page on, which is what turns a scroll position into a point
+    // on the page they saw. A session with no persona — a real participant's — is read on the
+    // screen the screenshot was captured at.
+    const viewportHeight = viewportHeights[index] ?? shot?.viewport.height ?? 0;
     // No screenshot is no page height and no fold line, so nothing is claimed about how far
     // down this screen anybody got: they are in the first bin and past no fold.
     const pageHeight = shot?.pageHeight ?? 0;
-    // Clamped, because a page shorter than what the person's `scrollY` says they scrolled to
-    // is a share of more than the whole page, which is not a share.
-    const share = pageHeight > 0 ? Math.min(1, reading.deepestScrollPx / pageHeight) : 0;
+    // Clamped, because a page shorter than the screen it was read on would otherwise be a
+    // share of more than the whole page, which is not a share.
+    const deepestSeenPx = reading.deepestScrollPx + viewportHeight;
+    const share = pageHeight > 0 ? Math.min(1, deepestSeenPx / pageHeight) : 0;
     const bin = Math.min(SCROLL_BIN_COUNT - 1, Math.floor(share * SCROLL_BIN_COUNT));
     bins[bin] = (bins[bin] ?? 0) + 1;
-    const viewportHeight = viewportHeights[index] ?? shot?.viewport.height ?? 0;
-    if (
-      shot !== undefined &&
-      reading.deepestScrollPx > 0 &&
-      reading.deepestScrollPx + viewportHeight > shot.foldY
-    ) {
+    // The bottom of the first screen: the fold the screenshot records, or this person's own
+    // screen bottom where that is further down the page. Scrolling past it is what the figure
+    // counts, so a session that never scrolled is past no fold whatever screen it was on.
+    if (shot !== undefined && reading.deepestScrollPx > Math.max(0, shot.foldY - viewportHeight)) {
       pastFoldSessions += 1;
     }
   });
@@ -202,7 +219,7 @@ const scrollDepthOf = (
  * slice got there or not.
  */
 export const screenFiguresOfSlice: ScreenFiguresBuilder = ({ run, slice }) => {
-  const readings = slice.sessions.map((session) => readSession(session));
+  const readings = slice.sessions.map((session) => readSession(run, session));
 
   return run.variants.flatMap((variant) =>
     run.steps.map((step): ScreenFigures => {

@@ -75,42 +75,42 @@ const rowOf = (figures: ScreenSlice['screens'], variant: string, step: string): 
 describe('the screens of a slice', () => {
   it('counts the whole run, screen by screen and version by version', () => {
     expect(figuresOf('all')).toEqual([
-      row('A', 'landing', { reached: 3, leftHere: 0, medianMsOnIt: 3000, bins: { 0: 3 } }),
+      row('A', 'landing', { reached: 3, leftHere: 0, medianMsOnIt: 3000, bins: { 5: 3 } }),
       row('A', 'prompt', {
         reached: 3,
         leftHere: 1,
         medianMsOnIt: 4000,
         clicks: { primary: 3, none: 1 },
-        bins: { 0: 3 },
+        bins: { 5: 3 },
       }),
       row('A', 'generate', {
         reached: 2,
         leftHere: 1,
         medianMsOnIt: 5500,
         clicks: { none: 1 },
-        bins: { 0: 2 },
+        bins: { 5: 2 },
       }),
       row('A', 'preview', {
         reached: 1,
         leftHere: 1,
         medianMsOnIt: 5000,
-        bins: { 1: 1 },
+        bins: { 7: 1 },
         pastFoldSessions: 1,
       }),
-      row('B', 'landing', { reached: 2, leftHere: 0, medianMsOnIt: 2500, bins: { 0: 2 } }),
+      row('B', 'landing', { reached: 2, leftHere: 0, medianMsOnIt: 2500, bins: { 5: 2 } }),
       row('B', 'prompt', {
         reached: 2,
         leftHere: 0,
         medianMsOnIt: 7000,
         clicks: { primary: 3 },
-        bins: { 0: 2 },
+        bins: { 5: 2 },
       }),
-      row('B', 'generate', { reached: 2, leftHere: 0, medianMsOnIt: 5000, bins: { 0: 2 } }),
+      row('B', 'generate', { reached: 2, leftHere: 0, medianMsOnIt: 5000, bins: { 5: 2 } }),
       row('B', 'preview', {
         reached: 2,
         leftHere: 2,
         medianMsOnIt: 5500,
-        bins: { 0: 2 },
+        bins: { 5: 1, 6: 1 },
         pastFoldSessions: 1,
       }),
     ]);
@@ -118,13 +118,13 @@ describe('the screens of a slice', () => {
 
   it('counts a segment slice: the one desktop session, and zeroes where it never got', () => {
     expect(figuresOf('segment:desktop')).toEqual([
-      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 2000, bins: { 0: 1 } }),
+      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 2000, bins: { 5: 1 } }),
       row('A', 'prompt', {
         reached: 1,
         leftHere: 1,
         medianMsOnIt: 4000,
         clicks: { primary: 1, none: 1 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
       row('A', 'generate', { reached: 0, leftHere: 0, medianMsOnIt: null }),
       row('A', 'preview', { reached: 0, leftHere: 0, medianMsOnIt: null }),
@@ -137,69 +137,69 @@ describe('the screens of a slice', () => {
 
   it('counts an outcome slice: the two who gave up, on both versions', () => {
     expect(figuresOf('outcome:abandoned')).toEqual([
-      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 3000, bins: { 0: 1 } }),
+      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 3000, bins: { 5: 1 } }),
       row('A', 'prompt', {
         reached: 1,
         leftHere: 0,
         medianMsOnIt: 4000,
         clicks: { primary: 1 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
-      row('A', 'generate', { reached: 1, leftHere: 1, medianMsOnIt: 5000, bins: { 0: 1 } }),
+      row('A', 'generate', { reached: 1, leftHere: 1, medianMsOnIt: 5000, bins: { 5: 1 } }),
       row('A', 'preview', { reached: 0, leftHere: 0, medianMsOnIt: null }),
-      row('B', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 2000, bins: { 0: 1 } }),
+      row('B', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 2000, bins: { 5: 1 } }),
       row('B', 'prompt', {
         reached: 1,
         leftHere: 0,
         medianMsOnIt: 4000,
         clicks: { primary: 1 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
       // The screen nobody looked at: reached, and nothing measured on it.
-      row('B', 'generate', { reached: 1, leftHere: 0, medianMsOnIt: null, bins: { 0: 1 } }),
-      row('B', 'preview', { reached: 1, leftHere: 1, medianMsOnIt: 4000, bins: { 0: 1 } }),
+      row('B', 'generate', { reached: 1, leftHere: 0, medianMsOnIt: null, bins: { 5: 1 } }),
+      row('B', 'preview', { reached: 1, leftHere: 1, medianMsOnIt: 4000, bins: { 5: 1 } }),
     ]);
   });
 
   it('counts a segment-and-outcome slice: the people on phones who finished', () => {
     expect(figuresOf('segment:phone|outcome:success')).toEqual([
-      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 4000, bins: { 0: 1 } }),
+      row('A', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 4000, bins: { 5: 1 } }),
       row('A', 'prompt', {
         reached: 1,
         leftHere: 0,
         medianMsOnIt: 5000,
         clicks: { primary: 1 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
       row('A', 'generate', {
         reached: 1,
         leftHere: 0,
         medianMsOnIt: 6000,
         clicks: { none: 1 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
       row('A', 'preview', {
         reached: 1,
         leftHere: 1,
         medianMsOnIt: 5000,
-        bins: { 1: 1 },
+        bins: { 7: 1 },
         pastFoldSessions: 1,
       }),
-      row('B', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 3000, bins: { 0: 1 } }),
+      row('B', 'landing', { reached: 1, leftHere: 0, medianMsOnIt: 3000, bins: { 5: 1 } }),
       // The prompt twice, by way of the `back`: one row, and the two spans added up.
       row('B', 'prompt', {
         reached: 1,
         leftHere: 0,
         medianMsOnIt: 10_000,
         clicks: { primary: 2 },
-        bins: { 0: 1 },
+        bins: { 5: 1 },
       }),
-      row('B', 'generate', { reached: 1, leftHere: 0, medianMsOnIt: 5000, bins: { 0: 1 } }),
+      row('B', 'generate', { reached: 1, leftHere: 0, medianMsOnIt: 5000, bins: { 5: 1 } }),
       row('B', 'preview', {
         reached: 1,
         leftHere: 1,
         medianMsOnIt: 7000,
-        bins: { 0: 1 },
+        bins: { 6: 1 },
         pastFoldSessions: 1,
       }),
     ]);
@@ -238,29 +238,30 @@ describe('where the clicks landed', () => {
 });
 
 describe('how far down they got', () => {
-  it('puts a session that never scrolled in the first bin and past no fold', () => {
-    // The desktop session, whose own screen is 900 tall against a fold line captured at 844:
-    // it saw below that line without scrolling, and scrolled past nothing.
+  it('counts a session that never scrolled as having seen its own first screen and no fold', () => {
+    // The desktop session: it saw the 900 its own screen holds of a 1600-tall page, which is
+    // the sixth of the ten bands down the page, and it scrolled past nothing.
     const prompt = rowOf(figuresOf('segment:desktop'), 'A', 'prompt');
 
     expect(prompt.scrollDepth).toEqual({
-      bins: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      bins: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
       pastFoldSessions: 0,
     });
   });
 
-  it('bins the deepest point by the share of the page, and counts the fold by what they saw', () => {
+  it('bins the deepest point they saw: the position they scrolled to plus their own screen', () => {
     const all = figuresOf('all');
 
-    // S-01 scrolled the preview to 300 of 1600: the second bin, and past the 844 fold.
+    // S-01 scrolled the preview to 300 and read on an 844-tall screen: 1144 of 1600, the
+    // eighth band, and past the 844 fold.
     expect(rowOf(all, 'A', 'preview').scrollDepth).toEqual({
-      bins: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+      bins: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
       pastFoldSessions: 1,
     });
-    // S-04 was at 120 of 1600 — the first bin — and still saw past the fold; S-06 scrolled
-    // nowhere at all.
+    // S-04 was at 120, so 964 of 1600 — one band further down than S-06, who scrolled
+    // nowhere at all and is past no fold.
     expect(rowOf(all, 'B', 'preview').scrollDepth).toEqual({
-      bins: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      bins: [0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
       pastFoldSessions: 1,
     });
   });
@@ -332,6 +333,57 @@ describe('a page shorter than the fold', () => {
       bins: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       pastFoldSessions: 0,
     });
+  });
+});
+
+/**
+ * S-06 with a click and a scroll made on its generate screen — **the screen nobody looked
+ * at**. A session's clock only moves on its fixations, so both land in the span of the screen
+ * before it: the step walk alone would count them against the prompt.
+ */
+const clickedWithoutLooking = (): Session => {
+  const original = smallRunSessions.find((one) => one.sessionId === 'S-06');
+  if (original === undefined) throw new Error('the fixture carries no S-06');
+  return sessionSchema.parse({
+    ...structuredClone(original),
+    actions: [
+      ...original.actions,
+      {
+        tMs: 5000,
+        type: 'click',
+        target: '#b-generate-primary',
+        aoiId: 'b-generate-primary',
+        value: null,
+        ok: true,
+      },
+    ].sort((one, other) => one.tMs - other.tMs),
+  });
+};
+
+describe('a click on a screen nobody looked at', () => {
+  it('is counted on the screen the area it landed on is on', () => {
+    const figures = screenFiguresOfSlice({
+      run: smallRun,
+      slice: {
+        key: 'all',
+        segment: null,
+        outcome: null,
+        label: 'Every outcome',
+        sessions: [clickedWithoutLooking()],
+      },
+    });
+
+    expect(rowOf(figures, 'B', 'generate').clicksByAoi).toEqual([
+      { aoiId: 'b-generate-body', clicks: 0 },
+      { aoiId: 'b-generate-primary', clicks: 1 },
+      { aoiId: null, clicks: 0 },
+    ]);
+    // And not against a control the prompt screen does not have.
+    expect(rowOf(figures, 'B', 'prompt').clicksByAoi).toEqual([
+      { aoiId: 'b-prompt-body', clicks: 0 },
+      { aoiId: 'b-prompt-primary', clicks: 1 },
+      { aoiId: null, clicks: 0 },
+    ]);
   });
 });
 
