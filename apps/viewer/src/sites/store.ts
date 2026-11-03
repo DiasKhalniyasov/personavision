@@ -259,3 +259,43 @@ export const readSite = async (siteId: string): Promise<StoreResult<SiteRecord>>
  */
 export const createSite = async (url: string): Promise<StoreResult<SiteRecord>> =>
   ask({ method: 'POST', url: SITES_PATH, body: { url } }, siteSchema);
+
+/** `/sites/<id>/verify`: where a check is asked for. `POST` only — nothing navigates here. */
+export const siteVerifyPath = (siteId: string): string => `${sitePath(siteId)}/verify`;
+
+/** The site as it now stands, and what the check that was just run found. */
+export interface CheckedSite {
+  readonly site: SiteRecord;
+  readonly check: SiteCheck;
+}
+
+// The route answers the whole site with the result beside it, so the screen redraws its
+// state from one and the method's own line from the other.
+const checkedSiteSchema = siteSchema.extend({ check: checkSchema });
+
+/**
+ * Run one of the four checks of `docs/FLOW.md` section 13 against this site.
+ *
+ * **The platform does the checking.** What is sent is the name of the method and nothing
+ * else: a body cannot verify a site, and there is no field here that could — the platform
+ * resolves the TXT record, fetches the page, reads the file or asks after the installation,
+ * and only a passing check moves the site (`packages/platform/src/site/verify.ts`).
+ *
+ * A check that **failed is an answer, not an error**: it comes back `ok` with the site
+ * unverified and `check` carrying what it looked for, where it looked and what it found
+ * instead. The `unreachable` result is for the other thing — a platform that could not be
+ * reached, or one that does not run this method yet, which answers its own sentence naming
+ * the methods it does run.
+ */
+export const verifySite = async (
+  siteId: string,
+  method: string,
+): Promise<StoreResult<CheckedSite>> => {
+  const answer = await ask(
+    { method: 'POST', url: siteVerifyPath(siteId), body: { method } },
+    checkedSiteSchema,
+  );
+  if (!answer.ok) return answer;
+  const { check, ...site } = answer.value;
+  return { ok: true, value: { site, check } };
+};
