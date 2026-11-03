@@ -24,6 +24,34 @@ export const SCREENSHOT_BYTES = Buffer.from([
 export const SCREENSHOT = { variant: 'A', step: 'cart' } as const;
 
 /**
+ * Not a playable recording, deliberately: a WebM file's own EBML magic followed by a
+ * deterministic ramp, so a slice of it is checked by arithmetic rather than by a decoder.
+ * Two kilobytes, which is what puts bytes on both sides of `bytes=1024-`.
+ */
+export const VIDEO_BYTES = Buffer.concat([
+  Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+  Buffer.from(Array.from({ length: 2044 }, (_, index) => index % 256)),
+]);
+
+/** The session whose recording the suites serve: the fixture's own first session. */
+export const VIDEO_SESSION = 'S-01';
+
+/**
+ * One session's recording, written where the paths module says it lives. Called by the
+ * suites that serve a video rather than by `temporaryWorkspace`, so a run directory holds
+ * one only where a test asked for one.
+ */
+export const writeSessionVideo = async (
+  runDir: string,
+  sessionId: string = VIDEO_SESSION,
+): Promise<Buffer> => {
+  const video = runPaths(runDir).video(sessionId);
+  await mkdir(dirname(video), { recursive: true });
+  await writeFile(video, VIDEO_BYTES);
+  return VIDEO_BYTES;
+};
+
+/**
  * The viewer's own document shell stands in for a build: `apps/viewer/dist` is a build
  * output and may not exist when the suite runs, and what is under test here is the
  * serving, not the bundling.

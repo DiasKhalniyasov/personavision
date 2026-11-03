@@ -9,7 +9,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { serveCommand } from '../src/commands/serve.js';
 import type { ServeResult } from '../src/commands/serve.js';
 import { personavision, startPersonavision } from './cli-process.js';
-import { SCREENSHOT, SCREENSHOT_BYTES, temporaryWorkspace, writeRunAt } from './workspace.js';
+import {
+  SCREENSHOT,
+  SCREENSHOT_BYTES,
+  VIDEO_BYTES,
+  VIDEO_SESSION,
+  temporaryWorkspace,
+  writeRunAt,
+  writeSessionVideo,
+} from './workspace.js';
 import type { TestWorkspace } from './workspace.js';
 
 /**
@@ -40,9 +48,13 @@ describe('personavision serve', () => {
   let theirCookie: string;
   let theirWorkspaceId: string;
 
-  const get = (path: string, cookie?: string): Promise<Response> =>
+  const get = (
+    path: string,
+    cookie?: string,
+    headers: Record<string, string> = {},
+  ): Promise<Response> =>
     fetch(new URL(path, base), {
-      headers: cookie === undefined ? {} : { cookie },
+      headers: cookie === undefined ? headers : { ...headers, cookie },
       redirect: 'manual',
     });
 
@@ -85,6 +97,11 @@ describe('personavision serve', () => {
     theirWorkspaceId = theirs.id;
     myCookie = await cookieFor(served.platform.seeded?.workspaceId ?? '');
     theirCookie = await cookieFor(theirWorkspaceId);
+
+    // A recording in each workspace's run, so that serving one and refusing the other are
+    // the same file under the same path and differ only in who asked.
+    await writeSessionVideo(workspace.runDir);
+    await writeSessionVideo(join(workspace.runsRoot, theirRunId));
   });
 
   afterAll(async () => {
@@ -147,6 +164,26 @@ describe('personavision serve', () => {
       expect(Buffer.from(await response.arrayBuffer())).toEqual(SCREENSHOT_BYTES);
     });
 
+    it('returns a session video byte for byte, and seeks into it with a byte range', async () => {
+      const path = `/runs/${workspace.runId}/${runPaths('').video(VIDEO_SESSION)}`;
+
+      const whole = await get(path, myCookie);
+      expect(whole.status).toBe(200);
+      expect(whole.headers.get('content-type')).toBe('video/webm');
+      expect(whole.headers.get('accept-ranges')).toBe('bytes');
+      const recording = Buffer.from(await whole.arrayBuffer());
+      expect(recording).toEqual(VIDEO_BYTES);
+      expect(recording).toEqual(await readFile(runPaths(workspace.runDir).video(VIDEO_SESSION)));
+
+      // What the replay screen's `?t=` costs: one slice, not a download and then a seek.
+      const ranged = await get(path, myCookie, { range: 'bytes=1024-' });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get('content-range')).toBe(
+        `bytes 1024-${VIDEO_BYTES.byteLength - 1}/${VIDEO_BYTES.byteLength}`,
+      );
+      expect(Buffer.from(await ranged.arrayBuffer())).toEqual(VIDEO_BYTES.subarray(1024));
+    });
+
     it('lists the session’s own workspace, newest first, and nobody else’s', async () => {
       const mine = (await (await get('/runs/index.json', myCookie)).json()) as {
         runId: string;
@@ -185,6 +222,18 @@ describe('personavision serve', () => {
 
     it('is not found for a signed-out request either', async () => {
       expect((await get(`/runs/${theirRunId}/run.json`)).status).toBe(404);
+    });
+
+    it('does not serve its session video, with or without a range', async () => {
+      const path = `/runs/${theirRunId}/${runPaths('').video(VIDEO_SESSION)}`;
+      // The file is there on disk, in the other workspace's run: a range header asks for
+      // part of it and is answered by the same scoping, not around it.
+      const asked: Record<string, string>[] = [{}, { range: 'bytes=0-15' }];
+      for (const headers of asked) {
+        const response = await get(path, myCookie, headers);
+        expect(response.status, JSON.stringify(headers)).toBe(404);
+      }
+      expect((await get(path, theirCookie)).status).toBe(200);
     });
   });
 
