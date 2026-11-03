@@ -21,6 +21,7 @@ import {
   chooseRunner,
   contributionsPath,
   createCloudRunJobsTransport,
+  createCloudRunRunner,
   JobsRefused,
   readSessionTaskEnvironment,
   RunnerNotConfiguredError,
@@ -29,6 +30,7 @@ import {
   TASK_ENV,
 } from '../src/index.js';
 import {
+  MOBILE,
   oneDeviceCaptureSet,
   peopleOnMobile,
   runVariant,
@@ -708,5 +710,56 @@ describe('the default Jobs transport, without a socket', () => {
     expect((calls[0] as Call).url).toBe(
       `https://europe-west1-run.googleapis.com/v2/${JOB}/executions/exec-1:cancel`,
     );
+  });
+});
+
+describe('collecting what a task wrote', () => {
+  /**
+   * The second half of a remote session is a download, and the session's cap is about the
+   * session rather than about the execution — so a store that never answers costs this one
+   * session and the run carries on, rather than holding a worker of the pool for ever.
+   */
+  it('gives up on a collection that outstays what the session had left', async () => {
+    const jobs = fakeJobs(() => ({
+      kind: 'ended',
+      result: { kind: 'failed', status: '', said: '' },
+    }));
+    const runner = createCloudRunRunner(
+      {
+        project: 'pv-test',
+        region: 'europe-west1',
+        job: 'personavision-session-runner',
+        image: IMAGE,
+        videoBucket: 'pv-test-session-videos',
+        engineMode: 'offline',
+      },
+      {
+        transport: {
+          ...jobs.transport,
+          settle: () => Promise.resolve({ kind: 'succeeded' }),
+        },
+        collect: () => new Promise(() => undefined),
+      },
+    );
+
+    const walked = await runner({
+      runDir,
+      runId: '2026-10-27-1200-fixture',
+      sessionId: 'S-01',
+      persona: peopleOnMobile(1)[0] as Persona,
+      variant: runVariant('A'),
+      seed: 11,
+      task: TASK,
+      startedAt: NOON,
+      timeoutMs: 200,
+      source,
+      providers: { decision: createOfflineDeterministicProvider({ seed: 11 }) },
+    });
+
+    expect(walked.session.outcome.status).toBe('automation_failure');
+    expect(walked.session.outcome.reason).toContain('had still not come back');
+    expect(walked.session.persona?.device).toEqual({ ...MOBILE, name: 'mobile-person-1' });
+    expect(walked.landsLate).toBeNull();
+    expect(walked.aois).toEqual([]);
   });
 });

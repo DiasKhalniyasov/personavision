@@ -15,8 +15,12 @@
  *   asked and what was answered, counted in the run's automation-failure total, and the other
  *   ninety-nine sessions carry on.
  * - **Nothing runs for ever.** The session's own wall-clock cap is passed to the task *and*
- *   held here: an execution still running at the cap is **cancelled** and reported, never
- *   waited on, and `landsLate` is always `null` because there is nothing left to land.
+ *   held here, over both halves of a remote session: the execution, and the collection of what
+ *   it wrote. Either one still going at the cap is given up on — the execution **cancelled**,
+ *   by name — and reported, never waited on, and `landsLate` is always `null` because there is
+ *   nothing left to land. The cap is measured from the moment the execution was created rather
+ *   than from the moment it started running, which is deliberate: an execution that queued for
+ *   five minutes cost the session five minutes, whoever was at fault.
  * - **The output comes back through the object store** (#316), which is why a remote run
  *   without a bucket is refused before any execution is created (`choose.ts`): a Cloud Run
  *   task cannot write to the owner's disk, so a run with nowhere to put a session is a run
@@ -29,6 +33,7 @@ import { readBreakage, remoteFailure } from './failures.js';
 import { brokenSession, FAILED_BEFORE_A_STEP } from './session.js';
 import { readContributions, sessionTaskEnvironment, taskArgs } from './session-task.js';
 import { JobsRefused } from './jobs.js';
+import { EXPIRED, withinTimeout } from './within.js';
 import type { Session } from '@personavision/contract';
 import type { ProviderMode } from '@personavision/provider';
 import type { AutomationFailure } from '../outcome.js';
@@ -177,8 +182,31 @@ export const createCloudRunRunner = (
     // The execution succeeded, so the task wrote a session and its contributions. A reply
     // this cannot read is our breakage and costs this one session: the alternative is a
     // malformed area of interest reaching `run.json`'s own write, which stops the swarm.
+    //
+    // Capped too, and with what is left of the session's own cap rather than a fresh one: the
+    // default collector is a file read and cannot hang, but the store this seam exists for is
+    // a download, and "nothing runs for ever" is about the session and not about the execution.
     try {
-      const { session, contributions } = await collect(request.runDir, request.sessionId);
+      const collected = await withinTimeout(
+        collect(request.runDir, request.sessionId),
+        Math.max(1, request.timeoutMs - since()),
+      );
+      if (collected === EXPIRED) {
+        return nothing(
+          request,
+          remoteFailure(
+            'nothing_landed',
+            mine,
+            {
+              status: 'CANCELLED',
+              said: `${execution.name} finished and its session had still not come back after the ${String(request.timeoutMs / 1000)} s this session had`,
+            },
+            FAILED_BEFORE_A_STEP,
+          ),
+          since(),
+        );
+      }
+      const { session, contributions } = collected;
       return {
         session,
         usage: contributions.usage,

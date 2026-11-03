@@ -133,10 +133,11 @@ export const chooseRunner = (
   }
 
   const region = read(env, RUNNER_ENV.region);
+  const named = read(env, RUNNER_ENV.job);
   const config = {
     project: read(env, RUNNER_ENV.project),
     region,
-    job: read(env, RUNNER_ENV.job) === '' ? DEFAULT_JOB : read(env, RUNNER_ENV.job),
+    job: named === '' ? DEFAULT_JOB : named,
     image: read(env, RUNNER_ENV.image),
     videoBucket,
     engineMode,

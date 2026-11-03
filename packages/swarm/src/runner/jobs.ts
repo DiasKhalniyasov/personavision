@@ -224,6 +224,11 @@ export const createCloudRunJobsTransport = ({
 
     settle: async (execution, { signal }) => {
       for (;;) {
+        // Checked before the request, not after it: an execution nobody is waiting for any
+        // more should cost no further call at all.
+        if (signal.aborted) {
+          throw new JobsRefused('ABORTED', 'nobody is waiting for this execution any more');
+        }
         const state = (await call(execution.name)) as ExecutionState;
         if ((state.succeededCount ?? 0) > 0) return { kind: 'succeeded' };
         const lost = (state.failedCount ?? 0) + (state.cancelledCount ?? 0);
@@ -234,9 +239,6 @@ export const createCloudRunJobsTransport = ({
             status: condition?.reason ?? '',
             said: condition?.message ?? 'the task did not succeed and the API gave no reason',
           };
-        }
-        if (signal.aborted) {
-          throw new JobsRefused('ABORTED', 'nobody is waiting for this execution any more');
         }
         await sleep(POLL_MS, signal);
       }

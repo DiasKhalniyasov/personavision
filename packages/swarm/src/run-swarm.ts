@@ -64,6 +64,7 @@ import {
 } from './holdout.js';
 import { runSession } from './run-session.js';
 import { chooseRunner } from './runner/choose.js';
+import { EXPIRED, withinTimeout } from './runner/within.js';
 import { brokenSession, stepNamed } from './runner/session.js';
 import type { Capture, CaptureSource, TaskDefinition, Variant } from '@personavision/browser';
 import type { Persona, Run, RunArtifact, RunUsage, Session } from '@personavision/contract';
@@ -753,9 +754,10 @@ const openRun = async (
 };
 
 /**
- * Which engine ran, and what it scored, on the record before the first session runs (#92).
+ * Which engine ran, what it scored and **where its sessions ran**, on the record before the
+ * first session runs (#92, #317).
  *
- * Two fields, written together because they are one claim: `engine.version` names the engine
+ * Three fields, written together because they are one claim: `engine.version` names the engine
  * and `calibration` carries the figures that engine was measured at, which is what the
  * header badge states on every screen. They come from the engine this build imports, because
  * nothing else knows which engine is about to walk the sessions — a creator can only guess at
@@ -764,10 +766,13 @@ const openRun = async (
  *
  * It happens here, in the swarm's own turn at `run.json` and before any session has landed,
  * so the value a reader sees while the run is open is the value the finished run carries: the
- * badge does not change number mid-run. A run whose creator already wrote these two fields
- * from `engineOnTheRecord` — which is how a run should be opened, and the only way a run that
- * failed to start can carry them at all — is left exactly as it was written, so the common
- * path costs no write at all.
+ * badge does not change number mid-run. A run whose creator already wrote these fields from
+ * `engineOnTheRecord` — which is how a run should be opened, and the only way a run that
+ * failed to start can carry them at all — is left exactly as it was written.
+ *
+ * The `runner` block is the swarm's own and nothing else writes it, so in practice this write
+ * does happen once per run: only the swarm knows which runner it was handed, and a creator
+ * that guessed at it would be guessing at the one field that says which code drove the run.
  *
  * The write is the whole artifact, as `closeRun`'s is, because `run.json` has no writer of
  * its own and `packages/contract` is not this ticket's to change. It is reached before the
@@ -839,26 +844,4 @@ const inTurn = (): (<T>(job: () => Promise<T>) => Promise<T>) => {
     );
     return mine;
   };
-};
-
-/** The cap won: the work is still running, and nobody is waiting for it any more. */
-const EXPIRED = Symbol('the session passed its cap');
-
-const withinTimeout = async <T>(
-  work: Promise<T>,
-  withinMs: number,
-): Promise<T | typeof EXPIRED> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race<T | typeof EXPIRED>([
-      work,
-      new Promise<typeof EXPIRED>((settle) => {
-        timer = setTimeout(() => settle(EXPIRED), withinMs);
-      }),
-    ]);
-  } finally {
-    // Left behind, the timer keeps the process alive for the length of the cap — twenty-four
-    // sessions of a replaying run would hold a minute of timers for a run that took a second.
-    clearTimeout(timer);
-  }
 };
