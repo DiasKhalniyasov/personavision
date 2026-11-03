@@ -17,7 +17,9 @@ import { distributionOf, scoredSessions, stepWalk, type FunnelSliceSpec } from '
  * 1. **A step's time in one session is the sum of its spans in that session.** A step walked
  *    twice — the `back` revisit the prototype's funnel shows — contributes the whole time
  *    that person spent on that step, one sample, not two. A session is the unit of the
- *    distribution, so "the sessions that reached the step" is also the sample count.
+ *    distribution, and its sample is the sessions **timed** on the step, which is the ones
+ *    that reached it less the ones reading 2 leaves unmeasured — so `sampleCount` is at most
+ *    the funnel's `reached` for that step and is not a second reading of it.
  * 2. **A screen nobody looked at contributes nothing.** `stepWalk` reports it as reached with
  *    no time measured (`durationMs: null`), and nothing measured is left out of the sample
  *    rather than entered as zero, which would pull the median down to a second nobody spent.
@@ -99,8 +101,8 @@ export const timingOfSlice: TimingBuilder = ({ run, slice }) => {
     );
   }
 
-  const measured = new Map(
-    sessions.map((session) => [session.sessionId, measuredPerStep(session)] as const),
+  const measured = new Map<Session, ReadonlyMap<string, number>>(
+    sessions.map((session) => [session, measuredPerStep(session)] as const),
   );
 
   // One row per step of `run.steps`, in that declared order, and only where somebody was
@@ -108,7 +110,7 @@ export const timingOfSlice: TimingBuilder = ({ run, slice }) => {
   // unlooked at, both have no distribution rather than an empty one.
   const perStep = run.steps.flatMap((step) => {
     const sample = sessions.flatMap((session) => {
-      const ms = measured.get(session.sessionId)?.get(step.id);
+      const ms = measured.get(session)?.get(step.id);
       return ms === undefined ? [] : [ms];
     });
     const distribution = distributionOf(sample);
@@ -124,7 +126,7 @@ export const timingOfSlice: TimingBuilder = ({ run, slice }) => {
         (a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0),
     )
     .flatMap((session) => {
-      const dominant = dominantStepOf(run, measured.get(session.sessionId) ?? new Map());
+      const dominant = dominantStepOf(run, measured.get(session) ?? new Map());
       if (dominant === null) return [];
       return [
         {
