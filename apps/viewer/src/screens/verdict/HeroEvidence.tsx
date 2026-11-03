@@ -19,9 +19,8 @@ import type { Capture, Transform } from '@/screens/attention/stage/overlayTransf
 import { attentionAreas } from '@/screens/attention/useAttentionAreas';
 import type { AttentionArea } from '@/screens/attention/useAttentionAreas';
 import { useAttentionStepSessions } from '@/screens/attention/useAttentionStepSessions';
-import { AOI_PARAM } from '@/screens/sessions/filters';
 import { useMoment } from '@/shell/motion';
-import { paths } from '@/shell/paths';
+import { heatmapLink } from '@/shell/paths';
 import styles from './heroEvidence.module.css';
 
 /**
@@ -304,14 +303,12 @@ export function HeroEvidence({ run }: { run: Run }) {
   // none — a primary action nobody ever looked at.
   const subject = outlined ?? unseenPrimaryAction(framed);
 
+  // Built where every link in the product is built, so the area's parameter is named once
+  // (`shell/paths.ts`) rather than here as well.
   const href =
     hero === null
       ? null
-      : `${paths.attention(run.runId, hero.variant, hero.step)}${
-          hero.aoiId === null
-            ? ''
-            : `?${new URLSearchParams({ [AOI_PARAM]: hero.aoiId }).toString()}`
-        }`;
+      : heatmapLink(run.runId, hero.variant, hero.step, { aoi: hero.aoiId ?? undefined });
 
   /**
    * What the frame says over the page when pixels cannot say it.

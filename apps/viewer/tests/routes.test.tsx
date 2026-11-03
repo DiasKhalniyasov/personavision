@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { EVIDENCE_LINK_PARAMS } from '@personavision/contract';
 import { loadDesignTokens } from './setup';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from './app';
-import { newTestStep, NEXT_PARAM, paths, patterns } from '../src/shell/paths';
+import {
+  funnelLink,
+  heatmapLink,
+  newTestStep,
+  NEXT_PARAM,
+  paths,
+  patterns,
+  RESULT_LINK_PARAMS,
+  sessionAtSecond,
+  sessionsLink,
+} from '../src/shell/paths';
 import type { SessionState } from '../src/shell/useSession';
 
 /**
@@ -84,6 +95,20 @@ describe('a signed-out visitor', () => {
     expect(router.state.location.pathname).toBe(paths.demo);
     // No signed-in chrome on a public page: there is no workspace to name.
     expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
+  });
+
+  it('lands on /signin from the two new results tabs, carrying the one it asked for', async () => {
+    const { runIds } = await serveRunData();
+    const runId = runIds[0] as string;
+
+    for (const intended of [paths.funnel(runId), paths.analysis(runId)]) {
+      const { router, unmount } = mountApp(intended, { session: SIGNED_OUT });
+      await waitFor(() => {
+        expect(router.state.location.pathname, intended).toBe(paths.signIn);
+      });
+      expect(new URLSearchParams(router.state.location.search).get(NEXT_PARAM)).toBe(intended);
+      unmount();
+    }
   });
 
   it('reads /signin itself', async () => {
@@ -211,6 +236,10 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [paths.sessions(runId), 'What happened to each person'],
       // The replay's heading names the person, not the screen: `S-01 · Rushed buyer · …`.
       [paths.session(runId, 'S-01'), /^S-01 · /],
+      // The two tabs of section 14 this ticket mounts. Their headers are the prototype's;
+      // what goes under each is #274's and #277's.
+      [paths.funnel(runId), 'Where the hundred of them went'],
+      [paths.analysis(runId), 'What Muse Wonder makes of it'],
     ];
 
     for (const [path, heading, session] of expected) {
@@ -238,6 +267,8 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       '/runs/:runId/attention/:variant/:step',
       '/runs/:runId/sessions',
       '/runs/:runId/sessions/:sessionId',
+      '/runs/:runId/funnel',
+      '/runs/:runId/analysis',
       '/settings/github',
     ]);
   });
@@ -248,5 +279,90 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
 
     expect(await screen.findByRole('heading', { name: 'There is no page here' })).toBeTruthy();
     expect(screen.getByText('/not/a/screen')).toBeTruthy();
+  });
+});
+
+describe('the citation link builders', () => {
+  /** A run id, and one with a character that has to survive being put in a path. */
+  const RUN = '2026-10-24-1402-northwind-demo';
+
+  it('name only parameters a citation may carry, and between them name every one of them', () => {
+    const named = Object.values(RESULT_LINK_PARAMS).flat();
+
+    // The contract's own list, not a copy of it: a builder that invents a parameter name,
+    // or a parameter no screen honours, fails here.
+    for (const key of named) expect(EVIDENCE_LINK_PARAMS, key).toContain(key);
+    expect([...new Set(named)].sort()).toEqual([...EVIDENCE_LINK_PARAMS].sort());
+  });
+
+  it('builds the funnel, by segment and for the whole audience', () => {
+    expect(funnelLink(RUN)).toBe(`/runs/${RUN}/funnel`);
+    expect(funnelLink(RUN, { segment: 'first-time' })).toBe(
+      `/runs/${RUN}/funnel?segment=first-time`,
+    );
+    // A filter nobody asked for is absent rather than empty: `?segment=` narrows to nothing.
+    expect(funnelLink(RUN, { segment: '' })).toBe(funnelLink(RUN));
+  });
+
+  it('builds the analysis, which takes no parameter', () => {
+    expect(paths.analysis(RUN)).toBe(`/runs/${RUN}/analysis`);
+  });
+
+  it('builds a heatmap on its version and step, with any of its four filters', () => {
+    expect(heatmapLink(RUN, 'B', 'waiting')).toBe(`/runs/${RUN}/attention/B/waiting`);
+    expect(
+      heatmapLink(RUN, 'B', 'waiting', {
+        aoi: 'progress',
+        overlay: 'attention',
+        segment: 'phone',
+        outcome: 'abandoned',
+      }),
+    ).toBe(
+      `/runs/${RUN}/attention/B/waiting?aoi=progress&overlay=attention&segment=phone&outcome=abandoned`,
+    );
+  });
+
+  it('builds a session at the second a citation reads, in seconds', () => {
+    expect(sessionAtSecond(RUN, 'S-07', 48)).toBe(`/runs/${RUN}/sessions/S-07?t=48`);
+    // `S-07 · 0:48.5`: a citation is sometimes written finer than a whole second.
+    expect(sessionAtSecond(RUN, 'S-07', 48.5)).toBe(`/runs/${RUN}/sessions/S-07?t=48.5`);
+    expect(sessionAtSecond(RUN, 'S-07', 0)).toBe(`/runs/${RUN}/sessions/S-07?t=0`);
+  });
+
+  it('builds a sessions list narrowed by any composition of its five', () => {
+    expect(sessionsLink(RUN)).toBe(`/runs/${RUN}/sessions`);
+    expect(sessionsLink(RUN, { outcome: 'failed' })).toBe(`/runs/${RUN}/sessions?outcome=failed`);
+    expect(sessionsLink(RUN, { variant: 'A', segment: 'phone' })).toBe(
+      `/runs/${RUN}/sessions?variant=A&segment=phone`,
+    );
+    expect(
+      sessionsLink(RUN, {
+        variant: 'A',
+        step: 'waiting',
+        aoi: 'progress',
+        outcome: 'abandoned',
+        segment: 'first-time',
+      }),
+    ).toBe(
+      `/runs/${RUN}/sessions?variant=A&step=waiting&aoi=progress&outcome=abandoned&segment=first-time`,
+    );
+  });
+
+  it('percent-encodes its values, and the browser’s own parsing gives back what went in', () => {
+    const segment = 'first time & phone';
+    const aoi = 'a/b?c=d#e';
+    const url = new URL(sessionsLink(RUN, { variant: 'A', aoi, segment }), 'https://example.test');
+
+    expect(url.pathname).toBe(`/runs/${RUN}/sessions`);
+    expect(url.searchParams.get('variant')).toBe('A');
+    expect(url.searchParams.get('aoi')).toBe(aoi);
+    expect(url.searchParams.get('segment')).toBe(segment);
+  });
+
+  it('percent-encodes the ids it puts in the path, so one cannot climb out of it', () => {
+    const url = new URL(sessionAtSecond('../../etc', 'S 7/8', 1), 'https://example.test');
+
+    expect(url.pathname).toBe('/runs/..%2F..%2Fetc/sessions/S%207%2F8');
+    expect(url.searchParams.get('t')).toBe('1');
   });
 });
