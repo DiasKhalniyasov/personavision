@@ -313,6 +313,11 @@ describe('a refusal', () => {
       SIGNUP_REFUSALS.workspaceMissing,
     ],
     [{ ...NEW_WORKSPACE, email: 'not-an-email' }, LABELS.email, SIGNUP_REFUSALS.emailMalformed],
+    [
+      { ...NEW_WORKSPACE, workspaceName: 'C'.repeat(61) },
+      LABELS.workspace,
+      SIGNUP_REFUSALS.workspaceTooLong,
+    ],
   ])('names the field of %o', async (fields, label, sentence) => {
     const platform = await servePlatform();
     mountSignUp();
@@ -363,6 +368,43 @@ describe('a refusal', () => {
     await waitFor(() => {
       expect(platform.workspaces()).toEqual([NEW_WORKSPACE.workspaceName]);
     });
+  });
+});
+
+describe('an answer this app could not read', () => {
+  it('does not claim a workspace was created by a 200 that names no session', async () => {
+    // A dev proxy, or an SPA fallback serving the page itself with a 200. Landing on
+    // `/sites` would be bounced to `/signin` by the guard, leaving the reader believing
+    // they have an account.
+    await servePlatform({ signupAnswers: { status: 200, body: { signedIn: false } } });
+    const { router } = mountSignUp();
+
+    await fillIn();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/could not read/i);
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe(paths.signUp);
+  });
+
+  it('offers to try again when the body itself could not be read, and marks no field', async () => {
+    await servePlatform({
+      signupAnswers: { status: 400, body: { signedIn: false, error: SIGNUP_REFUSALS.unreadable } },
+    });
+    mountSignUp();
+
+    await fillIn();
+
+    // The one refusal where nothing the reader typed is at fault: no field is named, so
+    // the same form is what to send again.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(SIGNUP_REFUSALS.unreadable);
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeTruthy();
+    for (const label of Object.values(LABELS)) {
+      expect(field(label).getAttribute('aria-invalid'), label).toBeNull();
+      // And every field points at it, so tabbing back into one reads the sentence.
+      expect(field(label).getAttribute('aria-describedby'), label).toContain(alert.id);
+    }
   });
 });
 

@@ -56,9 +56,20 @@ const REFUSED = 'That sign-up could not be completed. Check the three fields and
 
 /** The answer, read defensively: a body missing a field is not a reason to render nothing. */
 interface SignUpBody {
+  signedIn?: unknown;
   error?: unknown;
   field?: unknown;
 }
+
+/** The body of any answer, or `{}` for one this app could not read. */
+const readBody = async (response: Response): Promise<SignUpBody> => {
+  try {
+    const parsed: unknown = await response.json();
+    return typeof parsed === 'object' && parsed !== null ? (parsed as SignUpBody) : {};
+  } catch {
+    return {};
+  }
+};
 
 const FIELDS: readonly SignUpField[] = ['email', 'password', 'workspaceName'];
 
@@ -92,24 +103,35 @@ export const createWorkspace = async (fields: NewWorkspaceFields): Promise<SignU
     };
   }
 
+  // A refusal this app could not read is still a refusal: the status says whether the form
+  // was at fault, and the sentence below says so without pretending to know more.
+  const body = await readBody(response);
+
   if (!response.ok) {
-    let body: SignUpBody = {};
-    try {
-      const parsed: unknown = await response.json();
-      if (typeof parsed === 'object' && parsed !== null) body = parsed as SignUpBody;
-    } catch {
-      // A refusal this app could not read is still a refusal: the status says whether the
-      // form was at fault, and the sentence below says so without pretending to know more.
-    }
     const refused = response.status === 400 || response.status === 409;
+    const field = refused ? fieldOf(body.field) : null;
     return {
       ok: false,
       refusal: {
         message: text(body.error) ?? (refused ? REFUSED : UNREADABLE),
-        field: refused ? fieldOf(body.field) : null,
-        alreadyHasOne: response.status === 409,
-        retryable: !refused,
+        field,
+        alreadyHasOne: response.status === 409 && field === 'email',
+        // Nothing the reader typed is at fault unless the answer names the field it is
+        // about: a body that could not be read and a server with a problem are both worth
+        // sending the same form again, and neither marks a field as wrong.
+        retryable: field === null,
       },
+    };
+  }
+
+  if (body.signedIn !== true) {
+    // 200 from something that is not this platform — a dev proxy, or an SPA fallback
+    // serving the page itself. Claiming a workspace was created would land the reader on
+    // `/sites`, be bounced to `/signin` by the guard, and leave them believing they have
+    // an account. `shell/useSession`'s sign-in guards the same case the same way.
+    return {
+      ok: false,
+      refusal: { message: UNREADABLE, field: null, alreadyHasOne: false, retryable: true },
     };
   }
 

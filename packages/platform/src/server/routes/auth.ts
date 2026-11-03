@@ -58,6 +58,8 @@ const SIGNUP_REFUSALS = {
   },
   workspaceName: {
     missing: 'Name your workspace.',
+    // `MAX_WORKSPACE_NAME_LENGTH` in figures: a cap is worth stating as a number.
+    'too-long': 'Use 60 characters or fewer.',
   },
 } satisfies {
   // One sentence per pair `signUp` can actually produce, and no key for a pair it cannot:
@@ -80,6 +82,17 @@ const sentenceFor = (refused: SignUpRefusal): string => {
 
 /** Where a completed sign-up lands: adding a site and proving it is yours. */
 const AFTER_SIGNUP = '/sites';
+
+/**
+ * What a sign-up that already carries a session is told.
+ *
+ * An account is a member of exactly one workspace and nothing in the product can switch
+ * between two, so a second one would be unreachable. The screen sends a signed-in visitor
+ * on before the form renders (#265); this is the same rule where it cannot be bypassed —
+ * by a stale tab, by a script, or by a cross-origin form post, which would otherwise
+ * replace a signed-in owner's cookie with one for a workspace holding none of their tests.
+ */
+const ALREADY_SIGNED_IN = 'You already have a workspace.';
 
 /** A body larger than this is not a sign-in or a sign-up form, and is refused unread. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -160,8 +173,18 @@ const signedInBody = (
 });
 
 const signupHandler =
-  ({ store, sessionCookie, lifetimeSeconds }: AuthRouteOptions) =>
+  ({ store, readSession, sessionCookie, lifetimeSeconds }: AuthRouteOptions) =>
   async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    if ((await readSession(request)) !== null) {
+      // Nothing is created and the caller's own cookie is left exactly as it was.
+      sendJson(response, 409, {
+        error: ALREADY_SIGNED_IN,
+        signedIn: true,
+        next: '/',
+      } satisfies AuthBody);
+      return;
+    }
+
     const fields = await readFields(request);
     if (fields === null) {
       // Nothing was created, so this is not a refused sign-up: it is a request that could

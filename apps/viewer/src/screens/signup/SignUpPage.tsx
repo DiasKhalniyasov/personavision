@@ -50,6 +50,7 @@ function Field({
   label,
   hint,
   error,
+  aboveTheForm,
   resolving,
   ...input
 }: ComponentProps<typeof Input> & {
@@ -57,11 +58,20 @@ function Field({
   label: string;
   hint?: string;
   error: string | null;
+  /** The id of the sentence above the form, when one is standing there. */
+  aboveTheForm: string | null;
   resolving: boolean;
 }) {
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
-  const describedBy = [hint === undefined ? null : hintId, error === null ? null : errorId]
+  // The hint, then whichever sentence is about this field: its own, or — for a failure
+  // about the request rather than about a field — the one above the form, which is what
+  // `/signin` points both of its fields at.
+  const describedBy = [
+    hint === undefined ? null : hintId,
+    error === null ? null : errorId,
+    aboveTheForm,
+  ]
     .filter((value): value is string => value !== null)
     .join(' ');
 
@@ -122,6 +132,8 @@ export function SignUpPage() {
   const resolving = state.status === 'loading';
   /** A failure about the request rather than about one field: above the form, once. */
   const aboveTheForm = failure !== null && failure.field === null ? failure : null;
+  /** What every field points at while that sentence is standing there. */
+  const aboveTheFormId = aboveTheForm === null ? null : errorId;
   const errorFor = (field: SignUpField): string | null =>
     failure !== null && failure.field === field ? failure.message : null;
 
@@ -205,6 +217,7 @@ export function SignUpPage() {
               id={emailId}
               label="Work email"
               resolving={resolving}
+              aboveTheForm={aboveTheFormId}
               error={errorFor('email')}
               name="email"
               type="email"
@@ -225,6 +238,7 @@ export function SignUpPage() {
               label="Password"
               hint="At least twelve characters. We store a verifier, never the password."
               resolving={resolving}
+              aboveTheForm={aboveTheFormId}
               error={errorFor('password')}
               name="password"
               type="password"
@@ -236,6 +250,7 @@ export function SignUpPage() {
               id={workspaceId}
               label="Workspace name"
               resolving={resolving}
+              aboveTheForm={aboveTheFormId}
               error={errorFor('workspaceName')}
               name="workspaceName"
               type="text"

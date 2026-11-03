@@ -30,10 +30,15 @@ export const SIGNUP_REFUSALS = {
   passwordMissing: 'Enter a password.',
   passwordTooShort: 'Use at least twelve characters.',
   workspaceMissing: 'Name your workspace.',
+  workspaceTooLong: 'Use 60 characters or fewer.',
+  unreadable: 'That sign-up could not be read.',
 };
 
 /** The least a password may be, as `MIN_PASSWORD_LENGTH` in `packages/platform` fixes it. */
 const MIN_PASSWORD_LENGTH = 12;
+
+/** The most a workspace name may be, as `MAX_WORKSPACE_NAME_LENGTH` fixes it. */
+const MAX_WORKSPACE_NAME_LENGTH = 60;
 
 /** The rule `signUp` applies: a local part, an `@`, and a domain with a dot in it. */
 const LOOKS_LIKE_AN_EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
@@ -137,6 +142,9 @@ export async function servePlatform(
       return refuse(400, SIGNUP_REFUSALS.passwordTooShort, 'password');
     }
     if (workspaceName === '') return refuse(400, SIGNUP_REFUSALS.workspaceMissing, 'workspaceName');
+    if (workspaceName.length > MAX_WORKSPACE_NAME_LENGTH) {
+      return refuse(400, SIGNUP_REFUSALS.workspaceTooLong, 'workspaceName');
+    }
     // 409: the one refusal this route makes deliberately specific.
     if (accounts.has(email.toLowerCase())) {
       return refuse(409, SIGNUP_REFUSALS.emailTaken, 'email');

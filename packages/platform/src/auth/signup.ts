@@ -1,5 +1,6 @@
 import { hashPassword } from '../store/password.js';
 import type { PlatformStore } from '../store/types.js';
+import { workspaceForAccount } from '../workspace/membership.js';
 import type { SignedIn } from './signin.js';
 
 /**
@@ -21,6 +22,18 @@ import type { SignedIn } from './signin.js';
 /** The least a password may be, and the number the screen's own hint states. */
 export const MIN_PASSWORD_LENGTH = 12;
 
+/**
+ * The most a workspace name may be.
+ *
+ * The chrome names the workspace on every screen of the product and there is no screen to
+ * rename one on yet, so a name nobody can read is a workspace nobody can use. Sixty
+ * characters is longer than any company name and short enough to sit in the bar.
+ */
+export const MAX_WORKSPACE_NAME_LENGTH = 60;
+
+/** The most an email address may be: RFC 5321's own ceiling on a path. */
+const MAX_EMAIL_LENGTH = 254;
+
 export interface SignUpFields {
   email: string;
   password: string;
@@ -37,7 +50,7 @@ export interface SignUpFields {
 export type SignUpRefusal =
   | { field: 'email'; reason: 'missing' | 'not-an-email' | 'taken' }
   | { field: 'password'; reason: 'missing' | 'too-short' }
-  | { field: 'workspaceName'; reason: 'missing' };
+  | { field: 'workspaceName'; reason: 'missing' | 'too-long' };
 
 export type SignUpOutcome =
   { ok: true; signedIn: SignedIn } | { ok: false; refused: SignUpRefusal };
@@ -61,12 +74,20 @@ const LOOKS_LIKE_AN_EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 /** What is wrong with these fields, or `null` — everything but whether the email is taken. */
 const refusalOf = ({ email, password, workspaceName }: SignUpFields): SignUpRefusal | null => {
   if (email === '') return { field: 'email', reason: 'missing' };
-  if (!LOOKS_LIKE_AN_EMAIL.test(email)) return { field: 'email', reason: 'not-an-email' };
-  // Never trimmed: the spaces in a passphrase are characters of the password.
+  // An address past RFC 5321's ceiling is not an address, and says so with the same
+  // sentence: there is nothing useful to tell somebody about a 60,000-character email.
+  if (email.length > MAX_EMAIL_LENGTH || !LOOKS_LIKE_AN_EMAIL.test(email)) {
+    return { field: 'email', reason: 'not-an-email' };
+  }
+  // Never trimmed: the spaces in a passphrase are characters of the password. There is no
+  // ceiling either — the body cap is the only limit, and scrypt takes any length.
   if (password === '') return { field: 'password', reason: 'missing' };
   if (password.length < MIN_PASSWORD_LENGTH) return { field: 'password', reason: 'too-short' };
   // A name of only whitespace is a missing name: it is what the chrome would then show.
   if (workspaceName === '') return { field: 'workspaceName', reason: 'missing' };
+  if (workspaceName.length > MAX_WORKSPACE_NAME_LENGTH) {
+    return { field: 'workspaceName', reason: 'too-long' };
+  }
   return null;
 };
 
@@ -84,10 +105,22 @@ export const signUp = async (
   if (refused !== null) return { ok: false, refused };
 
   // Before anything is created, and after the free checks: a malformed address is never
-  // looked up. Two sign-ups racing on the same email is not guarded against here — the
-  // store has no unique index to lean on — and the loser gets a workspace of their own
-  // rather than somebody else's, which is the one outcome that has to hold.
-  if ((await store.accounts.byEmail(email)) !== null) {
+  // looked up.
+  //
+  // "Taken" is an account **that has a workspace**, not merely an account. An account that
+  // is a member of none is the wreckage of a sign-up that failed between its two writes,
+  // and `signIn` refuses it too (it has no workspace to land in), so treating it as taken
+  // would lock the address out for good — the dead end the specific wording exists to
+  // prevent. Signing up again leaves a second record, and `accounts.byEmail` answers with
+  // the newest, which is the one whose password somebody has.
+  //
+  // Two sign-ups racing on the same address are not guarded against here: the store has no
+  // unique index to lean on, and the one that wrote first loses — `byEmail` hands back the
+  // newer record, so its password no longer signs in and its workspace is reachable only
+  // until its session expires. Rare enough to accept, and a limiter in front of this route
+  // (#101) is where it is worth revisiting.
+  const existing = await store.accounts.byEmail(email);
+  if (existing !== null && (await workspaceForAccount(store, existing.id)) !== null) {
     return { ok: false, refused: { field: 'email', reason: 'taken' } };
   }
 

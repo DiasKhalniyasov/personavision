@@ -180,6 +180,74 @@ describe('signing up', () => {
       expect(workspaces.map((workspace) => workspace.name)).toEqual([FIELDS.workspaceName]);
     });
 
+    it('refuses a workspace name longer than the chrome can name, against its own field', async () => {
+      const response = await signUp({ ...FIELDS, workspaceName: 'C'.repeat(61) });
+      const read = await body(response);
+
+      expect(response.status).toBe(400);
+      expect(read.field).toBe('workspaceName');
+      expect(read.error).toBe('Use 60 characters or fewer.');
+      await createdNothing();
+
+      // Exactly the cap is a name, not a refusal.
+      expect((await signUp({ ...FIELDS, workspaceName: 'C'.repeat(60) })).status).toBe(200);
+    });
+
+    it('refuses an address past the ceiling an address has, with the same sentence', async () => {
+      const long = `${'c'.repeat(250)}@clipforge.example`;
+      const response = await signUp({ ...FIELDS, email: long });
+
+      expect(response.status).toBe(400);
+      expect((await body(response)).error).toBe('That does not look like an email address.');
+      await createdNothing(long);
+    });
+
+    it('does not lock out an email whose account was left without a workspace', async () => {
+      // The wreckage of a sign-up that failed between its two writes: an account that is a
+      // member of no workspace. `signIn` cannot use it either, so treating it as taken
+      // would lock this address out of the product for good.
+      await served.platform.store.accounts.create({
+        email: FIELDS.email,
+        displayName: 'ClipForge owner',
+        password: (await accountFor(DEMO_ACCOUNT_EMAIL))?.password ?? {
+          algorithm: 'scrypt',
+          salt: '00',
+          cost: 16_384,
+          blockSize: 8,
+          parallelization: 1,
+          keyLength: 64,
+          verifier: '00',
+        },
+      });
+
+      expect((await signUp({ ...FIELDS })).status).toBe(200);
+      // And it is the record just created — the newest — that the password signs in with.
+      expect((await served.signIn({ email: FIELDS.email, password: FIELDS.password })).status).toBe(
+        200,
+      );
+    });
+
+    it('refuses a sign-up that already carries a session, and changes nothing', async () => {
+      const cookie = cookieOf(await signUp({ ...FIELDS }));
+
+      const again = await served.request('/auth/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ ...FIELDS, email: 'second@clipforge.example' }),
+      });
+
+      // An account is a member of one workspace and nothing can switch between two, so a
+      // second one would be unreachable — and the caller's own cookie is left alone.
+      expect(again.status).toBe(409);
+      expect((await body(again)).error).toBe('You already have a workspace.');
+      expect(again.headers.get('set-cookie')).toBeNull();
+      await createdNothing('second@clipforge.example');
+
+      // The session they arrived with still names the workspace it always did.
+      const session = await served.request('/auth/session', { headers: { cookie } });
+      expect((await body(session)).workspace?.name).toBe(FIELDS.workspaceName);
+    });
+
     it('says the same of the seeded demo account, whose email a visitor could guess', async () => {
       const response = await signUp({ ...FIELDS, email: DEMO_ACCOUNT_EMAIL });
       expect(response.status).toBe(409);
