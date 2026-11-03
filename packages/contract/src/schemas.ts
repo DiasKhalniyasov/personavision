@@ -265,8 +265,8 @@ const outcomeCountsSchema = z.strictObject({
  * the four outcomes, for the holdout people alone. Stored so that the Improve screen
  * prints a third figure beside the baseline and the change without computing anything
  * (`docs/FLOW.md` section 15). `runSchema` holds this rate to these counts by the same
- * arithmetic and the same tolerance as a variant's own, so a holdout figure cannot
- * disagree with the people behind it.
+ * arithmetic and the same tolerance as a variant's own, and refuses them altogether on a
+ * run that ran no holdout, so a holdout figure cannot disagree with the people behind it.
  */
 const holdoutFiguresSchema = z.strictObject({
   completionRate: unitInterval,
@@ -306,9 +306,11 @@ const scoreSchema = z.strictObject({
   scoredSessionCount: z.int().positive(),
   perSeedGroup: z.array(z.strictObject({ seed: z.int(), frictionScore: points })),
   /**
-   * The same three figures for the holdout people alone. Optional with no default: a score
-   * of a run that tested no change carries none, and an absent block is a score no holdout
-   * was measured on rather than a holdout that completed nothing.
+   * The completion rate, the outcomes and the session count for the holdout people alone.
+   * Optional with no default: a score of a run that tested no change carries none, and an
+   * absent block is a score no holdout was measured on rather than a holdout that
+   * completed nothing. The friction score is deliberately not restated — the holdout's
+   * line is a completion figure, and the gap in points stays the verdict's.
    */
   holdout: holdoutFiguresSchema.optional(),
 });
@@ -368,11 +370,7 @@ const COMPLETION_TOLERANCE = 0.005;
  * screen prints side by side are never held to two different rules.
  */
 const completionRateIssues = (
-  figures: {
-    completionRate: number;
-    scoredSessionCount: number;
-    outcomeCounts: { success: number; abandoned: number; failed: number };
-  },
+  figures: Score | HoldoutFigures,
   path: PropertyKey[],
 ): Array<{ path: PropertyKey[]; message: string }> => {
   const issues: Array<{ path: PropertyKey[]; message: string }> = [];
@@ -400,6 +398,16 @@ const completionRateIssues = (
 };
 
 /**
+ * A web address a client can actually ask for: `http` or `https`, with a host. This is
+ * `packages/platform`'s rule for a site URL, applied to the two addresses path 2 records,
+ * because `new URL` — and so a bare `z.url()` — accepts `javascript:`, `data:` and
+ * `file:` without complaint. The preview is what the swarm is pointed at and the pull
+ * request is what a screen renders as a link, so neither may be a scheme that runs code
+ * or reads local disk.
+ */
+const webAddress = z.url({ protocol: /^https?$/, hostname: /^[^\s/?#]+$/ });
+
+/**
  * The pull request a change was opened as, on the connected repository. The URL is
  * recorded rather than composed from the repository and the number, because a URL built
  * from those two is a guess at the host's layout.
@@ -409,10 +417,19 @@ const completionRateIssues = (
  * written into a run, a log line or an error (`CONTEXT.md`, `docs/FLOW.md` section 16).
  */
 const pullRequestSchema = z.strictObject({
-  /** `owner/name`, as GitHub spells a repository. */
-  repository: z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'a repository is owner/name'),
+  /**
+   * `owner/name`, as GitHub spells a repository and in the characters GitHub allows. The
+   * client composes an API path from this, so a segment of dots — which would walk up out
+   * of `/repos/owner/name/pulls` — is not a name however the host reads it.
+   */
+  repository: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, 'a repository is owner/name, as GitHub spells it')
+    .refine((value) => !value.split('/').some((segment) => /^\.+$/.test(segment)), {
+      error: 'a repository is owner/name: "." and ".." are not names of anything',
+    }),
   number: z.int().positive(),
-  url: z.url(),
+  url: webAddress,
   title: name,
 });
 
@@ -428,10 +445,10 @@ const pullRequestSchema = z.strictObject({
  * resolving a preview on its own is held to it too, and not only once a whole run has been
  * simulated and written.
  */
-const previewSchema = z
+export const previewSchema = z
   .strictObject({
     /** `null` when the repository has no preview deployment for this pull request. */
-    url: z.url().nullable(),
+    url: webAddress.nullable(),
     /** Why there is none. Carried only when there is no URL. */
     reason: name.optional(),
   })
@@ -489,7 +506,7 @@ const holdoutVerdictOf = (confirmed: boolean | null): z.infer<typeof holdoutVerd
  * words for them; _variant_ stays the internal word the artifact uses for both
  * (`docs/FLOW.md` section 16).
  */
-const improveSchema = z.strictObject({
+export const improveSchema = z.strictObject({
   /** The recommendation this change answers, by its id in `recommendations.json`. */
   recommendationId: name,
   /** The file in the repository the change touches: one targeted change, not a list. */
@@ -687,6 +704,16 @@ export const runSchema = z
       if (score.holdout !== undefined) {
         for (const issue of completionRateIssues(score.holdout, ['scores', index, 'holdout'])) {
           ctx.addIssue({ code: 'custom', ...issue });
+        }
+        // Figures for people who were never held out are a third figure about nobody, and
+        // the Improve screen would print it beside two that are about somebody.
+        if ((run.improve?.holdout.personaIds.length ?? 0) === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['scores', index, 'holdout'],
+            message:
+              "this score carries the holdout's own figures, but this run ran no holdout: a figure is recorded for the people behind it or not at all",
+          });
         }
       }
     });
@@ -903,6 +930,26 @@ export const runSchema = z
         });
       }
     } else {
+      const declared = new Set(run.variants.map((variant) => variant.id));
+      for (const side of ['baselineVariant', 'changeVariant'] as const) {
+        if (!declared.has(improve[side])) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['improve', side],
+            message: `"${improve[side]}" is not one of this run's variants (${run.variants.map((variant) => variant.id).join(', ')})`,
+          });
+        }
+      }
+      // The before and the after are two versions. One id on both sides would print the
+      // same completion rate twice, and a gain of nothing would read as a change that did
+      // nothing rather than as a writer that recorded one version.
+      if (improve.baselineVariant === improve.changeVariant) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['improve', 'changeVariant'],
+          message: `the baseline and the change are both "${improve.changeVariant}": a before and after of one version is not a comparison`,
+        });
+      }
       const { holdout } = improve;
       // A holdout that names people the run never generated is not a holdout: the Improve
       // screen reads the holdout's figures as that set's, and a name nobody was is a
@@ -913,6 +960,28 @@ export const runSchema = z
           code: 'custom',
           path: ['improve', 'holdout', 'personaIds', unknown],
           message: `"${holdout.personaIds[unknown]}" is not one of this run's ${run.personas.length} personas: a holdout is people the run generated`,
+        });
+      }
+      // The ids are how many people the holdout is, so naming one twice makes the holdout
+      // bigger than the people in it — the rule `personas` is held to above.
+      const held = new Set<string>();
+      holdout.personaIds.forEach((personaId, index) => {
+        if (held.has(personaId)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['improve', 'holdout', 'personaIds', index],
+            message: `persona "${personaId}" is held out more than once: the ids are how many people the holdout is`,
+          });
+        }
+        held.add(personaId);
+      });
+      // "Nobody was simulated and no result was saved": a run that never started held
+      // nobody out either, so the Test failed screen's run cannot carry a confirmation.
+      if (run.status === 'failed' && holdout.personaIds.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['improve', 'holdout', 'personaIds'],
+          message: `this run failed to start, so it simulated nobody, but it records a holdout of ${holdout.personaIds.length}`,
         });
       }
       // "A change that wins on the original seeds and not on the holdout is reported as

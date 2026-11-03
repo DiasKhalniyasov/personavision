@@ -77,6 +77,14 @@ const withChange = (change: Partial<Improve> = {}): Run => {
   return run;
 };
 
+/** A path-2 run that ran no holdout: nobody held out, nothing confirmed, no figures. */
+const ranNoHoldout = (): Run => {
+  const run = withChange({ holdout: { personaIds: [], confirmed: null } });
+  run.verdict.holdout = 'none';
+  delete run.scores[0].holdout;
+  return run;
+};
+
 /** `improve/pullRequest/url — <message>`: where a rejection landed, and what it said. */
 const rejections = (run: unknown): string[] => {
   const result = runSchema.safeParse(run);
@@ -188,6 +196,41 @@ describe('the change a run tested', () => {
   });
 });
 
+describe('the two versions a path-2 run compared', () => {
+  it('are named by their ids in the run, and a name the run does not carry is rejected', () => {
+    const [rejection] = rejections(withChange({ baselineVariant: 'ZZZ' }));
+
+    expect(rejection).toContain('improve/baselineVariant');
+    expect(rejection).toContain("not one of this run's variants");
+  });
+
+  it('are two: a before and after of one version is rejected', () => {
+    const [rejection] = rejections(withChange({ changeVariant: 'A' }));
+
+    expect(rejection).toContain('improve/changeVariant');
+    expect(rejection).toContain('not a comparison');
+  });
+});
+
+describe('the addresses a path-2 run records', () => {
+  it('are http or https with a host, so a scheme that runs code is rejected', () => {
+    for (const url of ['javascript:alert(1)', 'data:text/html,<script></script>', 'file:///etc']) {
+      expect(paths(withChange({ preview: { url } }))).toContain('improve/preview/url');
+      expect(paths(withChange({ pullRequest: { ...PULL_REQUEST, url } }))).toContain(
+        'improve/pullRequest/url',
+      );
+    }
+  });
+
+  it('name a repository an API path can be composed from, so a walk out of one is rejected', () => {
+    for (const repository of ['../..', 'owner/..', 'owner/name?x=1', 'owner name/x']) {
+      expect(paths(withChange({ pullRequest: { ...PULL_REQUEST, repository } }))).toContain(
+        'improve/pullRequest/repository',
+      );
+    }
+  });
+});
+
 describe('the preview the change was tested at', () => {
   it('is accepted as a reason with no URL, which is a repository with no preview deployment', () => {
     const preview: Preview = {
@@ -244,17 +287,39 @@ describe('the holdout the change was never chosen against', () => {
   });
 
   it('is nobody and nothing confirmed when no holdout ran', () => {
-    const run = withChange({ holdout: { personaIds: [], confirmed: null } });
-    run.verdict.holdout = 'none';
+    const run = ranNoHoldout();
 
     expect(accepted(run).improve?.holdout).toEqual({ personaIds: [], confirmed: null });
+    expect(accepted(run).scores[0].holdout).toBeUndefined();
   });
 
   it('is rejected when it names nobody and still claims the gain was confirmed', () => {
-    const [rejection] = rejections(withChange({ holdout: { personaIds: [], confirmed: false } }));
+    const run = ranNoHoldout();
+    run.improve!.holdout.confirmed = false;
+
+    const [rejection] = rejections(run);
 
     expect(rejection).toContain('improve/holdout/confirmed');
     expect(rejection).toContain('names nobody');
+  });
+
+  it('is rejected when the same person is held out twice', () => {
+    const [rejection] = rejections(
+      withChange({
+        holdout: { personaIds: ['rushed-buyer', 'rushed-buyer'], confirmed: true },
+      }),
+    );
+
+    expect(rejection).toContain('improve/holdout/personaIds/1');
+    expect(rejection).toContain('held out more than once');
+  });
+
+  it('is rejected on a run that failed to start, which simulated nobody', () => {
+    const run = withChange();
+    run.status = 'failed';
+    run.failure = { reason: 'The site never answered.', detail: '' };
+
+    expect(paths(run)).toContain('improve/holdout/personaIds');
   });
 });
 
@@ -321,6 +386,16 @@ describe("the holdout's own figures on a score", () => {
     };
 
     expect(accepted(run).scores[0].holdout?.completionRate).toBe(0.82);
+  });
+
+  it('are rejected on a run that ran no holdout, because they are about nobody', () => {
+    const run = ranNoHoldout();
+    run.scores[0].holdout = { ...FIGURES };
+
+    const [rejection] = rejections(run);
+
+    expect(rejection).toContain('scores/0/holdout');
+    expect(rejection).toContain('ran no holdout');
   });
 
   it('are rejected when the outcomes do not account for the sessions that were scored', () => {
