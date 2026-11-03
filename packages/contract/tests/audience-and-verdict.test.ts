@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type {
   Audience,
+  EvidenceLinkParam,
   Gender,
   Goal,
   Persona,
@@ -13,6 +14,7 @@ import type {
 import {
   audienceSchema,
   EVIDENCE_LINK_PARAMS,
+  HEATMAP_OVERLAYS,
   personaSchema,
   readRun,
   runPaths,
@@ -27,6 +29,7 @@ import {
   CART,
   CONFIRM,
   COMPLETE_AOI,
+  deepLinkedFindings,
   extendedAudience,
   FINDING_ID,
   oneVariantArtifact,
@@ -490,33 +493,31 @@ describe('a persona names one simulated person', () => {
 describe("a finding's evidence link", () => {
   const runDir = describeRunDir();
 
-  it('rejects a parameter the evidence screens do not take', async () => {
+  /** The violations one finding's parameters produce, read back through `validate`. */
+  const afterParams = async (params: Record<string, string>): Promise<Violation[]> => {
     const findings = validFindings();
-    findings.findings[0].evidence_link.params = { variant: 'B', token: 'not-in-an-artifact' };
+    findings.findings[0].evidence_link.params = params;
     await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
+    return validate(runDir.dir());
+  };
 
-    const violations = await validate(runDir.dir());
+  /** `findings.json/findings/0/evidence_link/params/<param>`, as a violation names it. */
+  const paramAt = (param: string): string =>
+    `${label.findings}/findings/0/evidence_link/params/${param}`;
 
-    expect(offenders(violations)).toContain(
-      `${label.findings}/findings/0/evidence_link/params/token`,
+  it('rejects a parameter the evidence screens do not take, naming the whole list', async () => {
+    const violations = await afterParams({ variant: 'B', token: 'not-in-an-artifact' });
+
+    expect(offenders(violations)).toContain(paramAt('token'));
+    expect(violations[0].message).toBe(
+      '"token" is not a parameter the evidence screens take (variant, step, aoi, outcome, segment, overlay, t)',
     );
-    expect(violations[0].message).toMatch(/is not a parameter the evidence screens take/);
-  });
-
-  it('accepts every parameter the evidence routes have, and nothing else', async () => {
-    const findings = validFindings();
-    findings.findings[0].evidence_link.params = Object.fromEntries(
-      EVIDENCE_LINK_PARAMS.map((param) => [param, 'x']),
-    );
-    await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
-
-    expect(await validate(runDir.dir())).toEqual([]);
   });
 
   it('takes the three parameters this revision added, so a citation can be deep-linked', () => {
     // `docs/FLOW.md` section 16 names four; `step` was already here. The three added are the
-    // Heatmaps screen's segment filter and overlay, and the video-millisecond offset a
-    // replay opens paused on.
+    // segment filter the evidence screens share, the Heatmaps screen's overlay, and the
+    // second of the recording a replay opens paused on.
     expect([...EVIDENCE_LINK_PARAMS]).toEqual([
       'variant',
       'step',
@@ -528,20 +529,80 @@ describe("a finding's evidence link", () => {
     ]);
   });
 
-  it('accepts the Heatmaps filters and the replay timestamp a citation deep-links to', async () => {
+  /**
+   * A value each parameter's screen honours. Written out per parameter rather than reused,
+   * so that adding a name to the closed list is a change here too.
+   */
+  const aValueFor: Record<EvidenceLinkParam, string> = {
+    variant: 'B',
+    step: CONFIRM,
+    aoi: COMPLETE_AOI,
+    outcome: 'abandoned',
+    segment: 'phone',
+    overlay: 'scroll',
+    t: '0',
+  };
+
+  it('accepts every parameter the evidence routes have, and nothing else', async () => {
+    const params = Object.fromEntries(
+      EVIDENCE_LINK_PARAMS.map((param) => [param, aValueFor[param]]),
+    );
+
+    expect(await afterParams(params)).toEqual([]);
+  });
+
+  it.each([...HEATMAP_OVERLAYS])('accepts %s as the overlay a link opens on', async (overlay) => {
+    expect(await afterParams({ variant: 'B', step: CONFIRM, overlay })).toEqual([]);
+  });
+
+  it('rejects a fourth overlay, naming the three the Heatmaps screen has', async () => {
+    const violations = await afterParams({ variant: 'B', step: CONFIRM, overlay: 'hover' });
+
+    expect(offenders(violations)).toContain(paramAt('overlay'));
+    expect(violations[0].message).toBe(
+      '"hover" is not one of the Heatmaps screen\'s overlays (clicks, attention, scroll)',
+    );
+  });
+
+  it.each(['0', '48', '48.5'])('accepts %s seconds as the frame a replay opens on', async (t) => {
+    expect(await afterParams({ variant: 'B', step: CONFIRM, t })).toEqual([]);
+  });
+
+  it.each(['-1', '-0.5', 'NaN', '', 'nearly a minute', '2.4e3'])(
+    'rejects "%s" as a timestamp, saying the unit is seconds',
+    async (t) => {
+      const violations = await afterParams({ variant: 'B', step: CONFIRM, t });
+
+      expect(offenders(violations)).toContain(paramAt('t'));
+      expect(violations[0].message).toMatch(/seconds from the start of the recording/);
+    },
+  );
+
+  it('rejects a timestamp that is not a string at all', async () => {
     const findings = validFindings();
-    findings.findings[0].evidence_link.params = {
-      variant: 'B',
-      step: CONFIRM,
-      aoi: COMPLETE_AOI,
-      outcome: 'abandoned',
-      segment: 'mobile · price-sensitive',
-      overlay: 'attention',
-      t: '2400',
-    };
+    const params: Record<string, unknown> = findings.findings[0].evidence_link.params;
+    params['t'] = 48;
     await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
 
-    expect(await validate(runDir.dir())).toEqual([]);
+    expect(offenders(await validate(runDir.dir()))).toContain(paramAt('t'));
+  });
+
+  it('accepts a segment the audience named and rejects an empty one', async () => {
+    expect(await afterParams({ variant: 'B', step: CONFIRM, segment: 'first-time' })).toEqual([]);
+
+    const violations = await afterParams({ variant: 'B', step: CONFIRM, segment: '' });
+
+    expect(offenders(violations)).toContain(paramAt('segment'));
+    expect(violations[0].message).toMatch(/an empty one narrows nothing/);
+  });
+
+  it('round-trips a deep link carrying all three additions, through disk and back', async () => {
+    const written = deepLinkedFindings();
+    await writeRun(runDir.dir(), { ...validArtifact(), findings: written });
+
+    const { findings } = await readRun(runDir.dir());
+
+    expect(findings).toEqual(written);
   });
 });
 
