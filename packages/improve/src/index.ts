@@ -56,3 +56,23 @@ export type {
   RecordedRequest,
   RecordedTransport,
 } from './github/recorded.js';
+
+export { createFetchProbe, DEFAULT_PROBE_TIMEOUT_MS } from './preview/probe.js';
+export type { PreviewProbe, PreviewProbeAnswer } from './preview/probe.js';
+
+export {
+  DEFAULT_PREVIEW_POLL_MS,
+  DEFAULT_PREVIEW_WAIT_MS,
+  PREVIEW_UNUSABLE_STATES,
+  previewRecordOf,
+  resolvePreview,
+} from './preview/resolve.js';
+export type {
+  NoPreview,
+  PreviewFound,
+  PreviewOptions,
+  PreviewRequest,
+  PreviewResolution,
+  PreviewUnusable,
+  PreviewUnusableState,
+} from './preview/resolve.js';
