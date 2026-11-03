@@ -104,5 +104,14 @@ export {
   MODEL_ID_BY_MODE,
   MODEL_SPEC_BY_ID,
   PRICES_READ_ON,
+  WONDER_MODEL_ID,
+  WONDER_PRICES_READ_ON,
 } from './meta-pricing.js';
-export type { BilledTokens, ModelId, ModelMode, ModelSpec } from './meta-pricing.js';
+export type {
+  BilledTokens,
+  ModelId,
+  ModelMode,
+  ModelSpec,
+  PricedModelId,
+  WonderModelId,
+} from './meta-pricing.js';

@@ -513,10 +513,11 @@ are accepted and nothing else:
 > ticket that flips `acceptsImages` owes that branch a base64 `data:` URL built from the file (or a files-API upload),
 > and a test that asserts the encoding rather than the presence of the field.
 
-`meta-pricing.ts` currently has `acceptsImages: false` for both models, and the swarm therefore decides from fixated
-elements alone. **By the API that flag is wrong** — both models read images. Whether a persona *should* see the
-screenshot is a product question (a simulated person who reads the pixels is not reading the fixation list), not an
-API one, so this document records only that the API accepts it.
+`meta-pricing.ts` has `acceptsImages: true` for both models, on the strength of these calls, and the swarm still
+decides from the fixated elements alone and sends no screenshot. The two are not in conflict: the flag records what
+the **API** accepts, and whether a persona *should* see the screenshot is a product question (a simulated person who
+reads the pixels is not reading the fixation list), not an API one. A ticket that starts attaching the screenshot owes
+the `buildScreenMessage` branch above a `data:` URL and a test that asserts the encoding.
 
 ## Errors
 
@@ -1034,9 +1035,10 @@ builder. The figures quoted throughout are from those calls, and the statuses ar
 (the malformed request that showed the error wrapper is the endpoint's and not Wonder's) — plus one `GET /v1/models`
 to establish that `muse-wonder-1.0` is the only Wonder id the key can see. **Total cost $0.1222**, of which the four
 shape calls were $0.0900 and the single most expensive call — the change with its patch — was $0.0462. Eleven answered
-`200`; the seven that answered `4xx` were all deliberate: a model id that does not exist, a request with no `input`,
-the Chat Completions structured-output parameter, a schema outside the strict subset, `reasoning.effort: "none"`, and a
-corrupt image payload.
+`200`; the seven that answered `4xx` were all deliberate: a model id that does not exist (`404`), and six `400`s — a
+request with no `input`, the Chat Completions structured-output parameter, a schema outside the strict subset,
+`reasoning.effort: "none"`, a corrupt image payload, and the same `input`-less request sent to
+`muse-spark-1.3-contributor` to see whether the error envelope was Wonder's or the endpoint's.
 
 What was covered: one call of each of the four shapes the step needs (the structured audience, the goal, the ranked
 recommendations with citations, the change with a patch); structured replies through `text.format` with `strict: true`

@@ -114,12 +114,13 @@ describe('the live Muse Wonder API', () => {
       expect(body.error).toBeNull();
       expect(body.incomplete_details).toBeNull();
 
-      // `output` is an array and the reply is not the first item: every observed response
-      // put a `reasoning` item first and the assistant `message` second.
+      // `output` is an array holding more than the reply, which is why the reply is read by
+      // filtering for `message` rather than by taking `output[0]`. The *order* is only ever
+      // an observation — every observed response put the `reasoning` item first — so this
+      // asserts what the read rule needs and not an ordering the API never promised.
       const output = body.output as readonly Record<string, unknown>[];
       expect(output.map((item) => item.type)).toContain('reasoning');
       expect(output.map((item) => item.type)).toContain('message');
-      expect(output[0]?.type).toBe('reasoning');
 
       // The structured reply: schema-constrained, so it parses and it has the two fields.
       const text = replyText(body);
