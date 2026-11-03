@@ -379,3 +379,83 @@ describe('the writer refuses an artifact that would not read back', () => {
     }
   });
 });
+
+/**
+ * `run.json`'s `site` block: the address a run was pointed at and whether it had been
+ * verified when it was launched (#243).
+ *
+ * The block is optional, and the two runs that carry none are the two this asserts side by
+ * side: one written before the step existed, and a `personavision run`, which has no
+ * workspace and so no site to read. What the contract has to make impossible is reading an
+ * absent block as a claim — so the shape is checked at both ends, and the field is a boolean
+ * with no default rather than a flag that falls back to `false`.
+ */
+describe('the site a run ran against', () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await temporaryRunDir());
+    // A sound directory to start from, so the mutations below replace one file in a run
+    // that otherwise reads: a violation at the site's own path is the thing being asserted.
+    await writeRun(dir, validArtifact());
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  it('is read back exactly as it was written, verified or not', async () => {
+    for (const verifiedAtLaunch of [true, false]) {
+      const artifact = validArtifact();
+      artifact.run.site = { url: 'https://northwind.example/checkout', verifiedAtLaunch };
+      await writeRun(dir, artifact);
+
+      expect(await validate(dir)).toEqual([]);
+      expect((await readRun(dir)).run.site).toEqual({
+        url: 'https://northwind.example/checkout',
+        verifiedAtLaunch,
+      });
+    }
+  });
+
+  it('is absent on a run that did not say, and the directory still validates', async () => {
+    const artifact = validArtifact();
+    expect(artifact.run.site).toBeUndefined();
+    await writeRun(dir, artifact);
+
+    expect(await validate(dir)).toEqual([]);
+    expect((await readRun(dir)).run.site).toBeUndefined();
+    // Absent, and not resolved to a verification state nobody recorded: a reader asking
+    // whether this run's site was verified gets "it did not say" rather than "no".
+    expect('site' in (await readRun(dir)).run).toBe(false);
+  });
+
+  it('refuses a block that states an address without saying whether it was verified', async () => {
+    const run = validRun() as Record<string, unknown>;
+    run.site = { url: 'https://northwind.example/checkout' };
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toEqual([`${label.run}/site/verifiedAtLaunch`]);
+  });
+
+  it('refuses an address that is not one a browser could be pointed at', async () => {
+    const run = validRun() as Record<string, unknown>;
+    run.site = { url: 'northwind.example', verifiedAtLaunch: true };
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toEqual([`${label.run}/site/url`]);
+  });
+
+  it('leaves a customer nowhere to hide, because the block is closed like every other', async () => {
+    const run = validRun() as Record<string, unknown>;
+    run.site = {
+      url: 'https://northwind.example/checkout',
+      verifiedAtLaunch: true,
+      workspaceId: 'ws_01',
+    };
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toEqual([`${label.run}/site/workspaceId`]);
+  });
+});

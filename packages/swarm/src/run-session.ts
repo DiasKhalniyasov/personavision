@@ -52,6 +52,7 @@
  */
 
 import {
+  discardRecording,
   SessionBudget,
   taskStep,
   toAutomationFailure,
@@ -59,7 +60,6 @@ import {
 } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeSession } from '@personavision/contract';
 import { existsSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   buildAois,
@@ -897,7 +897,10 @@ const open = async (input: RunSessionInput, budget: SessionBudget): Promise<Open
         // The session's own recording, named by the session it belongs to: one source drives
         // every session of a run and one file cannot be two sessions. A source that opens no
         // browser has nothing to record and ignores it.
-        video: { runDir: input.runDir, sessionId: input.sessionId },
+        // `runId` is said rather than taken from the directory: a remote task's run
+        // directory is a scratch directory of its own, and a recording filed under that
+        // name is an object nothing could read back (`@personavision/browser`).
+        video: { runDir: input.runDir, runId: input.runId, sessionId: input.sessionId },
       });
       return started.inFlight;
     }, attempting);
@@ -914,9 +917,13 @@ const open = async (input: RunSessionInput, budget: SessionBudget): Promise<Open
         // a file at its own path would say otherwise.
         const abandoned = await handle.video?.finish().catch(() => undefined);
         if (abandoned?.state === 'recorded') {
-          await rm(runPaths(input.runDir).video(input.sessionId), { force: true }).catch(
-            () => undefined,
-          );
+          // Wherever `finish()` put it: the run directory, or the object store one variable
+          // selects, which is where the bytes are when a bucket is configured.
+          await discardRecording({
+            runDir: input.runDir,
+            runId: input.runId,
+            sessionId: input.sessionId,
+          });
         }
         await input.source.close(handle);
       })

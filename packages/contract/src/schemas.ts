@@ -887,6 +887,49 @@ export const runSchema = z
       version: name,
     }),
     /**
+     * The site this run ran against, and whether it had been **verified at launch**
+     * (`docs/FLOW.md` section 13; step #221).
+     *
+     * A reader of a committed run asks whether its figures came from a page somebody had
+     * proved they controlled, and that is a fact about the launch rather than about the site
+     * as it stands now: a site verified an hour after this run started was not verified while
+     * these sessions ran, and a site that has since lost its DNS record was. So the state is
+     * read once, at launch, and carried here — where it stays true of this run for ever.
+     *
+     * **It records; it does not gate.** No cap moves on it (the owner's answer of 2026-11-03
+     * settled decision 71 as _no gate on testing_), so an unverified site's run is driven
+     * under exactly the same caps as a verified one's and the only difference between the two
+     * artifacts is this boolean.
+     *
+     * **The URL names the site, and nothing else does.** There is no account id and no
+     * workspace id here, as there is nowhere else in a run directory: a run belongs to a
+     * workspace by what the platform's own `WorkspaceRecord.runIds` says, and nothing inside
+     * the artifact identifies a customer (`docs/FLOW.md` section 8). The platform's site
+     * record has an id, and it is deliberately not carried — it addresses a row in somebody's
+     * database and means nothing to a reader of the directory.
+     *
+     * It is written beside the engine block and in the same write, before the first session
+     * runs, so the site a reader sees while the run is open is the site the finished run
+     * carries.
+     *
+     * Optional with no default, as `status` and `reproduce` are. Two kinds of run carry none:
+     * one written before this step, and a `personavision run`, which has no workspace and no
+     * site to read. **An absent block is a run that did not say** — never a claim that the
+     * site it ran against was unverified.
+     */
+    site: z
+      .strictObject({
+        /**
+         * The address the run was pointed at, as the user typed it when they added the site:
+         * the platform stores it unnormalised, because the address somebody proved they
+         * control is the one they wrote down.
+         */
+        url: webAddress,
+        /** Whether the site was verified at the moment this run was launched. */
+        verifiedAtLaunch: z.boolean(),
+      })
+      .optional(),
+    /**
      * What it takes to run this run again, on the record beside what it produced (#78).
      *
      * Everything here is already true of the run somewhere else — the seeds are

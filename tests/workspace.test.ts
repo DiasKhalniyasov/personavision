@@ -224,6 +224,15 @@ describe('only the one sanctioned place reads a credential', () => {
     // instead and sends no header of its own. It asserts the key appears in neither the
     // request it built nor the response it got.
     'packages/provider/tests/wonder-live.test.ts',
+    // `#319`'s GitHub App credentials: the **one** file that reads `GITHUB_APP_ID` and the
+    // App's private key, at call time, to mint the installation token `@personavision/improve`
+    // is handed as an argument — which is why that package reads no environment variable at
+    // all (#297). The key is parsed inside one closure and never leaves it: nothing the module
+    // returns, throws, records or stores carries the PEM, a line of it or its DER, and
+    // `packages/platform/test/github-credentials.test.ts` asserts that with a real-shaped key
+    // in the environment, as well as that this is the only file in the repository naming those
+    // variables in code.
+    'packages/platform/src/github/credentials.ts',
     // `#69`'s SAM 3.1 live test, for the same reason and with one more lock: it needs the
     // key *and* an explicit opt-in, because the owner deferred SAM 3.1 and a key alone is
     // present on the owner's machine for every other model call. `packages/engine` itself

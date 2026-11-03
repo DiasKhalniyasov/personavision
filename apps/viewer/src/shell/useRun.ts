@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMatch } from 'react-router';
-import { findingsSchema, runPaths, runSchema, sessionSchema } from '@personavision/contract';
-import type { Findings, Run, Session } from '@personavision/contract';
+import {
+  findingsSchema,
+  recommendationsSchema,
+  runPaths,
+  runSchema,
+  sessionSchema,
+} from '@personavision/contract';
+import type { Findings, Recommendations, Run, Session } from '@personavision/contract';
 // Type-only, and therefore erased: the listing's shape is `readRunIndex`'s own, so the
 // viewer does not restate the three field names it answers with. `@personavision/cli`
 // reads files and never reaches the browser bundle.
@@ -23,6 +29,8 @@ import { matches, patterns } from './paths';
  * - `GET /runs/index.json` → the workspace's tests, newest first
  * - `GET /runs/<runId>/run.json` → one run, byte for byte as the pipeline wrote it
  * - `GET /runs/<runId>/findings.json` → that run's ranked findings
+ * - `GET /runs/<runId>/recommendations.json` → what to change, when the run produced any
+ * - `HEAD /runs/<runId>/videos/<id>.webm` → how big one session's recording is
  *
  * The session files of a run are read by `src/session/` (#20), through this same interface
  * and the same contract. What is read here instead is the one figure no run-level field
@@ -45,6 +53,7 @@ export const runDataBase = (runId: string): string => `${RUNS}/${encodeURICompon
 const runFile = (runId: string, file: string): string => `${runDataBase(runId)}${file}`;
 const runUrl = (runId: string): string => runFile(runId, layout.run);
 const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
+const recommendationsUrl = (runId: string): string => runFile(runId, layout.recommendations);
 const sessionUrl = (runId: string, sessionId: string): string =>
   runFile(runId, layout.session(sessionId));
 
@@ -69,6 +78,29 @@ export type LatestRunState =
   /** The workspace has no test yet. */
   | { readonly status: 'none' }
   | { readonly status: 'ready'; readonly runId: string }
+  | { readonly status: 'unreadable'; readonly url: string; readonly problem: string };
+
+/**
+ * One test in the workspace's listing: the id that addresses it, what was tested in the
+ * words it was asked for, and when it ran.
+ *
+ * It is `RunSummary` as this app can use it. The listing is read defensively: the id is
+ * required of every entry, because it is what addresses the test and nothing is fetched
+ * from a path built out of `undefined`, and the other two are `null` where the listing did
+ * not state them rather than being invented.
+ */
+export interface ListedRun {
+  readonly runId: string;
+  /** `run.json`'s `task.prompt`, or `null` for an entry the listing gave no name. */
+  readonly name: string | null;
+  /** When it ran, as the listing states it, or `null` for an entry that gave no instant. */
+  readonly createdAt: string | null;
+}
+
+export type RunIndexState =
+  | { readonly status: 'loading' }
+  /** The workspace's tests, newest first as `readRunIndex` sorts them. Empty is a workspace with none. */
+  | { readonly status: 'ready'; readonly runs: readonly ListedRun[] }
   | { readonly status: 'unreadable'; readonly url: string; readonly problem: string };
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -133,6 +165,28 @@ const readFindings = async (runId: string): Promise<FindingsState> => {
 };
 
 /**
+ * What this run says to change, or the stated absence of it.
+ *
+ * `recommendations.json` is **optional** in a run directory: a run that produced none has
+ * no file, which is not an empty list somebody wrote. A 404 is therefore `none` and not a
+ * problem — every other failure is still named, because a file that is there and will not
+ * parse is a broken run and not a run without recommendations.
+ */
+const readRecommendations = async (runId: string): Promise<RecommendationsState> => {
+  const url = recommendationsUrl(runId);
+  const answer = await readJson(url);
+  if (!answer.ok) {
+    return answer.status === 404
+      ? { status: 'none' }
+      : { status: 'unreadable', runId, url, problem: answer.problem };
+  }
+  const parsed = recommendationsSchema.safeParse(answer.body);
+  return parsed.success
+    ? { status: 'ready', recommendations: parsed.data }
+    : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
+};
+
+/**
  * One person a run excluded from its figures.
  *
  * `excludedFromScores` and `attribution` are stored on each session and were decided once,
@@ -185,7 +239,7 @@ const readExcluded = async (
   };
 };
 
-const readLatestRunId = async (): Promise<LatestRunState> => {
+const readRunIndexFile = async (): Promise<RunIndexState> => {
   const answer = await readJson(indexUrl);
   if (!answer.ok) return { status: 'unreadable', url: indexUrl, problem: answer.problem };
   // The listing is newest first, as `readRunIndex` sorts it, so the most recent test is
@@ -194,13 +248,40 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
   if (!Array.isArray(listed)) {
     return { status: 'unreadable', url: indexUrl, problem: 'it is not a list of tests' };
   }
-  const latest = (listed as Partial<RunSummary>[])[0];
-  if (latest === undefined) return { status: 'none' };
-  // The id addresses every other read, so a listing that carries none is unreadable rather
-  // than a workspace with no test: nothing is fetched from a path built out of `undefined`.
-  return typeof latest.runId === 'string' && latest.runId !== ''
-    ? { status: 'ready', runId: latest.runId }
-    : { status: 'unreadable', url: indexUrl, problem: 'a test in the listing has no id' };
+  const entries = listed as Partial<RunSummary>[];
+  // The id addresses every other read — a run file, a screen's URL, the site card's join —
+  // so an entry that carries none is **dropped**: there is nothing it could be used for,
+  // and nothing is ever fetched from a path built out of `undefined`. One bad entry does
+  // not cost the reader the tests either side of it, which matters because the chrome and
+  // `/` read this same listing on every signed-in screen.
+  const runs: ListedRun[] = entries.flatMap((entry) =>
+    typeof entry.runId === 'string' && entry.runId !== ''
+      ? [
+          {
+            runId: entry.runId,
+            name: typeof entry.name === 'string' && entry.name !== '' ? entry.name : null,
+            createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : null,
+          },
+        ]
+      : [],
+  );
+  // Unless **nothing** survived: a listing with entries in it must never read as a
+  // workspace with no test, which is the one reading that would send somebody to "start
+  // your first test" over the top of the tests they have.
+  return runs.length === 0 && entries.length > 0
+    ? { status: 'unreadable', url: indexUrl, problem: 'no test in the listing has an id' }
+    : { status: 'ready', runs };
+};
+
+/**
+ * The most recent test, off the one listing above rather than off a read of its own: the
+ * chrome asks for it on every signed-in screen, so a second read of the same file would be
+ * the same bytes fetched twice.
+ */
+const latestOf = (state: RunIndexState): LatestRunState => {
+  if (state.status !== 'ready') return state;
+  const latest = state.runs[0];
+  return latest === undefined ? { status: 'none' } : { status: 'ready', runId: latest.runId };
 };
 
 /**
@@ -215,7 +296,8 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
 const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
 const excludedCache = new Map<string, Promise<ExcludedState>>();
-let latestRun: Promise<LatestRunState> | null = null;
+const recommendationsCache = new Map<string, Promise<RecommendationsState>>();
+let runIndex: Promise<RunIndexState> | null = null;
 
 const keep = <State extends { status: string }>(
   key: string,
@@ -239,12 +321,15 @@ const loadFindings = (runId: string): Promise<FindingsState> =>
 const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<ExcludedState> =>
   excludedCache.get(runId) ?? keep(runId, excludedCache, readExcluded(runId, sessionIds));
 
-const loadLatestRunId = (): Promise<LatestRunState> => {
-  latestRun ??= readLatestRunId().then((state) => {
-    if (state.status === 'unreadable') latestRun = null;
+const loadRecommendations = (runId: string): Promise<RecommendationsState> =>
+  recommendationsCache.get(runId) ?? keep(runId, recommendationsCache, readRecommendations(runId));
+
+const loadRunIndex = (): Promise<RunIndexState> => {
+  runIndex ??= readRunIndexFile().then((state) => {
+    if (state.status === 'unreadable') runIndex = null;
     return state;
   });
-  return latestRun;
+  return runIndex;
 };
 
 /** Read this run again on the next render that asks for it. */
@@ -252,7 +337,8 @@ export const refreshRun = (runId: string): void => {
   cache.delete(runId);
   findingsCache.delete(runId);
   excludedCache.delete(runId);
-  latestRun = null;
+  recommendationsCache.delete(runId);
+  runIndex = null;
 };
 
 /** Forget every run that has been read. For tests, and for signing out. */
@@ -260,12 +346,25 @@ export const clearRunCache = (): void => {
   cache.clear();
   findingsCache.clear();
   excludedCache.clear();
-  latestRun = null;
+  recommendationsCache.clear();
+  runIndex = null;
 };
 
 export type FindingsState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly findings: Findings }
+  | {
+      readonly status: 'unreadable';
+      readonly runId: string;
+      readonly url: string;
+      readonly problem: string;
+    };
+
+export type RecommendationsState =
+  | { readonly status: 'loading' }
+  /** The run produced none: there is no file, which is an absence and not a failure. */
+  | { readonly status: 'none' }
+  | { readonly status: 'ready'; readonly recommendations: Recommendations }
   | {
       readonly status: 'unreadable';
       readonly runId: string;
@@ -347,13 +446,21 @@ export function useFindings(runId: string): FindingsState {
   return state;
 }
 
-/** The most recent test in the workspace, which is what `/` opens. */
-export function useLatestRun(): LatestRunState {
-  const [state, setState] = useState<LatestRunState>({ status: 'loading' });
+/**
+ * The workspace's tests, newest first: one read of `/runs/index.json` while the app is open.
+ *
+ * What it is for is naming a test somewhere other than on that test's own screens — the
+ * Sites screen's _"Last test: …"_ line, which has a run id from the platform and needs the
+ * words that test was asked for. Reading `run.json` for each of them would be one request
+ * per test to render a list of sites; the listing already carries the name, and carries it
+ * for every test at once.
+ */
+export function useRunIndex(): RunIndexState {
+  const [state, setState] = useState<RunIndexState>({ status: 'loading' });
 
   useEffect(() => {
     let live = true;
-    void loadLatestRunId().then((next) => {
+    void loadRunIndex().then((next) => {
       if (live) setState(next);
     });
     return () => {
@@ -362,6 +469,11 @@ export function useLatestRun(): LatestRunState {
   }, []);
 
   return state;
+}
+
+/** The most recent test in the workspace, which is what `/` opens. */
+export function useLatestRun(): LatestRunState {
+  return latestOf(useRunIndex());
 }
 
 /** The run the current route is about, or `null` on a route that is about no test. */
@@ -412,4 +524,67 @@ export function useOptionalRun(runId: string | null): RunState | null {
   }, [runId]);
 
   return state;
+}
+
+/**
+ * What this run says to change: read once per run while the app is open.
+ *
+ * The replay's outcome card names the recommendations one session is evidence for, which is
+ * a lookup over the citations stored in this file. A run that produced none answers `none`,
+ * and the card says so rather than showing a row that reads as *supports nothing*.
+ */
+export function useRecommendations(runId: string): RecommendationsState {
+  const [state, setState] = useState<RecommendationsState>({ status: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    setState({ status: 'loading' });
+    void loadRecommendations(runId).then((next) => {
+      if (live) setState(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+
+  return state;
+}
+
+/**
+ * How big one session's recording is, asked of the mount rather than of the artifact.
+ *
+ * The replay's outcome card states the file's size, and nothing in a run directory records
+ * it: the contract stores the recording's path, its duration and its offsets, which are
+ * what the recorder measured. The size is a fact of **the file**, so it is read from the
+ * file — one `HEAD` over the same read-only run mount the stage plays from, which answers
+ * `content-length` for every file it serves and computes nothing to do it. It is read here
+ * because this module is where this app asks a server about a run.
+ *
+ * `null` until it is known, and `null` for a mount that does not say: a card that cannot
+ * read the size says so in words rather than printing a zero somebody might believe.
+ */
+export function useRecordingSize(runId: string, path: string | null): number | null {
+  const [bytes, setBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setBytes(null);
+    if (path === null) return;
+
+    void fetch(absolute(runFile(runId, path)), { method: 'HEAD' })
+      .then((response) => {
+        const length = response.ok ? Number(response.headers.get('content-length')) : Number.NaN;
+        if (live && Number.isFinite(length) && length > 0) setBytes(length);
+      })
+      .catch(() => {
+        // A size that could not be read is a size the card does not state. It is not an
+        // error about the session: the recording itself may well play.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [runId, path]);
+
+  return bytes;
 }

@@ -14,7 +14,14 @@
 export { openSession, closeSession, readSessionState } from './session.js';
 export type { OpenSessionOptions, SessionState } from './session.js';
 
-export { cutRecording, prepareRecording, readRecording, videoFrame } from './video.js';
+export {
+  cutRecording,
+  discardRecording,
+  prepareRecording,
+  readRecording,
+  storeRecording,
+  videoFrame,
+} from './video.js';
 export type { PreparedRecording, RecordingFacts, SessionRecording, VideoRequest } from './video.js';
 
 export { readGeometry, isBelowFold } from './geometry.js';

@@ -23,6 +23,15 @@
  * saved or measured — comes back as `{ state: 'absent', reason }`, in words, and the session
  * is otherwise complete. Nothing here throws, and nothing here is an automation failure.
  *
+ * **Where the bytes end up is one variable, and the session never learns which.** The file
+ * Playwright writes is handed to the store `PV_VIDEO_BUCKET` selects
+ * (`@personavision/contract`'s `selectVideoStore`, and `docs/adr/0005-where-session-videos-live.md`):
+ * with the variable unset there is no store, the file stays where it is, and this module behaves
+ * exactly as it did. With one set the bytes go to that bucket and the local copy is removed, so
+ * a recording has one home and the mount knows which. Either way the result names the same
+ * run-directory-relative `videos/S-NN.webm`, and no bucket, object URL or credential appears in
+ * it — an upload that failed is the same stated absence as a recording that could not be made.
+ *
  * **The offsets are positional, and the caller marks them.** `screen()` and `action()` are
  * called once per screen and once per action, in the order the session's own `screens` and
  * `actions` arrays record them, because that is the alignment `sessionSchema` length-checks.
@@ -30,8 +39,9 @@
  */
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { VIDEO_CAP_MS, runPaths } from '@personavision/contract';
-import type { SessionVideo, VideoCap } from '@personavision/contract';
+import { basename } from 'node:path';
+import { VIDEO_CAP_MS, runPaths, selectVideoStore, videoObjectName } from '@personavision/contract';
+import type { SessionVideo, VideoCap, VideoStore } from '@personavision/contract';
 import type { Page, Video } from 'playwright';
 import type { Viewport } from './types.js';
 
@@ -41,6 +51,16 @@ export interface VideoRequest {
   readonly runDir: string;
   /** The session's id — `S-01` — which names the file and is re-derived nowhere. */
   readonly sessionId: string;
+  /**
+   * The run the recording belongs to, as `run.json`'s `runId` spells it, which is what an
+   * object in a store is filed under.
+   *
+   * Omitted, it is the run directory's own name — right wherever the run directory *is* the
+   * run, which is every local session. A process writing to a scratch directory of its own
+   * **must** say: a Cloud Run task's `runDir` is a `mkdtemp` under `/tmp`, and a recording
+   * filed under that name is an object nothing can ever read back.
+   */
+  readonly runId?: string;
   /**
    * The caps, in milliseconds, replacing `VIDEO_CAP_MS`'s.
    *
@@ -52,6 +72,15 @@ export interface VideoRequest {
   readonly caps?: Readonly<Partial<Record<VideoCap, number>>>;
   /** The clock, for the same reason. Defaults to `Date.now`. */
   readonly now?: () => number;
+  /**
+   * Where the recording's bytes are kept.
+   *
+   * Omitted — which is every caller in this repository — means the store `PV_VIDEO_BUCKET`
+   * selects, and that is `null` wherever the variable is unset: the file in the run directory,
+   * which is the default everywhere. `null` is that same answer, said explicitly. A test passes
+   * its own and reaches no network.
+   */
+  readonly store?: VideoStore | null;
 }
 
 /** A recording in progress: where its offsets are marked, and how it is finished. */
@@ -153,6 +182,59 @@ export const prepareRecording = async (request: VideoRequest): Promise<PreparedR
   return { dir: videosDir, failed: null, start: (page) => startRecording(page, request) };
 };
 
+/** The object one recording is filed under: the run's id, said or taken from the directory. */
+const objectNameFor = (request: VideoRequest): string =>
+  videoObjectName(request.runId ?? basename(request.runDir), request.sessionId);
+
+/**
+ * Throws away a recording that has been made and is not going to be reported.
+ *
+ * A session that is abandoned finishes its recording — which is what makes the file whole and
+ * closes the context — and is then written up as having none, so the recording has to go from
+ * wherever `finish()` put it: the run directory, or the store, or both. A recording a reader
+ * can find that no session names is worse than no recording at all.
+ */
+export const discardRecording = async (request: VideoRequest): Promise<void> => {
+  await rm(runPaths(request.runDir).video(request.sessionId), { force: true }).catch(
+    () => undefined,
+  );
+  const store = request.store === undefined ? selectVideoStore() : request.store;
+  // A store that will not let go is left to the bucket's own lifecycle rule: there is nothing
+  // useful to say about it here, and nothing is reported as recorded either way.
+  await store?.remove(objectNameFor(request)).catch(() => undefined);
+};
+
+/**
+ * Hands a finished recording to the object store, when there is one. `null` means it is kept;
+ * anything else is the sentence a session states instead of a video.
+ *
+ * Exported so the hand-over can be driven without a browser: every other way this file can
+ * fail is already reachable that way, and an upload that refuses is the one failure a run is
+ * most likely to meet.
+ *
+ * The local copy goes either way. Stored, it is a second home for bytes the mount no longer
+ * reads; refused, it is a file at a path the session says it has no recording at — and a
+ * recording a reader can find but no session names is worse than none.
+ */
+export const storeRecording = async (
+  request: VideoRequest & { readonly bytes: Uint8Array },
+): Promise<string | null> => {
+  const store = request.store === undefined ? selectVideoStore() : request.store;
+  if (store === null) return null;
+  const onDisk = runPaths(request.runDir).video(request.sessionId);
+  try {
+    await store.put(objectNameFor(request), request.bytes);
+  } catch (error) {
+    await rm(onDisk, { force: true }).catch(() => undefined);
+    // The store's own words, which name a status and never a bucket, an object URL or a
+    // credential — the contract its interface states, because this sentence is written into a
+    // session JSON and read off a screen.
+    return `the recording of ${request.sessionId} could not be stored, so this session has none: ${message(error)}`;
+  }
+  await rm(onDisk, { force: true }).catch(() => undefined);
+  return null;
+};
+
 /** One cap, as it was reached: which it was, and where the recording is cut because of it. */
 interface Reached {
   readonly cap: VideoCap;
@@ -216,6 +298,11 @@ const startRecording = (page: Page, request: VideoRequest): SessionRecording => 
         `the recording at ${recorded} is not a WebM this module can measure, so its duration would be a guess`,
       );
     }
+
+    // Measured first, stored second: bytes nothing could read a duration off are not worth a
+    // round trip, and a session that reports no recording must not leave one in the store.
+    const unstored = await storeRecording({ ...request, bytes: cut });
+    if (unstored !== null) return absent(unstored);
 
     // An offset is taken from the clock and a duration is read off the file, so a session's
     // last entry can land a frame past the end of its own recording. The contract holds an

@@ -478,6 +478,13 @@ describe.skipIf(!tagged)('the demo, beat by beat, over the built platform', () =
       const person = must(rushed.at(-1), `session of ${rushedPersona.name} on variant ${harder}`);
 
       await click(tab('Sessions'));
+      // The People screen opens on the **video grid** (#268), and this run recorded no video:
+      // every one of its sessions carries no `video` block at all, so the grid says so
+      // outright — "This test recorded no videos" — rather than drawing a wall of blank
+      // tiles, and offers the listing that does hold every person. The walk takes the screen
+      // at its word and follows it, because the beat is one person's replay and the rows are
+      // where a video-less run's people are. A run with video opens straight onto the tiles.
+      await click('a:text-is("Show these as rows instead")');
       await page.waitForSelector(`a:text-is("${person.sessionId}")`);
       await click(`a:text-is("${person.sessionId}")`);
 

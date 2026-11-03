@@ -290,10 +290,12 @@ describe('the surface the figures fill', () => {
     // The funnel and the paths are filled: #289 landed, and they answer rather than throw.
     expect(() => funnelOfSlice({ run: smallRun, slice })).not.toThrow();
     expect(() => pathsOfSlice({ slice })).not.toThrow();
-    expect(() => screenFiguresOfSlice({ run: smallRun, slice: screenSlice })).toThrow(/#291/);
     // #290 filled the timing: its own figures are asserted by value in
     // `aggregate-timing.test.ts`, and what belongs here is only that it answers.
     expect(timingOfSlice({ run: smallRun, slice }).total.sampleCount).toBe(5);
+    // The per-screen figures are filled in (#291) and answer rather than throwing: their own
+    // values are asserted in `aggregate-screens.test.ts`.
+    expect(screenFiguresOfSlice({ run: smallRun, slice: screenSlice }).length).toBeGreaterThan(0);
     expect(() =>
       composeAggregate({
         run: smallRun,

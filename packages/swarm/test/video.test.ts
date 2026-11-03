@@ -159,7 +159,9 @@ describe('a session whose source records one', () => {
     const session = await runSession(sessionOver(runDir, { source }));
 
     // The recording was asked for by the session it belongs to, at the contract's spelling.
-    expect(asked).toEqual([{ runDir, sessionId: 'S-01' }]);
+    // The run is named rather than taken from the directory: a remote task's run directory
+    // is a scratch directory of its own (#316).
+    expect(asked).toEqual([{ runDir, runId: '2026-10-27-1200-fixture', sessionId: 'S-01' }]);
     expect(session.video?.state).toBe('recorded');
     if (session.video?.state !== 'recorded') return;
     expect(session.video.path).toBe(runPaths('').video('S-01'));

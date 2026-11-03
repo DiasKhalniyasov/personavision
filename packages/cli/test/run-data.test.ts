@@ -4,7 +4,15 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runPaths } from '@personavision/contract';
+import {
+  createObjectVideoStore,
+  NO_LONGER_KEPT,
+  NO_LONGER_KEPT_STATE,
+  runPaths,
+  videoObjectName,
+} from '@personavision/contract';
+import { VideoStoreRefused } from '@personavision/contract';
+import type { VideoObjectTransport } from '@personavision/contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runDataMount } from '../src/run-data.js';
 import type { RunDataMountOptions, RunSummary } from '../src/run-data.js';
@@ -319,5 +327,160 @@ describe('the run-data mount', () => {
         expect(response.status).toBe(403);
       }
     });
+  });
+});
+
+/**
+ * The same mount with a bucket configured: the URL a browser fetches does not change, and the
+ * answer is a redirect rather than the bytes.
+ *
+ * The store is the real object-store implementation over a **fake transport** — no network, no
+ * credential, no bucket — so the redirect carries a real V4 signed URL and the "no longer kept"
+ * state is the store's own, asserted over HTTP rather than through internals.
+ */
+describe('the run-data mount with session videos in an object store', () => {
+  const BUCKET = 'pv-test-session-videos';
+  const SIGNER = 'session-videos@personavision-test.iam.gserviceaccount.com';
+
+  let root: string;
+  let runsRoot: string;
+  let shown: string;
+  let server: { base: string; close: () => Promise<void> };
+  let held: Set<string>;
+  let url: URL;
+  let refusing: { with: string | null };
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), 'personavision-mount-stored-'));
+    runsRoot = join(root, 'runs');
+    shown = await writeRunAt(runsRoot, {
+      stamp: '2026-11-04T09:30:00Z',
+      createdAt: '2026-11-04T09:30:00Z',
+      name: 'stored videos',
+    });
+    held = new Set([videoObjectName(shown, VIDEO_SESSION)]);
+
+    refusing = { with: null };
+
+    const transport: VideoObjectTransport = {
+      put: () => Promise.reject(new Error('the mount never writes')),
+      delete: () => Promise.reject(new Error('the mount never deletes')),
+      holds: ({ object }) =>
+        refusing.with === null
+          ? Promise.resolve(held.has(object))
+          : Promise.reject(new VideoStoreRefused(refusing.with)),
+      signer: () => Promise.resolve(SIGNER),
+      sign: () => Promise.resolve('deadbeef'),
+    };
+
+    server = await mounted({
+      runsRoot,
+      visibleRuns: () => [shown],
+      videoStore: createObjectVideoStore({ bucket: BUCKET, transport }),
+    });
+    url = new URL(`runs/${shown}/${runPaths('').video(VIDEO_SESSION)}`, server.base);
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('answers the same URL with a 302 to a signed URL instead of the bytes', async () => {
+    // A recording of this session exists on disk too, and is deliberately not what is served:
+    // where a video lives is the store's answer, not a guess from what happens to be there.
+    await writeSessionVideo(join(runsRoot, shown));
+
+    const response = await fetch(url, { redirect: 'manual' });
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.origin).toBe('https://storage.googleapis.com');
+    expect(location.pathname).toBe(`/${BUCKET}/${videoObjectName(shown, VIDEO_SESSION)}`);
+    expect(location.searchParams.get('X-Goog-Algorithm')).toBe('GOOG4-RSA-SHA256');
+    expect(location.searchParams.get('X-Goog-Signature')).toBe('deadbeef');
+    // Nothing of a 1.4 GB recording passed through this process.
+    expect((await response.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  it('answers a Range request with the same redirect, so a scrubber still seeks', async () => {
+    const response = await fetch(url, { redirect: 'manual', headers: { range: 'bytes=1024-' } });
+
+    expect(response.status).toBe(302);
+    // `host` is the only signed header, so the range the player re-sends to the signed URL is
+    // served by the store rather than by this process.
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.searchParams.get('X-Goog-SignedHeaders')).toBe('host');
+  });
+
+  it('states that a recording the store no longer holds is no longer kept', async () => {
+    const aged = new URL(`runs/${shown}/${runPaths('').video('S-02')}`, server.base);
+
+    const response = await fetch(aged);
+
+    // A state the results screens render, not a failure and not an empty body: the lifecycle
+    // rule deletes a test's videos after thirty days, which is the end of a recording's life.
+    expect(response.status).toBe(410);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({
+      state: NO_LONGER_KEPT_STATE,
+      reason: NO_LONGER_KEPT,
+    });
+  });
+
+  it('answers a store that will not answer with a 502, and never with “no longer kept”', async () => {
+    refusing.with = 'PERMISSION_DENIED';
+    try {
+      const response = await fetch(
+        new URL(`runs/${shown}/${runPaths('').video('S-04')}`, server.base),
+      );
+      const said = await response.text();
+
+      // This deployment's problem, not a recording that aged out: saying a recording was
+      // deleted when the store merely would not answer is a lie a reader cannot check.
+      expect(response.status).toBe(502);
+      expect(said).toContain('PERMISSION_DENIED');
+      expect(said).not.toContain(NO_LONGER_KEPT);
+      expect(said).not.toContain(BUCKET);
+    } finally {
+      refusing.with = null;
+    }
+  });
+
+  it('serves a recording the store never held but the run directory still has', async () => {
+    // A run recorded before the bucket was configured: the bytes that are here beat a
+    // sentence claiming they were deleted.
+    const bytes = await writeSessionVideo(join(runsRoot, shown), 'S-03');
+
+    const response = await fetch(
+      new URL(`runs/${shown}/${runPaths('').video('S-03')}`, server.base),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('video/webm');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  it('answers 404 for a .webm that is not a session recording, signing nothing', async () => {
+    const response = await fetch(new URL(`runs/${shown}/videos/deeper/S-01.webm`, server.base));
+
+    expect(response.status).toBe(404);
+  });
+
+  it('serves every other artifact file off disk exactly as it did', async () => {
+    const response = await fetch(new URL(`runs/${shown}/run.json`, server.base));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+  });
+
+  it('names no bucket and no object URL in what it refuses with', async () => {
+    const missing = await fetch(
+      new URL(`runs/${shown}/${runPaths('').video('S-09')}`, server.base),
+    );
+    const said = await missing.text();
+
+    expect(said).not.toContain(BUCKET);
+    expect(said).not.toContain('storage.googleapis.com');
   });
 });

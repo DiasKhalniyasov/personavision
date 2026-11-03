@@ -105,6 +105,60 @@ export type {
   GithubRouteOptions,
 } from './server/routes/github.js';
 
+/**
+ * The GitHub App's credentials and the installation token minted from them (#319).
+ *
+ * Exported because the two callers are outside this package: `personavision serve` hands
+ * `githubAppRegistration()` to `createPlatform` as its `githubApp` option, so
+ * `/settings/github` and the locked path-2 card answer from the environment rather than from
+ * the default, which says no App exists; and whatever drives path 2 hands
+ * `tokenSourceFor(installationId)` to
+ * `@personavision/improve`'s client as its `token`, which is the one shape #297 takes. The
+ * credentials themselves are read in `src/github/credentials.ts` and nowhere else.
+ */
+export {
+  GITHUB_APP_FAILURE_KINDS,
+  GITHUB_APP_ID_ENV,
+  GITHUB_APP_JWT_ALGORITHM,
+  GITHUB_APP_PRIVATE_KEY_ENV,
+  GITHUB_APP_PRIVATE_KEY_PATH_ENV,
+  GITHUB_APP_SLUG,
+  GithubAppError,
+  githubAppId,
+  githubAppIsRegistered,
+  githubAppRegistration,
+  readGithubAppSigner,
+} from './github/credentials.js';
+export type {
+  GithubAppCredentialOptions,
+  GithubAppFailureKind,
+  GithubAppRegistrationOptions,
+  GithubAppSigner,
+} from './github/credentials.js';
+
+export {
+  APP_JWT_BACKDATE_SECONDS,
+  APP_JWT_MAX_SPAN_SECONDS,
+  claimsOfAppJwt,
+  createGithubInstallationTokens,
+  GITHUB_API_BASE_URL,
+  GITHUB_USER_AGENT,
+  INSTALLATION_TOKEN_LIFETIME_MS,
+  INSTALLATION_TOKEN_MARGIN_MS,
+  mintAppJwt,
+  mintInstallationToken,
+  TOKEN_MINT_TIMEOUT_MS,
+} from './github/token.js';
+export type {
+  AppJwtClaims,
+  GithubInstallationTokens,
+  GithubTokenAnswer,
+  GithubTokenOptions,
+  GithubTokenRequest,
+  GithubTokenTransport,
+  MintedInstallationToken,
+} from './github/token.js';
+
 export {
   acceptedEstimateRequest,
   EstimateNotAcceptedError,

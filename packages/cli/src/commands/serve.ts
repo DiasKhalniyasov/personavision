@@ -1,4 +1,8 @@
-import { createPlatform, startPlatformServer } from '@personavision/platform';
+import {
+  createPlatform,
+  githubAppRegistration,
+  startPlatformServer,
+} from '@personavision/platform';
 import type { Platform, PlatformServer, SeededWorkspace } from '@personavision/platform';
 import launch from 'open';
 import sirv from 'sirv';
@@ -90,7 +94,16 @@ export const serveCommand = async ({
 }: ServeCommandOptions): Promise<ServeResult> => {
   await ensureViewerBuilt({ viewerDist, repoRoot, build, log, buildViewer });
 
-  const platform = await createPlatform({ dataDir, runsRoot });
+  // Whether a GitHub App is registered is answered from this process's environment, by
+  // the one module that reads it (#319): `GITHUB_APP_ID` set means `/settings/github` can
+  // offer the connect flow, and absent means path 2 renders locked with the reason. This
+  // is the only place the seam is filled — `createPlatform`'s default stays "not
+  // registered", so no test depends on what the machine running it happens to export.
+  const platform = await createPlatform({
+    dataDir,
+    runsRoot,
+    githubApp: githubAppRegistration(),
+  });
 
   if (platform.seeded !== null) {
     if (platform.seeded.runIds.length === 0) {

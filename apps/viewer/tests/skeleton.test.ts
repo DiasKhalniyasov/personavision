@@ -180,6 +180,7 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
       'src/screens/audience/AudiencesPage.tsx',
       'src/screens/audience/AudienceSetupPage.tsx',
       'src/screens/newtest/NewTestPage.tsx',
+      'src/screens/sites/SitesPage.tsx',
       'src/screens/landing/LandingPage.tsx',
       'src/screens/demo/DemoPage.tsx',
       'src/screens/empty/NoTestsScreen.tsx',
@@ -191,18 +192,20 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
   });
 
   it('reads a run, a session and the audience store each in one place', () => {
-    // No screen fetches or parses anything itself. There are six things to ask a server
+    // No screen fetches or parses anything itself. There are seven things to ask a server
     // for and one module each: `useRun` reads a **run**, over the documented read-only
     // paths; `useSession` (#103) asks who is signed in, over the three routes
     // `packages/platform` mounts; the audience screens' `store` (#109) reads and writes
-    // the **audience store**, over #102's four routes; the New test screen's `start`
-    // (#110) hands a `RunRequest` to the platform; the settings screens' `connection`
-    // (#271) reads this workspace's GitHub connection, which the locked path-2 card and
-    // `/settings/github` both render; and the sign-up screen's `signup` (#265) creates the
-    // account and the workspace over `POST /auth/signup` — it reads no session out of the
-    // answer, because `useSession` is still the only module that asks who is signed in.
-    // Each parses what comes back with the contract's schemas, and together they are the
-    // whole of this app's network.
+    // the **audience store**, over #102's four routes; `sites/store` (#267) reads and
+    // writes this workspace's **sites**, over #221's site routes, which is where the caps
+    // a card states come from and where the Add-a-site screen's verification call joins;
+    // the New test screen's `start` (#110) hands a `RunRequest` to the platform; the
+    // settings screens' `connection` (#271) reads this workspace's GitHub connection,
+    // which the locked path-2 card and `/settings/github` both render; and the sign-up
+    // screen's `signup` (#265) creates the account and the workspace over
+    // `POST /auth/signup` — it reads no session out of the answer, because `useSession` is
+    // still the only module that asks who is signed in. Each parses what comes back with
+    // the contract's schemas, and together they are the whole of this app's network.
     const asking = appSource()
       .filter((path) => /\bfetch\s*\(/.test(read(path).replace(/\/\*[\s\S]*?\*\//g, '')))
       .map((path) => relative(appDir, path))
@@ -215,6 +218,7 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
       join('src', 'screens', 'signup', 'signup.ts'),
       join('src', 'shell', 'useRun.ts'),
       join('src', 'shell', 'useSession.ts'),
+      join('src', 'sites', 'store.ts'),
     ]);
   });
 });

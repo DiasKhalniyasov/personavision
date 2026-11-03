@@ -1,8 +1,17 @@
 import { createReadStream } from 'node:fs';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+  listRunDirs,
+  NO_LONGER_KEPT_STATE,
+  runPaths,
+  runSchema,
+  selectVideoStore,
+  videoObjectName,
+  VideoStoreRefused,
+} from '@personavision/contract';
+import type { VideoLocation, VideoStore } from '@personavision/contract';
 
 /**
  * The run-data interface, implemented once: run directories served read-only over HTTP,
@@ -18,6 +27,15 @@ import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
  * - A `Range: bytes=…` request for any of them is answered with that slice, so a `<video>`
  *   element asked to open paused on one frame seeks to it instead of downloading the whole
  *   recording first. A range is an offset into the same read, not a computation.
+ *
+ * **A recording may not be on this disk at all.** `PV_VIDEO_BUCKET` selects where session
+ * videos live (`@personavision/contract`'s `selectVideoStore`, and
+ * `docs/adr/0005-where-session-videos-live.md`); with one set, the video path above answers a
+ * **302 to a short-lived signed URL** instead of streaming the bytes through this process, so a
+ * 1.4 GB recording does not cross Node twice and the `Range` a scrubber asks for is served by
+ * the store. The URL a browser fetches is the same either way, which is what `docs/adr/0001`
+ * fixes. A recording the store no longer holds — the thirty-day lifecycle rule of #228 — is
+ * answered as the typed, worded "no longer kept" state, never a 500 and never an empty body.
  *
  * There is no other endpoint, no computation and no write path. `personavision open`
  * serves it beside the built viewer, `personavision serve` serves it with workspace
@@ -46,6 +64,9 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 const JSON_CONTENT_TYPE = CONTENT_TYPES[extname(LAYOUT.run)] as string;
 
+/** What a recording is called, by the layout's own spelling and not by a second list. */
+const VIDEO_EXTENSION = extname(LAYOUT.video('sessionId'));
+
 /** One entry of `GET /runs/index.json`. */
 export interface RunSummary {
   /** The run directory's name, which is the run's id and the path its files hang under. */
@@ -64,6 +85,13 @@ export interface RunDataMountOptions {
    * listing and the files together rather than forking the mount (#100).
    */
   visibleRuns?: (request: IncomingMessage) => Promise<readonly string[]> | readonly string[];
+  /**
+   * Where session videos live. Omitted — which is every caller in this repository — means the
+   * store `PV_VIDEO_BUCKET` selects, and that is `null` wherever the variable is unset: the
+   * files in the run directory, which is what every test, the acceptance suite and the demo
+   * read. `null` is that same answer, said explicitly, and a test passes its own store.
+   */
+  videoStore?: VideoStore | null;
 }
 
 /** A connect-style middleware, so Vite's dev server and `node:http` take the same handler. */
@@ -194,6 +222,77 @@ const sliceOf = (header: string | undefined, size: number): Slice | null => {
   return start > end ? null : { start, end, partial: true };
 };
 
+/**
+ * A recording the store no longer holds: `410`, and a body that **states** it.
+ *
+ * The thirty-day lifecycle rule of #228 is the normal end of a recording's life, so this is a
+ * state the results screens render rather than a failure — which is why it carries the typed
+ * word and the sentence in a body a screen can read, and not a bare status a `<video>` element
+ * turns into "something went wrong".
+ */
+const stateGone = (response: ServerResponse, reason: string, head: boolean): void => {
+  const body = Buffer.from(`${JSON.stringify({ state: NO_LONGER_KEPT_STATE, reason }, null, 2)}\n`);
+  response.writeHead(410, {
+    'content-type': JSON_CONTENT_TYPE,
+    'content-length': body.byteLength,
+    'cache-control': 'no-store',
+  });
+  response.end(head ? undefined : body);
+};
+
+/**
+ * One stored recording: where to fetch it, or that it is no longer kept. `false` means the
+ * store does not hold it and the file on disk is the answer after all.
+ *
+ * The redirect is a **302**, so the method and the headers of the request are carried to the
+ * signed URL — a `Range` among them, which is what makes a scrubber seek. Nothing is streamed
+ * through this process, and no `Range` is parsed here: the store answers it.
+ *
+ * **A store that will not answer is not a recording that has aged out.** A refusal is this
+ * deployment's problem, so it is a `502` with the store's own status word — which names no
+ * bucket — and never the "no longer kept" sentence, because saying a recording was deleted
+ * when the store merely would not answer is a lie a reader cannot check.
+ */
+const sendStoredVideo = async (
+  response: ServerResponse,
+  store: VideoStore,
+  objectName: string,
+  onDisk: string,
+  head: boolean,
+): Promise<boolean> => {
+  let location: VideoLocation;
+  try {
+    location = await store.locate(objectName);
+  } catch (error) {
+    if (!(error instanceof VideoStoreRefused)) throw error;
+    plain(
+      response,
+      502,
+      `This recording could not be fetched from where it is kept: ${error.status}.`,
+    );
+    return true;
+  }
+  if (location.kind === 'gone') {
+    // A run recorded before a bucket was configured still has its files, and the bytes that
+    // are here beat a sentence claiming they were deleted. The caller's own path takes it
+    // from here, with the checks a file is served through.
+    const here = await stat(onDisk)
+      .then((stats) => stats.isFile())
+      .catch(() => false);
+    if (here) return false;
+    stateGone(response, location.reason, head);
+    return true;
+  }
+  response.writeHead(302, {
+    location: location.url,
+    'content-length': 0,
+    // A signed URL expires, and a run directory changes without a rebuild.
+    'cache-control': 'no-store',
+  });
+  response.end();
+  return true;
+};
+
 const sendFile = async (
   response: ServerResponse,
   file: string,
@@ -258,6 +357,8 @@ const isInside = (root: string, target: string): boolean => {
 export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
   const runsRoot = resolve(options.runsRoot);
   const visibleRuns = options.visibleRuns ?? (() => listRunDirs(runsRoot));
+  // Chosen once, where the mount is built, by the one function that reads the variable.
+  const videoStore = options.videoStore === undefined ? selectVideoStore() : options.videoStore;
 
   const answer = async (
     request: IncomingMessage,
@@ -300,6 +401,23 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
     if (path.includes('\0') || !isInside(runDir, file)) {
       refuse();
       return;
+    }
+    if (videoStore !== null && extname(file) === VIDEO_EXTENSION) {
+      const sessionId = basename(file, VIDEO_EXTENSION);
+      // A `.webm` under some other name is not a session's recording, and the store holds no
+      // object for it: 404 rather than a redirect to a signature over a guess.
+      if (rest.join('/') !== LAYOUT.video(sessionId)) {
+        plain(response, 404, `There is no ${path} in this run.`);
+        return;
+      }
+      const answered = await sendStoredVideo(
+        response,
+        videoStore,
+        videoObjectName(runId, sessionId),
+        file,
+        head,
+      );
+      if (answered) return;
     }
     // Lexically inside is not enough: a symbolic link in a run directory points wherever it
     // likes and `stat` would follow it. Both sides are resolved, because a runs root is

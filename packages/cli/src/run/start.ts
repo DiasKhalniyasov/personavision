@@ -126,6 +126,21 @@ export interface StartRunOptions {
   /** Hand-written people to run instead of those generated from the audience. */
   readonly people?: readonly Persona[];
   readonly concurrency?: number;
+  /**
+   * The site this run is against, and whether it was verified when it was launched, for the
+   * artifact's `site` block (#243).
+   *
+   * It is **the artifact's shape, not the platform's**: `SiteAtLaunch` carries the stored
+   * record's `id` as well, and the id is dropped here on purpose — it addresses a row in the
+   * platform's own store and a run directory names no such thing (`docs/FLOW.md` section 8).
+   * So a `TestPipeline` built over this function passes `{ url, verifiedAtLaunch }` from the
+   * site it was handed and leaves the id behind.
+   *
+   * Absent for `personavision run`, which has no workspace and no site: the command names
+   * none, so the run it writes carries no block, which is exactly why the field is optional
+   * on the contract.
+   */
+  readonly site?: Run['site'];
   readonly sessionTimeoutMs?: number;
   /** Chromium over a URL by default; a test replays a committed capture set instead. */
   readonly source?: CaptureSource;
@@ -369,6 +384,9 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
       source: options.source ?? createLiveSource(),
       providers: { decision: selected.provider },
       ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+      // Handed on for the swarm to write beside the engine block, before the first session.
+      // Nothing here reads it: what site a run is against decides nothing about how it runs.
+      ...(options.site === undefined ? {} : { site: options.site }),
       // A model's reply takes seconds per screen of real time that the person never spent:
       // a model run gets the room for it, or a slow answer reads as the person giving up.
       ...(options.sessionTimeoutMs === undefined
