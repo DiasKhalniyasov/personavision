@@ -4,6 +4,7 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runPaths } from '@personavision/contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runDataMount } from '../src/run-data.js';
 import type { RunDataMountOptions, RunSummary } from '../src/run-data.js';
@@ -94,6 +95,20 @@ describe('the run-data mount', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ kept: true });
+  });
+
+  it('serves an optional artifact file by the same rule, with no mount change', async () => {
+    // `recommendations.json` is optional and written by the pipeline when a run has one:
+    // the mount answers for it because it is a `.json` of the layout, not because it is
+    // named here (`docs/adr/0001-run-data-over-http-as-static-files.md`).
+    const file = runPaths('').recommendations;
+    await writeFile(join(runsRoot, shown, file), '{"recommendations":[]}\n');
+
+    const response = await fetch(new URL(`runs/${shown}/${file}`, server.base));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({ recommendations: [] });
   });
 
   it('names the methods it serves when asked for a write', async () => {

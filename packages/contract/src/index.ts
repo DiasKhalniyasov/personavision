@@ -12,6 +12,7 @@ export {
   findingsSchema,
   modelModeSchema,
   personaSchema,
+  recommendationsSchema,
   runRequestSchema,
   runSchema,
   runUsageSchema,
@@ -23,20 +24,25 @@ export {
 export type {
   Audience,
   AudienceDevice,
+  Citation,
   Findings,
   ModelMode,
   Persona,
+  Recommendation,
+  Recommendations,
   Run,
   RunFailure,
   RunProgress,
   RunRequest,
   RunStatus,
   RunUsage,
+  SampleProvenance,
   Score,
   Session,
   SessionProgress,
   Verdict,
   VariantProgress,
+  WriteUpClaim,
 } from './schemas.js';
 
 export { runDirName, runPaths } from './paths.js';

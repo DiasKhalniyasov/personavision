@@ -868,6 +868,146 @@ export const findingsSchema = z
   });
 
 /**
+ * One plain sentence a site owner could act on — the rule of `docs/FLOW.md` section 14,
+ * enforced here and not by a prompt: something that needs two sentences is two
+ * recommendations, and a model that writes a paragraph is rejected rather than rendered.
+ *
+ * A boundary is a terminator followed by the start of another sentence, so a full stop
+ * inside a number (`2.5 seconds`) or an abbreviation (`e.g. the banner`) is not one.
+ */
+const SENTENCE_BOUNDARY = /[.!?]["')\]]*\s+["'([]*[A-Z0-9]/u;
+
+const oneSentence = (what: string) =>
+  name.refine((value) => !SENTENCE_BOUNDARY.test(value), {
+    error: `${what} is one plain sentence (docs/FLOW.md section 14): this is two or more`,
+  });
+
+/**
+ * The three things a recommendation may cite, from `docs/FLOW.md` section 14. A citation is
+ * **structured and never prose**: the screens build the deep link — `?t=`, the heatmap
+ * route, the funnel anchor — out of these fields, and the model never writes a URL. The
+ * set is closed and discriminated by `kind`, so an unknown kind is reported at its own
+ * path instead of being read as one of the others.
+ */
+const citationSchema = z.discriminatedUnion('kind', [
+  /** A moment in one session's recording: a link carrying it opens the replay on that frame. */
+  z.strictObject({ kind: z.literal('session'), sessionId, offsetMs: milliseconds }),
+  /**
+   * A heatmap region, addressed as the verdict's hero evidence is: `aoiId` is `null` when
+   * the whole step is the region rather than one area on it.
+   */
+  z.strictObject({ kind: z.literal('heatmap'), variant: name, step: name, aoiId: name.nullable() }),
+  /** One step of the funnel, as the Funnel and timing screen anchors it. */
+  z.strictObject({ kind: z.literal('funnel'), stepId: name }),
+]);
+
+const AT_LEAST_ONE_CITATION =
+  'a claim carries its evidence as citations: one with nothing to cite is not published (docs/FLOW.md section 14)';
+
+/**
+ * How much of the run Muse Wonder read before writing any of this — what the Analysis
+ * screen prints as *"Read 20 of 93 sessions"*. These four field names are shared with the
+ * sampling ticket of the same step, named in both places so the two cannot drift.
+ */
+const sampleProvenanceSchema = z.strictObject({
+  /** How many whole sessions were read in detail. */
+  read: count,
+  /** How many the run holds: the aggregate covers all of them, the sample is read. */
+  of: count,
+  /** How the sample was drawn, in the sampler's own words — it is printed, never parsed. */
+  strategy: name,
+  /** The seed it was drawn with, so the same run yields the same sample. */
+  seed: z.int(),
+});
+
+/**
+ * One claim of the write-up the Analysis screen renders: a heading, its body and the
+ * citations it rests on. The generator writes the closing *"What I did not find"* claim as
+ * the last of them; what the schema holds every claim to is having something to cite.
+ */
+const writeUpClaimSchema = z.strictObject({
+  heading: name,
+  body: name,
+  citations: z.array(citationSchema).min(1, AT_LEAST_ONE_CITATION),
+});
+
+/**
+ * One thing to change. A finding states what happened and a recommendation states what to
+ * do about it, so it names the findings it rests on (`docs/FLOW.md` section 14).
+ */
+const recommendationSchema = z.strictObject({
+  id: name,
+  /** 1, 2, 3 … The pipeline ranks and stores it; the screen renders the order it finds. */
+  rank: z.int().positive(),
+  /** What to change, in one sentence a site owner could act on. */
+  sentence: oneSentence('a recommendation'),
+  /** Why — the sentence the Summary prints under it. */
+  evidence: name,
+  findingIds: z
+    .array(name)
+    .min(
+      1,
+      'a recommendation names the findings it rests on: a claim and the evidence behind it cannot drift apart',
+    ),
+  citations: z.array(citationSchema).min(1, AT_LEAST_ONE_CITATION),
+  /** The first of the two keys the ranking is stored from: how many people it would reach. */
+  peopleAffected: count,
+  /** The second: the funnel step it sits on, so a tie is broken by how far through it is. */
+  step: name,
+});
+
+/**
+ * `recommendations.json` — what Muse Wonder says to change, ranked, each one citing its
+ * evidence (`docs/FLOW.md` sections 14 and 16). **Optional** in a run directory: a run
+ * without the file produced no recommendation, which is not a zero somebody measured.
+ */
+export const recommendationsSchema = z
+  .strictObject({
+    schemaVersion,
+    runId: name,
+    sample: sampleProvenanceSchema,
+    recommendations: z.array(recommendationSchema),
+    /** The full write-up, generated from the recommendations above and never from prose. */
+    writeUp: z
+      .array(writeUpClaimSchema)
+      .min(1, 'a write-up with no claim in it is no write-up: leave it out instead')
+      .optional(),
+    /**
+     * Why a run recommends nothing, in one stored sentence: the Summary states it in words
+     * rather than showing an empty section.
+     */
+    nothingToRecommend: oneSentence('the reason a run recommends nothing').optional(),
+  })
+  .superRefine((document, ctx) => {
+    // `rank` is the stored order, so it is asserted the way a session's indexes are: an
+    // entry's rank is its position, and a gap or a repeat is a different list.
+    document.recommendations.forEach((recommendation, position) => {
+      const rank = position + 1;
+      if (recommendation.rank !== rank) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['recommendations', position, 'rank'],
+          message: `rank runs 1, 2, 3 … in array order, with no gap and no repeat: expected ${rank}, found ${recommendation.rank}`,
+        });
+      }
+    });
+    if (document.recommendations.length > 0 && document.nothingToRecommend !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['nothingToRecommend'],
+        message: `a run either recommends something or says why it could not: this carries ${document.recommendations.length} recommendation${document.recommendations.length === 1 ? '' : 's'} as well as a reason there are none`,
+      });
+    }
+    if (document.sample.read > document.sample.of) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sample', 'read'],
+        message: `the sample read ${document.sample.read} of ${document.sample.of} sessions: a sample is never larger than the run it was drawn from`,
+      });
+    }
+  });
+
+/**
  * The arguments a new run is started with. The CLI's `run` command and the web app's
  * New run form submit this same shape, so it is declared here once.
  */
@@ -934,4 +1074,9 @@ export const ZERO_USAGE: RunUsage = {
 };
 export type Session = z.infer<typeof sessionSchema>;
 export type Findings = z.infer<typeof findingsSchema>;
+export type Recommendations = z.infer<typeof recommendationsSchema>;
+export type Recommendation = z.infer<typeof recommendationSchema>;
+export type Citation = z.infer<typeof citationSchema>;
+export type WriteUpClaim = z.infer<typeof writeUpClaimSchema>;
+export type SampleProvenance = z.infer<typeof sampleProvenanceSchema>;
 export type RunRequest = z.infer<typeof runRequestSchema>;
