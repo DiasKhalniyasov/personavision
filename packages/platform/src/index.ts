@@ -1,6 +1,6 @@
 /**
- * `@personavision/platform` — accounts, sign-in sessions, workspaces, audience storage
- * and the server behind `personavision serve`.
+ * `@personavision/platform` — accounts, sign-in sessions, workspaces, audience storage,
+ * the sites a workspace may be tested against and the server behind `personavision serve`.
  *
  * Self-hosted and offline-capable by default: a file-backed store under a data directory
  * and a seeded demo workspace, so the whole product runs with no cloud account, no
@@ -59,6 +59,20 @@ export type { AudienceRouteOptions } from './server/routes/audiences.js';
 export { runRoutes } from './server/routes/runs.js';
 export type { RunRouteOptions } from './server/routes/runs.js';
 
+export {
+  addSite,
+  mintSiteToken,
+  parseSiteUrl,
+  SITE_TOKEN_PREFIX,
+  SITE_VERIFICATION_NAME,
+  siteVerificationPair,
+  SiteUrlNotAcceptedError,
+} from './site/index.js';
+export type { SiteIssue } from './site/index.js';
+
+export { siteRoutes } from './server/routes/sites.js';
+export type { SiteBody, SiteRouteOptions } from './server/routes/sites.js';
+
 export { isNavigation, routeMount } from './server/router.js';
 export { notImplemented, readJsonBody, sendJson } from './server/routes/types.js';
 export type { Middleware, Route } from './server/routes/types.js';
@@ -81,11 +95,16 @@ export type {
   AudienceStore,
   NewAccount,
   NewSession,
+  NewSite,
   NewWorkspace,
   PasswordVerifier,
   PlatformStore,
   SessionRecord,
   SessionStore,
+  SiteRecord,
+  SiteStore,
+  SiteVerification,
+  SiteVerificationMethod,
   WorkspaceRecord,
   WorkspaceStore,
 } from './store/types.js';

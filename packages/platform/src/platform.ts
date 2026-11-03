@@ -5,6 +5,7 @@ import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
 import { runRoutes } from './server/routes/runs.js';
+import { siteRoutes } from './server/routes/sites.js';
 import type { TestPipeline } from './run/start.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
@@ -27,7 +28,7 @@ import { readSettings, writeSettings } from './store/settings.js';
 export const SESSION_LIFETIME_SECONDS = 14 * 24 * 60 * 60;
 
 export interface PlatformOptions {
-  /** Where accounts, workspaces, audiences and sessions live. `--data-dir`. */
+  /** Where accounts, workspaces, audiences, sites and sessions live. `--data-dir`. */
   dataDir: string;
   /** The directory the run directories sit in — `./runs`. */
   runsRoot: string;
@@ -110,6 +111,7 @@ export const createPlatform = async ({
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
+      ...siteRoutes({ store, readSession }),
       ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),
