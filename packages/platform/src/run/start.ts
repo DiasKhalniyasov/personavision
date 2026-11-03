@@ -81,13 +81,24 @@ export type TestPipeline = (
  * today and unverified tomorrow runs under exactly the same caps; the only thing that
  * differs between the two runs is this field.
  *
+ * **Two of these three fields reach the artifact.** `run.json`'s `site` block is the `url`
+ * and `verifiedAtLaunch` and nothing else: `id` addresses a row in this package's own store,
+ * and a run directory names no account, no workspace and no record of ours
+ * (`docs/FLOW.md` section 8). It is carried here because the pipeline is handed the site that
+ * was resolved, and it is the pipeline that drops it.
+ *
  * Absent for `personavision run`, which has no workspace and no site.
  */
 export interface SiteAtLaunch {
+  /** The stored record's id — **not** written into the run. */
   readonly id: string;
-  /** The URL as the user typed it when they added the site. */
+  /** The URL as the user typed it when they added the site. Written into the run. */
   readonly url: string;
-  /** Whether the site was verified at the moment this run was launched. */
+  /**
+   * Whether the site was verified at the moment this run was launched. Written into the run
+   * as `site.verifiedAtLaunch`, where it stays true of this run for ever: a site verified an
+   * hour later was not verified while these sessions ran.
+   */
   readonly verifiedAtLaunch: boolean;
 }
 

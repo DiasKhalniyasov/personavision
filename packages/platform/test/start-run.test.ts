@@ -1,17 +1,21 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ModelModeUnavailableError } from '@personavision/provider';
-import { runSchema } from '@personavision/contract';
-import type { Audience, RunRequest } from '@personavision/contract';
+import { readRun, runSchema, writeRun } from '@personavision/contract';
+import type { Audience, Run, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
 import {
   oneVariantArtifact,
   USERS_FEATURE,
+  validArtifact,
   validGoal,
   validRun,
 } from '../../contract/tests/fixtures.js';
 import { hashPassword } from '../src/store/password.js';
 import { startSiteTest } from '../src/run/start.js';
-import type { StartedTest, TestPipeline } from '../src/run/start.js';
+import { foundTheLine, siteCheckResult, siteVerificationPair } from '../src/site/index.js';
+import type { SiteAtLaunch, StartedTest, TestPipeline } from '../src/run/start.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 
@@ -676,5 +680,217 @@ describe('starting a one-URL test over HTTP', () => {
     ]);
     expect(recorded.feature).toBe(USERS_FEATURE);
     expect(recorded.goal).toStrictEqual(validGoal());
+  });
+});
+
+/**
+ * The site on the run's own record: `run.json`'s `site` block, written through the whole
+ * start path rather than into a fixture (#243).
+ *
+ * Every other suite here stands the pipeline in with something that records what it was
+ * handed, because what is being asserted is the response. This one is the exception: the
+ * criterion is about **what is on disk afterwards**, so the pipeline writes a real run
+ * directory through `@personavision/contract`'s own writer, taking the site from the
+ * argument the platform resolved — exactly as `packages/cli`'s pipeline does, including
+ * dropping the stored record's id, which a run directory never names.
+ *
+ * So the directory these tests read was produced by the platform deciding, and not by a
+ * fixture that was handed the answer.
+ */
+describe('the site a platform-started run records', () => {
+  let served: TestServer;
+  let cookie: string;
+  let audienceId: string;
+  let workspaceId: string;
+  let accountId: string;
+  let siteId: string;
+  /** Every `SiteAtLaunch` the pipeline was handed, in order, beside the run it wrote. */
+  let handed: { site: SiteAtLaunch | undefined; runId: string }[];
+
+  const SITE_URL = 'https://app.clipforge.example/create';
+  const SITE_TOKEN = 'pv_siteonrecord';
+
+  /** Where the pipeline wrote a given run, as the platform's runs root holds it. */
+  const runDirOf = (runId: string): string => join(served.directories.runsRoot, runId);
+
+  /** The run as it now stands on disk — read back, not remembered. */
+  const recordedRun = async (runId: string): Promise<Run> => (await readRun(runDirOf(runId))).run;
+
+  const post = (body: unknown): Promise<Response> =>
+    served.request('/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json', cookie },
+      body: JSON.stringify(body),
+    });
+
+  const launch = (): Promise<Response> =>
+    post({
+      task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
+      variants: validRun().variants,
+      audienceId,
+      siteId,
+      repeats: 3,
+      seed: 1,
+      engineMode: 'offline',
+    });
+
+  /** The one way the store lets a site reach the verified state: a check that passed. */
+  const verifyTheSite = async (): Promise<void> => {
+    await served.platform.store.sites.verify(
+      workspaceId,
+      siteId,
+      siteCheckResult({
+        method: 'dns-txt',
+        subject: { one: 'TXT record', many: 'TXT records' },
+        lookedFor: siteVerificationPair(SITE_TOKEN),
+        lookedIn: [{ kind: 'domain', value: 'app.clipforge.example' }],
+        found: foundTheLine(['app.clipforge.example']),
+        at: new Date('2026-11-03T09:00:00.000Z'),
+      }),
+    );
+  };
+
+  beforeEach(async () => {
+    handed = [];
+    served = await startTestServer({
+      // A run written before the platform starts, so the seed publishes it as the demo run
+      // and seeds the audience beside it: a workspace with no audience can start no test.
+      runs: [{ stamp: '2026-10-24T14:02:00.000Z', name: 'northwind-demo' }],
+      /**
+       * A pipeline that writes the run it was asked for, the way the shipped one does: the
+       * artifact's `site` block is the URL and the verification state it was handed, and the
+       * `SiteAtLaunch.id` beside them is deliberately left behind — it addresses a row in the
+       * platform's store, and nothing inside a run directory names one.
+       */
+      pipeline: async (_request, _audience, site) => {
+        const runId = `2026-11-03-1000-clipforge-${String(handed.length + 1)}`;
+        const artifact = validArtifact();
+        artifact.run = {
+          ...artifact.run,
+          runId,
+          createdAt: '2026-11-03T10:00:00.000Z',
+          ...(site === undefined
+            ? {}
+            : { site: { url: site.url, verifiedAtLaunch: site.verifiedAtLaunch } }),
+        };
+        artifact.findings = { ...artifact.findings, runId };
+        await writeRun(join(served.directories.runsRoot, runId), artifact);
+        handed.push({ site, runId });
+        return { runId, engineMode: 'offline' };
+      },
+    });
+    const seeded = served.platform.seeded;
+    const response = await served.signIn({
+      email: seeded?.email ?? '',
+      password: seeded?.password ?? '',
+    });
+    expect(response.status).toBe(200);
+    cookie = cookieOf(response);
+    audienceId = seeded?.audienceId ?? '';
+    workspaceId = seeded?.workspaceId ?? '';
+    accountId = seeded?.accountId ?? '';
+    // Unverified, as `create` opens every site: the first launch below is on an unverified
+    // one, which is a launch the caps allow exactly as they allow a verified one's.
+    siteId = (
+      await served.platform.store.sites.create(workspaceId, { url: SITE_URL, token: SITE_TOKEN })
+    ).id;
+  });
+
+  afterEach(async () => {
+    await served.close();
+  });
+
+  it('carries the URL it ran against and that it was not verified', async () => {
+    const response = await launch();
+    expect(response.status).toBe(201);
+
+    const run = await recordedRun(handed[0]?.runId ?? '');
+
+    expect(run.site).toStrictEqual({ url: SITE_URL, verifiedAtLaunch: false });
+  });
+
+  it('records a verified site as verified', async () => {
+    await verifyTheSite();
+
+    const response = await launch();
+    expect(response.status).toBe(201);
+
+    expect((await recordedRun(handed[0]?.runId ?? '')).site).toStrictEqual({
+      url: SITE_URL,
+      verifiedAtLaunch: true,
+    });
+  });
+
+  it('leaves a run launched before the site was verified reading false, for ever', async () => {
+    expect((await launch()).status).toBe(201);
+    const before = handed[0]?.runId ?? '';
+
+    await verifyTheSite();
+    expect((await launch()).status).toBe(201);
+    const after = handed[1]?.runId ?? '';
+
+    // Two runs against one site, and the record of each says what was true when it started:
+    // verifying a site is not a way to make yesterday's figures come from a verified one.
+    expect((await recordedRun(before)).site?.verifiedAtLaunch).toBe(false);
+    expect((await recordedRun(after)).site?.verifiedAtLaunch).toBe(true);
+    expect((await recordedRun(before)).site?.url).toBe((await recordedRun(after)).site?.url);
+  });
+
+  it('names the site by URL alone: no site id, and nothing else in the block', async () => {
+    expect((await launch()).status).toBe(201);
+
+    // The platform had the stored record's id in hand and handed it over …
+    expect(handed[0]?.site?.id).toBe(siteId);
+    // … and the artifact names only the two fields the contract declares.
+    expect(Object.keys((await recordedRun(handed[0]?.runId ?? '')).site ?? {}).sort()).toEqual([
+      'url',
+      'verifiedAtLaunch',
+    ]);
+  });
+
+  it('holds no account identifier and no workspace identifier anywhere in the directory', async () => {
+    expect((await launch()).status).toBe(201);
+    const runDir = runDirOf(handed[0]?.runId ?? '');
+
+    const files = await readdir(runDir, { recursive: true, withFileTypes: true });
+    const written = files.filter((entry) => entry.isFile());
+    expect(written.length).toBeGreaterThan(0);
+
+    // Every identifier this workspace is known by inside the platform, and the one secret
+    // beside them. None of it is a thing a run directory may carry out of the product
+    // (`docs/FLOW.md` section 8): a run belongs to a workspace by what
+    // `WorkspaceRecord.runIds` says, and the artifact says nothing about whose it is.
+    const seeded = served.platform.seeded;
+    const forbidden: Record<string, string> = {
+      'the workspace id': workspaceId,
+      'the account id': accountId,
+      'the site id': siteId,
+      'the site token': SITE_TOKEN,
+      'the account email': seeded?.email ?? '',
+      'the account password': seeded?.password ?? '',
+      'the session cookie': cookie,
+    };
+    for (const value of Object.values(forbidden)) expect(value).not.toBe('');
+
+    for (const entry of written) {
+      const contents = await readFile(join(entry.parentPath, entry.name), 'utf8');
+      for (const [what, value] of Object.entries(forbidden)) {
+        expect({ file: entry.name, holds: what, it: contents.includes(value) }).toStrictEqual({
+          file: entry.name,
+          holds: what,
+          it: false,
+        });
+      }
+    }
+  });
+
+  it('still records the run as the workspace’s, which is where that fact lives', async () => {
+    expect((await launch()).status).toBe(201);
+
+    // The artifact names no workspace, so the join has to be the platform's own, and this is
+    // the assertion that the join exists at all: without it, an artifact that identifies
+    // nobody would be an artifact nobody can find.
+    const workspace = await served.platform.store.workspaces.byId(workspaceId);
+    expect(workspace?.runIds).toContain(handed[0]?.runId);
   });
 });

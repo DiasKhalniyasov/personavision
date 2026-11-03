@@ -266,6 +266,22 @@ export interface RunSwarmInput extends SwarmPlanInput {
    */
   readonly concurrency?: number;
   /**
+   * The site this run was launched against, and whether it was verified at that moment, for
+   * the swarm to put on the record before its first session (`run.json`'s `site` block,
+   * #243).
+   *
+   * It arrives as an input for the same reason the audience and the concurrency do: only the
+   * platform knows which site is being driven and what its verification state was when the
+   * caps were decided, and the state is read there **once, at launch**. The swarm neither
+   * resolves it nor re-reads it — a re-read mid-run would record something that was not true
+   * when the sessions started — and nothing in this package branches on it. It is a fact
+   * written down, not a switch.
+   *
+   * Absent for a caller with no site, which is `personavision run`: it has no workspace and
+   * no site, and the run it writes carries no block at all.
+   */
+  readonly site?: Run['site'];
+  /**
    * How long one session may take, in wall-clock milliseconds. One deadline, held three
    * ways, because what matters is not only that an overrun ends but that it ends with a
    * record of itself:
@@ -371,11 +387,13 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   );
   const runner: SessionRunner = chosen.runner ?? walkOne;
 
-  const opened = await openRun(input.runDir, planned, input.providers.decision.mode, {
-    where: chosen.where,
-    image: chosen.image,
-    concurrency,
-  });
+  const opened = await openRun(
+    input.runDir,
+    planned,
+    input.providers.decision.mode,
+    { where: chosen.where, image: chosen.image, concurrency },
+    input.site,
+  );
   const startedAt = opened.startedAt ?? clock().toISOString();
 
   const sessions: Session[] = [];
@@ -686,11 +704,25 @@ interface RunnerOnTheRecord {
   readonly concurrency: number;
 }
 
+/**
+ * Whether the site already on the record says what the swarm was handed.
+ *
+ * A caller that handed over **no** site agrees with whatever is written, which is what keeps
+ * this from unwriting a creator's own block: `personavision run` passes none, and a run
+ * opened with a block by some future creator is left exactly as it was written. A caller that
+ * handed one over agrees only if both halves match, so a block that disagrees is corrected to
+ * what was true at launch rather than left to be read as the launch's own answer.
+ */
+const sameSite = (recorded: Run['site'], handed: Run['site']): boolean =>
+  handed === undefined ||
+  (recorded?.url === handed.url && recorded.verifiedAtLaunch === handed.verifiedAtLaunch);
+
 const openRun = async (
   runDir: string,
   planned: readonly SwarmSession[],
   mode: ProviderMode,
   runner: RunnerOnTheRecord,
+  site: Run['site'],
 ): Promise<OpenedRun> => {
   const artifact = await readRun(runDir);
   const { run } = artifact;
@@ -749,20 +781,20 @@ const openRun = async (
       );
     }
   }
-  await recordEngine(runDir, artifact, runner);
+  await recordEngine(runDir, artifact, runner, site);
   return { runId: run.runId, startedAt: run.startedAt };
 };
 
 /**
- * Which engine ran, what it scored and **where its sessions ran**, on the record before the
- * first session runs (#92, #317).
+ * Which engine ran, what it scored, **where its sessions ran** and **what site they ran
+ * against**, on the record before the first session runs (#92, #317, #243).
  *
- * Three fields, written together because they are one claim: `engine.version` names the engine
- * and `calibration` carries the figures that engine was measured at, which is what the
- * header badge states on every screen. They come from the engine this build imports, because
- * nothing else knows which engine is about to walk the sessions — a creator can only guess at
- * its version, and a stale figure beside a new engine is exactly the fabrication
- * `docs/FLOW.md`'s badge must never show.
+ * Three fields are one claim about the engine: `engine.version` names it and `calibration`
+ * carries the figures it was measured at, which is what the header badge states on every
+ * screen. They come from the engine this build imports, because nothing else knows which
+ * engine is about to walk the sessions — a creator can only guess at its version, and a stale
+ * figure beside a new engine is exactly the fabrication `docs/FLOW.md`'s badge must never
+ * show.
  *
  * It happens here, in the swarm's own turn at `run.json` and before any session has landed,
  * so the value a reader sees while the run is open is the value the finished run carries: the
@@ -774,6 +806,15 @@ const openRun = async (
  * does happen once per run: only the swarm knows which runner it was handed, and a creator
  * that guessed at it would be guessing at the one field that says which code drove the run.
  *
+ * The `site` block rides along in the same write for a plainer reason: it is the other fact
+ * about a launch that a reader of the finished directory cannot recover from the sessions, and
+ * recording it beside the engine is one write rather than two. It is written **only when a
+ * caller handed one over**, so a run with no site — `personavision run`, which has no
+ * workspace — carries no block, and an absent block stays what the contract says it is: a run
+ * that did not say, and never a claim that its site was unverified. A run that fails before
+ * the swarm is reached therefore records no site either; the only thing that knows a site at
+ * all is the layer that resolved it.
+ *
  * The write is the whole artifact, as `closeRun`'s is, because `run.json` has no writer of
  * its own and `packages/contract` is not this ticket's to change. It is reached before the
  * first session, where a run the swarm walks holds none.
@@ -782,6 +823,7 @@ const recordEngine = async (
   runDir: string,
   artifact: RunArtifact,
   runner: RunnerOnTheRecord,
+  site: Run['site'],
 ): Promise<void> => {
   const { run } = artifact;
   const engine = engineOnTheRecord();
@@ -790,7 +832,8 @@ const recordEngine = async (
     sameCalibration(run.calibration, engine.calibration) &&
     run.runner?.where === runner.where &&
     run.runner.image === runner.image &&
-    run.runner.concurrency === runner.concurrency;
+    run.runner.concurrency === runner.concurrency &&
+    sameSite(run.site, site);
   if (agrees) return;
   await writeRun(runDir, {
     ...artifact,
@@ -799,6 +842,10 @@ const recordEngine = async (
       engine: { ...run.engine, version: engine.version },
       calibration: engine.calibration,
       runner,
+      // Spread conditionally rather than assigned, so that a caller with no site leaves the
+      // field exactly as it found it instead of writing `site: undefined` over a block
+      // somebody else put there.
+      ...(site === undefined ? {} : { site }),
     },
   });
 };

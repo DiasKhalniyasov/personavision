@@ -464,6 +464,29 @@ describe('a run of one site', () => {
     expect(run.sessionIds).toEqual(['S-01', 'S-02']);
   });
 
+  /**
+   * The `site` block of `run.json` is the **platform's**, and this command is not it (#243).
+   *
+   * `--site` names a URL to drive, and that is all the command knows: there is no workspace
+   * holding a site record, so there is nothing that has been proved and nothing to read a
+   * verification state off. Writing the block with `verifiedAtLaunch: false` would be the
+   * one thing the contract forbids — reading "nobody said" as "it was not verified" — so no
+   * block is written at all, which is exactly why the field is optional.
+   */
+  it('writes no site block, because a command line proves nothing about a URL', async () => {
+    fixture = await runFixture({ size: 2 });
+
+    await runCommand(fixture.options(oneSite()));
+
+    const { runDir, run } = await theRun(fixture.runsRoot);
+    expect(await validate(runDir)).toEqual([]);
+    expect(run.site).toBeUndefined();
+    expect('site' in run).toBe(false);
+    // The URL is still on the record, where a run has always carried it: as the version it
+    // drove. What is missing is only the claim about who controls it.
+    expect(run.variants[0]?.url).toBe('https://fixture.test/cart.html');
+  });
+
   it('names the site where the progress report names a version', async () => {
     fixture = await runFixture({ size: 2 });
 

@@ -10,7 +10,14 @@
 
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { createFixtureSource } from '@personavision/browser';
-import { readRun, runPaths, runSchema, sessionSchema, validate } from '@personavision/contract';
+import {
+  readRun,
+  runPaths,
+  runSchema,
+  sessionSchema,
+  validate,
+  writeRun,
+} from '@personavision/contract';
 import { createOfflineDeterministicProvider, FREE_USAGE } from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_CONCURRENCY, planSwarm, runSwarm } from '../src/index.js';
@@ -904,4 +911,88 @@ const breaksFor = (inner: CaptureSource, personaId: string): CaptureSource => ({
     if (device.name.endsWith(personaId)) throw new Error('the fixture site is on fire');
     return inner.openSession(variant, device);
   },
+});
+
+/**
+ * The site a run was launched against, on the record before its first session (#243).
+ *
+ * The swarm resolves no site and reads none: the value arrives from the layer that decided
+ * the caps, and all the swarm owes it is one write, early enough that the open run a reader
+ * finds mid-flight already says what the finished one will. Nothing here branches on it —
+ * the same sessions run against a verified site and an unverified one, which is the whole
+ * point of recording rather than gating.
+ */
+describe('the site on the record', () => {
+  const NORTHWIND = { url: 'https://northwind.example/cart', verifiedAtLaunch: true };
+
+  /** The site as `run.json` holds it at the moment the first session starts. */
+  const siteWhenTheFirstSessionStarts = async (
+    over: Partial<RunSwarmInput> = {},
+  ): Promise<Run['site'] | 'no session started'> => {
+    let atFirstSession: Run['site'] | 'no session started' = 'no session started';
+    let seen = false;
+    await runSwarm(
+      swarmOver({
+        ...over,
+        onProgress: async (event) => {
+          if (event.kind !== 'session-started' || seen) return;
+          seen = true;
+          atFirstSession = (await readRun(runDir)).run.site;
+        },
+      }),
+    );
+    return atFirstSession;
+  };
+
+  it('writes what it was handed before the first session, and leaves it there', async () => {
+    await open();
+
+    expect(await siteWhenTheFirstSessionStarts({ site: NORTHWIND })).toEqual(NORTHWIND);
+    expect((await readRun(runDir)).run.site).toEqual(NORTHWIND);
+  });
+
+  it('records an unverified site as unverified rather than as nothing', async () => {
+    await open();
+    const unverified = { url: 'https://northwind.example/cart', verifiedAtLaunch: false };
+
+    const { run } = await runSwarm(swarmOver({ site: unverified }));
+
+    expect(run.site).toEqual(unverified);
+    expect((await readRun(runDir)).run.site?.verifiedAtLaunch).toBe(false);
+  });
+
+  it('writes no block at all for a caller that has no site', async () => {
+    await open();
+
+    expect(await siteWhenTheFirstSessionStarts()).toBeUndefined();
+    const { run } = await readRun(runDir);
+    expect(run.site).toBeUndefined();
+    expect(await validate(runDir)).toEqual([]);
+  });
+
+  it('leaves a block its creator already wrote exactly as it found it', async () => {
+    await open();
+    const artifact = await readRun(runDir);
+    await writeRun(runDir, { ...artifact, run: { ...artifact.run, site: NORTHWIND } });
+
+    // Handed nothing, so there is nothing to correct: a creator that knew the site is not
+    // overruled by a swarm that does not.
+    await runSwarm(swarmOver());
+
+    expect((await readRun(runDir)).run.site).toEqual(NORTHWIND);
+  });
+
+  it('drives the same sessions whether the site was verified or not', async () => {
+    const sessionsOf = async (site: Run['site']): Promise<unknown> => {
+      await sweep(runDir);
+      runDir = await temporaryRunDir();
+      await open();
+      const { sessions } = await runSwarm(swarmOver({ site }));
+      return sessions.map((session) => [session.sessionId, session.outcome.status]);
+    };
+
+    expect(await sessionsOf({ ...NORTHWIND, verifiedAtLaunch: false })).toEqual(
+      await sessionsOf(NORTHWIND),
+    );
+  });
 });
