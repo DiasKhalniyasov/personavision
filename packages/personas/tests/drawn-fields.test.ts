@@ -127,6 +127,31 @@ describe('the gender split is apportioned like the device mix', () => {
       JSON.stringify(generatePersonas(written)),
     );
   });
+
+  it('orders the two words itself, rather than taking whatever order it is handed', () => {
+    // `generatePersonas` parses first, and zod happens to rebuild the split in the schema's
+    // own order, so the case above would pass without the sort. This is the one that would
+    // not: the apportionment reached directly, on an audience nobody normalised.
+    const written = audienceWith({ size: 21, genderSplit: { female: 0.54, male: 0.46 } });
+    const reversed = audienceWith({ size: 21, genderSplit: { male: 0.46, female: 0.54 } });
+
+    expect(Object.keys(reversed.genderSplit ?? {})).not.toStrictEqual(
+      Object.keys(written.genderSplit ?? {}),
+    );
+    expect(genderApportionment(reversed)).toStrictEqual(genderApportionment(written));
+    // And the tie-break is stated rather than incidental: `female` leads, so the odd person
+    // of a 50/50 split over 21 people is drawn as `female`.
+    expect(
+      countsOf(
+        genderApportionment(audienceWith({ size: 21, genderSplit: { male: 0.5, female: 0.5 } })),
+      ),
+    ).toStrictEqual(
+      new Map<Gender, number>([
+        ['female', 11],
+        ['male', 10],
+      ]),
+    );
+  });
 });
 
 describe('the age groups', () => {

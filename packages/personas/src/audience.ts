@@ -210,12 +210,17 @@ const apportion = <Value>(
  *
  * The two words are read off the split the people are drawn from rather than written out
  * here, so this file cannot spell a third — the same reason `genderSchema` reads them off
- * `genderSplitSchema` in the contract. They are sorted, because the key order of an object
- * parsed from a file is the file's and not a promise: an audience written `{ female, male }`
- * and the same audience written `{ male, female }` are one audience, and they have to draw
- * one set of people. Sorted, `female` is first, so a 50/50 split over an odd number of
- * people gives the odd person to `female` — arbitrary, but the same arbitrary answer every
- * time, which is the property that matters.
+ * `genderSplitSchema` in the contract. They are then **sorted**, because reading them off
+ * the object makes their order the object's, and that is not an order to inherit by
+ * accident. As it happens zod rebuilds a parsed audience in the schema's own declaration
+ * order, so an audience written `{ female, male }` and one written `{ male, female }` reach
+ * this function identical — but that is an incidental property of the parser rather than
+ * something the contract promises, and this function is reachable with an audience nobody
+ * parsed. Sorting makes the order this file's own and the answer the same either way.
+ *
+ * Sorted, `female` is first, so a 50/50 split over an odd number of people gives the odd
+ * person to `female`: arbitrary, and the same arbitrary answer every time, which is the
+ * property that matters.
  *
  * Not floored. A share of zero here is a measurement the audience made, so nobody is drawn
  * as it; `devices.ts` states that difference where the floor is.

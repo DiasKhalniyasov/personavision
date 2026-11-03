@@ -202,10 +202,11 @@ gets somebody as soon as there are as many people as languages.
 into it would be this package inventing a claim about the audience, so the same rule runs over
 an equal share each — three languages over a hundred people are 34, 33 and 33 — and the list's
 own order breaks the tie. The gender split's two words are read off the split itself rather
-than written out here, sorted so that an audience written `{ female, male }` and the same
-audience written `{ male, female }` draw one set of people; sorted, `female` leads, so a 50/50
-split over an odd number of people gives the odd person to `female`. Arbitrary, and the same
-arbitrary answer every time, which is the property that matters.
+than written out here, and then sorted, so that their order is this file's own rather than one
+inherited by accident — from however the audience happened to be written, or from the order zod
+rebuilds a parsed object in. Sorted, `female` leads, so a 50/50 split over an odd number of
+people gives the odd person to `female`. Arbitrary, and the same arbitrary answer every time,
+which is the property that matters.
 
 **The audience decides how many; the seed decides who.** The apportionment is the audience's
 and is the same at every seed, exactly as the device mix is, so two seed groups of one run
