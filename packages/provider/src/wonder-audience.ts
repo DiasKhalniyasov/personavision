@@ -56,6 +56,11 @@ export const AUDIENCE_REPLY_SCHEMA_NAME = 'wonder_audience';
  * (`docs/FLOW.md` section 12). It is what the model is told to answer with when the sentence
  * names no number of its own, and what the offline stand-in answers; the user edits it on
  * the form like every other field.
+ *
+ * `@personavision/platform` carries the same hundred as `DEFAULT_PARTICIPANTS`, which is
+ * what a submitted audience that names no size is stored with (#348). The two are the
+ * design contract's one number read in two layers rather than one package's default read by
+ * the other: nothing in this package may import the platform, which imports this one.
  */
 export const DEFAULT_AUDIENCE_SIZE = 100;
 
