@@ -21,11 +21,14 @@ import type { VariantScore } from './score.js';
  * second run — which is why the group half of the rule is the run's and the band half is
  * the holdout's.
  *
- * **The holdout is 20 people** (decision 83, option b, 2026-11-03), so bands that overlap
- * are the common case rather than a rarity. A holdout that cannot separate the two
- * versions has not found against the change: it is `null` — *the holdout could not judge* —
- * and never `false`, because reporting "not confirmed" on too few people is a false
- * accusation against a change that may be fine.
+ * **The holdout is small** — a share of the participants today (`HOLDOUT_SHARE` in
+ * `@personavision/personas`), a fixed 20 under #318 — so bands that overlap are the common
+ * case rather than a rarity, and more so the smaller it gets. A holdout that cannot
+ * separate the two versions has not found against the change: it is `null` — *the holdout
+ * could not judge* — and never `false`, because reporting "not confirmed" on too few
+ * people is a false accusation against a change that may be fine. Nothing here reads the
+ * size: the judgement is made from the people the figures were measured on, whatever that
+ * number turns out to be.
  *
  * Pure: contract types only, no disk, no network, no browser.
  */
