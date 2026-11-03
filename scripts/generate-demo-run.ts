@@ -56,7 +56,7 @@ import { engineOnTheRecord, planSwarm, runSwarm } from '@personavision/swarm';
 import { declaredDefects } from '@personavision/northwind-demo/defects.ts';
 import { NORTHWIND_TASK, northwindVariants } from '@personavision/northwind-demo/demo.config.ts';
 import { serveDemoShop } from '@personavision/northwind-demo/serve.ts';
-import type { Variant } from '@personavision/browser';
+import type { CaptureSource, Variant } from '@personavision/browser';
 import type { DemoShop } from '@personavision/northwind-demo/serve.ts';
 import type { Findings, Run, Session } from '@personavision/contract';
 import type { PlantedDefectEvaluation } from '@personavision/scoring';
@@ -146,6 +146,25 @@ const ENGINE_WEIGHTS = {
   beta: defaultEngineConfig.beta,
   gamma: defaultEngineConfig.gamma,
 };
+
+/**
+ * A live source whose sessions are not recorded.
+ *
+ * **The demo run records no video**, and that is this artifact's own choice rather than a
+ * default. A recording's bytes and the wall-clock offsets into it are the one part of a
+ * session that is not derived from the seed (#253), and this directory is committed on the
+ * promise this file's own **Determinism** note makes: two runs leave it byte-identical, so
+ * that a re-commit of it is a reviewable diff. Twenty-four recordings that differ on every regeneration would end that
+ * promise — the same reason the capture cache is removed below. A session that recorded none
+ * carries no video block at all and parses exactly as it does today (#242).
+ *
+ * Every other live run records: `runSession` asks for `videos/S-NN.webm` per session, and
+ * what this drops is that request.
+ */
+const recordingNothing = (source: CaptureSource): CaptureSource => ({
+  ...source,
+  openSession: (variant, device) => source.openSession(variant, device),
+});
 
 /**
  * One session at a time. Not a performance choice: the device mix drives two viewports over
@@ -389,7 +408,7 @@ export const generateDemoRun = async (
       variants: walk,
       personas,
       seedGroups: SEED_GROUPS,
-      source: createLiveSource(),
+      source: recordingNothing(createLiveSource()),
       providers: { decision: createOfflineDeterministicProvider({ seed: DEMO_AUDIENCE_SEED }) },
       concurrency: CONCURRENCY,
       // Fixed, so two regenerations are byte-identical: the artifact's timestamps are the

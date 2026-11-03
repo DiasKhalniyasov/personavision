@@ -14,7 +14,7 @@
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ActOptions } from './act.js';
-import type { SessionRecording } from './video.js';
+import type { SessionRecording, VideoRequest } from './video.js';
 
 /** A variant under test: its id in the run artifact, and the URL a session opens. */
 export interface Variant {
@@ -213,13 +213,32 @@ export interface PageHandle {
   readonly video?: SessionRecording;
 }
 
+/** What one session is opened with, by the caller that knows which session it is. */
+export interface SessionRequest {
+  /**
+   * Record this session into the run directory, as `videos/S-NN.webm`.
+   *
+   * A request names the session the file belongs to, so it is made per session rather than
+   * per source: one source drives every session of a run, and one file cannot be two
+   * sessions. A source that opens no browser — a run directory replayed from disk — has
+   * nothing to record and ignores it, which is what leaves a fixture-mode session with no
+   * video at all rather than with an absence it would have to explain.
+   */
+  readonly video?: VideoRequest;
+}
+
 /**
  * Where captures come from: Chromium over a URL (`createLiveSource`) or a run directory on
  * disk (`createFixtureSource`). The engine, the swarm and the tests are written against
  * this interface and not against either implementation.
  */
 export interface CaptureSource {
-  openSession(variant: Variant, device: Device): Promise<PageHandle>;
+  /**
+   * `session` is what this one session is opened with, and the recording it asks for is the
+   * only thing in it. It is optional, so an implementation written against the two
+   * parameters before it still satisfies this.
+   */
+  openSession(variant: Variant, device: Device, session?: SessionRequest): Promise<PageHandle>;
   capture(page: PageHandle, ctx: CaptureContext): Promise<Capture>;
   /**
    * `options` is the fourth parameter `act.ts` left to the ticket that fills the walk: it

@@ -51,6 +51,7 @@ import type { SessionVideo } from '@personavision/contract';
 import type { SessionBudgetLimits, SessionIntegrity } from './budget.js';
 import type { AutomationFailureOutcome } from './failure-mapping.js';
 import type { OpenSessionOptions } from './session.js';
+import type { VideoRequest } from './video.js';
 import type {
   ActResult,
   Action,
@@ -208,27 +209,31 @@ const captureOnce: CaptureSource['capture'] = async (page, ctx) => {
  * and the tests are written against.
  *
  * `options` is what every session this source opens is opened with — the navigation cap, the
- * load state, and `video` to record one into the run directory as `videos/S-NN.webm`.
- * `CaptureSource.openSession` takes a variant and a device and nothing else, by design, so
- * what a session is opened *with* is declared once, here.
+ * load state, and `video` to record one into the run directory as `videos/S-NN.webm`. Of
+ * what a session is opened with, `CaptureSource.openSession` carries only the recording it
+ * asks for, by design; everything else is declared once, here.
  *
- * **A source with `video` records one session**, because a `video` request names the session
- * the file belongs to and one file cannot be two sessions. A source opened a second time
- * records nothing rather than writing over the first recording and reporting its path twice —
- * two sessions claiming one file is a run nothing can read. A caller recording many sessions
- * therefore builds a source per session (it is an object literal) or opens them itself with
- * `openSession(variant, device, { video })`, which is what the swarm does.
+ * **A caller that names the session it is recording wins.** `openSession`'s own
+ * `SessionRequest` is per session, which is what a swarm driving many sessions through one
+ * source has: each session names its own `videos/S-NN.webm` and nothing has to be told twice.
+ *
+ * **The source's own `video` records one session**, because a `video` request names the
+ * session the file belongs to and one file cannot be two sessions. A source whose own request
+ * is used a second time records nothing rather than writing over the first recording and
+ * reporting its path twice — two sessions claiming one file is a run nothing can read.
  */
 export const createLiveSource = (options: OpenSessionOptions = {}): CaptureSource => {
   const recorded = { already: false };
+  /** The source's own request, spent on the first session that has none of its own. */
+  const ownVideo = (): VideoRequest | undefined => {
+    if (options.video === undefined || recorded.already) return undefined;
+    recorded.already = true;
+    return options.video;
+  };
   return {
-    openSession: (variant, device) => {
-      if (options.video === undefined) return openSession(variant, device, options);
-      if (recorded.already) {
-        return openSession(variant, device, { ...options, video: undefined });
-      }
-      recorded.already = true;
-      return openSession(variant, device, options);
+    openSession: (variant, device, session) => {
+      const video = session?.video ?? ownVideo();
+      return openSession(variant, device, { ...options, video });
     },
     capture: captureOnce,
     act,
