@@ -14,9 +14,30 @@ import { paths } from '../../src/shell/paths';
  * rows survive a filter, what the query string reads after a control is used, and the words
  * of the screen a filter matching nothing produces. Nothing is asserted about component
  * state, because there is none to assert — the filters are the URL.
+ *
+ * The rows are one of the screen's two views and the grid is the default (#268), so the
+ * mounts here name the view they are about. What the filters do to a grid of thumbnails,
+ * and where their counts come from, is `grid.test.tsx`'s.
  */
 
 const SEED = '2026-10-24-1402-northwind-demo';
+
+/** The rows view: `?view=rows`, with any filters before it. */
+const rowsView = (runId: string, query: string = ''): string =>
+  `${paths.sessions(runId)}?${query === '' ? '' : `${query}&`}view=rows`;
+
+/**
+ * What the URL is narrowed by, as an object.
+ *
+ * These tests are about what a control writes into the query, and neither the order the
+ * parameters end up in nor the `view=rows` the mount asked for is the thing under test —
+ * what matters is that the view survives every one of them, which is why it is left in.
+ */
+const narrowing = (search: string): Record<string, string> =>
+  Object.fromEntries(new URLSearchParams(search));
+
+/** The rows view with nothing else: what a cleared screen settles on. */
+const ROWS = { view: 'rows' };
 
 /** The run's own facts, from `scripts/seed-example-run.ts`. */
 const SUCCEEDED_ON_A = ['S-01', 'S-02', 'S-03', 'S-04', 'S-05', 'S-06', 'S-07', 'S-08', 'S-10'];
@@ -55,7 +76,7 @@ afterEach(forgetRuns);
 describe('the filters a URL carries', () => {
   it('narrows the list to one outcome', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
+    mountApp(rowsView(SEED, `outcome=automation_failure`));
 
     expect(await listed(2)).toEqual(AUTOMATION_FAILURES);
     // And the counts line says how much of the test is on screen.
@@ -64,21 +85,21 @@ describe('the filters a URL carries', () => {
 
   it('narrows the list to the people who fixated one area of interest', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?aoi=${PLACE_ORDER}`);
+    mountApp(rowsView(SEED, `aoi=${PLACE_ORDER}`));
 
     expect(await listed(SUCCEEDED_ON_A.length)).toEqual(SUCCEEDED_ON_A);
   });
 
   it('narrows further as a version and an outcome combine', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?variant=B&outcome=failed`);
+    mountApp(rowsView(SEED, `variant=B&outcome=failed`));
 
     expect(await listed(3)).toEqual(['S-13', 'S-14', 'S-19']);
   });
 
   it('narrows further still with an area of interest on top of both', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?variant=A&outcome=success&aoi=${PLACE_ORDER}`);
+    mountApp(rowsView(SEED, `variant=A&outcome=success&aoi=${PLACE_ORDER}`));
 
     expect(await listed(SUCCEEDED_ON_A.length)).toEqual(SUCCEEDED_ON_A);
   });
@@ -86,7 +107,7 @@ describe('the filters a URL carries', () => {
   it('shows a chip naming the area a reader arrived from, and widens the list when it is dismissed', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?aoi=${PLACE_ORDER}`);
+    const { router } = mountApp(rowsView(SEED, `aoi=${PLACE_ORDER}`));
 
     await listed(SUCCEEDED_ON_A.length);
     const chip = screen.getByRole('button', { name: 'Fixated: Place order' });
@@ -94,14 +115,14 @@ describe('the filters a URL carries', () => {
 
     await user.click(chip);
 
-    expect(router.state.location.search).toBe('');
+    expect(narrowing(router.state.location.search)).toEqual(ROWS);
     expect(await listed(24)).toHaveLength(24);
     expect(screen.queryByRole('button', { name: /^Fixated:/ })).toBeNull();
   });
 
   it('states the run’s own totals until every session the filter needs has been read', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
+    mountApp(rowsView(SEED, `outcome=automation_failure`));
 
     // While the rows are arriving the filter cannot judge them, so they are all on screen.
     // The line says what is true at that moment — the test's own totals — rather than
@@ -117,7 +138,7 @@ describe('the filters a URL carries', () => {
 
   it('states the run’s own totals when nothing is filtered', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     expect(
       await screen.findByText('24 people · 22 scored · 2 excluded because our automation broke'),
@@ -130,7 +151,7 @@ describe('the segmented controls', () => {
   it('write the filter into the URL and show which way the list is narrowed', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(paths.sessions(SEED));
+    const { router } = mountApp(rowsView(SEED));
 
     await listed(24);
     const outcomes = segment('Filter by outcome');
@@ -140,7 +161,7 @@ describe('the segmented controls', () => {
 
     await user.click(within(outcomes).getByRole('button', { name: 'Abandoned' }));
 
-    expect(router.state.location.search).toBe('?outcome=abandoned');
+    expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, outcome: 'abandoned' });
     expect(await listed(8)).toEqual([
       'S-11',
       'S-12',
@@ -166,36 +187,43 @@ describe('the segmented controls', () => {
   it('offers Automation failure, so those two people are findable rather than spotted by eye', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(paths.sessions(SEED));
+    const { router } = mountApp(rowsView(SEED));
 
     await listed(24);
     await user.click(option('Filter by outcome', 'Automation failure'));
 
-    expect(router.state.location.search).toBe('?outcome=automation_failure');
+    expect(narrowing(router.state.location.search)).toEqual({
+      ...ROWS,
+      outcome: 'automation_failure',
+    });
     expect(await listed(2)).toEqual(AUTOMATION_FAILURES);
   });
 
   it('combine with one another, and the “All …” option clears one filter without the other', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?outcome=success`);
+    const { router } = mountApp(rowsView(SEED, `outcome=success`));
 
     await listed(11);
     await user.click(option('Filter by version', 'B'));
 
-    expect(router.state.location.search).toBe('?outcome=success&variant=B');
+    expect(narrowing(router.state.location.search)).toEqual({
+      ...ROWS,
+      outcome: 'success',
+      variant: 'B',
+    });
     expect(await listed(2)).toEqual(['S-16', 'S-21']);
 
     await user.click(option('Filter by outcome', 'All outcomes'));
 
-    expect(router.state.location.search).toBe('?variant=B');
+    expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, variant: 'B' });
     expect(await listed(12)).toHaveLength(12);
   });
 
   it('leave the history alone when the option already pressed is pressed again', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?variant=A`);
+    const { router } = mountApp(rowsView(SEED, `variant=A`));
 
     await listed(12);
     const key = router.state.location.key;
@@ -204,7 +232,7 @@ describe('the segmented controls', () => {
 
     // Pressing the active option is not a filter, so it is not a navigation either: a
     // reader who taps it twice does not need three Backs to leave the screen.
-    expect(router.state.location.search).toBe('?variant=A');
+    expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, variant: 'A' });
     expect(router.state.location.key).toBe(key);
     expect(await listed(12)).toHaveLength(12);
   });
@@ -212,7 +240,7 @@ describe('the segmented controls', () => {
   it('drop the area chip when the other version is picked, rather than filtering on both', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?aoi=${CONFIRM_PURCHASE}`);
+    const { router } = mountApp(rowsView(SEED, `aoi=${CONFIRM_PURCHASE}`));
 
     await screen.findByRole('button', { name: 'Fixated: Confirm purchase' });
     await user.click(option('Filter by version', 'A'));
@@ -221,7 +249,7 @@ describe('the segmented controls', () => {
     // have fixated it, and the pair would read as a finding over the other version's
     // figures. The version is what the reader just asked for, so the area is what goes.
     await waitFor(() => {
-      expect(router.state.location.search).toBe('?variant=A');
+      expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, variant: 'A' });
     });
     expect(screen.queryByRole('button', { name: /^Fixated:/ })).toBeNull();
     expect(await listed(12)).toHaveLength(12);
@@ -231,7 +259,7 @@ describe('the segmented controls', () => {
   it('are operable from the keyboard', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(paths.sessions(SEED));
+    const { router } = mountApp(rowsView(SEED));
 
     await listed(24);
     const all = option('Filter by version', 'All variants');
@@ -243,13 +271,13 @@ describe('the segmented controls', () => {
     expect(document.activeElement).toBe(option('Filter by version', 'A'));
     await user.keyboard('{Enter}');
 
-    expect(router.state.location.search).toBe('?variant=A');
+    expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, variant: 'A' });
     expect(await listed(12)).toHaveLength(12);
   });
 });
 
 describe('a filter that matches nothing', () => {
-  const impossible = `${paths.sessions(SEED)}?variant=B&outcome=success&aoi=${CONFIRM_PURCHASE}`;
+  const impossible = rowsView(SEED, `variant=B&outcome=success&aoi=${CONFIRM_PURCHASE}`);
 
   it('says so in words, with the finding behind it', async () => {
     await serveRunData();
@@ -279,7 +307,7 @@ describe('a filter that matches nothing', () => {
     await user.click(screen.getByRole('link', { name: 'Clear filters' }));
 
     expect(router.state.location.pathname).toBe(paths.sessions(SEED));
-    expect(router.state.location.search).toBe('');
+    expect(narrowing(router.state.location.search)).toEqual(ROWS);
     expect(await listed(24)).toHaveLength(24);
   });
 
@@ -313,22 +341,22 @@ describe('a filter that matches nothing', () => {
 describe('a URL naming something this test has no entry for', () => {
   it('drops the bad value and lists the test, rather than rendering a blank screen', async () => {
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?variant=Z&outcome=sideways&aoi=no-such`);
+    const { router } = mountApp(rowsView(SEED, `variant=Z&outcome=sideways&aoi=no-such`));
 
     expect(await listed(24)).toHaveLength(24);
     await waitFor(() => {
-      expect(router.state.location.search).toBe('');
+      expect(narrowing(router.state.location.search)).toEqual(ROWS);
     });
     expect(screen.queryByText('No session matches')).toBeNull();
   });
 
   it('keeps the half of the link that does name something', async () => {
     await serveRunData();
-    const { router } = mountApp(`${paths.sessions(SEED)}?variant=A&aoi=no-such-area`);
+    const { router } = mountApp(rowsView(SEED, `variant=A&aoi=no-such-area`));
 
     expect(await listed(12)).toHaveLength(12);
     await waitFor(() => {
-      expect(router.state.location.search).toBe('?variant=A');
+      expect(narrowing(router.state.location.search)).toEqual({ ...ROWS, variant: 'A' });
     });
   });
 });
@@ -336,7 +364,7 @@ describe('a URL naming something this test has no entry for', () => {
 describe('the filtered screen as a screen reader and a keyboard reach it', () => {
   it('passes axe with the filters applied', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?variant=A&outcome=success&aoi=${PLACE_ORDER}`);
+    mountApp(rowsView(SEED, `variant=A&outcome=success&aoi=${PLACE_ORDER}`));
 
     await listed(SUCCEEDED_ON_A.length);
     const main = document.querySelector('main');
@@ -350,7 +378,7 @@ describe('the filtered screen as a screen reader and a keyboard reach it', () =>
 
   it('passes axe on the no-match screen', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?variant=B&outcome=success&aoi=${CONFIRM_PURCHASE}`);
+    mountApp(rowsView(SEED, `variant=B&outcome=success&aoi=${CONFIRM_PURCHASE}`));
 
     await screen.findByRole('heading', { name: 'No session matches' });
     const main = document.querySelector('main');

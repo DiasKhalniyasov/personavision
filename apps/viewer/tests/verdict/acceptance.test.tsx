@@ -473,7 +473,10 @@ describe('under prefers-reduced-motion: reduce', () => {
     const deeper = [
       [paths.breakdown(SEED), '[data-section="score-cards"]'],
       [paths.attention(SEED, hero.variant, hero.step), '[data-section="attention"]'],
-      [paths.sessions(SEED), '[aria-label="The people in this test"]'],
+      // The Sessions screen opens on the grid of video thumbnails (#268); the rows are
+      // the view this list resolves on, and the grid's own stillness is asserted in
+      // `tests/sessions/grid.test.tsx`, over a run that has recordings to draw.
+      [`${paths.sessions(SEED)}?view=rows`, '[aria-label="The people in this test"]'],
     ] as const;
 
     for (const [path, resolved] of deeper) {

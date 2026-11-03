@@ -39,7 +39,7 @@ describe('the run the chrome names and the run the screen renders', () => {
     });
     unmount();
 
-    mountApp(paths.sessions(SEED));
+    mountApp(`${paths.sessions(SEED)}?view=rows`);
     await screen.findByRole('heading', { name: 'What happened to each person' });
 
     expect(served(requests, `/runs/${SEED}/run.json`)).toBe(1);
