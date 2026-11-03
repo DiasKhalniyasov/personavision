@@ -92,4 +92,23 @@ export {
 } from './io.js';
 export type { RunArtifact, Violation } from './io.js';
 
+export {
+  createGoogleStorageTransport,
+  createObjectVideoStore,
+  NO_LONGER_KEPT,
+  NO_LONGER_KEPT_STATE,
+  selectVideoStore,
+  SIGNED_URL_TTL_SECONDS,
+  VIDEO_BUCKET_ENV,
+  videoObjectName,
+  VideoStoreRefused,
+} from './video-store.js';
+export type {
+  ObjectVideoStoreOptions,
+  SelectVideoStoreOptions,
+  VideoLocation,
+  VideoObjectTransport,
+  VideoStore,
+} from './video-store.js';
+
 export { createSeededRandom } from './random.js';

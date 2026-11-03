@@ -17,8 +17,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { SCHEMA_VERSION, runPaths, sessionSchema } from '@personavision/contract';
+import type { VideoStore } from '@personavision/contract';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -44,6 +45,12 @@ const describeWithChromium = CHROMIUM_INSTALLED || process.env.CI ? describe : d
 
 /** A recorded walk is two captures, one action, and a video saved and measured. */
 const WALK_TIMEOUT_MS = 60_000;
+
+/**
+ * The bucket the object-store case pretends to be configured with. It appears in no artifact
+ * and in no message, which is what the session JSON is asserted against.
+ */
+const VIDEO_BUCKET = 'pv-test-session-videos';
 
 const MOBILE: Device = {
   name: 'mobile',
@@ -263,6 +270,49 @@ describeWithChromium('a recorded session', () => {
         (walked.video.actionOffsetsMs[0] ?? 0) - (walked.video.screenOffsetsMs[0] ?? 0);
       expect(dwelled).toBeGreaterThanOrEqual(dwellMs);
       expect(dwelled).toBeLessThan(dwellMs + 500);
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
+    'hands the recording to the object store, and records the contract’s own path for it',
+    async () => {
+      // A fake store, in process: no network, no credential, no bucket. What is asserted is
+      // that the session is indistinguishable from a locally stored one — the same path, the
+      // same duration, the same offsets — and that nothing of the store reaches the artifact.
+      const taken = new Map<string, Uint8Array>();
+      const store: VideoStore = {
+        put: (objectName, bytes) => {
+          taken.set(objectName, bytes);
+          return Promise.resolve();
+        },
+        locate: () => Promise.resolve({ kind: 'gone', reason: 'not asked for here' }),
+        remove: () => Promise.resolve(),
+      };
+
+      const { walked, runDir } = await record({ sessionId: 'S-05', store });
+      if (walked.video?.state !== 'recorded') throw new Error('the session recorded nothing');
+
+      // The path a session JSON records is the run-directory-relative one, exactly as it is
+      // for a recording on disk: a session does not know where its video went.
+      expect(walked.video.path).toBe(runPaths('').video('S-05'));
+      expect(walked.video.durationMs).toBeGreaterThan(0);
+
+      // The bytes are in the store, under the run, and are a WebM something can measure.
+      const objectName = `${basename(runDir)}/${runPaths('').video('S-05')}`;
+      const stored = taken.get(objectName);
+      expect(stored).toBeDefined();
+      expect(readRecording(stored ?? new Uint8Array())?.durationMs).toBe(walked.video.durationMs);
+      // And the run directory holds no second copy of them.
+      expect(existsSync(join(runDir, walked.video.path))).toBe(false);
+
+      // The session the contract accepts carries the path and nothing of the store: no bucket
+      // name, no object URL and no credential, which is what `CONTEXT.md` requires of a run
+      // artifact.
+      const session = JSON.stringify(sessionSchema.parse(sessionOf(walked, 'S-05')));
+      expect(session).toContain(runPaths('').video('S-05'));
+      expect(session).not.toContain(VIDEO_BUCKET);
+      expect(session).not.toContain('storage.googleapis.com');
     },
     WALK_TIMEOUT_MS,
   );
