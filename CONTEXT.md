@@ -42,6 +42,7 @@ because section 8 predates them:
 | `@personavision/viewer`      | `apps/viewer` — the platform's web app. Added by its own ticket.                                                                                 |
 | `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience and site storage, and `personavision serve`.                                                    |
 | `@personavision/provider`    | The decision layer: the `DecisionProvider` interface, the offline deterministic policy and the provider-contract suite. Added by step #8 (#33).  |
+| `@personavision/improve`     | Path 2's closed loop: the one GitHub client, the change, its pull request, the preview URL and the comment. Added by step #227 (#297).           |
 
 The owner's direction of **2026-11-03** (`docs/FLOW.md` sections 11 to 17) adds two product paths, a real onboarding
 and a results page for 100-agent runs. It adds **one** package, `@personavision/improve` — path 2's closed loop: the
