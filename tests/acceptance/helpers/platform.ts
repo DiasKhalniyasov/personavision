@@ -19,7 +19,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeSession, openSession } from '@personavision/browser';
-import type { Device, PageHandle } from '@personavision/browser';
+import { startRun } from '../../../packages/cli/src/run/start.js';
+import type { CaptureSource, Device, PageHandle, TaskStep } from '@personavision/browser';
+import type { StartedRun } from '../../../packages/cli/src/run/start.js';
+import type { SiteAtLaunch, TestPipeline } from '../../../packages/platform/src/index.js';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -206,5 +209,90 @@ export const openBrowserOver = async (base: string, device: Device): Promise<Ope
     handle,
     offMachine: () => [...offMachine],
     close: () => closeSession(handle),
+  };
+};
+
+/*
+ * ─── The one-URL walk (#286) ──────────────────────────────────────────────────────────
+ *
+ * The product in this process rather than behind a port: the platform over a data directory
+ * of its own, and the pipeline it hands a started test to. The walk above drives seven
+ * screens through a browser and is slow for that reason; a hundred agents need neither a
+ * screen nor a port, so this half of the plumbing starts neither.
+ */
+
+/**
+ * The pipeline a platform-started test is run by: `personavision run`'s own.
+ *
+ * `packages/cli/src/run/start.ts` is shaped as the platform's `TestPipeline` so that the
+ * command line and the New test form drive **one** pipeline and write identical run
+ * directories. That is the seam a one-URL test crosses, so the walk is a caller of it and
+ * not a second copy of it — which is the whole reason this gate exists: the four packages
+ * are tested apart, and nothing else asks them to agree.
+ */
+export interface OneUrlPipelineOptions {
+  /** Where the run directory goes — the platform's own runs root. */
+  readonly runsRoot: string;
+  /** The replay. No browser is launched and nothing is downloaded. */
+  readonly source: CaptureSource;
+  /** The task's declared steps, which the capture set records. */
+  readonly steps: readonly TaskStep[];
+  /** How many sessions may be open at once — the per-site cap, named by the caller. */
+  readonly concurrency: number;
+  /** Every line the run reports. The walk reads the open run from inside it. */
+  readonly report: (line: string) => void;
+}
+
+export interface OneUrlPipeline {
+  readonly pipeline: TestPipeline;
+  /** What the run wrote: its directory, its artifact and the engine that actually ran. */
+  readonly ran: () => StartedRun;
+  /**
+   * The site the platform resolved and handed over, or `undefined` for a caller that named
+   * none. It is the seam #243 writes the run's own `site` block from, so a walk can see the
+   * site reach the pipeline before anything records it.
+   */
+  readonly site: () => SiteAtLaunch | undefined;
+}
+
+export const oneUrlPipeline = ({
+  runsRoot,
+  source,
+  steps,
+  concurrency,
+  report,
+}: OneUrlPipelineOptions): OneUrlPipeline => {
+  let started: StartedRun | null = null;
+  let launchedAgainst: SiteAtLaunch | undefined;
+
+  const pipeline: TestPipeline = async (request, audience, site) => {
+    launchedAgainst = site;
+    started = await startRun({
+      runsRoot,
+      request,
+      audience,
+      steps,
+      source,
+      concurrency,
+      // No API key, no model id, no PERSONAVISION_* variable: "offline" is asserted by
+      // running the sequence with an environment that holds nothing to run on a model with,
+      // the way `bareEnvironment` asserts it for the served walk above.
+      env: {},
+      report,
+    });
+    return {
+      runId: started.runId,
+      engineMode: started.engineMode,
+      ...(started.modelMode === undefined ? {} : { modelMode: started.modelMode }),
+    };
+  };
+
+  return {
+    pipeline,
+    ran: (): StartedRun => {
+      if (started === null) throw new Error('this pipeline has not been handed a test to run');
+      return started;
+    },
+    site: (): SiteAtLaunch | undefined => launchedAgainst,
   };
 };
