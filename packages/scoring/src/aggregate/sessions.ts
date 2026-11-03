@@ -111,7 +111,8 @@ export const stepWalk = (session: Session): readonly StepSpan[] => {
   const firstLookMs = new Map<number, number>();
   for (const fixation of session.fixations) {
     const seen = firstLookMs.get(fixation.screenIndex);
-    if (seen === undefined || fixation.tMs < seen) firstLookMs.set(fixation.screenIndex, fixation.tMs);
+    if (seen === undefined || fixation.tMs < seen)
+      firstLookMs.set(fixation.screenIndex, fixation.tMs);
   }
 
   // Right to left, so that a screen nobody looked at can take the start of the screen after
@@ -217,9 +218,7 @@ export const funnelSliceSpecs = (run: Run, sessions: readonly Session[]): Funnel
     { variant: null, segment: null },
     ...segments.map((segment) => ({ variant: null, segment })),
     ...variants.map((variant) => ({ variant: variant.id, segment: null })),
-    ...variants.flatMap((variant) =>
-      segments.map((segment) => ({ variant: variant.id, segment })),
-    ),
+    ...variants.flatMap((variant) => segments.map((segment) => ({ variant: variant.id, segment }))),
   ];
 
   return narrowings.flatMap(({ variant, segment }) => {
