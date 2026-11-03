@@ -151,6 +151,112 @@ describe('the file-backed store', () => {
     });
   });
 
+  describe('sites', () => {
+    /**
+     * A token the caller mints. The store is handed one rather than minting it, so a second
+     * implementation of the interface inherits the shape rather than reinventing it; what
+     * mints one for real is `mintSiteToken`, asserted in `sites.test.ts`.
+     */
+    const aSite = (url = 'https://app.clipforge.example/create', token = 'pv_7f3c91a2d84e') => ({
+      url,
+      token,
+    });
+
+    it('round-trips a site and lists it for its own workspace only', async () => {
+      const mine = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const theirs = await store.workspaces.create({ name: 'Theirs', memberAccountIds: [] });
+      const saved = await store.sites.create(mine.id, aSite());
+
+      expect(saved.url).toBe('https://app.clipforge.example/create');
+      expect(saved.token).toBe('pv_7f3c91a2d84e');
+      expect(await store.sites.byId(mine.id, saved.id)).toEqual(saved);
+      expect(await store.sites.list(mine.id)).toEqual([saved]);
+      expect(await store.sites.list(theirs.id)).toEqual([]);
+      expect(await store.sites.byId(theirs.id, saved.id)).toBeNull();
+    });
+
+    it('opens every site unverified, with no method and no moment', async () => {
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const saved = await store.sites.create(workspace.id, aSite());
+
+      expect(saved.verification).toEqual({ state: 'unverified', method: null, verifiedAt: null });
+    });
+
+    it('stores the URL as it was given, port, credentials and all', async () => {
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const url = 'https://me:pw@Staging.ClipForge.Example:8443/create?a=1';
+      const saved = await store.sites.create(workspace.id, aSite(url));
+
+      expect(saved.url).toBe(url);
+    });
+
+    it('has no path through it that reads a site back as verified', async () => {
+      // The one thing that may verify a site is a passing check, which is a later ticket of
+      // #221: this interface publishes no writer for the block, so there is no path through
+      // the store by which a site could be read back as anything else. Removing one does not
+      // verify it either — the state and the removal are different facts.
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const unverified = { state: 'unverified', method: null, verifiedAt: null };
+
+      const created = await store.sites.create(workspace.id, aSite());
+      expect(created.verification).toEqual(unverified);
+      expect((await store.sites.byId(workspace.id, created.id))?.verification).toEqual(unverified);
+      expect((await store.sites.list(workspace.id))[0]?.verification).toEqual(unverified);
+      expect((await store.sites.softDelete(workspace.id, created.id)).verification).toEqual(
+        unverified,
+      );
+    });
+
+    it('keeps a soft-deleted site readable and leaves it out of the list', async () => {
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const saved = await store.sites.create(workspace.id, aSite());
+      const deleted = await store.sites.softDelete(workspace.id, saved.id);
+
+      expect(deleted.deletedAt).not.toBeNull();
+      expect(await store.sites.byId(workspace.id, saved.id)).toEqual(deleted);
+      expect(await store.sites.list(workspace.id)).toEqual([]);
+      expect(await store.sites.list(workspace.id, { includeDeleted: true })).toEqual([deleted]);
+    });
+
+    it('does not move the moment of removal when a site is removed twice', async () => {
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const saved = await store.sites.create(workspace.id, aSite());
+      const first = await store.sites.softDelete(workspace.id, saved.id);
+      const again = await store.sites.softDelete(workspace.id, saved.id);
+
+      expect(again).toEqual(first);
+    });
+
+    it('refuses to remove another workspace’s site', async () => {
+      const mine = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const theirs = await store.workspaces.create({ name: 'Theirs', memberAccountIds: [] });
+      const saved = await store.sites.create(mine.id, aSite());
+
+      await expect(store.sites.softDelete(theirs.id, saved.id)).rejects.toThrow(/site/);
+      expect((await store.sites.byId(mine.id, saved.id))?.deletedAt).toBeNull();
+    });
+
+    it('gives two workspaces that add the same URL two records of their own', async () => {
+      const mine = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const theirs = await store.workspaces.create({ name: 'Theirs', memberAccountIds: [] });
+      const url = 'https://app.clipforge.example/create';
+      const ours = await store.sites.create(mine.id, aSite(url, 'pv_aaaaaaaaaaaa'));
+      const them = await store.sites.create(theirs.id, aSite(url, 'pv_bbbbbbbbbbbb'));
+
+      expect(ours.id).not.toBe(them.id);
+      expect(await store.sites.list(mine.id)).toEqual([ours]);
+      expect(await store.sites.list(theirs.id)).toEqual([them]);
+    });
+
+    it('keeps a site across a restart', async () => {
+      const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
+      const saved = await store.sites.create(workspace.id, aSite());
+
+      const reopened = await openFileStore(dataDir);
+      expect(await reopened.sites.byId(workspace.id, saved.id)).toEqual(saved);
+    });
+  });
+
   describe('sessions', () => {
     it('reads a session back and forgets it when it is deleted', async () => {
       const session = await store.sessions.create({

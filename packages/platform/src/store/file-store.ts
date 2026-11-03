@@ -9,10 +9,13 @@ import type {
   AudienceStore,
   NewAccount,
   NewSession,
+  NewSite,
   NewWorkspace,
   PlatformStore,
   SessionRecord,
   SessionStore,
+  SiteRecord,
+  SiteStore,
   WorkspaceRecord,
   WorkspaceStore,
 } from './types.js';
@@ -225,6 +228,49 @@ const fileAudienceStore = (collection: JsonCollection<AudienceRecord>): Audience
   };
 };
 
+const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
+  const owned = async (workspaceId: string, siteId: string): Promise<SiteRecord> => {
+    const record = await collection.get(siteId);
+    // A site of another workspace is not this workspace's to see, so it is missing rather
+    // than forbidden — that another workspace holds this URL is not disclosed, which is the
+    // rule `visibleRuns` already follows for runs.
+    if (record === null || record.workspaceId !== workspaceId) throw missing('site', siteId);
+    return record;
+  };
+  return {
+    create: async (workspaceId, site: NewSite) =>
+      collection.put({
+        id: randomUUID(),
+        workspaceId,
+        url: site.url,
+        token: site.token,
+        // Unverified, stated here rather than taken from an argument: a created site has
+        // passed no check, and `SiteStore` offers nothing that could say otherwise.
+        verification: { state: 'unverified', method: null, verifiedAt: null },
+        createdAt: now(),
+        updatedAt: now(),
+        deletedAt: null,
+      }),
+    byId: async (workspaceId, siteId) => {
+      const record = await collection.get(siteId);
+      return record !== null && record.workspaceId === workspaceId ? record : null;
+    },
+    list: async (workspaceId, options) =>
+      (await collection.all()).filter(
+        (record) =>
+          record.workspaceId === workspaceId &&
+          (options?.includeDeleted === true || record.deletedAt === null),
+      ),
+    softDelete: async (workspaceId, siteId) => {
+      const record = await owned(workspaceId, siteId);
+      // Removing a site twice is the same removal: the second one answers the record as it
+      // stands rather than moving `deletedAt` off the moment the site was actually removed.
+      if (record.deletedAt !== null) return record;
+      return collection.put({ ...record, deletedAt: now(), updatedAt: now() });
+    },
+  };
+};
+
 const fileSessionStore = (collection: JsonCollection<SessionRecord>): SessionStore => ({
   create: async (session: NewSession) =>
     collection.put({
@@ -252,6 +298,7 @@ export const openFileStore = async (dataDir: string): Promise<PlatformStore> => 
     accounts: fileAccountStore(new JsonCollection<AccountRecord>(dataDir, 'accounts')),
     workspaces: fileWorkspaceStore(new JsonCollection<WorkspaceRecord>(dataDir, 'workspaces')),
     audiences: fileAudienceStore(new JsonCollection<AudienceRecord>(dataDir, 'audiences')),
+    sites: fileSiteStore(new JsonCollection<SiteRecord>(dataDir, 'sites')),
     sessions: fileSessionStore(new JsonCollection<SessionRecord>(dataDir, 'sessions')),
   };
 };

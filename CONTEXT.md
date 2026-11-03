@@ -12,6 +12,22 @@ The product's vocabulary — fixation, saccade, dwell, area of interest, time to
 
 It is not restated here. Read it there, and use those words in code, tests, issues and UI copy. Severity, outcome, attribution and score-band names come from the `--sev-*`, `--outcome-*`, `--attr-*` and `--score-*` tokens in `docs/design/tokens.css`.
 
+Three words the owner's direction of **2026-11-03** adds, fixed by `docs/FLOW.md` section 13 and written down here
+because section 8 predates them:
+
+- A **site** is a URL that belongs to a workspace. It is what a test runs against and what the per-site caps are
+  counted against. A site is listed, read and removed only through the workspace that holds it, and a site of another
+  workspace answers **404 and not 403** — that somebody else holds that URL is not disclosed. The same URL added by two
+  workspaces is two sites. Removing one is a soft delete, so the site a finished test ran against stays readable.
+- A site's **verification token** is a short public string — `pv_` and hex — minted by the platform, one per site. It is
+  a **proof of control, not a secret**: the user publishes it themselves as a DNS record, a meta tag or a file, and the
+  platform answers it over the API and prints it on screen with the line to copy. Nothing hashes it, redacts it or
+  handles it as a credential. Two workspaces that add the same URL get two tokens, so one workspace's published token
+  is never another's proof.
+- A site's **verification state** is `unverified` or `verified`, with the method that proved it and the moment it was
+  proved. **Only a check the platform ran itself may move it** — never a submitted field, and never a box a user ticks.
+  The state gates scale rather than trying: an unverified site is testable, with fewer agents and fewer runs an hour.
+
 ## Module map
 
 | Package                      | Owns                                                                                                                                             |
@@ -24,7 +40,7 @@ It is not restated here. Read it there, and use those words in code, tests, issu
 | `@personavision/personas`    | The seeded persona **generator**: an audience in, people out. Trait sampling and the device mix.                                                 |
 | `@personavision/calibration` | Scores the engine against the UEyes benchmark and fits its configuration. The only place a human-likeness figure is produced. Added by step #11. |
 | `@personavision/viewer`      | `apps/viewer` — the platform's web app. Added by its own ticket.                                                                                 |
-| `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience storage and `personavision serve`.                                                              |
+| `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience and site storage, and `personavision serve`.                                                    |
 | `@personavision/provider`    | The decision layer: the `DecisionProvider` interface, the offline deterministic policy and the provider-contract suite. Added by step #8 (#33).  |
 
 The owner's direction of **2026-11-03** (`docs/FLOW.md` sections 11 to 17) adds two product paths, a real onboarding
