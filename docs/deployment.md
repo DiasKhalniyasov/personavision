@@ -96,7 +96,7 @@ from the session-video step this page depends on.
 | `PV_RUNNER_IMAGE`        | the image the job runs, **tag included**. Recorded on the run                     |
 | `PV_RUNNER_CONCURRENCY`  | **our own** ceiling on sessions in flight. Never a per-site cap — see below       |
 | `PV_RUNNER_START_ALLOWANCE_MS` | how long an execution may take to be scheduled and pull the image before the wait counts against the session. Optional; five minutes |
-| `PV_VIDEO_BUCKET`        | where a remote session's output comes back through (#316). Required for `cloud-run` |
+| `PV_VIDEO_BUCKET`        | the Google Cloud Storage bucket session videos live in. Required for `cloud-run` |
 
 **Not one of them is a credential**, and this repository reads no variable whose name is key-,
 token-, secret- or credential-shaped except the one sanctioned model-key read in
@@ -140,14 +140,29 @@ own `--concurrency` flag and this variable does not reach it.
 ## What a remote run needs that this does not provide
 
 A Cloud Run task cannot write to the coordinator's disk, so a remote session's session file, its
-run contributions and its video reach the run directory through the **object store of #316**,
-which `PV_VIDEO_BUCKET` selects. That store is not in this build. Until it lands:
+run contributions and its video reach the run directory through the object store `PV_VIDEO_BUCKET`
+selects. **The video half of that is in this build** and the rest is not
+(`docs/adr/0005-where-session-videos-live.md`): a session's recording is written to the bucket and
+served from it, and the session file and the run contributions still have no way home. Until they
+do:
 
 - `PV_RUNNER=cloud-run` with no `PV_VIDEO_BUCKET` is **refused before any execution is
   created**, with that reason;
 - with one set, the coordinator creates executions and the task runs its session, writes it and
-  then exits saying the upload is the object store's — which the coordinator reads as a failed
-  execution and records as that session's typed automation failure. Nothing is lost silently and
-  nothing is reported as collected that was not.
+  then exits saying the session file's own upload is still missing — which the coordinator reads
+  as a failed execution and records as that session's typed automation failure. Nothing is lost
+  silently and nothing is reported as collected that was not.
 
-That is why the two are built in this order.
+That is why these are built in this order.
+
+### `PV_VIDEO_BUCKET` is read on its own, and a local run may set it
+
+It is **not** only a remote-run variable. It is read by
+`@personavision/contract`'s `selectVideoStore`, which is the one function in the repository that
+reads it, and it decides where *any* session's recording goes — a local run with it set writes its
+videos to the bucket and the read-only run mount answers `GET /runs/<runId>/videos/S-NN.webm` with
+a 302 to a short-lived signed URL instead of the bytes. Unset, videos are files in the run
+directory and nothing reaches for a bucket, which is what every test, the acceptance suite and the
+demo run on. The bucket, its thirty-day lifecycle rule and its credential are #228; this
+repository reads the bucket **name** and nothing else, and the signing identity is the one the
+process already runs as.

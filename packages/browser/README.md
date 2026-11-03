@@ -143,10 +143,23 @@ at a frame showing something else. A cap does not touch the session, which keeps
 still scored.
 
 **A recording that fails is not a failed session.** A videos directory that cannot be made, a
-context that opened no recording, a file that cannot be saved or measured: each comes back as
-`{ state: 'absent', reason }` with the reason in words, the session otherwise complete, and no
-automation failure anywhere. The one failure that is known before a browser is launched — the
-directory — is found there, so a session whose recording cannot start never leaks a browser.
+context that opened no recording, a file that cannot be saved or measured, an upload that was
+refused: each comes back as `{ state: 'absent', reason }` with the reason in words, the session
+otherwise complete, and no automation failure anywhere. The one failure that is known before a
+browser is launched — the directory — is found there, so a session whose recording cannot start
+never leaks a browser.
+
+**Where the bytes end up is one variable, and this package never branches on it.**
+`PV_VIDEO_BUCKET` unset — which is every test, the acceptance suite and the demo — means the file
+stays in the run directory, exactly as above. Set, it names a Google Cloud Storage bucket, and
+`storeRecording` hands the measured bytes to the store `@personavision/contract`'s
+`selectVideoStore` answers with, then removes the local copy so one recording has one home. The
+session's own block is identical either way: the same run-directory-relative
+`videos/S-NN.webm`, the same duration, the same offsets, and **no bucket name, object URL or
+credential anywhere in it**. A caller that wants its own store passes one —
+`createLiveSource({ video: { runDir, sessionId, store } })` — and `null` is the run directory,
+said explicitly. `docs/adr/0005-where-session-videos-live.md` records the choice, what it costs
+and how the recording is then served.
 
 A recording outlasts its session by about a second, because Playwright holds the last frame when
 it stops recording. The duration reported is the file's own, read back off the bytes rather than
@@ -232,6 +245,7 @@ function each behind it without changing a name.
 | `withCache`                          | Capture caching, keyed on content                                    |
 | `createLiveSource` `walkTask`        | The `CaptureSource` over Chromium, and the walk above it             |
 | `prepareRecording` `videoFrame`      | A session's recording, and the 720p frame it is recorded at          |
+| `storeRecording`                     | The finished bytes handed to the store one variable chooses          |
 | `readRecording` `cutRecording`       | A recording's own duration and frame; the same file cut at a cap     |
 | `createFixtureSource`                | The `CaptureSource` that replays captures from disk                  |
 
@@ -332,9 +346,13 @@ serves it from disk, with no dependency of its own):
   non-empty WebM at the contract's path whose measured duration is the one the session
   reports, the 720p frame, the offsets of every screen and action parsed against the
   contract's session schema, the two caps cutting the file and leaving the entries past them
-  without an offset, and the unwritable videos directory that leaves the session complete with
-  its video absent and no automation failure. The frame arithmetic and bytes that are not a
-  WebM need no browser.
+  without an offset, the unwritable videos directory that leaves the session complete with
+  its video absent and no automation failure, and one walk handed a fake object store whose
+  session records the same contract path and nothing of the store. The frame arithmetic and
+  bytes that are not a WebM need no browser.
+- `test/video-store.test.ts` — the hand-over on its own: no store leaves the file where it is,
+  a store takes the bytes under the run and the local copy goes, a store that refuses is a
+  stated absence naming a status and no bucket, and neither mode writes a log line. No browser.
 - `test/budget.test.ts` — the retry and wall-clock caps and the integrity counters. No browser.
 - `test/run-projection.test.ts` — the two `run.json` arrays, placed into the committed
   example run and parsed by `@personavision/contract`, and that a screen a dozen sessions
