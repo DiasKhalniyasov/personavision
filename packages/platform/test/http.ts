@@ -5,6 +5,7 @@ import type { Platform } from '../src/platform.js';
 import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
 import type { Middleware } from '../src/server/routes/types.js';
+import type { GithubAppRegistration } from '../src/server/routes/github.js';
 import type { SiteCheckDeps, SiteConnections } from '../src/site/index.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 import type { TestDirectories } from './workspace.js';
@@ -44,6 +45,12 @@ export interface TestServerOptions {
    * that no repository is connected to any site.
    */
   siteConnections?: SiteConnections;
+  /**
+   * Whether a GitHub App is registered, and where it is installed from (#299). Omitted — as
+   * every suite but the one about the connection omits it — leaves the default in place: not
+   * registered, which is the state until the owner registers one (#231).
+   */
+  githubApp?: GithubAppRegistration;
 }
 
 export interface TestServer {
@@ -72,6 +79,7 @@ export const startTestServer = async ({
   pipeline,
   siteChecks,
   siteConnections,
+  githubApp,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
   const runIds: string[] = [];
@@ -81,6 +89,7 @@ export const startTestServer = async ({
     pipeline,
     siteChecks,
     siteConnections,
+    githubApp,
   });
   const server = await startPlatformServer({
     guard: platform.guard,

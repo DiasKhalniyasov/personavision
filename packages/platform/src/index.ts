@@ -60,6 +60,19 @@ export { runRoutes } from './server/routes/runs.js';
 export type { RunRouteOptions } from './server/routes/runs.js';
 
 export {
+  githubRoutes,
+  GITHUB_APP_NOT_REGISTERED,
+  GITHUB_APP_TICKET,
+  NO_CONNECTION,
+  unregisteredGithubApp,
+} from './server/routes/github.js';
+export type {
+  GithubAppRegistration,
+  GithubConnectionBody,
+  GithubRouteOptions,
+} from './server/routes/github.js';
+
+export {
   addSite,
   AVAILABLE_SITE_VERIFICATION_METHODS,
   checkConnectedRepository,
@@ -82,6 +95,7 @@ export {
   SiteCheckNotAvailableError,
   siteVerificationPair,
   SiteUrlNotAcceptedError,
+  storedSiteConnections,
   verificationDomains,
   verifySite,
 } from './site/index.js';
@@ -124,7 +138,10 @@ export type {
   AccountStore,
   AudienceRecord,
   AudienceStore,
+  GithubInstallationRecord,
+  GithubInstallationStore,
   NewAccount,
+  NewGithubInstallation,
   NewSession,
   NewSite,
   NewWorkspace,

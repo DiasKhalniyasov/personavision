@@ -7,7 +7,10 @@ import type {
   AccountStore,
   AudienceRecord,
   AudienceStore,
+  GithubInstallationRecord,
+  GithubInstallationStore,
   NewAccount,
+  NewGithubInstallation,
   NewSession,
   NewSite,
   NewWorkspace,
@@ -304,6 +307,36 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
   };
 };
 
+/**
+ * The workspace's connected repository, filed under the workspace's own id.
+ *
+ * That key is the "one repository per workspace" rule rather than a check on top of it: a
+ * second connection writes the same record, so there is never a second to read, and nothing
+ * under another workspace's key is reachable from here (#299).
+ */
+const fileGithubInstallationStore = (
+  collection: JsonCollection<GithubInstallationRecord>,
+): GithubInstallationStore => ({
+  connect: async (workspaceId, installation: NewGithubInstallation) =>
+    collection.put({
+      id: workspaceId,
+      workspaceId,
+      installationId: installation.installationId,
+      repository: installation.repository,
+      siteId: installation.siteId,
+      // The store's clock, so the moment stored is the moment it was connected rather than
+      // whatever reached the store in a body.
+      connectedAt: now(),
+    }),
+  forWorkspace: async (workspaceId) => {
+    const record = await collection.get(workspaceId);
+    // The id is the workspace, so this comparison can only fail on a record written by hand
+    // into the file — and then it fails closed: another workspace's connection verifies
+    // nothing here.
+    return record !== null && record.workspaceId === workspaceId ? record : null;
+  },
+});
+
 const fileSessionStore = (collection: JsonCollection<SessionRecord>): SessionStore => ({
   create: async (session: NewSession) =>
     collection.put({
@@ -333,5 +366,8 @@ export const openFileStore = async (dataDir: string): Promise<PlatformStore> => 
     audiences: fileAudienceStore(new JsonCollection<AudienceRecord>(dataDir, 'audiences')),
     sites: fileSiteStore(new JsonCollection<SiteRecord>(dataDir, 'sites')),
     sessions: fileSessionStore(new JsonCollection<SessionRecord>(dataDir, 'sessions')),
+    githubInstallations: fileGithubInstallationStore(
+      new JsonCollection<GithubInstallationRecord>(dataDir, 'github-installations'),
+    ),
   };
 };

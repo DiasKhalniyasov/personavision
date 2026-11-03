@@ -53,7 +53,7 @@ export type { FetchedBody } from './fetch-once.js';
 
 export { checkConnectedRepository } from './check-repository.js';
 
-export { noSiteConnections } from './connections.js';
+export { noSiteConnections, storedSiteConnections } from './connections.js';
 export type { SiteConnections, SiteRepositoryConnection } from './connections.js';
 
 export {

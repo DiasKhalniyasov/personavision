@@ -1,7 +1,14 @@
 import type { Audience, ModelMode } from '@personavision/contract';
+import type { GithubInstallationStore } from './connections.js';
+
+export type {
+  GithubInstallationRecord,
+  GithubInstallationStore,
+  NewGithubInstallation,
+} from './connections.js';
 
 /**
- * The store seam: what the platform keeps, and the five interfaces it keeps it behind.
+ * The store seam: what the platform keeps, and the six interfaces it keeps it behind.
  *
  * There is one implementation here — file-backed, under a data directory, with no ORM, no
  * migration framework and nothing that reaches the network. A managed database later is a
@@ -332,4 +339,10 @@ export interface PlatformStore {
   readonly audiences: AudienceStore;
   readonly sites: SiteStore;
   readonly sessions: SessionStore;
+  /**
+   * The repository each workspace has connected, which is what unlocks path 2 and what
+   * verifies the site that repository deploys (`docs/FLOW.md` sections 15 and 13, #299).
+   * Declared in `connections.ts`, beside the record it keeps.
+   */
+  readonly githubInstallations: GithubInstallationStore;
 }

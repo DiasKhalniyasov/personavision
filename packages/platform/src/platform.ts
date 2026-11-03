@@ -4,9 +4,12 @@ import { sessionGuard } from './auth/guard.js';
 import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
+import { githubRoutes } from './server/routes/github.js';
+import type { GithubAppRegistration } from './server/routes/github.js';
 import { runRoutes } from './server/routes/runs.js';
 import { siteRoutes } from './server/routes/sites.js';
 import type { TestPipeline } from './run/start.js';
+import { storedSiteConnections } from './site/index.js';
 import type { SiteCheckDeps, SiteConnections } from './site/index.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
@@ -47,13 +50,21 @@ export interface PlatformOptions {
   siteChecks?: SiteCheckDeps;
   /**
    * Whether a GitHub repository is connected to a site, which the `connected-repository`
-   * check asks rather than looks for (#238). Absent — as it is today — means **no repository
-   * is connected to any site**, so that check answers the sentence saying so.
+   * check asks rather than looks for (#238). Absent means **the store's own answer**: the
+   * repository this workspace connected, or nothing where it has connected none (#299).
    *
-   * This is the one thing the "Improve my site" step (#227) has to wire in: it passes its
-   * installation lookup here, the way `pipeline` is passed, and nothing else changes.
+   * It stays an option because that is the seam a test replaces — a check's lookup can then
+   * answer whatever a case needs without a record on disk — and because #227 may put its
+   * installation lookup here. It is no longer the thing that makes a connection real.
    */
   siteConnections?: SiteConnections;
+  /**
+   * Whether a GitHub App is registered, and where a user installs it (#231). Absent — as it
+   * is until the owner registers one — means **not registered**, which is what
+   * `/settings/github` and the locked path-2 card render and what `POST /github/connect`
+   * answers. #319 owns the read behind it; nothing here reads the environment.
+   */
+  githubApp?: GithubAppRegistration;
 }
 
 export interface Platform {
@@ -93,6 +104,7 @@ export const createPlatform = async ({
   pipeline,
   siteChecks,
   siteConnections,
+  githubApp,
 }: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
   const resolvedRunsRoot = resolve(runsRoot);
@@ -129,7 +141,16 @@ export const createPlatform = async ({
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
-      ...siteRoutes({ store, readSession, siteChecks, siteConnections }),
+      ...siteRoutes({
+        store,
+        readSession,
+        siteChecks,
+        // The real lookup unless a caller passes its own: the `connected-repository` check
+        // reads the workspace's connected repository out of the store, which is the one path
+        // to a site verified that way (#299).
+        siteConnections: siteConnections ?? storedSiteConnections(store.githubInstallations),
+      }),
+      ...githubRoutes({ store, readSession, app: githubApp }),
       ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),
