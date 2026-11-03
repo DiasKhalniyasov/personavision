@@ -57,6 +57,12 @@ export type {
   RecordedTransport,
 } from './github/recorded.js';
 
+export { COMMENT_MARKER, commentBody, SIMULATED_LABEL } from './comment/body.js';
+export type { CommentDraft, CommentInput, CommentRefused, RunComment } from './comment/body.js';
+
+export { findRunComment, postRunComment } from './comment/post.js';
+export type { RunCommentPosted, RunCommentResult, RunCommentUpdated } from './comment/post.js';
+
 export { createFetchProbe, DEFAULT_PROBE_TIMEOUT_MS } from './preview/probe.js';
 export type { PreviewProbe, PreviewProbeAnswer } from './preview/probe.js';
 
