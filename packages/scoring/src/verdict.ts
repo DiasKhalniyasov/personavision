@@ -2,7 +2,7 @@ import type { Audience, Verdict } from '@personavision/contract';
 import { audienceSentenceFor, completionReason, reasonFrom } from './audienceSentence.js';
 import { bandOf, bandsDisjoint, type Band } from './bands.js';
 import type { Finding } from './findings/index.js';
-import { judgeHoldout, type ChangeUnderTest } from './holdout.js';
+import { judgeHoldout, type ChangeUnderTest, type OnTheOriginalSeeds } from './holdout.js';
 import type { VariantScore } from './score.js';
 
 /**
@@ -374,21 +374,32 @@ export const verdict: VerdictWriter = (scores, findings, audience, change) => {
     separated: headlineSeparated,
   });
 
-  // The change's gain on the original seeds, by the verdict's own two gates and no others:
-  // the bands it already compared and the seed groups it already counted. The baseline
-  // being the harder of the two is what makes the gap a gain rather than a loss, and a
-  // group that put the baseline lower is a group that disagreed.
+  // What the change did on the seeds it was chosen on, by the verdict's own two gates and
+  // no others: the bands it has already compared and the seed groups it has already
+  // counted. A group that put the baseline lower is a group that disagreed.
+  //
+  // The gain also has to be **this** comparison. The bands and the groups above are the
+  // hardest variant against the easiest, which on a run of more than two need not be the
+  // baseline and the change; and the variant the headline recommends is the one more of
+  // the audience completed, which is not always the one that scored easier. When either
+  // comes apart from the change, the run has not shown the change ahead, and the holdout
+  // is told that rather than being asked to confirm a gain nothing measured.
+  const onTheOriginalSeeds = (tested: ChangeUnderTest): OnTheOriginalSeeds => {
+    if (!disjoint || agreement.comparable === 0 || agreement.agreeing !== agreement.comparable) {
+      return 'did-not-separate';
+    }
+    const isThisComparison =
+      harder.variant === tested.baselineVariant && easiest?.variant === tested.changeVariant;
+    return isThisComparison && preferred.variant === tested.changeVariant ? 'won' : 'not-ahead';
+  };
+
   const holdout =
     change === undefined
       ? null
       : judgeHoldout({
           scores,
           change,
-          gainHeld:
-            disjoint &&
-            harder.variant === change.baselineVariant &&
-            agreement.comparable > 0 &&
-            agreement.agreeing === agreement.comparable,
+          onTheOriginalSeeds: onTheOriginalSeeds(change),
           headline: audienceSentence,
           audience,
         });

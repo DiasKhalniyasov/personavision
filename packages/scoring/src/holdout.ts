@@ -1,4 +1,4 @@
-import type { Audience, HoldoutVerdict } from '@personavision/contract';
+import type { Audience, HoldoutFigures, HoldoutVerdict } from '@personavision/contract';
 import { goalPhrase } from './audienceSentence.js';
 import { bandsDisjoint, type Band } from './bands.js';
 import type { VariantScore } from './score.js';
@@ -51,16 +51,26 @@ export interface HoldoutLine {
   readonly audienceSentence: string;
 }
 
+/**
+ * What the change did on the seeds it was chosen on, by the verdict's own bands and
+ * seed-group agreement — the half of the standard this function does not recompute.
+ *
+ * The two ways of not winning are kept apart because they are different sentences: a run
+ * whose bands overlapped did not separate the two versions, and a run that separated them
+ * and left the change behind is a change that did not come out ahead. Telling the second
+ * one that nothing separated would be untrue.
+ */
+export type OnTheOriginalSeeds = 'won' | 'did-not-separate' | 'not-ahead';
+
 export interface HoldoutInput {
   /** One row per variant × task, as `score()` returns them; the holdout figures are on them. */
   readonly scores: readonly VariantScore[];
   readonly change: ChangeUnderTest;
   /**
-   * Whether the change's gain on the original seeds held: the verdict's own bands and
-   * seed-group agreement, already computed. The holdout confirms a gain or fails to; with
-   * no gain of its own this run has nothing for it to confirm.
+   * What the change did on the original seeds. The holdout confirms a gain or fails to;
+   * with no gain of its own this run has nothing for it to confirm.
    */
-  readonly gainHeld: boolean;
+  readonly onTheOriginalSeeds: OnTheOriginalSeeds;
   /** The headline the verdict would carry if no holdout had run. */
   readonly headline: string;
   readonly audience: Audience;
@@ -84,32 +94,81 @@ const onScale = (value: number): number => Math.min(Math.max(value, 0), 100);
  * σ is the spread of a share over the people behind it, `sqrt(p(1-p)/n)`: on 20 people a
  * few points apart the bands overlap and the holdout has not judged anything, which is the
  * honest reading of a holdout that size and the reason `null` is a main path.
+ *
+ * **The share is counted with one more success and one more failure than were seen**, so a
+ * holdout everybody or nobody finished on has a band and not a point. Taken literally,
+ * `sqrt(p(1-p)/n)` is exactly zero at 0 and at 1, and `bandsDisjoint` is strict: 20 of 20
+ * against 19 of 20 would come apart and the product would report *not confirmed* over one
+ * person — the false accusation this function exists to avoid. The two added observations
+ * say what twenty people cannot: that the next one could go either way. They move the band
+ * and nothing else; no figure printed anywhere is this number.
  */
 const completionBand = ({ success, scored }: HoldoutSide): Band => {
-  const rate = success / scored;
-  const sd = Math.sqrt((rate * (1 - rate)) / scored) * 100;
+  const people = scored + 2;
+  const rate = (success + 1) / people;
+  const sd = Math.sqrt((rate * (1 - rate)) / people) * 100;
   return { low: onScale(rate * 100 - sd), high: onScale(rate * 100 + sd) };
 };
 
+/** One variant's holdout figures, by the task they were measured on. */
+const holdoutByTask = (
+  scores: readonly VariantScore[],
+  variant: string,
+): Map<string, HoldoutFigures> => {
+  const byTask = new Map<string, HoldoutFigures>();
+  for (const score of scores) {
+    if (score.variant === variant && score.holdout !== undefined) {
+      byTask.set(score.taskId, score.holdout);
+    }
+  }
+  return byTask;
+};
+
+/** The holdout's two sides, when there is a pair of them to compare. */
+interface HoldoutPair {
+  readonly before: HoldoutSide;
+  readonly after: HoldoutSide;
+}
+
 /**
- * The holdout's figures for one variant, summed across its score rows.
+ * The holdout's figures on the two versions, summed over the tasks **both** of them were
+ * measured on.
  *
  * A run has one row per variant × task and the holdout is one set of people, so the line
- * the Improve screen prints is their figures over the whole run. `null` when no row of
- * that variant carries holdout figures, which is a score no holdout was measured on.
+ * the Improve screen prints is their figures over the run. Only tasks measured on both
+ * sides are summed — the rule `seedGroupAgreement` already applies to seeds — because a
+ * baseline figure from one task against a change figure from another is not a before and
+ * after of anything. `null` when the two sides share no task, which is a holdout with
+ * nothing to compare.
  */
-const holdoutSideOf = (scores: readonly VariantScore[], variant: string): HoldoutSide | null => {
-  let success = 0;
-  let scored = 0;
-  let measured = false;
-  for (const score of scores) {
-    if (score.variant !== variant || score.holdout === undefined) continue;
-    measured = true;
-    success += score.holdout.outcomeCounts.success;
-    scored += score.holdout.scoredSessionCount;
+const holdoutPairOf = (
+  scores: readonly VariantScore[],
+  { baselineVariant, changeVariant }: ChangeUnderTest,
+): HoldoutPair | null => {
+  const before = holdoutByTask(scores, baselineVariant);
+  const after = holdoutByTask(scores, changeVariant);
+  const sides = { before: { success: 0, scored: 0 }, after: { success: 0, scored: 0 } };
+  for (const [taskId, beforeFigures] of before) {
+    const afterFigures = after.get(taskId);
+    if (afterFigures === undefined) continue;
+    for (const [side, figures] of [
+      ['before', beforeFigures],
+      ['after', afterFigures],
+    ] as const) {
+      sides[side].success += figures.outcomeCounts.success;
+      sides[side].scored += figures.scoredSessionCount;
+    }
   }
-  return measured && scored > 0 ? { success, scored } : null;
+  return sides.before.scored > 0 && sides.after.scored > 0 ? sides : null;
 };
+
+/** Whether this run measured a holdout at all, on either of the two versions. */
+const ranAHoldout = (scores: readonly VariantScore[], change: ChangeUnderTest): boolean =>
+  scores.some(
+    (score) =>
+      score.holdout !== undefined &&
+      (score.variant === change.baselineVariant || score.variant === change.changeVariant),
+  );
 
 /** The prototype's words for a holdout that moved with the rest of the audience. */
 const CONFIRMED_REASON =
@@ -154,36 +213,46 @@ const couldNotJudge = (headline: string, because: string): HoldoutLine => ({
 export const judgeHoldout = ({
   scores,
   change,
-  gainHeld,
+  onTheOriginalSeeds,
   headline,
   audience,
 }: HoldoutInput): HoldoutLine => {
-  const before = holdoutSideOf(scores, change.baselineVariant);
-  const after = holdoutSideOf(scores, change.changeVariant);
-
-  if (before === null && after === null) {
+  if (!ranAHoldout(scores, change)) {
     return { verdict: 'none', confirmed: null, reason: null, audienceSentence: headline };
   }
-  if (before === null || after === null) {
+  const pair = holdoutPairOf(scores, change);
+  if (pair === null) {
     return couldNotJudge(
       headline,
       'it was measured on only one of the two versions, so there is nothing to compare',
     );
   }
-  if (!gainHeld) {
+  if (onTheOriginalSeeds === 'did-not-separate') {
     return couldNotJudge(
       headline,
       'this test did not separate the two versions, so there is no gain for it to confirm',
     );
   }
-  if (!bandsDisjoint(completionBand(before), completionBand(after))) {
+  if (onTheOriginalSeeds === 'not-ahead') {
+    return couldNotJudge(
+      headline,
+      'the change did not come out ahead on the seeds it was chosen on, so there is no gain for it to confirm',
+    );
+  }
+
+  const { before, after } = pair;
+  const bandBefore = completionBand(before);
+  const bandAfter = completionBand(after);
+  if (!bandsDisjoint(bandBefore, bandAfter)) {
     return couldNotJudge(
       headline,
       `the ${people(after.scored)} it ran on cannot tell the two versions apart`,
     );
   }
 
-  const movedWithThem = after.success / after.scored > before.success / before.scored;
+  // The bands came apart, so which of them is higher is the whole of the direction:
+  // reading it off them keeps the answer and the test of it the same comparison.
+  const movedWithThem = bandAfter.low > bandBefore.high;
   return movedWithThem
     ? {
         verdict: 'confirmed',

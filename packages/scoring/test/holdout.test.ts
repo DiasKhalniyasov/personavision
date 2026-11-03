@@ -166,7 +166,7 @@ describe('a holdout too small to judge', () => {
     const judged = judgeHoldout({
       scores: [baseline(TOO_CLOSE_TO_CALL.before), change(TOO_CLOSE_TO_CALL.after)],
       change: CHANGE,
-      gainHeld: true,
+      onTheOriginalSeeds: 'won',
       headline: 'Headline.',
       audience: AUDIENCE,
     });
@@ -246,7 +246,9 @@ describe('the same standard as the verdict itself', () => {
     expect(written.audienceSentence).toContain('no gain for it to confirm');
   });
 
-  it('confirms nothing when the baseline is the easier of the two', () => {
+  it('says the change did not come out ahead, rather than that nothing separated', () => {
+    // The two versions came apart cleanly and the change is the harder of them: telling
+    // the user this test did not separate them would be untrue.
     const written = verdict(
       [change(MOVED_WITH_THEM.after), baseline(MOVED_WITH_THEM.before)],
       [],
@@ -254,8 +256,120 @@ describe('the same standard as the verdict itself', () => {
       { baselineVariant: 'B', changeVariant: 'A' },
     );
 
+    expect(written.bandsDisjoint).toBe(true);
     expect(written.holdout).toBe('none');
-    expect(written.audienceSentence).toContain('no gain for it to confirm');
+    expect(written.audienceSentence).toContain('the change did not come out ahead');
+    expect(written.audienceSentence).not.toContain('did not separate the two versions');
+  });
+
+  it('confirms nothing when the gap is not the baseline against the change', () => {
+    // Three variants: the gap the verdict reports is the hardest against the easiest, and
+    // neither of those is the pair this change was tested as.
+    const third = scoreOf({
+      variant: 'C',
+      median: 5,
+      sd: 1,
+      groups: [4, 5, 6],
+      success: 10,
+      scored: 11,
+    });
+    const written = verdict(
+      [baseline(MOVED_WITH_THEM.before), change(MOVED_WITH_THEM.after), third],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.bandsDisjoint).toBe(true);
+    expect(written.holdout).toBe('none');
+    expect(written.audienceSentence).toContain('the change did not come out ahead');
+  });
+
+  it('confirms nothing when the audience completes the baseline more often', () => {
+    // The change scored easier and the bands came apart, but fewer of the audience
+    // finished on it, so the headline recommends the baseline. A holdout line saying the
+    // change is ahead would contradict the field beside it.
+    const completedLess = scoreOf({
+      variant: 'B',
+      median: 22,
+      sd: 3,
+      groups: [19, 22, 25],
+      success: 2,
+      scored: 11,
+      holdout: MOVED_WITH_THEM.after,
+    });
+    const written = verdict(
+      [baseline(MOVED_WITH_THEM.before), completedLess],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.preferredVariant).toBe('A');
+    expect(written.holdout).toBe('none');
+    expect(written.audienceSentence).toContain('the change did not come out ahead');
+  });
+});
+
+describe('a holdout everybody or nobody finished on', () => {
+  it('does not call one person in twenty a separation', () => {
+    const written = verdict(
+      [baseline(holdoutOf(20, 20)), change(holdoutOf(19, 20))],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.holdout).toBe('none');
+    expect(written.holdout).not.toBe('not_confirmed');
+    expect(written.audienceSentence).toContain('cannot tell the two versions apart');
+  });
+
+  it('still confirms a holdout that nobody finished the baseline on', () => {
+    const written = verdict(
+      [baseline(holdoutOf(0, 20)), change(holdoutOf(14, 20))],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.holdout).toBe('confirmed');
+  });
+});
+
+describe('the holdout over a run of more than one task', () => {
+  const taskOf = (score: VariantScore, taskId: string): VariantScore => ({ ...score, taskId });
+
+  it('sums the tasks both versions were measured on', () => {
+    const written = verdict(
+      [
+        taskOf(baseline(holdoutOf(4, 10)), 'buy-a-tent'),
+        taskOf(baseline(holdoutOf(4, 10)), 'find-a-store'),
+        taskOf(change(holdoutOf(8, 10)), 'buy-a-tent'),
+        taskOf(change(holdoutOf(7, 10)), 'find-a-store'),
+      ],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.holdout).toBe('confirmed');
+    expect(written.audienceSentence).toContain('20 people');
+  });
+
+  it('could not judge when the two versions share no measured task', () => {
+    const written = verdict(
+      [
+        taskOf(baseline(holdoutOf(4, 20)), 'buy-a-tent'),
+        taskOf(change(holdoutOf(15, 20)), 'find-a-store'),
+      ],
+      [],
+      AUDIENCE,
+      CHANGE,
+    );
+
+    expect(written.holdout).toBe('none');
+    expect(written.audienceSentence).toContain('only one of the two versions');
   });
 });
 
