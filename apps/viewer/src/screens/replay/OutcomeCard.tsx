@@ -1,12 +1,22 @@
 import { Link } from 'react-router';
-import { runPaths } from '@personavision/contract';
-import type { Run, Session } from '@personavision/contract';
+import { runPaths, VIDEO_CAP_MS } from '@personavision/contract';
+import type { Recommendations, Run, Session } from '@personavision/contract';
 import { attributionWords, findingsForSession, outcomeWords } from '@/session/index.js';
 import type { Finding } from '@/session/index.js';
 import { evidenceUrl } from '@/screens/verdict/evidenceLink';
-import { useFindings } from '@/shell/useRun';
+import { paths } from '@/shell/paths';
+import { useFindings, useRecommendations } from '@/shell/useRun';
+import { timeLabel } from './position';
 import styles from './replay.module.css';
 import { stepLabel } from './runWords';
+
+/** What the file itself says about the recording, which no run artifact records. */
+export interface RecordingFacts {
+  /** From the mount's `content-length`; `null` until it is known. */
+  readonly sizeBytes: number | null;
+  /** The recording's own frame, from the file; `null` until the player has read it. */
+  readonly resolution: { readonly width: number; readonly height: number } | null;
+}
 
 /**
  * The `.outcome-card` that closes `#rp-timeline`: what this session means, and why it can
@@ -26,9 +36,25 @@ import { stepLabel } from './runWords';
  * **The findings are a lookup, not a reading.** A session is evidence for a finding when
  * that finding lists its id in `sessionIds`; no claim sentence is matched, and each finding
  * links to the target its own `evidence_link` names, which is resolved in the one place the
- * app resolves it.
+ * app resolves it. The recommendations above that row are the same lookup one level up: a
+ * recommendation cites the sessions it rests on, so the row is the citations that name this
+ * person and never a sentence somebody matched.
+ *
+ * **The video row states the file, not a claim about it.** The path, the duration and the
+ * truncation are the artifact's own; the size and the frame size are the file's, read from
+ * the mount and from the player, because nothing in a run directory records them. Each one
+ * that is not known yet says so instead of printing a figure.
  */
-export function OutcomeCard({ run, session }: { run: Run; session: Session }) {
+export function OutcomeCard({
+  run,
+  session,
+  recording,
+}: {
+  run: Run;
+  session: Session;
+  /** What the stage has learnt about the file. Absent for a session with no recording. */
+  recording?: RecordingFacts;
+}) {
   const outcome = outcomeWords(session.outcome.status);
   const attribution = attributionWords(session.outcome.attribution);
   const endedOn = stepLabel(run, session.outcome.step);
@@ -66,6 +92,11 @@ export function OutcomeCard({ run, session }: { run: Run; session: Session }) {
       <p>{session.outcome.reason}</p>
 
       <dl className={styles.kv}>
+        <dt>Supports</dt>
+        <dd>
+          <SupportingRecommendations runId={run.runId} sessionId={session.sessionId} />
+        </dd>
+
         <dt>Supports findings</dt>
         <dd>
           <SupportedFindings runId={run.runId} sessionId={session.sessionId} />
@@ -74,6 +105,11 @@ export function OutcomeCard({ run, session }: { run: Run; session: Session }) {
         <dt>Automation integrity</dt>
         <dd>
           <span className="tag tag-automation">{integrity.tag}</span> {integrity.sentence}
+        </dd>
+
+        <dt>Video</dt>
+        <dd className="mono" data-video-row>
+          {videoWords(session, recording)}
         </dd>
 
         <dt>Reproduce</dt>
@@ -186,4 +222,97 @@ function SupportedFinding({ finding, runId }: { finding: Finding; runId: string 
     return <>{named} (its evidence link could not be resolved)</>;
   }
   return <Link to={href}>{named}</Link>;
+}
+
+/**
+ * `11.4 MB`, as the prototype's row reads it. A file under a megabyte is reported in kB
+ * rather than rounded into one: `0.1 MB` for a two-kilobyte stub would be a measurement
+ * nobody made, on the one row whose job is to state the file as it is.
+ */
+const fileSize = (bytes: number): string =>
+  bytes < 1_000_000
+    ? `${Math.max(Math.round(bytes / 1000), 1)} kB`
+    : `${(bytes / 1_000_000).toFixed(1)} MB`;
+
+/** Which cap cut a recording, with the figure the contract holds it to. */
+const truncationWords = (cap: 'screen' | 'session'): string =>
+  `truncated at the per-${cap} cap of ${timeLabel(VIDEO_CAP_MS[cap])}`;
+
+/**
+ * The `Video` row: the recording this replay played, as a file a reader could check.
+ *
+ * Three different absences, told apart rather than merged: a test that recorded no video at
+ * all, a session whose recorder said why it has none, and a figure about the file that has
+ * not been read yet. None of them prints a number.
+ */
+function videoWords(session: Session, recording: RecordingFacts | undefined): string {
+  const video = session.video;
+  if (video === undefined) return 'this test recorded no video';
+  if (video.state === 'absent') return `no recording \u00b7 ${video.reason}`;
+
+  const parts = [video.path, timeLabel(video.durationMs)];
+  if (video.truncated !== null) parts.push(truncationWords(video.truncated));
+  parts.push(
+    recording?.sizeBytes === null || recording?.sizeBytes === undefined
+      ? 'size not read'
+      : fileSize(recording.sizeBytes),
+  );
+  const resolution = recording?.resolution ?? null;
+  parts.push(
+    resolution === null ? 'resolution not read' : `${resolution.width} \u00d7 ${resolution.height}`,
+  );
+  return parts.join(' \u00b7 ');
+}
+
+/** The recommendations whose citations name this session, in their stored rank order. */
+const citing = (document: Recommendations, sessionId: string) =>
+  document.recommendations.filter((recommendation) =>
+    recommendation.citations.some(
+      (citation) => citation.kind === 'session' && citation.sessionId === sessionId,
+    ),
+  );
+
+/**
+ * The `Supports` row of `.outcome-card`: what this one person is evidence for.
+ *
+ * The row is never blank and never implies more than it knows. A run that produced no
+ * recommendations says so — `recommendations.json` is optional, and a run still being
+ * written has none yet — a run whose recommendations name somebody else says that, and a
+ * file that would not parse says it could not be read. Each recommendation links to the
+ * Summary, which is the screen that leads with them (`docs/FLOW.md` section 14.1).
+ */
+function SupportingRecommendations({ runId, sessionId }: { runId: string; sessionId: string }) {
+  const state = useRecommendations(runId);
+
+  if (state.status === 'loading') {
+    return (
+      <span aria-busy="true" role="status">
+        Reading what this test recommends.
+      </span>
+    );
+  }
+  if (state.status === 'none') {
+    return <>This test has produced no recommendations, so nothing rests on this person yet.</>;
+  }
+  if (state.status === 'unreadable') {
+    return <>The recommendations this person supports could not be read: {state.problem}.</>;
+  }
+
+  const supported = citing(state.recommendations, sessionId);
+  if (supported.length === 0) {
+    return <>No recommendation in this test cites this person.</>;
+  }
+
+  return (
+    <>
+      {supported.map((recommendation, position) => (
+        <span key={recommendation.id}>
+          {position === 0 ? null : ' \u00b7 '}
+          <Link to={paths.run(runId)}>
+            Recommendation {recommendation.rank} &mdash; {recommendation.sentence}
+          </Link>
+        </span>
+      ))}
+    </>
+  );
 }
