@@ -48,6 +48,10 @@ describe('personavision --help', () => {
 
     expect(code).toBe(0);
     for (const flag of [
+      // The one-URL form first, in the order a reader meets the two forms.
+      '--site',
+      '--feature',
+      '--criterion',
       '--url',
       '--task',
       '--audience',

@@ -236,6 +236,10 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
     audience,
     personas,
     seedGroups,
+    // What a one-URL test was about, carried from the request onto the record: the user's
+    // own feature sentence and the goal that was attempted (`docs/FLOW.md` section 11).
+    // Absent on a two-variant run, which carries neither — an absent block is a run that
+    // recorded none rather than a value somebody wrote.
     ...(request.feature === undefined ? {} : { feature: request.feature }),
     ...(request.goal === undefined ? {} : { goal: request.goal }),
   };

@@ -1,7 +1,13 @@
 import { readFile } from 'node:fs/promises';
-import { modelModeSchema, personaSchema, runRequestSchema } from '@personavision/contract';
+import {
+  goalSchema,
+  modelModeSchema,
+  personaSchema,
+  runRequestSchema,
+} from '@personavision/contract';
 import { z } from 'zod';
 import { AudienceValidationError } from '@personavision/personas';
+import { SiteUrlNotAcceptedError, variantForSite } from '@personavision/platform';
 import { CliError } from '../cli-error.js';
 import { resolveAudience } from '../run/audience.js';
 import { engineFailureNotice } from '../run/progress.js';
@@ -26,6 +32,18 @@ import type { CreateModelProvider } from '../run/engine.js';
  * user of the product starts a test through the platform (`personavision serve`), which
  * drives the same pipeline (`../run/start.ts`) so that the two produce identical run
  * directories.
+ *
+ * It takes **two forms**, which are the product's two paths (`docs/FLOW.md` section 11):
+ *
+ * - **One site.** `--site` with the feature in the user's own words and the goal's two
+ *   sentences — what to attempt (`--task`) and what has to be observable for it to have
+ *   worked (`--criterion`). It writes a run with one variant, named for the site,
+ *   and the goal records its author as `user`, because a person typed it.
+ * - **Two versions compared.** `--url` once or twice, which is what sections 2 to 5
+ *   describe and what this command has always done, unchanged down to its defaults.
+ *
+ * The two do not mix: a command naming a site *and* a version is refused with both named,
+ * rather than one of them being guessed at.
  *
  * Two arguments are this command's own, beyond what the form submits:
  *
@@ -121,6 +139,26 @@ const saysWhatFinishingMeans = (task: string): boolean => FINISHING_ACT.test(tas
 export interface RunCommandArguments {
   /** `--url`, repeatable: the first is variant A, the second variant B. */
   url: readonly string[];
+  /**
+   * `--site`: the one URL the test is of. It is what tells the two forms apart — a command
+   * that names it is the one-URL form — and a command that names a site and a version too
+   * is refused rather than resolved in either direction.
+   */
+  site?: string;
+  /**
+   * `--feature`: what the test is about, in the user's own words. Stored as it was typed:
+   * nothing trims it or normalises it (`featureSchema`).
+   */
+  feature?: string;
+  /**
+   * `--criterion`: what has to be observable in the page for an attempt to count as a
+   * success. The other half of the goal; `--task` is the half that says what to attempt.
+   */
+  successCriterion?: string;
+  /**
+   * `--task`: what the people attempt. In the one-URL form it is the **goal's task**, so it
+   * is held to one sentence as well as to saying what finishing means.
+   */
   task: string;
   /**
    * `--audience`, or `--personas` under its published name: a committed preset, or the path
@@ -178,6 +216,30 @@ const integer = (
 const isProblem = (candidate: { parsed: number } | Problem): candidate is Problem =>
   'message' in candidate;
 
+/**
+ * A sentence of the goal that is more than one sentence, reported at the flag that carries
+ * it. The contract holds each half of a goal to one sentence (`docs/FLOW.md` section 12),
+ * and the request's own rejection would name `goal.task` — so it is checked here, where the
+ * flag a reader typed can be named back to them rather than a `--goal` nobody passed.
+ */
+const notOneSentence = (
+  argument: string,
+  value: string,
+  schema: typeof goalSchema.shape.task,
+): Problem | null => {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return null;
+  return { argument, value, message: parsed.error.issues[0]?.message ?? 'Needs one sentence.' };
+};
+
+/**
+ * A refusal written elsewhere, in the shape this command's refusals are read in: the
+ * platform's site messages are clauses of a longer sentence ("a site is an http:// or
+ * https:// URL"), and every problem printed here is a sentence of its own.
+ */
+const sentence = (message: string): string =>
+  `${message.charAt(0).toUpperCase()}${message.slice(1)}${message.endsWith('.') ? '' : '.'}`;
+
 /** `http://` or `https://`, which is what the form's URL fields accept. */
 const urlProblem = (value: string): string | null => {
   let url: URL;
@@ -200,24 +262,53 @@ export const parseRunRequest = (
   argv: RunCommandArguments,
 ): { request: RunRequest } | { problems: Problem[] } => {
   const problems: Problem[] = [];
+  /** Which form this is: the one that names a site, or the one that names versions. */
+  const site = argv.site?.trim() ?? '';
+  const oneUrl = site !== '';
+  /** The one variant of a one-URL run, once its URL has been accepted. */
+  let variant: RunRequest['variants'][number] | null = null;
 
-  if (argv.url.length === 0) {
+  if (!oneUrl) {
+    if (argv.url.length === 0) {
+      problems.push({
+        argument: '--url',
+        value: '',
+        message:
+          'Needs the URL of the version to test, or --site with the feature and the goal to test one site. Pass --url twice to compare two versions.',
+      });
+    }
+    if (argv.url.length > VARIANTS.length) {
+      problems.push({
+        argument: '--url',
+        value: argv.url.join(' '),
+        message: `A test compares at most ${VARIANTS.length} versions: --url once for ${VARIANTS[0].name}, twice for ${VARIANTS[1].name} as well.`,
+      });
+    }
+    for (const value of argv.url.slice(0, VARIANTS.length)) {
+      const problem = urlProblem(value);
+      if (problem !== null) problems.push({ argument: '--url', value, message: problem });
+    }
+  } else if (argv.url.length > 0) {
+    // Both forms at once. One site and two versions are two different tests, and which was
+    // meant is not something to guess at — so both are named back, with what they were
+    // given, rather than one of them being quietly dropped.
     problems.push({
-      argument: '--url',
-      value: '',
-      message: 'Needs the URL of the version to test. Pass it twice to compare two versions.',
+      argument: '--site',
+      value: site,
+      message: `A test is of one site or of versions compared, and this names both: --site ${site} and --url ${argv.url.join(' ')}. Drop whichever the test is not.`,
     });
-  }
-  if (argv.url.length > VARIANTS.length) {
-    problems.push({
-      argument: '--url',
-      value: argv.url.join(' '),
-      message: `A test compares at most ${VARIANTS.length} versions: --url once for ${VARIANTS[0].name}, twice for ${VARIANTS[1].name} as well.`,
-    });
-  }
-  for (const value of argv.url.slice(0, VARIANTS.length)) {
-    const problem = urlProblem(value);
-    if (problem !== null) problems.push({ argument: '--url', value, message: problem });
+  } else {
+    // `variantForSite` is the platform's own (#282): the command line and the New test form
+    // accept the same addresses, refuse the rest in the same words, and write the one
+    // variant a one-URL test runs — `site`, named for the host — under one spelling rather
+    // than two. `site` and not `A`, because `A` promises a `B` that a run of one site has
+    // not got.
+    try {
+      variant = variantForSite(site);
+    } catch (error) {
+      if (!(error instanceof SiteUrlNotAcceptedError)) throw error;
+      problems.push({ argument: '--site', value: site, message: sentence(error.message) });
+    }
   }
 
   const task = argv.task.trim();
@@ -234,6 +325,53 @@ export const parseRunRequest = (
       message:
         'The task has to say what finishing means, or nobody can be counted as having completed it. Example: "Buy the hiking boots and pay with the saved card."',
     });
+  } else if (oneUrl) {
+    // In this form the sentence *is* the goal's task, and a goal is two sentences and not
+    // two paragraphs.
+    const problem = notOneSentence('--task', task, goalSchema.shape.task);
+    if (problem !== null) problems.push(problem);
+  }
+
+  // The feature and the goal: what makes one URL a test rather than a comparison. Both are
+  // asked for only in that form, so the two-variant command is held to exactly what it
+  // always was.
+  const criterion = argv.successCriterion ?? '';
+  if (oneUrl) {
+    if ((argv.feature ?? '').trim() === '') {
+      problems.push({
+        argument: '--feature',
+        value: argv.feature ?? '',
+        message:
+          'Needs the feature the test is about, in your own words — "generating a video from a prompt", "checking out with a promo code". It is stored as you type it.',
+      });
+    }
+    if (criterion.trim() === '') {
+      problems.push({
+        argument: '--criterion',
+        value: criterion,
+        message:
+          'Needs what has to be observable in the page for an attempt to count as a success: a visible element, a URL, a piece of text. Not a judgement and not a feeling.',
+      });
+    } else {
+      const problem = notOneSentence('--criterion', criterion, goalSchema.shape.successCriterion);
+      if (problem !== null) problems.push(problem);
+    }
+  } else {
+    // The same refusal from the other side: these two describe the one site under test, and
+    // a flag that is read in one form and silently dropped in the other is a flag that lies
+    // about what the run recorded.
+    for (const [argument, value] of [
+      ['--feature', argv.feature],
+      ['--criterion', argv.successCriterion],
+    ] as const) {
+      if (value === undefined) continue;
+      problems.push({
+        argument,
+        value,
+        message:
+          'Describes the one site a test is of: pass --site with it, or drop it. A comparison of versions has the versions as its subject.',
+      });
+    }
   }
 
   if (argv.audience.trim() === '') {
@@ -290,7 +428,16 @@ export const parseRunRequest = (
 
   const request = runRequestSchema.safeParse({
     task: { prompt: task },
-    variants: argv.url.map((url, index) => ({ ...VARIANTS[index], url })),
+    variants:
+      variant === null ? argv.url.map((url, index) => ({ ...VARIANTS[index], url })) : [variant],
+    // A person typed this goal, so `user` is who last wrote it: the author is what a
+    // completion rate is read against a month later (`docs/FLOW.md` section 12).
+    ...(oneUrl
+      ? {
+          feature: argv.feature,
+          goal: { task, successCriterion: criterion, lastWrittenBy: 'user' },
+        }
+      : {}),
     audienceId: argv.audience.trim(),
     repeats: (repeats as { parsed: number }).parsed,
     seed: (seed as { parsed: number }).parsed,
