@@ -301,6 +301,172 @@ describe('recommendations.json in a run directory', () => {
     expect(offenders(await validate(dir))).toEqual([label.recommendations]);
   });
 
+  it('refuses a citation into a session the run does not hold, at that session id', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, { ...validArtifact(), recommendations: document });
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'session', sessionId: 'S-99', offsetMs: 2400 }],
+          },
+        ],
+      }),
+    );
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toEqual([
+      `${label.recommendations}/recommendations/0/citations/0/sessionId`,
+    ]);
+    expect(violations[0].message).toMatch(/names no session listed in run.json sessionIds/);
+  });
+
+  it('holds a write-up claim to the same rule as the recommendation it comes from', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, { ...validArtifact(), recommendations: document });
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        writeUp: [
+          {
+            ...document.writeUp![0],
+            citations: [{ kind: 'session', sessionId: 'S-99', offsetMs: 0 }],
+          },
+        ],
+      }),
+    );
+
+    expect(offenders(await validate(dir))).toEqual([
+      `${label.recommendations}/writeUp/0/citations/0/sessionId`,
+    ]);
+  });
+
+  it('refuses a heatmap citation into a variant, a step or an area the run does not declare', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, { ...validArtifact(), recommendations: document });
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'heatmap', variant: 'C', step: 'wishlist', aoiId: 'z-nothing' }],
+          },
+        ],
+      }),
+    );
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toEqual([
+      `${label.recommendations}/recommendations/0/citations/0/variant`,
+      `${label.recommendations}/recommendations/0/citations/0/step`,
+      `${label.recommendations}/recommendations/0/citations/0/aoiId`,
+    ]);
+    expect(violations[0].message).toMatch(/names no variant declared in this run/);
+  });
+
+  it('refuses a funnel citation into a step the run does not declare', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, { ...validArtifact(), recommendations: document });
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'funnel', stepId: 'wishlist' }],
+          },
+        ],
+      }),
+    );
+
+    expect(offenders(await validate(dir))).toEqual([
+      `${label.recommendations}/recommendations/0/citations/0/stepId`,
+    ]);
+  });
+
+  it('accepts a heatmap citation whose region is the whole step', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, {
+      ...validArtifact(),
+      recommendations: {
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'heatmap', variant: 'B', step: CONFIRM, aoiId: null }],
+          },
+        ],
+      },
+    });
+
+    expect(await validate(dir)).toEqual([]);
+  });
+
+  it('refuses a recommendation resting on a finding findings.json does not carry', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, { ...validArtifact(), recommendations: document });
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [{ ...document.recommendations[0], findingIds: ['F-99'] }],
+      }),
+    );
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toEqual([
+      `${label.recommendations}/recommendations/0/findingIds/0`,
+    ]);
+    expect(violations[0].message).toMatch(/names no finding in findings.json/);
+  });
+
+  it('accepts a citation into a session the run does hold', async () => {
+    const document = validRecommendations();
+    await writeRun(dir, {
+      ...validArtifact(),
+      recommendations: {
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'session', sessionId: 'S-01', offsetMs: 120 }],
+          },
+        ],
+      },
+    });
+
+    expect(await validate(dir)).toEqual([]);
+  });
+
+  it('refuses to write a citation that would not read back', async () => {
+    const document = validRecommendations();
+
+    await expect(
+      writeRun(dir, {
+        ...validArtifact(),
+        recommendations: {
+          ...document,
+          recommendations: [
+            {
+              ...document.recommendations[0],
+              citations: [{ kind: 'session', sessionId: 'S-99', offsetMs: 2400 }],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/names no session listed in run.json sessionIds/);
+  });
+
   it('refuses to write recommendations that would not read back', async () => {
     const document = validRecommendations();
 
