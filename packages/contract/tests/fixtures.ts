@@ -5,6 +5,7 @@ import type {
   Audience,
   Findings,
   ModelMode,
+  Recommendations,
   Run,
   RunArtifact,
   RunProgress,
@@ -356,6 +357,45 @@ export const validFindings = (): Findings => ({
       sessionCount: 1,
       attribution: 'product',
       evidence_link: { screen: 'attention', params: { variant: 'B', step: CONFIRM } },
+    },
+  ],
+});
+
+/**
+ * What Muse Wonder says to change about this run: one recommendation, citing the finding it
+ * rests on and all three kinds of evidence, with the write-up generated from it. The run
+ * holds two sessions, so the sample read both of them.
+ */
+export const validRecommendations = (): Recommendations => ({
+  schemaVersion: SCHEMA_VERSION,
+  runId: RUN_ID,
+  sample: { read: 2, of: 2, strategy: 'stratified by outcome, then segment', seed: 20_261_024 },
+  recommendations: [
+    {
+      id: 'R-01',
+      rank: 1,
+      sentence: 'Move Complete order above the fold on the redesigned confirmation step.',
+      evidence: 'No session fixated it; the area is 340 px below the fold at 1440 x 900.',
+      findingIds: [FINDING_ID],
+      citations: [
+        { kind: 'session', sessionId: 'S-02', offsetMs: 2400 },
+        { kind: 'heatmap', variant: 'B', step: CONFIRM, aoiId: COMPLETE_AOI },
+        { kind: 'funnel', stepId: CONFIRM },
+      ],
+      peopleAffected: 1,
+      step: CONFIRM,
+    },
+  ],
+  writeUp: [
+    {
+      heading: 'Nobody saw the button that completes the order',
+      body: 'On the redesign the primary action sits below the fold, and no simulated person looked at it. The one who reached the step scrolled past it.',
+      citations: [{ kind: 'heatmap', variant: 'B', step: CONFIRM, aoiId: COMPLETE_AOI }],
+    },
+    {
+      heading: 'What I did not find',
+      body: 'Nothing in these sessions points at the cart step: everybody who reached it left it the same way.',
+      citations: [{ kind: 'funnel', stepId: CART }],
     },
   ],
 });

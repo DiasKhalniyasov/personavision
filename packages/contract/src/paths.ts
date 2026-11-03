@@ -1,6 +1,7 @@
 /**
  * The run-directory layout: `runs/<YYYY-MM-DD-HHMM-name>/` holding `run.json`,
- * `findings.json`, `sessions/S-NN.json` and `screenshots/<variant>/<step>.png`.
+ * `findings.json`, the optional `recommendations.json`, `sessions/S-NN.json` and
+ * `screenshots/<variant>/<step>.png`.
  *
  * This module is the only place those names are written. No other package re-derives a
  * path or globs for a file by guesswork.
@@ -14,6 +15,7 @@
 
 const RUN_FILE = 'run.json';
 const FINDINGS_FILE = 'findings.json';
+const RECOMMENDATIONS_FILE = 'recommendations.json';
 const SESSIONS_DIR = 'sessions';
 const SCREENSHOTS_DIR = 'screenshots';
 const JSON_EXTENSION = '.json';
@@ -42,6 +44,11 @@ export interface RunPaths {
   readonly dir: string;
   readonly run: string;
   readonly findings: string;
+  /**
+   * What Muse Wonder says to change. Optional: a run directory without it produced no
+   * recommendation (`docs/FLOW.md` sections 14 and 16).
+   */
+  readonly recommendations: string;
   readonly sessionsDir: string;
   readonly screenshotsDir: string;
   /** `sessions/S-01.json` for session id `S-01`. */
@@ -58,6 +65,7 @@ export const runPaths = (runDir: string): RunPaths => ({
   dir: runDir,
   run: join(runDir, RUN_FILE),
   findings: join(runDir, FINDINGS_FILE),
+  recommendations: join(runDir, RECOMMENDATIONS_FILE),
   sessionsDir: join(runDir, SESSIONS_DIR),
   screenshotsDir: join(runDir, SCREENSHOTS_DIR),
   session: (sessionId) => join(runDir, SESSIONS_DIR, `${sessionId}${JSON_EXTENSION}`),

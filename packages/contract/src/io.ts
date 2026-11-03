@@ -1,8 +1,22 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { z } from 'zod';
 import { runPaths, sessionIdFromFileName } from './paths.js';
-import type { Findings, Run, RunProgress, RunUsage, Session, SessionProgress } from './schemas.js';
-import { findingsSchema, runSchema, sessionSchema, ZERO_USAGE } from './schemas.js';
+import type {
+  Findings,
+  Recommendations,
+  Run,
+  RunProgress,
+  RunUsage,
+  Session,
+  SessionProgress,
+} from './schemas.js';
+import {
+  findingsSchema,
+  recommendationsSchema,
+  runSchema,
+  sessionSchema,
+  ZERO_USAGE,
+} from './schemas.js';
 
 /**
  * Reading, writing and validating a whole run directory. A round trip through disk is
@@ -24,6 +38,11 @@ export interface RunArtifact {
   run: Run;
   sessions: Session[];
   findings: Findings;
+  /**
+   * What Muse Wonder says to change. Absent for a run that produced no recommendation —
+   * the file is optional, and a run directory without it is not a violation.
+   */
+  recommendations?: Recommendations;
 }
 
 /**
@@ -49,15 +68,21 @@ const readJsonFile = async (
   file: string,
   label: string,
   violations: Violation[],
+  /**
+   * An optional artifact file that is simply absent is a run that recorded none rather than
+   * a violation. Anything else wrong with it — unreadable, not JSON — still is one.
+   */
+  optional = false,
 ): Promise<unknown> => {
   let text: string;
   try {
     text = await readFile(file, 'utf8');
   } catch (error) {
-    const message =
-      (error as NodeJS.ErrnoException).code === 'ENOENT'
-        ? 'missing from the run directory'
-        : `could not be read: ${(error as Error).message}`;
+    const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+    if (missing && optional) return undefined;
+    const message = missing
+      ? 'missing from the run directory'
+      : `could not be read: ${(error as Error).message}`;
     violations.push({ file: label, path: '', message });
     return undefined;
   }
@@ -366,6 +391,19 @@ const collect = async (
       ? undefined
       : parse(findingsSchema, findingsJson, relative.findings, violations);
 
+  // The one optional file of the layout: a run with no recommendations has no such file,
+  // and reads back as a run with none.
+  const recommendationsJson = await readJsonFile(
+    paths.recommendations,
+    relative.recommendations,
+    violations,
+    true,
+  );
+  const recommendations =
+    recommendationsJson === undefined
+      ? undefined
+      : parse(recommendationsSchema, recommendationsJson, relative.recommendations, violations);
+
   const byId = new Map<string, Session>();
   for (const sessionId of await readSessionIds(paths.sessionsDir)) {
     const label = relative.session(sessionId);
@@ -393,7 +431,15 @@ const collect = async (
 
   // `run.sessionIds` is the authoritative order, and it agreed with disk above.
   const sessions = run.sessionIds.map((sessionId) => byId.get(sessionId) as Session);
-  return { artifact: { run, sessions, findings }, violations };
+  return {
+    artifact: {
+      run,
+      sessions,
+      findings,
+      ...(recommendations !== undefined && { recommendations }),
+    },
+    violations,
+  };
 };
 
 const report = (runDir: string, violations: ReadonlyArray<Violation>): string =>
@@ -453,6 +499,15 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
   const violations: Violation[] = [];
   const run = parse(runSchema, artifact.run, relative.run, violations);
   const findings = parse(findingsSchema, artifact.findings, relative.findings, violations);
+  const recommendations =
+    artifact.recommendations === undefined
+      ? undefined
+      : parse(
+          recommendationsSchema,
+          artifact.recommendations,
+          relative.recommendations,
+          violations,
+        );
   const sessions: Session[] = [];
   for (const candidate of artifact.sessions) {
     const label = relative.session(candidate.sessionId);
@@ -466,6 +521,10 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
   await mkdir(paths.sessionsDir, { recursive: true });
   await writeFile(paths.run, serialize(run));
   await writeFile(paths.findings, serialize(findings));
+  // The writer owns the run directory, so a run written over an older one must not inherit
+  // its recommendations: advice from another run is worse than none.
+  if (recommendations === undefined) await rm(paths.recommendations, { force: true });
+  else await writeFile(paths.recommendations, serialize(recommendations));
   await Promise.all(
     sessions.map((session) => writeFile(paths.session(session.sessionId), serialize(session))),
   );

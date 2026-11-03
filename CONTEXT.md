@@ -43,7 +43,7 @@ The binary is `personavision`. The library packages above exist as buildable pla
 
 **No package other than `@personavision/contract` declares an artifact field name or a run-directory path.** Not a constant, not a string literal, not a re-derived path. Readers and writers import the schemas and the inferred types, so a field name is read from the compiler rather than from prose, and a round trip through disk is type-checked at both ends.
 
-The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one.
+The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `recommendations.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one. `recommendations.json` is **optional**: a run directory without it produced no recommendation, which is not a zero somebody measured.
 
 `run.json` carries the **audience** the test was run for — by value, copied when the test started, so that editing the stored audience later cannot restate a finished test. The personas it lists are generated from that audience and carry `audienceId` and a `segment`; `scores[].completionRate` and the verdict's `preferredVariant`, `audienceSentence`, `reasons`, `headlineFindingIds` and `heroEvidence` are what the Verdict screen leads with, stored rather than computed in a browser.
 
@@ -59,6 +59,7 @@ The run directory is served read-only, mirroring the on-disk layout exactly:
 
 - `GET /runs/<runId>/run.json`
 - `GET /runs/<runId>/findings.json`
+- `GET /runs/<runId>/recommendations.json` (when the run has one)
 - `GET /runs/<runId>/sessions/S-NN.json`
 - `GET /runs/<runId>/screenshots/<variant>/<step>.png`
 

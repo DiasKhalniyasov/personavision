@@ -10,8 +10,10 @@ import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
  * `docs/adr/0001-run-data-over-http-as-static-files.md`.
  *
  * - `GET /runs/index.json` → `[{ runId, name, createdAt }]`, newest first
- * - `GET /runs/<runId>/run.json`, `/findings.json`, `/sessions/S-NN.json`,
- *   `/screenshots/<variant>/<step>.png` → the files on disk, byte for byte
+ * - `GET /runs/<runId>/run.json`, `/findings.json`, `/recommendations.json`,
+ *   `/sessions/S-NN.json`, `/screenshots/<variant>/<step>.png` → the files on disk, byte for
+ *   byte. A new artifact file of the layout is reachable the moment it is written: the
+ *   mount answers for the file kinds below and holds no list of names.
  *
  * There is no other endpoint, no computation and no write path. `personavision open`
  * serves it beside the built viewer, `personavision serve` serves it with workspace
