@@ -15,13 +15,19 @@
  * not — `packages/browser`'s rule, from its own helper.
  */
 
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runPaths, sessionSchema } from '@personavision/contract';
-import { createFixtureSource, createLiveSource, readRecording } from '@personavision/browser';
+import {
+  createFixtureSource,
+  createLiveSource,
+  readRecording,
+  SessionBudget,
+} from '@personavision/browser';
 import { FREE_USAGE } from '@personavision/provider';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSession } from '../src/index.js';
 import type { SessionVideo } from '@personavision/contract';
 import type { CaptureSource, SessionRecording, VideoRequest } from '@personavision/browser';
@@ -204,6 +210,71 @@ describe('a session whose source records one', () => {
     expect(session.screens[1]?.step).toBe(session.screens[0]?.step);
     expect(session.video.screenOffsetsMs).toHaveLength(session.screens.length);
     expect(session.video.screenOffsetsMs[0]).not.toBe(session.video.screenOffsetsMs[1]);
+  });
+
+  it('marks an action where it happened, not where the driver answered', async () => {
+    const { recording } = recordingThat(recordedAs('S-01'));
+    const { source } = recordedBy(recording);
+    /** The recording's clock while the driver is away, which is where it may not be marked. */
+    const whileActing: number[] = [];
+    const acting: CaptureSource = {
+      ...source,
+      act: (page, action, ctx, options) => {
+        // A click waits out the navigation it causes and the budget may retry it, so the
+        // recording's clock has moved on by the time the driver answers.
+        whileActing.push(recording.at(), recording.at(), recording.at());
+        return source.act(page, action, ctx, options);
+      },
+    };
+
+    const session = await runSession(
+      sessionOver(runDir, {
+        source: acting,
+        providers: { decision: scrollsThenClicks() },
+        maxScreens: 1,
+      }),
+    );
+
+    if (session.video?.state !== 'recorded') throw new Error('the session recorded nothing');
+    expect(whileActing.length).toBeGreaterThan(0);
+    const acted = session.video.actionOffsetsMs[0];
+    expect(acted).not.toBeNull();
+    // The frame the action happened on, not the frame after the next screen had loaded.
+    expect(acted ?? 0).toBeLessThan(Math.min(...whileActing));
+  });
+
+  it('finishes and removes the recording of a session the budget gave up on', async () => {
+    let finishes = 0;
+    const { recording } = recordingThat((marked) => {
+      finishes += 1;
+      // What finishing does: the file lands at the contract's path. Left unfinished, the
+      // browser closing would leave it under the name Playwright chose instead.
+      mkdirSync(runPaths(runDir).videosDir, { recursive: true });
+      writeFileSync(runPaths(runDir).video('S-01'), 'a recording');
+      return recordedAs('S-01')(marked);
+    });
+    const { source } = recordedBy(recording);
+    const slow: CaptureSource = {
+      ...source,
+      openSession: async (variant, device, session) => {
+        // The session arrives after the cap that gave up on it.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return source.openSession(variant, device, session);
+      },
+    };
+
+    const session = await runSession(
+      sessionOver(runDir, { source: slow, budget: new SessionBudget({ wallClockMs: 1 }) }),
+    );
+
+    expect(session.outcome.status).toBe('automation_failure');
+    expect(session.video).toBeUndefined();
+    // The late handle's recording is finished and its file removed: a session written up as
+    // having no video may not leave one at its own path for a reader to find.
+    await vi.waitFor(() => {
+      expect(finishes).toBe(1);
+      expect(existsSync(runPaths(runDir).video('S-01'))).toBe(false);
+    });
   });
 
   it('is written complete and scored when the recording failed', async () => {
