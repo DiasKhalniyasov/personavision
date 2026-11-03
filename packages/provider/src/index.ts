@@ -29,6 +29,7 @@ export type {
   DecisionStep,
   DecisionUsage,
   FixatedElement,
+  ScreenElement,
   Goal,
   PastAction,
   PersonaTraits,

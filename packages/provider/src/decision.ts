@@ -86,7 +86,9 @@ export const validateDecision = (
 
   const violations: string[] = [];
   const { action, intent, usage, relevanceHints } = decision as Partial<Decision>;
-  const fixatedIds = new Set(context.fixatedElements.map((element) => element.id));
+  const fixatedIds = new Set(
+    [...context.fixatedElements, ...(context.screenElements ?? [])].map((element) => element.id),
+  );
 
   if (typeof intent !== 'string' || intent.trim() === '') {
     violations.push(

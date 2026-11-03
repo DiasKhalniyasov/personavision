@@ -108,7 +108,7 @@ describeWithChromium('personavision run against a page in a browser', () => {
         repeats: '1',
         seed: '3',
         mode: 'contributor',
-        // No key, so the offline deterministic engine: the cold-start promise of step #8.
+        engine: 'offline',
         env: {},
         log: (line) => void printed.push(line),
         onStop: () => (): void => undefined,

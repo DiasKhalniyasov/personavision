@@ -138,7 +138,12 @@ export interface TaskStep {
   id: string;
   label: string;
   match: { urlPattern: string; requiredSelector: string };
-  primaryAction: { selector: string };
+  /**
+   * `optional`: a page of the step where the control is not rendered carries no primary
+   * action rather than failing the session — for a step that spans pages the task does not
+   * control, such as a whole site a person wanders before finding what they were sent for.
+   */
+  primaryAction: { selector: string; optional?: boolean };
   /**
    * What the person is trying to do *on this screen*, in their own words — "Go to
    * checkout", not the whole errand. Omitted, the screen inherits the task's `prompt`.

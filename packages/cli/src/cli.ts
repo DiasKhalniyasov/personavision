@@ -155,6 +155,14 @@ program
     '--steps <file>',
     'a JSON file declaring the task’s steps — each with the URL pattern and required element that recognise it and the selector that advances it; without one the page is the task’s single step',
   )
+  .option(
+    '--people <file>',
+    'a JSON array of personas, each with traits, device and an optional profile (age, about, habits), to run instead of the people generated from the audience',
+  )
+  .option(
+    '--gaze-examples <files...>',
+    'narrated eye-tracking sessions of real people (gaze-example.txt from .local/eyetrack/narrate.py), shown to a model run as how real eyes move',
+  )
   .action(
     async (options: {
       url: string[];
@@ -166,6 +174,8 @@ program
       engine?: string;
       mode: string;
       steps?: string;
+      people?: string;
+      gazeExamples?: string[];
     }) => {
       await runCommand({
         ...options,

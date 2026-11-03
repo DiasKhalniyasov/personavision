@@ -22,7 +22,7 @@ import {
 } from './progress.js';
 import { taskFor } from './task.js';
 import type { CaptureSource, TaskStep, Variant } from '@personavision/browser';
-import type { Audience, Run, RunFailure, RunRequest } from '@personavision/contract';
+import type { Audience, Persona, Run, RunFailure, RunRequest } from '@personavision/contract';
 import type { CreateModelProvider, SelectedEngine } from './engine.js';
 import type { ModelMode } from '@personavision/provider';
 import type { SwarmProgress } from '@personavision/swarm';
@@ -123,6 +123,8 @@ export interface StartRunOptions {
   readonly audience: Audience;
   /** The task's declared steps, or `null` for the page as one step (see `./task.ts`). */
   readonly steps?: readonly TaskStep[] | null;
+  /** Hand-written people to run instead of those generated from the audience. */
+  readonly people?: readonly Persona[];
   readonly concurrency?: number;
   readonly sessionTimeoutMs?: number;
   /** Chromium over a URL by default; a test replays a committed capture set instead. */
@@ -200,6 +202,9 @@ const takeRunDir = async (runsRoot: string, wanted: string): Promise<string> => 
 const seedGroupsOf = (request: RunRequest): number[] =>
   Array.from({ length: request.repeats }, (_unused, index) => request.seed + index);
 
+/** Real time a model-run session may take: sixteen screens at up to ~30 s an answer. */
+const MODEL_SESSION_TIMEOUT_MS = 10 * 60_000;
+
 export const startRun = async (options: StartRunOptions): Promise<StartedRun> => {
   const { request, audience } = options;
   const clock = options.now ?? ((): Date => new Date());
@@ -209,7 +214,7 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
   // Nothing is written until the plan holds: the people, the seeds, the task and the
   // sessions they cross to. A plan nobody is in is not a run, and it is refused here rather
   // than discovered by the swarm with a run directory already on disk.
-  const personas = generatePersonas(audience, { seed: request.seed });
+  const personas = options.people ?? generatePersonas(audience, { seed: request.seed });
   const seedGroups = seedGroupsOf(request);
   const task = taskFor(request, options.steps ?? null);
   const variants = walkable(request.variants);
@@ -358,8 +363,12 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
       source: options.source ?? createLiveSource(),
       providers: { decision: selected.provider },
       ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+      // A model's reply takes seconds per screen of real time that the person never spent:
+      // a model run gets the room for it, or a slow answer reads as the person giving up.
       ...(options.sessionTimeoutMs === undefined
-        ? {}
+        ? selected.engine.mode === 'model'
+          ? { sessionTimeoutMs: MODEL_SESSION_TIMEOUT_MS }
+          : {}
         : { sessionTimeoutMs: options.sessionTimeoutMs }),
       now: clock,
       onProgress,

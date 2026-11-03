@@ -506,8 +506,9 @@ const answersWithin = (provider: DecisionProvider, remainingMs: () => number): D
   return {
     ...provider,
     decide: within((context) => provider.decide(context)),
-    beginSession: (identity) => {
-      const session = provider.beginSession(identity);
+    beginSession: (identity, scope) => {
+      // the scope carries the session's trajectory file (#139): dropping it here wrote none
+      const session = provider.beginSession(identity, scope);
       return {
         ...session,
         decide: within((context) => session.decide(context)),

@@ -163,11 +163,10 @@ export const selectDecisionProvider = (
   const modelMode = namedTier ?? DEFAULT_MODEL_MODE;
   const modelId = MODEL_ID_BY_MODE[modelMode];
   /**
-   * Whether a model is the only acceptable answer. `standard` is: its caller is a paying
-   * customer's run, and a simulated result presented as theirs is worse than a refusal.
-   * `contributor` is not, and neither is the absence of a request.
+   * Whether a model is the only acceptable answer: any tier that was named. A simulated
+   * result standing in for a model run is worse than a refusal (owner decision, 2026-10-28).
    */
-  const modelOrNothing = namedTier === 'standard';
+  const modelOrNothing = namedTier !== undefined;
   /** What a fall-back's reason opens with, so an offline run says which model it wanted. */
   const asked =
     namedTier === undefined ? '' : `${modelMode} model mode (${modelId}) was asked for; `;

@@ -60,14 +60,14 @@ export const MODEL_SPEC_BY_ID: Readonly<Record<ModelId, ModelSpec>> = {
     inputPerMillionUsd: 1.25,
     cachedInputPerMillionUsd: 0.15,
     outputPerMillionUsd: 4.25,
-    acceptsImages: false,
+    acceptsImages: true,
     acceptsReasoningEffort: false,
   },
   'muse-spark-1.3-contributor': {
     inputPerMillionUsd: 0.1,
     cachedInputPerMillionUsd: 0.002,
     outputPerMillionUsd: 0.2,
-    acceptsImages: false,
+    acceptsImages: true,
     acceptsReasoningEffort: false,
   },
 };

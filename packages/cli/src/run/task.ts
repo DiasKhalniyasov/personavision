@@ -125,7 +125,7 @@ const stepSchema = z.strictObject({
   id: nonEmpty,
   label: nonEmpty,
   match: z.strictObject({ urlPattern: nonEmpty, requiredSelector: nonEmpty }),
-  primaryAction: z.strictObject({ selector: nonEmpty }),
+  primaryAction: z.strictObject({ selector: nonEmpty, optional: z.boolean().optional() }),
   /**
    * What the person wants on that screen, where the file says. Optional, and the step
    * inherits the task's own sentence without it (#78): the sentence is the errand, and a

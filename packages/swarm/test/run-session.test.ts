@@ -56,7 +56,7 @@ import {
 const PAGE_ACTIONS = new Set<Session['actions'][number]['type']>(['click', 'scroll', 'back']);
 
 /** The whole of `DecisionContext` for a provider that does not read images. */
-const CONTEXT_FIELDS = ['fixatedElements', 'goal', 'history', 'step', 'traits'];
+const CONTEXT_FIELDS = ['fixatedElements', 'goal', 'history', 'step', 'task', 'traits'];
 
 /** The whole of a `FixatedElement`: what the agent took in, and what its eyes did. */
 const FIXATED_ELEMENT_FIELDS = ['dwellMs', 'fixationCount', 'id', 'name', 'role', 'text'];

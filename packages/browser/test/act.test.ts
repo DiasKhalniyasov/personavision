@@ -199,6 +199,35 @@ describeWithChromium('acting on a page', () => {
   );
 
   it(
+    'taps where a control is when it never holds still long enough for Playwright to click it',
+    async () =>
+      withSession(DESKTOP, '/cart.html', async (handle) => {
+        // A playing video or a carousel: its box moves every frame, so Playwright's wait for a
+        // stable element runs out.
+        await handle.page.evaluate((selector) => {
+          document
+            .querySelector(selector)
+            ?.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(4px)' }], {
+              duration: 200,
+              iterations: Infinity,
+              direction: 'alternate',
+            });
+        }, CHECKOUT_SELECTOR);
+
+        const result = await act(
+          handle,
+          { type: 'click', selector: CHECKOUT_SELECTOR },
+          contextFor(DESKTOP),
+          { timeoutMs: 1000 },
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.url).toBe(`${site.url}/payment.html`);
+      }),
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'acts on the same control whether it is named by element id or by selector',
     async () => {
       // The capture is the extractor's own reading of the page, so the id handed to `act`

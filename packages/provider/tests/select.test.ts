@@ -211,30 +211,25 @@ describe('choosing which model tier a run decides on', () => {
     ).toThrow(ModelModeUnavailableError);
   });
 
-  it('falls back to offline for a contributor request with no key, with a reason', () => {
-    const selected = selectDecisionProvider({
+  it('refuses a contributor request with no key', () => {
+    expect(() =>
+      selectDecisionProvider({
       seed: 1,
       env: {},
       requestedMode: { mode: 'model', modelMode: 'contributor' },
       createModelProvider: () => fakeModelProvider,
-    });
-
-    expect(selected.mode).toBe('offline');
-    expect(selected.provider.name).toBe(OFFLINE_PROVIDER_NAME);
-    expect(selected.reason).toContain(MODEL_API_KEY_ENV);
-    expect(selected.modelMode).toBeUndefined();
-    expect(selected.modelId).toBeUndefined();
+    }),
+    ).toThrow(ModelModeUnavailableError);
   });
 
-  it('falls back to offline for a contributor request with a key but no model provider', () => {
-    const selected = selectDecisionProvider({
+  it('refuses a contributor request with a key but no model provider', () => {
+    expect(() =>
+      selectDecisionProvider({
       seed: 1,
       env: withKey,
       requestedMode: { mode: 'model', modelMode: 'contributor' },
-    });
-
-    expect(selected.mode).toBe('offline');
-    expect(selected.modelMode).toBeUndefined();
+    }),
+    ).toThrow(ModelModeUnavailableError);
   });
 
   it('names no model when it ran none, so an offline run records no tier', () => {
@@ -333,17 +328,15 @@ describe('choosing which model tier a run decides on', () => {
     ).not.toThrow();
   });
 
-  it('runs offline when a contributor factory answers with a provider that is not a model', () => {
-    const selected = selectDecisionProvider({
+  it('refuses when a contributor factory answers with a provider that is not a model', () => {
+    expect(() =>
+      selectDecisionProvider({
       seed: 1,
       env: withKey,
       requestedMode: { mode: 'model', modelMode: 'contributor' },
       createModelProvider: () => createOfflineDeterministicProvider({ seed: 1 }),
-    });
-
-    expect(selected.mode).toBe('offline');
-    expect(selected.modelMode).toBeUndefined();
-    expect(selected.reason).toContain('contributor');
+    }),
+    ).toThrow(ModelModeUnavailableError);
   });
 
   it('keeps the key out of a tier result, its reason and a refusal', () => {

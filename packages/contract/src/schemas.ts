@@ -139,6 +139,10 @@ export const personaSchema = z.strictObject({
   segment: name,
   traits: personaTraitsSchema,
   device: deviceSchema,
+  /** Who the person is, in words: optional, because a generated persona has only its traits. */
+  profile: z
+    .strictObject({ age: z.int().min(0), about: name, habits: z.array(name) })
+    .optional(),
 });
 
 const variantSchema = z.strictObject({ id: name, name, url: z.url() });
