@@ -100,6 +100,14 @@ export {
 export type { AudienceAskInput, AudienceDeviceClass } from './wonder-audience.js';
 
 export {
+  ANALYSIS_EFFORT,
+  ANALYSIS_REPLY_SCHEMA_NAME,
+  analysisAsk,
+  writeAnalysis,
+} from './wonder-analysis.js';
+export type { AnalysisAskInput, AnalysisFinding } from './wonder-analysis.js';
+
+export {
   applyUnifiedPatch,
   CHANGE_EFFORT,
   CHANGE_REPLY_SCHEMA_NAME,
