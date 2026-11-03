@@ -1,6 +1,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runPaths, validate } from '@personavision/contract';
+import { ONE_URL_VARIANT_ID } from '@personavision/platform';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
 import { engineOnTheRecord } from '@personavision/swarm';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -443,8 +444,10 @@ describe('a run of one site', () => {
 
     const { runDir, run } = await theRun(fixture.runsRoot);
     expect(await validate(runDir)).toEqual([]);
+    // The platform's one-URL variant, under the one spelling both surfaces write (#282):
+    // `site` rather than `A`, named for the site's host.
     expect(run.variants).toEqual([
-      { id: 'A', name: 'fixture.test', url: 'https://fixture.test/cart.html' },
+      { id: ONE_URL_VARIANT_ID, name: 'fixture.test', url: 'https://fixture.test/cart.html' },
     ]);
     // The user's own sentence, as typed: the double space between its words survives.
     expect(run.feature).toBe('buying a canvas tote bag  on the phone');
@@ -470,7 +473,7 @@ describe('a run of one site', () => {
     expect(printed[1]).toBe('0 of 2 sessions finished · offline deterministic engine');
     // One row, not two, in the shape every other row has: nothing of the feature or the
     // goal is printed into the artifact or the log beside it.
-    expect(printed[2]).toBe('  A fixture.test · 2 sessions · https://fixture.test/cart.html');
+    expect(printed[2]).toBe('  site fixture.test · 2 sessions · https://fixture.test/cart.html');
     expect(printed[3]).toBe('  Fixture shoppers · 2 people · seeds 11');
   });
 
@@ -527,6 +530,22 @@ describe('a run of one site', () => {
 
     expect(error.message).toContain('--feature');
     expect(error.message).toContain('--site');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses an address that is not a whole URL, in the platform’s own words', async () => {
+    fixture = await runFixture({ size: 2 });
+    // The same refusal the New test form gives, because both surfaces parse a site URL
+    // through `variantForSite`: nothing is assumed on the typist's behalf.
+    const options = fixture.options(oneSite({ site: 'fixture.test/cart.html' }));
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.exitCode).not.toBe(0);
+    expect(error.message).toContain('--site');
+    expect(error.message).toContain('is not a whole web address');
     expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
   });
 

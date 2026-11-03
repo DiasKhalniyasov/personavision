@@ -7,6 +7,7 @@ import {
 } from '@personavision/contract';
 import { z } from 'zod';
 import { AudienceValidationError } from '@personavision/personas';
+import { SiteUrlNotAcceptedError, variantForSite } from '@personavision/platform';
 import { CliError } from '../cli-error.js';
 import { resolveAudience } from '../run/audience.js';
 import { engineFailureNotice } from '../run/progress.js';
@@ -61,21 +62,6 @@ const VARIANTS = [
   { id: 'A', name: 'Current checkout' },
   { id: 'B', name: 'Redesign candidate' },
 ] as const;
-
-/**
- * How the one variant of a one-URL run is named: the site's own host.
- *
- * A path-1 test is a run with **one variant** and nothing forks on a path, so that variant
- * needs a name wherever a screen or a log line names one — and the only honest name for it
- * is the site itself. `Current checkout` is the A/B form's word for a version it compares,
- * and a run of one site is comparing nothing. So it is derived rather than asked for: one
- * fewer sentence to type for a form whose whole point is that one URL is enough.
- */
-const siteVariant = (site: string): { id: string; name: string; url: string } => ({
-  id: VARIANTS[0].id,
-  name: new URL(site).host,
-  url: site,
-});
 
 /**
  * A task has to say what counts as finishing, because the simulated people stop when they
@@ -246,6 +232,14 @@ const notOneSentence = (
   return { argument, value, message: parsed.error.issues[0]?.message ?? 'Needs one sentence.' };
 };
 
+/**
+ * A refusal written elsewhere, in the shape this command's refusals are read in: the
+ * platform's site messages are clauses of a longer sentence ("a site is an http:// or
+ * https:// URL"), and every problem printed here is a sentence of its own.
+ */
+const sentence = (message: string): string =>
+  `${message.charAt(0).toUpperCase()}${message.slice(1)}${message.endsWith('.') ? '' : '.'}`;
+
 /** `http://` or `https://`, which is what the form's URL fields accept. */
 const urlProblem = (value: string): string | null => {
   let url: URL;
@@ -271,6 +265,8 @@ export const parseRunRequest = (
   /** Which form this is: the one that names a site, or the one that names versions. */
   const site = argv.site?.trim() ?? '';
   const oneUrl = site !== '';
+  /** The one variant of a one-URL run, once its URL has been accepted. */
+  let variant: RunRequest['variants'][number] | null = null;
 
   if (!oneUrl) {
     if (argv.url.length === 0) {
@@ -302,8 +298,17 @@ export const parseRunRequest = (
       message: `A test is of one site or of versions compared, and this names both: --site ${site} and --url ${argv.url.join(' ')}. Drop whichever the test is not.`,
     });
   } else {
-    const problem = urlProblem(site);
-    if (problem !== null) problems.push({ argument: '--site', value: site, message: problem });
+    // `variantForSite` is the platform's own (#282): the command line and the New test form
+    // accept the same addresses, refuse the rest in the same words, and write the one
+    // variant a one-URL test runs — `site`, named for the host — under one spelling rather
+    // than two. `site` and not `A`, because `A` promises a `B` that a run of one site has
+    // not got.
+    try {
+      variant = variantForSite(site);
+    } catch (error) {
+      if (!(error instanceof SiteUrlNotAcceptedError)) throw error;
+      problems.push({ argument: '--site', value: site, message: sentence(error.message) });
+    }
   }
 
   const task = argv.task.trim();
@@ -423,9 +428,8 @@ export const parseRunRequest = (
 
   const request = runRequestSchema.safeParse({
     task: { prompt: task },
-    variants: oneUrl
-      ? [siteVariant(site)]
-      : argv.url.map((url, index) => ({ ...VARIANTS[index], url })),
+    variants:
+      variant === null ? argv.url.map((url, index) => ({ ...VARIANTS[index], url })) : [variant],
     // A person typed this goal, so `user` is who last wrote it: the author is what a
     // completion rate is read against a month later (`docs/FLOW.md` section 12).
     ...(oneUrl
