@@ -64,6 +64,18 @@ export const parseSiteUrl = (value: unknown): string => {
   }
   const url = value.trim();
 
+  // Before `new URL`, because `new URL` would hide it: the URL parser strips tabs, carriage
+  // returns and newlines as a cleanup step and parses what is left, so a pasted address with
+  // a line break through it passes every check below. The string stored is the one that was
+  // typed, so that one would be stored with the break still in it — handed on to the checks
+  // that fetch it, to the browser that drives it and to whatever logs it. An address no
+  // client would request is not the address somebody controls.
+  if (/[\s\u0000-\u001f\u007f]/.test(url)) {
+    return refuse(
+      `a web address has no spaces or line breaks in it — check what was pasted, and give it like ${EXAMPLE}`,
+    );
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -83,7 +95,9 @@ export const parseSiteUrl = (value: unknown): string => {
     return refuse(`"${quoted(url)}" names no site: a site is an absolute URL, like ${EXAMPLE}`);
   }
   // The URL the user typed, not `parsed.href`: the round trip through `URL` adds a trailing
-  // slash, lower-cases the host and re-escapes the path, none of which they asked for.
+  // slash, lower-cases the host and re-escapes the path, none of which they asked for. What
+  // is returned is only ever `value` trimmed, and it holds no character `URL` would have
+  // rewritten away, so the address stored is both what they wrote and one a client can ask for.
   return url;
 };
 

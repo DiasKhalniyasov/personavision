@@ -190,7 +190,7 @@ describe('the file-backed store', () => {
       expect(saved.url).toBe(url);
     });
 
-    it('hands a site back unverified from every one of its four methods', async () => {
+    it('has no path through it that reads a site back as verified', async () => {
       // The one thing that may verify a site is a passing check, which is a later ticket of
       // #221: this interface publishes no writer for the block, so there is no path through
       // the store by which a site could be read back as anything else. Removing one does not

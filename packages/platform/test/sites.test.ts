@@ -427,7 +427,33 @@ describe('the URL a site may be', () => {
     // No trailing slash added, no host lower-cased, no path re-escaped: the address a person
     // proves they control is the address they wrote down.
     expect(parseSiteUrl('https://App.Example.com')).toBe('https://App.Example.com');
-    expect(parseSiteUrl('  https://app.example.com/a b  ')).toBe('https://app.example.com/a b');
+    expect(parseSiteUrl('  https://app.example.com/create  ')).toBe(
+      'https://app.example.com/create',
+    );
+  });
+
+  it('refuses an address with a space or a line break through it', () => {
+    // `new URL` strips these and parses what is left, so each of these would otherwise pass
+    // every check and be stored with the character still in it.
+    for (const value of [
+      'https://app.example.com/a b',
+      'https://app.example.com\n/create',
+      'https://app.example.com\r\n/create',
+      'https://app.example.com\t/create',
+      'https://app.example.com/\u0000',
+      'https://app.example.com /create',
+    ]) {
+      expect(() => parseSiteUrl(value)).toThrow(SiteUrlNotAcceptedError);
+    }
+
+    try {
+      parseSiteUrl('https://app.example.com\n/create');
+      expect.unreachable('an address with a line break is not accepted');
+    } catch (error) {
+      const { issues } = error as SiteUrlNotAcceptedError;
+      expect(issues[0]?.path).toBe('url');
+      expect(issues[0]?.message).toContain('line breaks');
+    }
   });
 
   it('refuses everything that is not an absolute http or https URL', () => {

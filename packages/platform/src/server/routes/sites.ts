@@ -104,8 +104,13 @@ const refuse = (response: ServerResponse, issues: readonly SiteIssue[]): void =>
 /**
  * A handler that needs a workspace: the session's, or 401.
  *
- * Declared here rather than shared with the audience routes: the two are four lines each and
- * the shared one would be a module neither ticket owns.
+ * This, `siteIdOf`, `refuse` and `SIGNED_OUT` above are copied from `audiences.ts` rather
+ * than shared with it — about forty-five lines of it, not a handful. That is a deliberate
+ * cost and not a claim that it is small: extracting them means editing `audiences.ts`, which
+ * #235's Touches section promises other workers this branch leaves alone. The two have
+ * already begun to diverge (the audience routes carry a rule about editing a soft-deleted
+ * record that has no counterpart here), so whoever next has both files in their Touches
+ * should lift `inWorkspace` and the id reader beside `routes/types.ts` and delete both copies.
  */
 const inWorkspace =
   (
