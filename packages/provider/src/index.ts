@@ -110,6 +110,17 @@ export {
 export type { ChangeAskInput, ChangeFile } from './wonder-change.js';
 
 export {
+  CRITERION_KINDS,
+  GOAL_EFFORT,
+  GOAL_REPLY_SCHEMA_NAME,
+  goalAsk,
+  GoalCriterionError,
+  readCriterion,
+  writeGoal,
+} from './wonder-goal.js';
+export type { CriterionKind, CriterionReading, GoalAskInput } from './wonder-goal.js';
+
+export {
   createMetaWonderProvider,
   DEFAULT_WONDER_EFFORT,
   DEFAULT_WONDER_TIMEOUT_MS,
