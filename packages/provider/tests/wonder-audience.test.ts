@@ -225,6 +225,27 @@ describe('one audience, offline', () => {
     expect(sumOf(value.devices.map((device) => device.share))).toBeCloseTo(1, 10);
   });
 
+  it('leaves out a class the sentence does not reach, rather than declaring it empty', async () => {
+    const value = await offline();
+
+    // `packages/personas`' device quota hands every declared class at least one person, so a
+    // tablet at a share of zero would put one of the hundred on a tablet the sentence never
+    // mentioned.
+    expect(value.devices.map((device) => device.name)).toEqual(['mobile', 'desktop']);
+    expect(value.devices.every((device) => device.share > 0)).toBe(true);
+  });
+
+  it('reads the class the sentence names first, and can reach every class offered', async () => {
+    const majority = async (sentence: string): Promise<string> =>
+      [...(await offline(input({ sentence }))).devices].sort((a, b) => b.share - a.share)[0].name;
+
+    // The sentence names a desktop and then mentions a phone: reading the whole sentence for
+    // one word before the other would make this a mobile audience.
+    expect(await majority('desktop users who never touch a phone')).toBe('desktop');
+    expect(await majority('parents on a tablet who browse in the evening')).toBe('tablet');
+    expect(await majority('shoppers who use their phones')).toBe('mobile');
+  });
+
   it('answers in the class geometry it was offered, for every sentence a seed can reach', async () => {
     // The age brackets are the seed's, and the open `65+` bracket has no measured end to
     // derive an age range from: every seed has to produce an audience the contract accepts.
@@ -427,6 +448,22 @@ describe('the same audience through the model implementation', () => {
     expect(value.devices[1].viewport).toEqual(AUDIENCE_DEVICE_CLASSES[1].viewport);
   });
 
+  it('expands a class the caller handed in that carries more than the artifact records', async () => {
+    // `apps/viewer`'s own `DEVICE_CLASSES` — the list this file asks a screen to hand in —
+    // carries a `label` for its chip. `audienceDeviceSchema` is a strict object, so spreading
+    // the class handed in would have the contract refuse every audience written that way.
+    const labelled = { ...AUDIENCE_DEVICE_CLASSES[0], label: 'Mobile' };
+
+    const { value } = await writeAudience(
+      throughModel(reply({ devices: [{ class: 'mobile', share: 1 }] })),
+      input({ deviceClasses: [labelled] }),
+    );
+
+    expect(() => audienceSchema.parse(value)).not.toThrow();
+    expect(value.devices).toEqual([{ ...AUDIENCE_DEVICE_CLASSES[0], share: 1 }]);
+    expect(value.devices[0]).not.toHaveProperty('label');
+  });
+
   it('expands a class the caller handed in rather than one of its own', async () => {
     const watch = {
       name: 'watch',
@@ -441,6 +478,80 @@ describe('the same audience through the model implementation', () => {
     );
 
     expect(value.devices).toEqual([{ ...watch, share: 1 }]);
+  });
+
+  it('keeps the caller’s id and provenance when the reply writes its own', async () => {
+    // A reply shaped like a whole audience is held to the artifact's schema like any other,
+    // and the two fields it was never shown are the caller's: a model cannot name the
+    // audience id it is stored under, the seed it is reproducible from, or the generator its
+    // people are drawn by.
+    const whole = await offline();
+    const smuggled = {
+      ...whole,
+      id: 'A-99',
+      generatedFrom: { seed: 1, generatorVersion: 'persona-gen-0' },
+    };
+
+    const { value } = await writeAudience(throughModel(JSON.stringify(smuggled)), input());
+
+    expect(value.id).toBe('A-01');
+    expect(value.generatedFrom).toEqual({ seed: 7, generatorVersion: 'persona-gen-1' });
+  });
+
+  it('refuses a device class it was not offered, whatever shape the reply is in', async () => {
+    const whole = await offline();
+    const invented = {
+      ...whole,
+      devices: [
+        {
+          name: 'smart fridge',
+          viewport: { width: 400, height: 400 },
+          deviceScaleFactor: 1,
+          touch: true,
+          share: 1,
+        },
+      ],
+    };
+
+    const error = await refusalOf(asked(JSON.stringify(invented)));
+
+    expect(error.paths).toContain('devices[0].name');
+    expect(error.message).toContain('smart fridge');
+  });
+
+  it('refuses the same device class twice, as the contract refuses the same bracket twice', async () => {
+    const error = await refusalOf(
+      asked(
+        reply({
+          devices: [
+            { class: 'mobile', share: 0.5 },
+            { class: 'mobile', share: 0.5 },
+          ],
+        }),
+      ),
+    );
+
+    expect(error.paths).toContain('devices[1].name');
+    expect(error.message).toContain('more than once');
+  });
+
+  it('reports a malformed audience-shaped reply at its path, never as a bare type error', async () => {
+    // These three reach the share repair, which runs before `audienceSchema` because the
+    // shares are what that schema measures. A field it cannot read is left for the contract
+    // to report rather than dereferenced.
+    const whole = await offline();
+    const provenance = { id: whole.id, generatedFrom: whole.generatedFrom };
+
+    for (const broken of [
+      provenance,
+      { ...whole, genderSplit: null },
+      { ...whole, ageGroups: null },
+      { ...whole, devices: 'all of them' },
+    ]) {
+      const error = await refusalOf(asked(JSON.stringify(broken)));
+      expect(error.paths.length).toBeGreaterThan(0);
+      expect(error.message).not.toContain('Cannot read properties');
+    }
   });
 
   it('is the call the package index publishes', async () => {

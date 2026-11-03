@@ -241,7 +241,16 @@ const audienceReplySchema = (classes: readonly AudienceDeviceClass[]) =>
 /** What one reply describes, before the caller's two fields are stamped on. */
 type DescribedAudience = z.infer<ReturnType<typeof audienceReplySchema>>;
 
-/** `z.toJSONSchema` labels its output; the structured-reply parameter takes the schema. */
+/**
+ * `z.toJSONSchema` labels its output; the structured-reply parameter takes the schema.
+ *
+ * `wonder-change.ts` holds the same four lines, private to that file, and the two uses after
+ * this one will want them too. They are a copy on purpose for as long as the four uses are
+ * being written in parallel: the shared home for them is beside `WonderAsk.replySchema` in
+ * `wonder.ts`, and widening that file is a change to the seam every use and every
+ * implementation reads — so it belongs to a ticket that owns it rather than to whichever use
+ * lands first.
+ */
 const jsonSchemaOf = (schema: z.ZodType): Readonly<Record<string, unknown>> => {
   const schemaObject = z.toJSONSchema(schema) as Record<string, unknown>;
   delete schemaObject.$schema;
@@ -251,6 +260,24 @@ const jsonSchemaOf = (schema: z.ZodType): Readonly<Record<string, unknown>> => {
 /** The classes this ask offers, which is what the model may name and what a name expands to. */
 const classesOf = (input: AudienceAskInput): readonly AudienceDeviceClass[] =>
   input.deviceClasses ?? AUDIENCE_DEVICE_CLASSES;
+
+/**
+ * The class as the artifact records a device: its four fields, and nothing a caller carries
+ * beside them.
+ *
+ * A caller's own class list is wider than this type: `apps/viewer`'s `DEVICE_CLASSES` — the
+ * list this file tells a screen to hand in — carries a `label` for its chip, and is
+ * structurally a list of these. `audienceDeviceSchema` is a strict object, so spreading the
+ * class we were handed would put that label on the device and have the contract refuse every
+ * audience written through the very list the comment above asks for. The fields are named
+ * here, as the Audience form's own `audienceOf` names them, for exactly that reason.
+ */
+const geometryOf = (offered: AudienceDeviceClass): AudienceDeviceClass => ({
+  name: offered.name,
+  viewport: { width: offered.viewport.width, height: offered.viewport.height },
+  deviceScaleFactor: offered.deviceScaleFactor,
+  touch: offered.touch,
+});
 
 /**
  * The described audience as the artifact carries it: each class name expanded to the class
@@ -271,26 +298,49 @@ const stamp = (reply: DescribedAudience, input: AudienceAskInput): Audience => {
           `device class "${entry.class}" is not one of the ${classes.length} this ask offered: the reply's own enumeration is built from them, so this cannot happen without one of the two being edited away from the other`,
         );
       }
-      return { ...offered, share: entry.share };
+      return { ...geometryOf(offered), share: entry.share };
     }),
     generatedFrom: { seed: input.seed, generatorVersion: input.generatorVersion },
   } satisfies Audience;
 };
 
+/** A reply as it arrives: an object whose fields are whatever was written in them. */
+type Loose = Record<string, unknown>;
+
+const isLoose = (value: unknown): value is Loose => typeof value === 'object' && value !== null;
+
+/**
+ * The values as shares, or `null` where one of them is not a number at all.
+ *
+ * `null` is not a refusal: a field spelled as something other than a set of shares is not
+ * shares to be repaired, and `audienceSchema` says what it is at its own path. Repairing
+ * before that parse is what makes this reader necessary — the shares have to be a
+ * distribution before the contract measures them, and the contract is what reports a type.
+ */
+const sharesOf = (values: readonly unknown[]): readonly number[] | null =>
+  values.every((value) => typeof value === 'number' && Number.isFinite(value))
+    ? (values as readonly number[])
+    : null;
+
 /**
  * Everything about an audience that the reply schema cannot say: that it states the three
- * fields the artifact leaves optional, and that its three sets of shares are distributions.
+ * fields the artifact leaves optional, that its device classes are ones this ask offered and
+ * each named once, and that its three sets of shares are distributions — scaled where they
+ * miss one by rounding.
  *
  * Every failure is collected before any is thrown, so a reply that is wrong in three places
- * is reported in three places rather than one at a time. The repaired shares are what comes
- * out, which is why this runs on the stamped audience and not on the reply: one place reads
- * the device mix, the gender split and the age groups, whether a model or the offline
- * generator wrote them.
+ * is reported in three places rather than one at a time. It reads the reply field by field
+ * rather than trusting a type, because it runs **before** `audienceSchema` — it has to, since
+ * the shares it repairs are what that schema measures — and a reply is whatever came back.
+ * What it does not understand it leaves alone for the contract to report at its own path,
+ * so no reply can reach a bare `TypeError` with no path in it.
  */
-const checkAudience = (audience: Audience): Audience => {
+const checkAudience = (audience: Loose, classes: readonly AudienceDeviceClass[]): Loose => {
   const issues: { readonly path: readonly unknown[]; readonly message: string }[] = [];
+  const repaired: Loose = { ...audience };
+
   for (const field of ALWAYS_STATED) {
-    if (audience[field] === undefined) {
+    if (audience[field] === undefined || audience[field] === null) {
       issues.push({
         path: [field],
         message: `the audience states no ${field}: a sentence is read by somebody of some age in some language, so a Wonder audience states all of ${ALWAYS_STATED.join(', ')} — and a field this use filled in itself would read as one the model wrote`,
@@ -298,55 +348,68 @@ const checkAudience = (audience: Audience): Audience => {
     }
   }
 
-  const held = <T>(
-    shares: readonly number[],
-    what: string,
-    path: readonly unknown[],
-    rebuild: (shares: readonly number[]) => T,
-    whole: T,
-  ): T => {
+  /** One list of entries, each carrying a share, held to being a distribution. */
+  const holdList = (field: 'devices' | 'ageGroups', what: string): void => {
+    const list = repaired[field];
+    if (!Array.isArray(list) || !list.every(isLoose)) return;
+    const entries = list as readonly Loose[];
+    const shares = sharesOf(entries.map((entry) => entry.share));
+    if (shares === null) return;
     const distribution = asDistribution(shares, what);
     if (!distribution.ok) {
-      issues.push({ path, message: distribution.refused });
-      return whole;
+      issues.push({ path: [field], message: distribution.refused });
+      return;
     }
-    return rebuild(distribution.shares);
+    repaired[field] = entries.map((entry, index) => ({
+      ...entry,
+      share: distribution.shares[index],
+    }));
   };
 
-  const devices = held(
-    audience.devices.map((device) => device.share),
-    'the device mix',
-    ['devices'],
-    (shares) => audience.devices.map((device, index) => ({ ...device, share: shares[index] })),
-    audience.devices,
-  );
-  const ageGroups =
-    audience.ageGroups === undefined
-      ? undefined
-      : held(
-          audience.ageGroups.map((group) => group.share),
-          'the age groups',
-          ['ageGroups'],
-          (shares) =>
-            (audience.ageGroups ?? []).map((group, index) => ({
-              ...group,
-              share: shares[index],
-            })),
-          audience.ageGroups,
-        );
-  const genderSplit =
-    audience.genderSplit === undefined
-      ? undefined
-      : held(
-          [audience.genderSplit.male, audience.genderSplit.female],
-          'the gender split',
-          ['genderSplit'],
-          (shares) => ({ male: shares[0], female: shares[1] }),
-          audience.genderSplit,
-        );
+  holdList('devices', 'the device mix');
+  holdList('ageGroups', 'the age groups');
+
+  const split = repaired.genderSplit;
+  if (isLoose(split)) {
+    const shares = sharesOf([split.male, split.female]);
+    if (shares !== null) {
+      const distribution = asDistribution(shares, 'the gender split');
+      if (distribution.ok) {
+        repaired.genderSplit = { male: distribution.shares[0], female: distribution.shares[1] };
+      } else {
+        issues.push({ path: ['genderSplit'], message: distribution.refused });
+      }
+    }
+  }
+
+  // A class is named out of the list this ask carries, and named once. The reply shape's own
+  // enumeration already closes the first for a model's reply; an audience that arrives in the
+  // artifact's shape has no enumeration behind it, and neither shape is held to the second by
+  // anything else — `audienceSchema` holds one age bracket to one share and says nothing
+  // about a device named twice, which is the same fault for the same reason.
+  const devices = repaired.devices;
+  if (Array.isArray(devices)) {
+    const seen = new Set<string>();
+    devices.forEach((device, index) => {
+      if (!isLoose(device) || typeof device.name !== 'string') return;
+      if (!classes.some((offered) => offered.name === device.name)) {
+        issues.push({
+          path: ['devices', index, 'name'],
+          message: `the device mix is on "${device.name}", which is not one of the ${classes.length} classes this ask offered (${classes.map((offered) => `"${offered.name}"`).join(', ')}): a class is named out of the list the ask carries, and its geometry is this ask's rather than the reply's`,
+        });
+      }
+      if (seen.has(device.name)) {
+        issues.push({
+          path: ['devices', index, 'name'],
+          message: `device class "${device.name}" appears more than once: one class carries one share, exactly as one age bracket carries one share`,
+        });
+      }
+      seen.add(device.name);
+    });
+  }
 
   if (issues.length > 0) throw new AudienceReplyRefused(issues);
-  return { ...audience, devices, ageGroups, genderSplit };
+  return repaired;
 };
 
 /**
@@ -355,16 +418,25 @@ const checkAudience = (audience: Audience): Audience => {
  * same object the structured form saves and not an audience this file believes in.
  */
 const parseAudience = (reply: unknown, input: AudienceAskInput): Audience => {
-  // The model answers the described fields and never sees `id` or `generatedFrom`; the
-  // offline generator answers the artifact's own shape, with both already stamped. Routing
-  // on the provenance block rather than on two validators is also what makes this function
-  // idempotent, which it has to be: `createOfflineWonderProvider` runs the generator's
-  // answer through here, and a caller is free to run an audience through it twice.
-  const stamped =
-    typeof reply === 'object' && reply !== null && 'generatedFrom' in reply
-      ? (reply as Audience)
-      : stamp(audienceReplySchema(classesOf(input)).parse(reply), input);
-  return audienceSchema.parse(checkAudience(stamped));
+  const classes = classesOf(input);
+  // Two shapes reach one validator. A model answers the described fields, with a device class
+  // per entry and no provenance block, because it is never shown either of those two fields.
+  // The offline generator answers the artifact's own audience — which is also what a caller
+  // is handed back, so this function has to read its own answer: the offline implementation
+  // runs the generator's audience through here, and a caller is free to run one through twice.
+  //
+  // Which shape it is decides nothing about what is trusted. The caller's id and provenance
+  // are stamped on either way, so a reply carrying a provenance block of its own cannot name
+  // the audience id it is stored under, the seed it is reproducible from or the generator its
+  // people are drawn by; and the device classes of either shape are held to the ones this ask
+  // offered, below.
+  const described = isLoose(reply) && 'generatedFrom' in reply ? reply : null;
+  const stamped: Loose = {
+    ...(described ?? (stamp(audienceReplySchema(classes).parse(reply), input) as unknown as Loose)),
+    id: input.id,
+    generatedFrom: { seed: input.seed, generatorVersion: input.generatorVersion },
+  };
+  return audienceSchema.parse(checkAudience(stamped, classes));
 };
 
 /** The sentence with the punctuation a person types at the end of one taken off. */
@@ -382,6 +454,41 @@ const splitAt = (text: string, marker: RegExp): readonly [string, string | undef
   if (found === null) return [text, undefined];
   const after = trimmed(text.slice(found.index + found[0].length));
   return [trimmed(text.slice(0, found.index)), after === '' ? undefined : after];
+};
+
+/**
+ * The words a sentence names a device class by, for the three classes this file offers. A
+ * class this table does not know is named by its own name, so a caller's own list needs no
+ * entry here.
+ */
+const CLASS_WORDS: Readonly<Record<string, readonly string[]>> = {
+  mobile: ['phone', 'mobile', 'smartphone'],
+  desktop: ['desktop', 'laptop', 'computer'],
+  tablet: ['tablet', 'ipad'],
+};
+
+/**
+ * The class the sentence names **first**, or `null` where it names none.
+ *
+ * First rather than best, and by position rather than by testing one pattern before the
+ * other: _"desktop users who never touch a phone"_ is a desktop audience, and reading the
+ * whole sentence for `phone` before `desktop` would make it a mobile one. Every class offered
+ * can be reached this way, which a pair of patterns in a fixed order could not — a tablet was
+ * in the list with no sentence able to name it.
+ */
+const classNamedIn = (
+  sentence: string,
+  classes: readonly AudienceDeviceClass[],
+): AudienceDeviceClass | null => {
+  const lower = sentence.toLowerCase();
+  let first: { readonly at: number; readonly device: AudienceDeviceClass } | null = null;
+  for (const device of classes) {
+    for (const word of CLASS_WORDS[device.name] ?? [device.name]) {
+      const at = lower.indexOf(word.toLowerCase());
+      if (at !== -1 && (first === null || at < first.at)) first = { at, device };
+    }
+  }
+  return first === null ? null : first.device;
 };
 
 /** Two decimals, which is how a person reads a share and how a model writes one. */
@@ -408,26 +515,18 @@ const offlineAudience = (input: AudienceAskInput, seed: number): Audience => {
   const [role, place] = splitAt(whoBefore, /\s+(?:in|from|across)\s+/iu);
 
   const classes = classesOf(input);
-  const named = (...words: readonly string[]): AudienceDeviceClass | undefined =>
-    classes.find((device) => words.includes(device.name));
-  const leading =
-    (/phone|mobile/iu.test(sentence)
-      ? named('mobile', 'phone')
-      : /desktop|laptop|computer/iu.test(sentence)
-        ? named('desktop')
-        : undefined) ?? classes[0];
+  const leading = classNamedIn(sentence, classes) ?? classes[0];
   const others = classes.filter((device) => device !== leading);
-  // A majority on the device the sentence names, the rest of the audience on the next class
-  // offered, and nobody on any class after it — which is the shape the Audience form's own
-  // chips start in, and a share of zero is a class that carries nobody rather than one that
-  // was left out.
+  // A majority on the class the sentence names and the rest of the audience on the next class
+  // offered. **Only the classes that carry somebody are in the mix**: a class declared at a
+  // share of zero is not a class nobody is on — `packages/personas`' device quota hands every
+  // *declared* class at least one person once the audience is larger than the mix — so a
+  // class the sentence does not reach is left out of the audience rather than declared empty,
+  // which is also what the Audience form does with a chip nobody chose.
   const share = others.length === 0 ? 1 : round2(0.6 + random() * 0.2);
   const devices = [
     { class: leading.name, share },
-    ...others.map((device, index) => ({
-      class: device.name,
-      share: index === 0 ? round2(1 - share) : 0,
-    })),
+    ...(others.length === 0 ? [] : [{ class: others[0].name, share: round2(1 - share) }]),
   ];
 
   // Two neighbouring brackets, so that the age range they derive to is one a person would
