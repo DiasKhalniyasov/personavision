@@ -10,10 +10,17 @@ import type { CommentInput, CommentRefused } from './body.js';
  * the comment this product wrote and **edits** it; there is no second create, and no
  * sweeping up of old ones afterwards.
  *
- * Finding it is by this product's own hidden marker and nothing else — not by the author,
- * not by the first comment on the pull request, not by anything a reader could reproduce
- * by writing a comment of their own. A comment that does not carry the marker is somebody
- * else's writing and is never edited, whoever wrote it and whatever it says.
+ * Finding it is by this product's own hidden marker — not by the author, not by the first
+ * comment on the pull request. A comment that does not carry the marker is somebody else's
+ * writing and is never edited, whoever wrote it and whatever it says.
+ *
+ * The marker has to **open** the comment, which is a comment nobody writes by accident.
+ * GitHub's *Quote reply* copies a comment's raw markdown, HTML comment and all, so a
+ * reviewer quoting this one creates a second comment that carries the marker — behind a
+ * `> ` on every line. Matching the marker anywhere in the body would make that quote one of
+ * ours, and once our own comment is deleted (an owner tidying the pull request up) the next
+ * run would overwrite the reviewer's words with the product's figures. Reading only the
+ * first characters of the body costs nothing and closes that.
  *
  * Everything here goes through the one GitHub client seam, so a test runs over the recorded
  * transport with no token and no network.
@@ -38,7 +45,7 @@ export type RunCommentResult = RunCommentPosted | RunCommentUpdated | CommentRef
  * whose comments are all somebody else's.
  */
 export const findRunComment = (comments: readonly IssueComment[]): IssueComment | undefined =>
-  comments.find((entry) => entry.body.includes(COMMENT_MARKER));
+  comments.find((entry) => entry.body.startsWith(COMMENT_MARKER));
 
 /** `owner/name`, as the run records a repository and as the client seam takes one. */
 const repositoryOf = (spelling: string): GitHubRepository => {
@@ -62,6 +69,10 @@ export const postRunComment = async (
 
   const repository = repositoryOf(draft.pullRequest.repository);
   const pullNumber = draft.pullRequest.number;
+  // One read of the pull request's comments, which the client asks for a hundred of. A
+  // pull request whose hundred-and-first comment is ours is one the marker cannot be found
+  // on, and this would post a second: widening that is the client seam's to do (#297), and
+  // it is noted on #301 rather than worked around here.
   const ours = findRunComment(await client.readComments(repository, pullNumber));
 
   return ours === undefined

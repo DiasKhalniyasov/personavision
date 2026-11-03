@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COMMENT_MARKER,
   commentBody,
   createGitHubClient,
   createRecordedTransport,
@@ -149,7 +150,28 @@ describe('a comment somebody else wrote is never edited', () => {
     expect(recorded.requests.map((request) => request.path)).toEqual([COMMENTS, EDIT]);
   });
 
-  it('finds ours by the marker alone, whatever the comment says around it', () => {
+  it('never edits a quote of our own comment, which carries the marker behind a “>”', async () => {
+    // GitHub's Quote reply copies the raw markdown, HTML comment and all. Our own comment
+    // has been deleted here — an owner tidying the pull request up — so the quote is the
+    // only comment left carrying the marker.
+    const quoted = written()
+      .split('\n')
+      .map((row) => `> ${row}`)
+      .join('\n');
+    const theirs = reply(4, `${quoted}\n\nIs the holdout really only 40 people?`, 'a-reviewer');
+
+    const { recorded, client } = over([
+      { method: 'GET', path: COMMENTS, reply: { body: [theirs] } },
+      { method: 'POST', path: POST, reply: { status: 201, body: reply(9, written()) } },
+    ]);
+
+    const result = await postRunComment(client, { run: runWithChange(), runUrl: RUN_URL });
+
+    expect(result.kind).toBe('posted');
+    expect(recorded.requests.map((request) => request.path)).toEqual([COMMENTS, POST]);
+  });
+
+  it('finds ours by the marker it opens with, whatever the comment says after it', () => {
     const ours: IssueComment = {
       id: 9,
       body: written(),
@@ -165,6 +187,7 @@ describe('a comment somebody else wrote is never edited', () => {
 
     expect(findRunComment([theirs, ours])?.id).toBe(9);
     expect(findRunComment([theirs])).toBeUndefined();
+    expect(findRunComment([{ ...theirs, body: `> ${COMMENT_MARKER}\n> quoted` }])).toBeUndefined();
   });
 });
 

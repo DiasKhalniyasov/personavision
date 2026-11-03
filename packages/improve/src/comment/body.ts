@@ -53,13 +53,23 @@ export const COMMENT_MARKER = '<!-- personavision:run-comment -->';
 export const SIMULATED_LABEL = 'simulated';
 
 /**
- * What a measurement looks like in the finished text: a percentage, a *38 of 93*, or a
- * count of people. It is deliberately a reading of the **text** and not of the figures
- * that went in — the promise is about what a reader sees, and a reader cannot see an
- * intention. It matches no part of a URL, a date or a pull request number, none of which
- * is a measurement of anybody.
+ * What a measurement looks like in the finished text: a percentage, a *38 of 93*, a count
+ * of people, a duration, or a number of times. It is deliberately a reading of the **text**
+ * and not of the figures that went in — the promise is about what a reader sees, and a
+ * reader cannot see an intention.
+ *
+ * The five shapes are the ones `@personavision/scoring`'s own `wording.ts` emits —
+ * `percentSaid`, `outOf`, `people`, `secondsSaid`, `millisecondsSaid` and `timesSaid` —
+ * because the one thing in this body the product did not write is a run's prose, and that
+ * prose is written there. A reason reading *"the first look took 610 ms longer"* is a
+ * simulated measurement and is labelled as one.
+ *
+ * It matches no part of a date or a pull request number. It is not asked about the link
+ * line, which carries no measurement by construction and whose percent-encoding would
+ * read as one.
  */
-const MEASUREMENT = /\d[\d,.]*\s*%|\b\d+\s+(?:of|in)\s+(?:the\s+)?\d+\b|\b\d+\s+people\b/;
+const MEASUREMENT =
+  /\d[\d,.]*\s*%|\b\d+\s+(?:of|in)\s+(?:the\s+)?\d+\b|\b\d+\s+people\b|\b\d[\d,.]*\s*m?s\b|\b\d+\s+times\b/;
 
 /** The label, however it was spelled. */
 const LABELLED = /simulated/i;
@@ -111,34 +121,67 @@ const refused = (reason: string): CommentRefused => ({ kind: 'refused', reason }
 const labelled = (text: string): string =>
   MEASUREMENT.test(text) && !LABELLED.test(text) ? `${text} (${SIMULATED_LABEL})` : text;
 
-/** The share as a percentage, as the product says it everywhere else. */
-const percent = (rate: number): string => `${String(Math.round(rate * 100))}%`;
+/**
+ * The stored share as a percentage — and **100% and 0% are reserved for everybody and
+ * nobody**, as the Verdict screen's own `inTen` reserves ten tenths and none.
+ *
+ * Rounding never reaches them. 199 of 200 is 99% here and not 100%, because this is the one
+ * line of the product a reader quotes back, and *"100% completed the task, 199 of 200
+ * people"* contradicts itself inside one line. The counts decide the two ends, so the
+ * figure and the population beside it always say the same thing.
+ */
+const percent = (figures: HoldoutFigures | Score): string => {
+  const { success } = figures.outcomeCounts;
+  if (success === 0) return '0%';
+  if (success === figures.scoredSessionCount) return '100%';
+  return `${String(Math.min(99, Math.max(1, Math.round(figures.completionRate * 100))))}%`;
+};
 
-/** The population behind the figure, which is what makes the percentage readable. */
-const population = (figures: HoldoutFigures | Score): string =>
-  `${String(figures.outcomeCounts.success)} of ${String(figures.scoredSessionCount)} people`;
+/**
+ * The population behind the figure, which is what makes the percentage readable. Spelled as
+ * `@personavision/scoring`'s `outOf` spells it, the singular included: *1 of 1 person*.
+ */
+const population = (figures: HoldoutFigures | Score): string => {
+  const scored = figures.scoredSessionCount;
+  return `${String(figures.outcomeCounts.success)} of ${String(scored)} ${scored === 1 ? 'person' : 'people'}`;
+};
 
 const figure = (label: string, figures: HoldoutFigures | Score, note = ''): string =>
   labelled(
-    `- **${label}** — ${percent(figures.completionRate)} completed the task (${SIMULATED_LABEL}), ${population(figures)}${note}`,
+    `- **${label}** — ${percent(figures)} completed the task (${SIMULATED_LABEL}), ${population(figures)}${note}`,
   );
 
 /**
  * The holdout line, in words, in the body's opening lines. A change that won on the seeds
  * it was chosen on and not on the holdout reads as *not confirmed* here, where a reader
  * who stops after two lines still sees it, and not in a trailing note.
+ *
+ * It is a **label and not an explanation**, because the run's own headline already is the
+ * explanation: `judgeHoldout` in `@personavision/scoring` writes the holdout into
+ * `verdict.audienceSentence` and *replaces* the headline with it rather than appending a
+ * caveat (decision 96). A sentence of ours spelling the same judgement out a second time
+ * would state *not confirmed* twice in one paragraph, in two different wordings, which is
+ * the drift this product has one spelling of everything to avoid. The prototype's notice
+ * leads with exactly these three words, so the label is also what `#screen-improve` draws.
  */
 const HOLDOUT_LINE: Readonly<Record<HoldoutVerdict, string>> = {
-  confirmed:
-    '**Confirmed on the holdout.** The gain held up on people this change was never chosen against, so it is the change and not the swarm agreeing with itself.',
-  not_confirmed:
-    '**Not confirmed on the holdout.** This change won on the seeds it was chosen on and not on the people it was never chosen against, so the gain below is not confirmed.',
-  none: '**No holdout ran.** Nobody was held out of the people this change was chosen from, so nothing below is confirmed against people it was never chosen against.',
+  confirmed: '**Confirmed on the holdout.**',
+  not_confirmed: '**Not confirmed on the holdout.**',
+  /** No holdout, or one too small to judge: both are `none`, and neither confirms anything. */
+  none: '**No holdout ran.** Nothing below is confirmed against people this change was never chosen against.',
 };
 
-/** A link to the run is an `http://` or `https://` address that names a host. */
+/**
+ * A link to the run is an `http://` or `https://` address that names a host, and that
+ * cannot end the markdown link it is written into.
+ *
+ * `(`, `)`, `<`, `>`, `` ` `` and `"` are what close a link destination or open a title, so
+ * an address carrying one would end the link early and leave the rest of itself in the
+ * comment as raw markup — on a customer's pull request, which is the one thing this module
+ * must not do. No address of a run on the platform carries any of them.
+ */
 const linkable = (url: string): boolean => {
-  if (/[\s\u0000-\u001f\u007f]/.test(url)) return false;
+  if (/[\s\u0000-\u001f\u007f()<>`"]/.test(url)) return false;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -187,6 +230,7 @@ export const commentBody = (input: CommentInput): CommentDraft => {
 
   const verdict: HoldoutVerdict = run.verdict.holdout ?? 'none';
   const holdout = after.holdout;
+  const link = `[See this run on PersonaVision](${runUrl})`;
 
   const blocks = [
     COMMENT_MARKER,
@@ -200,12 +244,17 @@ export const commentBody = (input: CommentInput): CommentDraft => {
         : [figure('Holdout', holdout, ', on seeds this change was never chosen against')]),
     ].join('\n'),
     ['**Why**', '', ...run.verdict.reasons.map((reason) => labelled(`- ${reason}`))].join('\n'),
-    `[See this run on PersonaVision](${runUrl})`,
+    link,
     `Simulated for ${run.audience.name}. It says this change helps these people; it does not estimate what it will do to your conversion rate. Merging is yours.`,
   ];
   const text = `${blocks.join('\n\n')}\n`;
 
-  const unlabelled = text.split('\n').find((row) => MEASUREMENT.test(row) && !LABELLED.test(row));
+  // Every line but the link, which carries no measurement and whose percent-encoding would
+  // read as one: `%20%2F` holds a `0%`, and refusing a whole comment over it would stop one
+  // deployment's runs from ever being commented on, with a reason that reads like a typo.
+  const unlabelled = text
+    .split('\n')
+    .find((row) => row !== link && MEASUREMENT.test(row) && !LABELLED.test(row));
   if (unlabelled !== undefined) {
     return refused(
       `every number in this comment is labelled ${SIMULATED_LABEL}, and "${unlabelled.trim()}" is not: nothing is posted`,

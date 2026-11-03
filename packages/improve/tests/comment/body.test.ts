@@ -143,10 +143,24 @@ describe('the holdout line is in the opening lines, in words', () => {
       .join('\n');
 
   it('reads “not confirmed” before anything else when the holdout did not confirm', () => {
-    const written = body(runWithChange({ holdout: 'not_confirmed' }));
+    const run = runWithChange({ holdout: 'not_confirmed' });
+    const written = body(run);
 
     expect(opening(written)).toContain('**Not confirmed on the holdout.**');
-    expect(opening(written)).toContain('never chosen against');
+    expect(opening(written)).toContain(run.verdict.audienceSentence);
+  });
+
+  it('labels the judgement rather than explaining it a second time', () => {
+    // judgeHoldout in @personavision/scoring replaces the headline with one that states the
+    // holdout in full (decision 96), so a sentence of ours saying the same thing would read
+    // as two different wordings of one judgement in one paragraph.
+    const run = runWithChange({ holdout: 'not_confirmed' });
+    run.verdict.audienceSentence =
+      'Outdoor-gear shoppers buy a tent more easily on B than on A, but the 20 people the change was never chosen against did not move with them: this gain is not confirmed.';
+
+    expect(body(run)).toContain(
+      `**Not confirmed on the holdout.** ${run.verdict.audienceSentence}`,
+    );
   });
 
   it('reads “confirmed” in the same place when it did', () => {
@@ -241,5 +255,58 @@ describe('there are runs with no comment to write', () => {
     for (const url of ['javascript:alert(1)', 'file:///Users/someone/runs/run.json', 'not a url']) {
       expect(refusal(runWithChange(), url)).toContain('http:// or https://');
     }
+  });
+
+  it('refuses a link that would end the markdown it is written into', () => {
+    // A `)` closes the link destination, and everything after it lands in somebody's pull
+    // request as raw markup.
+    for (const url of [
+      'https://app.personavision.example/x)<img/src=y/onerror=alert(1)>',
+      'https://app.personavision.example/x "a title"',
+      'https://app.personavision.example/`x`',
+    ]) {
+      expect(refusal(runWithChange(), url)).toContain('http:// or https://');
+    }
+  });
+
+  it('posts a comment for a link whose path is percent-encoded', () => {
+    // `%20%2F` holds a `0%`, which the measurement check must not read as an unlabelled
+    // figure: refusing there would stop one deployment's runs from ever being commented on.
+    const url = 'https://app.personavision.example/runs/a%20%2Fb';
+
+    expect(body(runWithChange(), url)).toContain(`[See this run on PersonaVision](${url})`);
+  });
+});
+
+describe('the figures say the same thing as the counts beside them', () => {
+  const withCounts = (success: number, scored: number): Run => {
+    const run = runWithChange({ holdout: 'none' });
+    run.scores[1].completionRate = success / scored;
+    run.scores[1].outcomeCounts = {
+      success,
+      abandoned: scored - success,
+      failed: 0,
+      automationFailure: 0,
+    };
+    run.scores[1].scoredSessionCount = scored;
+    return run;
+  };
+
+  it('keeps 100% for everybody and 0% for nobody, and rounds to neither', () => {
+    expect(body(withCounts(199, 200))).toContain('99% completed the task (simulated), 199 of 200');
+    expect(body(withCounts(200, 200))).toContain('100% completed the task (simulated), 200 of 200');
+    expect(body(withCounts(1, 300))).toContain('1% completed the task (simulated), 1 of 300');
+    expect(body(withCounts(0, 300))).toContain('0% completed the task (simulated), 0 of 300');
+  });
+
+  it('says one person rather than one people', () => {
+    expect(body(withCounts(1, 1))).toContain('100% completed the task (simulated), 1 of 1 person');
+  });
+
+  it('labels a reason that states a duration, which the scoring step also writes', () => {
+    const run = runWithChange();
+    run.verdict.reasons = ['The first look at the button took 610 ms longer.'];
+
+    expect(body(run)).toContain('- The first look at the button took 610 ms longer. (simulated)');
   });
 });
