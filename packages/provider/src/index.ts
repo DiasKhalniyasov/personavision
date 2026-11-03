@@ -89,6 +89,17 @@ export type {
 export { createOfflineWonderProvider, OFFLINE_WONDER_PROVIDER_NAME } from './wonder-offline.js';
 
 export {
+  AUDIENCE_DEVICE_CLASSES,
+  AUDIENCE_EFFORT,
+  AUDIENCE_REPLY_SCHEMA_NAME,
+  audienceAsk,
+  DEFAULT_AUDIENCE_SIZE,
+  SHARE_ROUNDING_TOLERANCE,
+  writeAudience,
+} from './wonder-audience.js';
+export type { AudienceAskInput, AudienceDeviceClass } from './wonder-audience.js';
+
+export {
   applyUnifiedPatch,
   CHANGE_EFFORT,
   CHANGE_REPLY_SCHEMA_NAME,
