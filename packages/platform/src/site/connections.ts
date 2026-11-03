@@ -1,3 +1,5 @@
+import type { GithubInstallationStore } from '../store/connections.js';
+
 /**
  * The connection seam: whether a GitHub repository is connected to a site, and which one.
  *
@@ -69,11 +71,46 @@ export interface SiteConnections {
 /**
  * The default lookup: **no repository is connected**, to any site, in any workspace.
  *
- * This is what `personavision serve` runs until #227 supplies the real one, and it is a
- * truthful answer rather than a stub — nothing has installed the GitHub App, because there is
- * no GitHub App yet. The method's panel on `#screen-site` therefore draws its empty state
- * with the sentence that says so, which is the state every site is in today.
+ * It is no longer what `personavision serve` runs — `createPlatform` hands the checks
+ * `storedSiteConnections` below, which reads the workspace's own installation record (#299).
+ * This stays as the answer where the seam is unwired: a check handed deps with no lookup in
+ * them, and a test that wants a site with nothing connected to it. It is a truthful answer
+ * rather than a stub, and the sentence the method's panel draws from it is the one every
+ * site gets until somebody connects a repository.
  */
 export const noSiteConnections: SiteConnections = {
   forWorkspace: async () => [],
 };
+
+/**
+ * The real lookup: the workspace's connected repository, read from the store (#299).
+ *
+ * This is what `createPlatform` hands the checks in place of `noSiteConnections`, through the
+ * `siteConnections` option #238 defined — so there is still **one** path to a verified site
+ * and this file is the only thing that changed when the connection became real.
+ *
+ * It answers at most one connection, because a workspace has at most one connected
+ * repository (`GithubInstallationStore`). The check does not care how many there are: a
+ * connection naming this site verifies it, a connection naming another site of the workspace
+ * gets its own sentence, and an empty answer is "nothing is connected".
+ *
+ * **The installation id does not come through.** Nothing downstream of here — the check, the
+ * stored `lastCheck`, the site the route answers with — has any use for it, so it stops at
+ * the store rather than travelling into a result a screen prints.
+ */
+export const storedSiteConnections = (
+  installations: Pick<GithubInstallationStore, 'forWorkspace'>,
+): SiteConnections => ({
+  forWorkspace: async (workspaceId) => {
+    const connected = await installations.forWorkspace(workspaceId);
+    return connected === null
+      ? []
+      : [
+          {
+            siteId: connected.siteId,
+            repository: connected.repository,
+            connectedAt: connected.connectedAt,
+          },
+        ];
+  },
+});

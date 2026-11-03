@@ -15,10 +15,10 @@ import type { SiteRepositoryConnection } from './connections.js';
  * the only one that looks nowhere.
  *
  * _"The installation exists and the connection names this site."_ There is no record to
- * resolve and no page to fetch — the check **asks the connection seam**
- * (`SiteConnections`), which answers nothing until the GitHub App of #227 fills it in. So no
- * network call is made here, no credential is read, and the result a site gets today is the
- * one that says no repository is connected to it.
+ * resolve and no page to fetch — the check **asks the connection seam** (`SiteConnections`),
+ * which on a running server reads the workspace's installation record (#299) and answers
+ * nothing where it has connected nothing. So no network call is made here and no credential
+ * is read: what verifies a site by this method is a record the workspace already has.
  *
  * It passes **exactly when a connection names this site**. A repository connected to another
  * site of the same workspace does not verify this one, and says so in its own sentence,
@@ -150,6 +150,7 @@ export const checkConnectedRepository: SiteCheck = async (
     );
   }
 
-  // The state every site is in until #227 lands: the workspace has connected nothing.
+  // The workspace has connected nothing — the state every site is in until somebody
+  // installs the App on the repository that deploys it.
   return result(nothingPublished([]), lookedIn);
 };
