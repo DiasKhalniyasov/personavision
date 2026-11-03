@@ -9,7 +9,10 @@
 
 export {
   audienceSchema,
+  changeSchema,
+  EVIDENCE_LINK_PARAMS,
   findingsSchema,
+  goalSchema,
   holdoutVerdictSchema,
   improveSchema,
   modelModeSchema,
@@ -25,10 +28,17 @@ export {
   ZERO_USAGE,
 } from './schemas.js';
 export type {
+  AgeGroup,
   Audience,
+  AudienceAgeGroup,
   AudienceDevice,
+  Change,
   Citation,
+  EvidenceLinkParam,
   Findings,
+  GenderSplit,
+  Goal,
+  GoalAuthor,
   Holdout,
   HoldoutFigures,
   HoldoutVerdict,

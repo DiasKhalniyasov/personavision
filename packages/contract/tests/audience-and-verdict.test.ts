@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Audience, Persona, Score, Verdict, Violation } from '../src/index.js';
 import {
   audienceSchema,
+  EVIDENCE_LINK_PARAMS,
   readRun,
   runPaths,
   runRequestSchema,
@@ -11,10 +12,12 @@ import {
   writeRun,
 } from '../src/index.js';
 import {
+  ageGroup,
   AUDIENCE_ID,
   CART,
   CONFIRM,
   COMPLETE_AOI,
+  extendedAudience,
   FINDING_ID,
   temporaryRunDir,
   validArtifact,
@@ -267,6 +270,140 @@ describe('the completion rate the product leads with', () => {
   });
 });
 
+describe('the audience is extended, never forked', () => {
+  const runDir = describeRunDir();
+
+  it('parses an audience that declares none of the three additions', async () => {
+    const { run } = await readRun(runDir.dir());
+
+    expect(run.audience.languages).toBeUndefined();
+    expect(run.audience.genderSplit).toBeUndefined();
+    expect(run.audience.ageGroups).toBeUndefined();
+  });
+
+  it('carries the gender split, the age groups and the languages, and reads them back', async () => {
+    const written = extendedAudience();
+
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = written;
+      }),
+    ).toEqual([]);
+    expect((await readRun(runDir.dir())).run.audience).toEqual(written);
+  });
+
+  it('rejects a gender split whose shares do not sum to 1, at the split', async () => {
+    const run = validRun();
+    run.audience = { ...extendedAudience(), genderSplit: { male: 0.46, female: 0.44 } };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/audience/genderSplit`);
+    expect(violations[0].message).toMatch(/shares must sum to 1/);
+  });
+
+  it('rejects a gender share outside 0..1, at that share', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = { ...extendedAudience(), genderSplit: { male: 1.4, female: -0.4 } };
+      }),
+    ).toContain(`${label.run}/audience/genderSplit/male`);
+  });
+
+  it('rejects an age mix whose shares do not sum to 1, at the age groups', async () => {
+    const run = validRun();
+    run.audience = {
+      ...extendedAudience(),
+      ageGroups: [ageGroup('25–34', 0.5), ageGroup('35–44', 0.2)],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/audience/ageGroups`);
+    expect(violations[0].message).toMatch(/shares must sum to 1/);
+  });
+
+  it('rejects a bracket nobody thinks in, at that bracket', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        const audience: Record<string, unknown> = { ...extendedAudience() };
+        audience['ageGroups'] = [{ group: '25-34', share: 1 }];
+        run.audience = audience as typeof run.audience;
+      }),
+    ).toContain(`${label.run}/audience/ageGroups/0/group`);
+  });
+
+  it('rejects the same bracket twice, at the repeat', async () => {
+    const run = validRun();
+    run.audience = {
+      ...extendedAudience(),
+      ageGroups: [ageGroup('25–34', 0.5), ageGroup('25–34', 0.5)],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/audience/ageGroups/1/group`);
+    expect(violations[0].message).toMatch(/appears more than once/);
+  });
+
+  it('rejects age groups that do not agree with ageRange, at the age groups', async () => {
+    const run = validRun();
+    // 25–45 is the range the fixture declares, and 65+ is nobody in it.
+    run.audience = { ...extendedAudience(), ageGroups: [ageGroup('65+', 1)] };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toContain(`${label.run}/audience/ageGroups`);
+    expect(violations[0].message).toMatch(/starts inside the lowest and ends inside the highest/);
+  });
+
+  it('accepts the open top bracket when the range reaches into it', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = {
+          ...extendedAudience(),
+          ageRange: { min: 25, max: 70 },
+          ageGroups: [ageGroup('25–34', 0.6), ageGroup('65+', 0.4)],
+        };
+      }),
+    ).toEqual([]);
+  });
+
+  it('lets a bracket that holds nobody sit outside the range it was derived from', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = {
+          ...extendedAudience(),
+          ageGroups: [...extendedAudience().ageGroups!, ageGroup('65+', 0)],
+        };
+      }),
+    ).toEqual([]);
+  });
+
+  it('accepts an age mix that sums to 1 only within the tolerance', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = {
+          ...extendedAudience(),
+          ageGroups: [ageGroup('25–34', 1 / 3), ageGroup('35–44', 1 / 3), ageGroup('45–54', 1 / 3)],
+        };
+      }),
+    ).toEqual([]);
+  });
+
+  it('refuses an empty list where the absent field is what declares nothing', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.audience = { ...extendedAudience(), languages: [], ageGroups: [] };
+      }),
+    ).toEqual([`${label.run}/audience/languages`, `${label.run}/audience/ageGroups`]);
+  });
+});
+
 describe('the audience schema on its own, as the platform and the generator parse it', () => {
   it('holds a bare audience to its device mix, before any run exists', () => {
     const audience = { ...validRun().audience };
@@ -289,6 +426,25 @@ describe('the audience schema on its own, as the platform and the generator pars
   });
 
   it('accepts the audience the run carries', () => {
+    expect(audienceSchema.safeParse(validRun().audience).success).toBe(true);
+  });
+
+  it('holds a bare audience to its gender split and its age mix, before any run exists', () => {
+    const result = audienceSchema.safeParse({
+      ...extendedAudience(),
+      genderSplit: { male: 0.5, female: 0.2 },
+      ageGroups: [ageGroup('18–24', 1)],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join('/'))).toEqual([
+      'genderSplit',
+      'ageGroups',
+    ]);
+  });
+
+  it('accepts a bare audience that was extended, and one that was not', () => {
+    expect(audienceSchema.safeParse(extendedAudience()).success).toBe(true);
     expect(audienceSchema.safeParse(validRun().audience).success).toBe(true);
   });
 });
@@ -334,13 +490,40 @@ describe("a finding's evidence link", () => {
     expect(violations[0].message).toMatch(/is not a parameter the evidence screens take/);
   });
 
-  it('accepts the parameters the Attention and Sessions routes have', async () => {
+  it('accepts every parameter the evidence routes have, and nothing else', async () => {
+    const findings = validFindings();
+    findings.findings[0].evidence_link.params = Object.fromEntries(
+      EVIDENCE_LINK_PARAMS.map((param) => [param, 'x']),
+    );
+    await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
+
+    expect(await validate(runDir.dir())).toEqual([]);
+  });
+
+  it('takes the four parameters this revision added, so a citation can be deep-linked', () => {
+    // `docs/FLOW.md` sections 14 and 16: the segment and overlay filters of the Heatmaps
+    // screen, the funnel step, and the video-millisecond offset a replay opens paused on.
+    expect([...EVIDENCE_LINK_PARAMS]).toEqual([
+      'variant',
+      'step',
+      'aoi',
+      'outcome',
+      'segment',
+      'overlay',
+      't',
+    ]);
+  });
+
+  it('accepts the Heatmaps filters and the replay timestamp a citation deep-links to', async () => {
     const findings = validFindings();
     findings.findings[0].evidence_link.params = {
       variant: 'B',
       step: CONFIRM,
       aoi: COMPLETE_AOI,
       outcome: 'abandoned',
+      segment: 'mobile · price-sensitive',
+      overlay: 'attention',
+      t: '2400',
     };
     await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
 

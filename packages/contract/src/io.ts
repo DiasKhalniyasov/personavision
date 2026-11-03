@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { z } from 'zod';
 import { runPaths, sessionIdFromFileName } from './paths.js';
 import type {
+  Citation,
   Findings,
   Recommendations,
   Run,
@@ -137,6 +138,7 @@ const checkReferences = (
   run: Run,
   sessions: ReadonlyArray<Session>,
   findings: Findings | undefined,
+  recommendations: Recommendations | undefined,
   violations: Violation[],
 ): void => {
   const declaredAois = new Set(run.aois.map((aoi) => aoi.id));
@@ -360,6 +362,35 @@ const checkReferences = (
       }
     });
   });
+
+  // Across two files, for the same reason: the Analysis screen renders a citation as a deep
+  // link into the session's recording at the millisecond it names, so a citation into a
+  // session this run does not hold is a link to nothing — and the one thing section 14 asks
+  // of that screen is that it render citations rather than invent them. The write-up's claims
+  // cite the same way and are held to the same rule.
+  const checkCitations = (
+    list: 'recommendations' | 'writeUp',
+    index: number,
+    citations: ReadonlyArray<Citation>,
+  ): void => {
+    citations.forEach((citation, position) => {
+      if (citation.kind === 'session' && !seen.has(citation.sessionId)) {
+        violations.push(
+          at(
+            relative.recommendations,
+            [list, index, 'citations', position, 'sessionId'],
+            `"${citation.sessionId}" names no session listed in run.json sessionIds`,
+          ),
+        );
+      }
+    });
+  };
+  recommendations?.recommendations.forEach((recommendation, index) => {
+    checkCitations('recommendations', index, recommendation.citations);
+  });
+  recommendations?.writeUp?.forEach((claim, index) => {
+    checkCitations('writeUp', index, claim.citations);
+  });
 };
 
 const readSessionIds = async (sessionsDir: string): Promise<string[]> => {
@@ -426,7 +457,7 @@ const collect = async (
   }
 
   if (run === undefined) return { artifact: undefined, violations };
-  checkReferences(run, [...byId.values()], findings, violations);
+  checkReferences(run, [...byId.values()], findings, recommendations, violations);
   if (findings === undefined || violations.length > 0) return { artifact: undefined, violations };
 
   // `run.sessionIds` is the authoritative order, and it agreed with disk above.
@@ -514,7 +545,7 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
     const session = parse(sessionSchema, candidate, label, violations);
     if (session !== undefined) sessions.push(session);
   }
-  if (run !== undefined) checkReferences(run, sessions, findings, violations);
+  if (run !== undefined) checkReferences(run, sessions, findings, recommendations, violations);
   if (violations.length > 0) throw new Error(report(runDir, violations));
 
   const paths = runPaths(runDir);

@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   Audience,
+  AudienceAgeGroup,
+  Change,
   Findings,
+  Goal,
   ModelMode,
   Recommendations,
   Run,
@@ -64,6 +67,67 @@ const audience = (): Audience => ({
   priceSensitivity: 0.75,
   size: 1,
   generatedFrom: { seed: 20_261_024, generatorVersion: 'persona-gen-1' },
+});
+
+/**
+ * The audience of the run, with the three additions the owner's direction made
+ * (`docs/FLOW.md` section 12). The base fixture declares none of them — that is what makes
+ * it the audience of a run written before they existed — so a test that wants them asks for
+ * them here.
+ *
+ * The brackets agree with the fixture's `ageRange` of 25–45, which is what the contract
+ * holds them to: the range starts inside the lowest bracket that carries somebody and ends
+ * inside the highest.
+ */
+export const extendedAudience = (): Audience => ({
+  ...audience(),
+  languages: ['English', 'Irish'],
+  genderSplit: { male: 0.46, female: 0.54 },
+  ageGroups: [
+    { group: '25–34', share: 0.5 },
+    { group: '35–44', share: 0.3 },
+    { group: '45–54', share: 0.2 },
+  ],
+});
+
+/** One bracket of the audience's age mix, for a test that replaces the list. */
+export const ageGroup = (group: AudienceAgeGroup['group'], share: number): AudienceAgeGroup => ({
+  group,
+  share,
+});
+
+/**
+ * The goal the run ran: what the agents attempt, what counts as having done it, and whose
+ * words those are now. It is the user's, because the fixture is a goal somebody read on the
+ * screen before launch and corrected.
+ */
+export const validGoal = (): Goal => ({
+  task: 'Buy the Ridgeline hiking boots in size 43.',
+  successCriterion: 'The confirmation step shows the text "Order complete".',
+  lastWrittenBy: 'user',
+});
+
+/**
+ * The change Muse Wonder decided from the recommendation above: one file, one patch, and
+ * the pull request to open for it.
+ */
+export const validChange = (): Change => ({
+  recommendationId: 'R-01',
+  changedFile: 'app/checkout/confirm/page.tsx',
+  patch: [
+    '--- a/app/checkout/confirm/page.tsx',
+    '+++ b/app/checkout/confirm/page.tsx',
+    '@@ -18,7 +18,7 @@',
+    '-      <OrderSummary />',
+    '-      <CompleteOrderButton />',
+    '+      <CompleteOrderButton />',
+    '+      <OrderSummary />',
+    '',
+  ].join('\n'),
+  pullRequest: {
+    title: 'Move Complete order above the order summary on the confirmation step',
+    body: 'Answers recommendation R-01: no simulated person fixated the button that completes the order, which sits 340 px below the fold at 1440 x 900. Every number behind this is simulated.',
+  },
 });
 
 const traits = () => ({

@@ -53,6 +53,49 @@ const timestamp = z.iso.datetime({ offset: true });
 /** `S-01`, `S-02` … `S-NN` — a session's id, and the name of its file under `sessions/`. */
 const sessionId = z.string().regex(/^S-\d{2,}$/, 'a session id is S-01, S-02 … S-NN');
 
+/**
+ * One plain sentence a reader could act on — the rule of `docs/FLOW.md` section 14 for a
+ * recommendation and of section 12 for the two sentences of a goal, enforced here and not
+ * by a prompt: something that needs two sentences is two of whatever it is, and a model
+ * that writes a paragraph is rejected rather than rendered.
+ *
+ * A boundary is a terminator followed by the start of another sentence, so a full stop
+ * inside a number (`2.5 seconds`) or an abbreviation (`e.g. the banner`) is not one.
+ */
+const SENTENCE_BOUNDARY = /[.!?]["')\]]*\s+["'([]*[A-Z0-9]/u;
+
+const oneSentence = (what: string, section = 14) =>
+  name.refine((value) => !SENTENCE_BOUNDARY.test(value), {
+    error: `${what} is one plain sentence (docs/FLOW.md section ${section}): this is two or more`,
+  });
+
+/**
+ * The age brackets a user actually thinks in (`docs/FLOW.md` section 12). They are the
+ * user's own words, so they are an enumeration and not a pair of numbers each audience
+ * picks for itself: two audiences cut at two different ages cannot be compared.
+ */
+const ageGroupSchema = z.enum(['18–24', '25–34', '35–44', '45–54', '55–64', '65+']);
+
+/**
+ * What each bracket means in years. The last one is open above — `max` is `null`, because
+ * `65+` is where a person stops being asked their age, not an upper bound somebody measured.
+ */
+const AGE_GROUP_YEARS: Record<
+  z.infer<typeof ageGroupSchema>,
+  { readonly min: number; readonly max: number | null }
+> = {
+  '18–24': { min: 18, max: 24 },
+  '25–34': { min: 25, max: 34 },
+  '35–44': { min: 35, max: 44 },
+  '45–54': { min: 45, max: 54 },
+  '55–64': { min: 55, max: 64 },
+  '65+': { min: 65, max: null },
+};
+
+/** `18–24`, or `65+` for the open one: a bracket as a message prints it. */
+const spellAgeGroup = (years: { readonly min: number; readonly max: number | null }): string =>
+  years.max === null ? `${years.min}+` : `${years.min}–${years.max}`;
+
 const viewportSchema = z.strictObject({
   width: z.int().positive(),
   height: z.int().positive(),
@@ -81,6 +124,20 @@ const personaTraitsSchema = z.strictObject({
  */
 const audienceDeviceSchema = deviceSchema.extend({ share: unitInterval });
 
+/**
+ * One age bracket of an audience, with the share of the audience in it. Like the device
+ * mix, the shares are a distribution; `audienceSchema` also holds them to agreeing with
+ * `ageRange`, which is derived from them (`docs/FLOW.md` section 12).
+ */
+const audienceAgeGroupSchema = z.strictObject({ group: ageGroupSchema, share: unitInterval });
+
+/**
+ * The share of the audience that is male and the share that is female — a distribution like
+ * `devices[].share` (`docs/FLOW.md` section 12), and the only two shares there are: a split
+ * is how the agents are drawn, not a statement about who exists.
+ */
+const genderSplitSchema = z.strictObject({ male: unitInterval, female: unitInterval });
+
 /** `devices[].share` is a distribution, so the mix has to add up to one whole audience. */
 const SHARE_TOLERANCE = 1e-6;
 
@@ -101,6 +158,34 @@ export const audienceSchema = z
     ageRange: z.strictObject({ min: z.int().min(0), max: z.int().min(0) }),
     roles: z.array(name),
     regions: z.array(name),
+    /**
+     * The languages the audience reads the page in, beside `regions`: "Almaty" and "in
+     * Russian" are two different facts about the same audience, and the agents read the
+     * page in one of them (`docs/FLOW.md` section 12).
+     *
+     * Optional with no default, like the two additions below — an audience carrying none
+     * declared none, which is not the same statement as an empty list, so the absent field
+     * is the one spelling of it.
+     */
+    languages: z
+      .array(name)
+      .min(1, 'an audience that declares no language leaves the field out rather than empty')
+      .optional(),
+    /**
+     * The gender split, when the audience declared one. Optional with no default: a split
+     * of zeroes is a measurement somebody made, and an audience that made none says so by
+     * carrying nothing here.
+     */
+    genderSplit: genderSplitSchema.optional(),
+    /**
+     * The age brackets the audience falls into, each with its share. Optional with no
+     * default, and when present a distribution that `ageRange` has to agree with: the range
+     * is derived from the brackets that carry somebody (`docs/FLOW.md` section 12).
+     */
+    ageGroups: z
+      .array(audienceAgeGroupSchema)
+      .min(1, 'an audience that declares no age group leaves the field out rather than empty')
+      .optional(),
     goals: z.array(name),
     devices: z.array(audienceDeviceSchema).min(1),
     techSavviness: unitInterval,
@@ -125,7 +210,90 @@ export const audienceSchema = z
         message: `an age range runs from min to max: found ${audience.ageRange.min}–${audience.ageRange.max}`,
       });
     }
+    if (audience.genderSplit !== undefined) {
+      const splitTotal = audience.genderSplit.male + audience.genderSplit.female;
+      if (Math.abs(splitTotal - 1) > SHARE_TOLERANCE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['genderSplit'],
+          message: `the gender split is a distribution: the shares must sum to 1 (±${SHARE_TOLERANCE}), and these sum to ${splitTotal}`,
+        });
+      }
+    }
+    const { ageGroups } = audience;
+    // An empty list is refused above, by the rule that the absent field is what declares
+    // nothing: the checks below would otherwise report the same fault a second time.
+    if (ageGroups !== undefined && ageGroups.length > 0) {
+      const groupTotal = ageGroups.reduce((total, group) => total + group.share, 0);
+      if (Math.abs(groupTotal - 1) > SHARE_TOLERANCE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['ageGroups'],
+          message: `the age groups are a distribution: the shares must sum to 1 (±${SHARE_TOLERANCE}), and these sum to ${groupTotal}`,
+        });
+      }
+      // One bracket carries one share: the same bracket twice is two numbers for one fact,
+      // and whichever a reader took would be a different audience.
+      const declared = new Set<string>();
+      ageGroups.forEach((entry, index) => {
+        if (declared.has(entry.group)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['ageGroups', index, 'group'],
+            message: `age group "${entry.group}" appears more than once: one bracket carries one share`,
+          });
+        }
+        declared.add(entry.group);
+      });
+      // `ageRange` is derived from the brackets that carry somebody, so it starts inside the
+      // lowest of them and ends inside the highest. A bracket with a zero share holds nobody
+      // and so cannot widen the range it was derived from.
+      const years = ageGroups
+        .filter((entry) => entry.share > 0)
+        .map((entry) => AGE_GROUP_YEARS[entry.group]);
+      if (years.length > 0) {
+        const lowest = years.reduce((a, b) => (b.min < a.min ? b : a));
+        const highest = years.reduce((a, b) => (b.min > a.min ? b : a));
+        const outside = (age: number, bracket: { min: number; max: number | null }): boolean =>
+          age < bracket.min || (bracket.max !== null && age > bracket.max);
+        if (outside(audience.ageRange.min, lowest) || outside(audience.ageRange.max, highest)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['ageGroups'],
+            message: `the age groups that carry somebody run ${spellAgeGroup(lowest)} to ${spellAgeGroup(highest)}, and ageRange is ${audience.ageRange.min}–${audience.ageRange.max}: an age range is derived from those brackets, so it starts inside the lowest and ends inside the highest`,
+          });
+        }
+      }
+    }
   });
+
+/**
+ * Who last wrote the goal — the model, or the user who edited what it wrote. A completion
+ * rate is only as meaningful as the criterion behind it, so a reader a month later has to be
+ * able to see which of the two wrote the one they are reading (`docs/FLOW.md` section 12).
+ */
+const goalAuthorSchema = z.enum(['model', 'user']);
+
+/**
+ * The goal a run was given: what the agents attempt, and what counts as having done it
+ * (`docs/FLOW.md` section 12). Muse Wonder writes both from the site's URL and the feature
+ * description, the user may edit either on the screen before launch, and the edited text is
+ * what the run records.
+ *
+ * The success criterion is **what has to be observable in the page** — a visible element, a
+ * URL, a piece of text — and not a judgement and not a feeling. Whether a sentence is
+ * observable is not something a schema can decide: the provider sends an unobservable
+ * criterion back once for one it can state (step #219). What is held here is the shape, and
+ * that each of the two is one sentence.
+ */
+export const goalSchema = z.strictObject({
+  /** What the agents attempt, in the words a person would use. */
+  task: oneSentence("a goal's task", 12),
+  /** What has to be observable in the page for an attempt to count as a success. */
+  successCriterion: oneSentence('a success criterion', 12),
+  /** The model, or the user: whoever's words these are now. */
+  lastWrittenBy: goalAuthorSchema,
+});
 
 /**
  * One simulated person, generated from the audience. It carries where it came from —
@@ -495,6 +663,50 @@ const holdoutVerdictOf = (confirmed: boolean | null): z.infer<typeof holdoutVerd
 };
 
 /**
+ * Which recommendation a change answers and the one file it touches: the two fields the
+ * change Muse Wonder decides and the change a run tested spell the same way. Declared once
+ * here so that `changeSchema` and `improveSchema` cannot drift into two spellings of one
+ * fact.
+ */
+const changeTargetShape = {
+  /** The recommendation this change answers, by its id in `recommendations.json`. */
+  recommendationId: name,
+  /** The file in the repository the change touches: one targeted change, not a list. */
+  changedFile: name,
+} as const;
+
+/**
+ * The change Muse Wonder decided — the fourth of the four things it answers
+ * (`docs/FLOW.md` sections 15 and 16): the recommendation it answers, the file it touches,
+ * the patch, and the title and body of the pull request to open. **One change, not a
+ * list**: a model that would rather make two has to pick one, and this shape is where that
+ * is true instead of a prompt.
+ *
+ * It is the decision, not the outcome. `improveSchema` below is what a run records once the
+ * pull request exists — its number, its URL, the preview it was tested at and the holdout
+ * it was tested against — and it shares the two fields above with this one rather than
+ * restating them.
+ */
+export const changeSchema = z.strictObject({
+  ...changeTargetShape,
+  /**
+   * The patch that makes the change, as a unified diff. It is carried as text and not
+   * parsed here: a contract that guessed at a diff dialect would refuse patches `git apply`
+   * accepts, and the repository is the only thing that can say whether one applies.
+   */
+  patch: z
+    .string()
+    .min(1, 'a change carries the patch that makes it: an empty patch changes nothing'),
+  /**
+   * The pull request this change asks for, before there is one. The body states the
+   * recommendation it comes from, the evidence it cites and that the numbers behind it are
+   * simulated (`docs/FLOW.md` section 15); that it says so is the writer's job, and what is
+   * held here is that there is a body to say it in.
+   */
+  pullRequest: z.strictObject({ title: name, body: name }),
+});
+
+/**
  * The change a run tested — the whole of what the artifact learns about path 2's closed
  * loop (`docs/FLOW.md` section 15): the recommendation the change answers, the file it
  * touches, the pull request it was opened as, the preview it was tested at, and the holdout
@@ -507,10 +719,7 @@ const holdoutVerdictOf = (confirmed: boolean | null): z.infer<typeof holdoutVerd
  * (`docs/FLOW.md` section 16).
  */
 export const improveSchema = z.strictObject({
-  /** The recommendation this change answers, by its id in `recommendations.json`. */
-  recommendationId: name,
-  /** The file in the repository the change touches: one targeted change, not a list. */
-  changedFile: name,
+  ...changeTargetShape,
   pullRequest: pullRequestSchema,
   preview: previewSchema,
   baselineVariant: name,
@@ -538,6 +747,13 @@ export const runSchema = z
     failure: runFailureSchema.optional(),
     usage: runUsageSchema.optional(),
     task: taskSchema,
+    /**
+     * The goal this run ran, and who last wrote it (`docs/FLOW.md` section 12). Optional
+     * with no default: a run carrying none recorded none, and a completion rate with no
+     * stated criterion behind it is read as exactly that rather than as a criterion
+     * somebody can reconstruct from the task.
+     */
+    goal: goalSchema.optional(),
     variants: z.array(variantSchema).min(1),
     steps: z.array(z.strictObject({ id: name, label: name })).min(1),
     /**
@@ -1132,12 +1348,26 @@ export const sessionSchema = z
   });
 
 /**
- * The query parameters the two evidence screens take, from the routes in `docs/FLOW.md`
- * section 3. The key space is closed like every other object in the artifact: a link
- * cannot carry a parameter those screens have no use for, and so cannot carry a
+ * The query parameters the evidence screens take, from the routes in `docs/FLOW.md`
+ * sections 3 and 14. The key space is closed like every other object in the artifact: a
+ * link cannot carry a parameter those screens have no use for, and so cannot carry a
  * credential under a name of its own invention.
+ *
+ * **It is closed, and it grows only here**, and only with a parameter a route in
+ * `docs/FLOW.md` names: `segment` is the filter the Sessions, Heatmaps and Funnel screens
+ * share, `overlay` chooses one of the Heatmaps screen's three, and `t` is the
+ * video-millisecond offset a citation opens a replay paused on. A link a screen cannot
+ * build is a citation rendered as prose, which is what section 14 forbids.
  */
-const EVIDENCE_LINK_PARAMS = ['variant', 'step', 'aoi', 'outcome'] as const;
+export const EVIDENCE_LINK_PARAMS = [
+  'variant',
+  'step',
+  'aoi',
+  'outcome',
+  'segment',
+  'overlay',
+  't',
+] as const;
 
 export const findingsSchema = z
   .strictObject({
@@ -1176,21 +1406,6 @@ export const findingsSchema = z
         }
       }
     });
-  });
-
-/**
- * One plain sentence a site owner could act on — the rule of `docs/FLOW.md` section 14,
- * enforced here and not by a prompt: something that needs two sentences is two
- * recommendations, and a model that writes a paragraph is rejected rather than rendered.
- *
- * A boundary is a terminator followed by the start of another sentence, so a full stop
- * inside a number (`2.5 seconds`) or an abbreviation (`e.g. the banner`) is not one.
- */
-const SENTENCE_BOUNDARY = /[.!?]["')\]]*\s+["'([]*[A-Z0-9]/u;
-
-const oneSentence = (what: string) =>
-  name.refine((value) => !SENTENCE_BOUNDARY.test(value), {
-    error: `${what} is one plain sentence (docs/FLOW.md section 14): this is two or more`,
   });
 
 /**
@@ -1360,6 +1575,13 @@ export const runRequestSchema = z
 export type ModelMode = z.infer<typeof modelModeSchema>;
 export type Audience = z.infer<typeof audienceSchema>;
 export type AudienceDevice = z.infer<typeof audienceDeviceSchema>;
+export type AgeGroup = z.infer<typeof ageGroupSchema>;
+export type AudienceAgeGroup = z.infer<typeof audienceAgeGroupSchema>;
+export type GenderSplit = z.infer<typeof genderSplitSchema>;
+export type Goal = z.infer<typeof goalSchema>;
+export type GoalAuthor = z.infer<typeof goalAuthorSchema>;
+export type Change = z.infer<typeof changeSchema>;
+export type EvidenceLinkParam = (typeof EVIDENCE_LINK_PARAMS)[number];
 export type Persona = z.infer<typeof personaSchema>;
 export type Verdict = z.infer<typeof verdictSchema>;
 export type Score = z.infer<typeof scoreSchema>;
