@@ -41,6 +41,19 @@ const SIGNED_OUT = 'Sign in to read this.';
 /** An audience of another workspace is missing, not forbidden: that it exists is not news. */
 const NO_SUCH_AUDIENCE = 'There is no such audience.';
 
+/**
+ * How many simulated people an audience created here generates when the submission names no
+ * number: a hundred (`docs/FLOW.md` section 12).
+ *
+ * Stated once, and stated **here** rather than in the contract. The contract's audience is
+ * also the copy a finished run carries, and a run of four people is still a run of four — a
+ * default down there would quietly answer for every audience ever written, including the
+ * committed example's. This is the platform's own answer to a field a form left empty, so
+ * the form (#273) and the free text that fills it (#257) read this name rather than typing a
+ * hundred again.
+ */
+export const DEFAULT_PARTICIPANTS = 100;
+
 const audienceIdOf = (request: IncomingMessage): string => {
   const { pathname } = new URL(request.url ?? '/', 'http://localhost');
   const captured = AUDIENCE_PATH.exec(pathname)?.[1] ?? '';
@@ -67,6 +80,21 @@ const refuse = (response: ServerResponse, issues: readonly AudienceIssue[]): voi
 /** A plain object: something a `PATCH` merges into rather than replaces. */
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The submitted audience with the platform's defaults under it, for the fields it leaves
+ * out. One field has one, and it is read as **absent** and not as wrong: a submission that
+ * names the number and gets it wrong is the contract's to refuse, at its own path.
+ *
+ * Only a `POST` passes through here. A `PATCH` is merged over a stored audience that was
+ * validated when it was written, so every field it does not name already has a value — and
+ * defaulting there would resize the demo audience's four people to a hundred the first time
+ * somebody renamed it.
+ */
+const withDefaults = (submitted: unknown): unknown =>
+  isPlainObject(submitted) && submitted.size === undefined
+    ? { ...submitted, size: DEFAULT_PARTICIPANTS }
+    : submitted;
 
 /**
  * The stored audience with the submitted fields over it, as deep as the submission goes: a
@@ -100,7 +128,7 @@ const validated = async (
   // that spans two of them: the device shares and the age range are checked against the
   // audience as it would stand, not against the fields the submission happened to name.
   try {
-    return parseAudience(stored === null ? body.value : merge(stored, body.value));
+    return parseAudience(stored === null ? withDefaults(body.value) : merge(stored, body.value));
   } catch (error) {
     if (error instanceof AudienceValidationError) {
       refuse(response, error.issues);

@@ -64,7 +64,7 @@ export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.j
 export { withPeople } from './audience/people.js';
 export type { AudienceWithPeople } from './audience/people.js';
 
-export { audienceRoutes } from './server/routes/audiences.js';
+export { audienceRoutes, DEFAULT_PARTICIPANTS } from './server/routes/audiences.js';
 export type { AudienceRouteOptions } from './server/routes/audiences.js';
 
 export { runRoutes } from './server/routes/runs.js';
