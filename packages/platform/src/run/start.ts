@@ -276,31 +276,32 @@ const ONE_ATTEMPT_EACH = 1;
 const A_MODEL_RUN = 'model';
 
 /**
- * The site as a person names it: its host — `app.clipforge.example` — which is how
- * `#screen-sites` lists a site and how `#screen-newtest-estimate` names the one a launch is
- * about. The port is part of it, so two sites on `localhost` are told apart.
- *
- * The URL has been through `parseSiteUrl` by the time this is called, so `new URL` cannot
- * throw here.
- */
-const siteName = (url: string): string => new URL(url).host;
-
-/**
  * The one variant a one-URL test runs: the site, under the name a person reads it by.
  *
- * Exported because `personavision run` writes the same test from the command line (#284)
- * and should write the same variant, rather than spelling the id and the name again.
+ * The name is the URL's host — `app.clipforge.example` — which is how `#screen-sites` lists
+ * a site and how `#screen-newtest-estimate` names the one a launch is about. The port is
+ * part of it, so two sites on `localhost` are told apart. The URL itself is the address that
+ * was typed.
+ *
+ * It takes whatever was submitted and parses it through `parseSiteUrl` rather than trusting
+ * a caller to have done it, exactly as `addSite` does: this is exported so that
+ * `personavision run` writes the same variant from the command line (#284) instead of
+ * spelling the id and the name again, and a caller handing it `app.clipforge.example` — or
+ * nothing at all — should get the sentence that names what is wrong with it rather than a
+ * bare `TypeError` out of `new URL`.
  */
-export const variantForSite = (url: string): RunRequest['variants'][number] => ({
-  id: ONE_URL_VARIANT_ID,
-  name: siteName(url),
-  url,
-});
+export const variantForSite = (url: unknown): RunRequest['variants'][number] => {
+  const site = parseSiteUrl(url);
+  return { id: ONE_URL_VARIANT_ID, name: new URL(site).host, url: site };
+};
 
 /**
  * The seed a launch runs at where nothing names one: the day it was launched on, written the
  * way the prototype prints it under the audience on `#screen-results` — *"generated from
  * this audience with seed 20261103"*.
+ *
+ * The day is the **UTC** day, which is the clock `run.createdAt` is written in, so the seed
+ * and the date the run records are the same day rather than two.
  *
  * No step of the wizard asks for a seed and none should: it is a number a person has no way
  * to choose well. The day is the one number that is both already on the screen and
@@ -350,6 +351,15 @@ const insteadOfASentence = (value: unknown): string =>
     ? 'nothing was written here'
     : `this is ${typeof value === 'object' ? 'an object' : `a ${typeof value}`} and not a sentence`;
 
+/**
+ * What was found where the goal was expected. A goal is two sentences in an object, so
+ * "nothing was written here" is true of an absent one and a lie about anything else.
+ */
+const insteadOfAGoal = (value: unknown): string =>
+  value === undefined || value === null
+    ? 'nothing was written here'
+    : `this is ${Array.isArray(value) ? 'a list' : `a ${typeof value}`} and not a goal`;
+
 /** The sentence a field holds, or `null` where it holds none. Returned **untrimmed**. */
 const sentenceIn = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() !== '' ? value : null;
@@ -378,10 +388,10 @@ const whatAOneUrlTestNeeds = (draft: SiteTestDraft): DraftIssue[] => {
     });
   }
 
-  if (typeof draft.goal !== 'object' || draft.goal === null) {
+  if (typeof draft.goal !== 'object' || draft.goal === null || Array.isArray(draft.goal)) {
     issues.push({
       path: GOAL,
-      message: `${insteadOfASentence(draft.goal)}: a one-URL test runs a goal — the task each person attempts, and what counts as having done it`,
+      message: `${insteadOfAGoal(draft.goal)}: a one-URL test runs a goal — the task each person attempts, and what counts as having done it, as a sentence each`,
     });
     return issues;
   }
@@ -434,28 +444,32 @@ const asAFieldOfTheDraft = (issue: DraftIssue): DraftIssue => {
  */
 const draftForSite = (draft: SiteTestDraft, launchedAt: Date): TestDraft => {
   const issues = whatAOneUrlTestNeeds(draft);
-  let url: string | null = null;
+  let variant: RunRequest['variants'][number] | null = null;
   try {
-    url = parseSiteUrl(draft.site);
+    variant = variantForSite(draft.site);
   } catch (error) {
     if (!(error instanceof SiteUrlNotAcceptedError)) throw error;
     // The same rule the Add-a-site form is held to, reported at the field this person typed
     // in: `site` on the wizard rather than the `url` of that form.
     issues.unshift(...error.issues.map(({ message }) => ({ path: SITE, message })));
   }
-  if (url === null || issues.length > 0) throw new DraftNotAcceptedError(issues);
+  if (variant === null || issues.length > 0) throw new DraftNotAcceptedError(issues);
 
   return {
     // The goal's task **is** the task: a one-URL test has one sentence saying what to
     // attempt, the user approved it, and a second copy of it is a second thing to disagree.
     task: { prompt: draft.goal.task },
-    variants: [variantForSite(url)],
+    variants: [variant],
     feature: draft.feature,
     goal: draft.goal,
     audienceId: draft.audienceId,
-    repeats: draft.repeats ?? ONE_ATTEMPT_EACH,
-    seed: draft.seed ?? seedForLaunchDay(launchedAt),
-    engineMode: draft.engineMode ?? A_MODEL_RUN,
+    // Resolved only where the field is **absent**, which is a screen that does not collect
+    // it. A field that was submitted is passed on as it was submitted, `null` included, so
+    // the contract refuses it at its own path rather than this standing in for it: a client
+    // that sends `engineMode: null` gets a refusal and not a model run nobody asked for.
+    repeats: draft.repeats === undefined ? ONE_ATTEMPT_EACH : draft.repeats,
+    seed: draft.seed === undefined ? seedForLaunchDay(launchedAt) : draft.seed,
+    engineMode: draft.engineMode === undefined ? A_MODEL_RUN : draft.engineMode,
   };
 };
 
@@ -488,7 +502,11 @@ export const startSiteTest = async ({
   ...test
 }: StartSiteTestOptions): Promise<StartedTest> => {
   const clock = now ?? ((): Date => new Date());
-  const request = draftForSite(draft, clock());
+  // Spread rather than read straight, for the same reason `startTest` spreads what it was
+  // given: a submitted body that is not an object — an empty request, `null`, a number —
+  // spreads to no fields at all, which is a draft with everything missing and a refusal that
+  // says what a one-URL test needs, rather than a crash on the way to one.
+  const request = draftForSite({ ...draft }, clock());
   try {
     return await startTest({ ...test, draft: request });
   } catch (error) {

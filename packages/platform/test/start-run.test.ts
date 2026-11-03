@@ -435,6 +435,62 @@ describe('starting a one-URL test over HTTP', () => {
     expect(calls).toEqual([]);
   });
 
+  it('refuses an empty request by saying what a one-URL test needs', async () => {
+    const response = await served.request('/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json', cookie },
+      body: '',
+    });
+    const read = (await response.json()) as { issues?: { path: string }[] };
+
+    expect(response.status).toBe(400);
+    expect((read.issues ?? []).map((issue) => issue.path)).toStrictEqual([
+      'site',
+      'feature',
+      'goal',
+    ]);
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a draft whose goal is not a goal, saying what it found', async () => {
+    const { paths, messages } = await refusedAt({
+      ...submission(),
+      goal: 'Generate a video from a text prompt.',
+    });
+
+    expect(paths).toStrictEqual(['goal']);
+    // Not "nothing was written here": something was, and it is not a goal.
+    expect(messages[0]).toContain('this is a string and not a goal');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a list where the goal should be, rather than reading two halves off it', async () => {
+    const { paths, messages } = await refusedAt({ ...submission(), goal: [] });
+
+    expect(paths).toStrictEqual(['goal']);
+    expect(messages[0]).toContain('this is a list and not a goal');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a submission that leaves a field empty rather than out, at that field', async () => {
+    // A client that sends what the wizard has not filled in — `engineMode: null` from an
+    // unset field — is refused, rather than having a model run chosen on its behalf.
+    const { paths } = await refusedAt({ ...submission(), engineMode: null, repeats: null });
+
+    expect(paths).toStrictEqual(['repeats', 'engineMode']);
+    expect(calls).toEqual([]);
+  });
+
+  it('reads a submission with the site left out as the one-URL test it is', async () => {
+    // What a launch step sends when no site was chosen: `JSON.stringify` drops a key whose
+    // value is `undefined`, so the body arrives with no `site` in it at all.
+    const { paths } = await refusedAt({ feature: USERS_FEATURE, goal: validGoal(), audienceId });
+
+    // The field that is missing, and not a page about `task` and `variants`.
+    expect(paths).toStrictEqual(['site']);
+    expect(calls).toEqual([]);
+  });
+
   it('refuses a draft with no site, in the words the Add-a-site form uses', async () => {
     const { paths, messages } = await refusedAt({ ...submission(), site: '' });
 

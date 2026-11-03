@@ -25,10 +25,10 @@ import type { Route } from './types.js';
  * standard workspace whose test cannot run on the standard model is refused rather than
  * answered by another (#144). This route is the HTTP skin on that, and the status codes.
  *
- * **Two forms, one route and one run.** A submission naming a `site` is a one-URL test —
- * the site, the feature in the user's words, the goal as they approved it and the audience,
- * which the New test wizard collects (#273, #276, #279) — and a submission naming its
- * `variants` is the two-variant comparison, unchanged down to its refusals. Both answer with
+ * **Two forms, one route and one run.** A submission naming its `variants` is the
+ * two-variant comparison, unchanged down to its refusals; anything else is read as the
+ * one-URL test the New test wizard collects (#273, #276, #279) — the site, the feature in
+ * the user's words, the goal as they approved it and the audience. Both answer with
  * the id of one run directory: a path-1 test is a run with one variant and a path-2 test is
  * a run with two, and nothing here branches on a "path" (the auto-decision of 2026-11-03 on
  * #222).
@@ -65,15 +65,20 @@ const refuse = (response: ServerResponse, status: number, error: string, extra =
   sendJson(response, status, { error, ...extra });
 
 /**
- * Which of the two forms was submitted: a body that names a site is a one-URL test.
+ * Which of the two forms was submitted: a comparison **names its `variants`** and a test of
+ * one site does not.
  *
- * The site is the field only that form has, and it is read as the whole answer rather than
- * one of several hints, so there is no body this route half-recognises. A submission that
- * names a site **and** variants is two forms at once: it is refused with both named by the
- * one-URL path rather than one of them being guessed at.
+ * Read off `variants` rather than off `site`, because the site is the field most likely to
+ * be missing from a one-URL submission — a launch step serialising a draft whose site was
+ * never chosen leaves the key out altogether — and such a draft has to be refused at `site`
+ * rather than answered with a page of refusals about `task` and `variants`, which are the
+ * fields the New test wizard cannot render. A submission naming both is two forms at once,
+ * and the one-URL path refuses it with the `variants` it found named rather than guessing
+ * which half was meant. `variants` is required of a comparison by the contract, so a body
+ * that names none was never one.
  */
-const namesASite = (body: unknown): boolean =>
-  typeof body === 'object' && body !== null && 'site' in body;
+const namesTwoVersions = (body: unknown): boolean =>
+  typeof body === 'object' && body !== null && 'variants' in body && !('site' in body);
 
 export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Route[] => [
   {
@@ -104,9 +109,9 @@ export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Ro
               pipeline,
             };
             try {
-              const run = namesASite(body.value)
-                ? await startSiteTest({ ...test, draft: body.value as SiteTestDraft })
-                : await startTest({ ...test, draft: body.value as TestDraft });
+              const run = namesTwoVersions(body.value)
+                ? await startTest({ ...test, draft: body.value as TestDraft })
+                : await startSiteTest({ ...test, draft: body.value as SiteTestDraft });
               started(response, run.runId);
             } catch (error) {
               if (error instanceof DraftNotAcceptedError) {
