@@ -235,15 +235,20 @@ interface Anchor {
  * afterwards, which is why the contract stores `actionOffsetsMs` at all: an action is the
  * one entry stamped on both, so each one is a pair of times the map can be built from.
  *
- * Between two pairs the map is linear, past the last one the clocks run together, and a
- * session whose recording reaches no action at all maps one to one — which is the honest
- * default, because both clocks started at the same frame.
+ * Between two pairs the map is linear, and outside them the clocks run together.
  *
- * `screenOffsetsMs` is deliberately not used here. A screen carries no timestamp of its
- * own — it *begins* at its first fixation, which is the session timeline's own rule
- * (`src/session/timeline.ts`) — so turning its offset into a pair would mean deriving that
- * rule a second time, and the screen the timeline reports for the mapped moment is the same
- * screen either way.
+ * **The first pair is the first screen.** The recorder's clock starts when the browser
+ * context opens, before the page is even navigated to, so the two clocks do *not* start
+ * together: `screenOffsetsMs[0]` is where the first screen begins in the recording, and the
+ * session's own clock starts at 0 on that screen by the timeline's own rule
+ * (`src/session/timeline.ts`). That is the pair, and it is the one the contract stores for
+ * exactly this. Without it the whole first stretch of the map would be interpolated from an
+ * origin nothing measured, and a frame still loading the page would be shown under
+ * mid-session attention.
+ *
+ * The later screens' offsets are deliberately left alone: a screen *begins* at its first
+ * fixation, which is the timeline's rule, and pairing those would mean deriving that rule a
+ * second time here. An action is stamped on both clocks already.
  */
 export interface VideoClock {
   /** The recording's own length, which is what the scrubber runs over. */
@@ -270,7 +275,10 @@ function anchorsOf(session: Session, video: Recording): Anchor[] {
   });
   pairs.sort((left, right) => left.videoMs - right.videoMs);
 
-  const kept: Anchor[] = [{ sessionMs: 0, videoMs: 0 }];
+  // The first screen: session time 0, at the offset the recording says it begins at. A
+  // recording truncated before its own first screen has no such offset, and then the two
+  // clocks are left running together from zero.
+  const kept: Anchor[] = [{ sessionMs: 0, videoMs: video.screenOffsetsMs[0] ?? 0 }];
   for (const pair of pairs) {
     const last = kept[kept.length - 1] as Anchor;
     if (pair.videoMs > last.videoMs && pair.sessionMs > last.sessionMs) kept.push(pair);
@@ -285,7 +293,12 @@ function along(
   write: (anchor: Anchor) => number,
   value: number,
 ): number {
-  let before = anchors[0] as Anchor;
+  const first = anchors[0] as Anchor;
+  // Before the first pair and after the last one there is nothing to interpolate between,
+  // so the two clocks run together: a second of one is a second of the other.
+  if (value <= read(first)) return write(first) + (value - read(first));
+
+  let before = first;
   let after: Anchor | null = null;
   for (const anchor of anchors) {
     if (read(anchor) <= value) before = anchor;

@@ -11,10 +11,11 @@ import styles from './replay.module.css';
  * rested. The colours are the four gaze tokens and live in `replay.css`; nothing visual is
  * set here.
  *
- * The **scanpath** — the saccades between the fixations — is the one part of it a reader
- * turns off: over the recording the three layers toggle independently as the prototype
- * draws them, and the dots on their own read better on a moving frame than the dots with
- * the hops over them. The toggle is the reader's, so it is a prop and not URL state.
+ * The dots and the hops between them are **two layers**, because over the recording they
+ * toggle independently as the prototype draws them: the dots on their own read better on a
+ * moving frame, and the scanpath on its own is the order of attention without the dwell
+ * rings over the picture. Both toggles are the reader's, so they are props and not URL
+ * state.
  *
  * It is `aria-hidden`: a drawing of where somebody looked cannot be read out. What carries
  * the same content in words is the stage's own text alternative, the scrubber's position
@@ -38,9 +39,12 @@ const NUMBER_SIZE = 3;
 
 export function GazeOverlay({
   trail,
+  marks = true,
   scanpath = true,
 }: {
   trail: GazeTrail;
+  /** Whether the fixations themselves are drawn. */
+  marks?: boolean;
   /** Whether the hops between the fixations are drawn. */
   scanpath?: boolean;
 }) {
@@ -58,7 +62,7 @@ export function GazeOverlay({
             vectorEffect="non-scaling-stroke"
           />
         ))}
-        {trail.marks.map((mark) => (
+        {(marks ? trail.marks : []).map((mark) => (
           <g key={mark.number}>
             <ellipse
               className={styles.fixation}

@@ -86,7 +86,12 @@ const screenStarts = (file: SeedSession): number[] =>
  */
 export function recordedSession(
   sessionId: string,
-  options: { shiftMs?: number; truncated?: 'screen' | 'session' | null } = {},
+  options: {
+    shiftMs?: number;
+    /** Milliseconds the recording ran on for after the session's last figure. */
+    plusMs?: number;
+    truncated?: 'screen' | 'session' | null;
+  } = {},
 ): Record<string, unknown> {
   const file = readSeedSession(sessionId);
   const read = file as unknown as SeedSession;
@@ -98,7 +103,7 @@ export function recordedSession(
     video: {
       state: 'recorded',
       path: layout.video(sessionId),
-      durationMs: read.durationMs + shiftMs,
+      durationMs: read.durationMs + shiftMs + (options.plusMs ?? 0),
       truncated: options.truncated ?? null,
       screenOffsetsMs: screenStarts(read).map(offset),
       actionOffsetsMs: read.actions.map((action) => offset(action.tMs)),

@@ -71,16 +71,24 @@ export function VideoStage({
   const [state, setState] = useState<'loading' | 'ready' | 'unreadable'>('loading');
 
   /**
-   * The element follows the page's position while it is paused, and is left alone while it
-   * plays — except when the reader drags the scrubber mid-playback, which moves the position
-   * by more than a moment's worth and is honoured at once.
+   * The element is seeked when it is not already **inside the second the page names**.
+   *
+   * The page's position is whole seconds, because that is what a link carries, and a playing
+   * element runs through the whole of each one — so an element at 7.85 while the page says 7
+   * is where it should be, and snapping it to 7.0 would rewind the frame the reader is
+   * watching. That is what pausing and ending do: both leave the element part-way through
+   * the page's current second, and a seek there would jump the picture backwards, or off the
+   * end of a recording that had just finished.
+   *
+   * Anything else — a dragged scrubber, a link opened on a frame, the element behind the
+   * page — is a real divergence and is followed at once.
    */
   useEffect(() => {
     const video = element.current;
     if (video === null) return;
-    const drift = Math.abs(video.currentTime * 1000 - videoMs);
-    if (drift > (playing ? DRAG_MS : SEEK_MS)) video.currentTime = videoMs / 1000;
-  }, [videoMs, playing]);
+    const ahead = video.currentTime * 1000 - videoMs;
+    if (ahead < 0 || ahead >= A_SECOND) video.currentTime = videoMs / 1000;
+  }, [videoMs]);
 
   useEffect(() => {
     const video = element.current;
@@ -122,9 +130,10 @@ export function VideoStage({
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             onResolution({ width: video.videoWidth, height: video.videoHeight });
           }
-          if (Math.abs(video.currentTime * 1000 - videoMs) > SEEK_MS) {
-            video.currentTime = videoMs / 1000;
-          }
+          // A seek before the metadata arrived may not have taken: the element did not yet
+          // know how long the file was. The frame the link asked for is asked for again.
+          const ahead = video.currentTime * 1000 - videoMs;
+          if (ahead < 0 || ahead >= A_SECOND) video.currentTime = videoMs / 1000;
         }}
         onTimeUpdate={(event) => {
           if (playing) onTime(event.currentTarget.currentTime * 1000);
@@ -141,7 +150,7 @@ export function VideoStage({
           is on the box and not on a layer, so turning the gaze off does not take the
           reading of this frame away with it. */}
       <div className={styles.overlay} role="img" aria-label={alternative}>
-        {gaze ? <GazeOverlay trail={trail} scanpath={scanpath} /> : null}
+        {gaze || scanpath ? <GazeOverlay trail={trail} marks={gaze} scanpath={scanpath} /> : null}
         {clicks ? <ClickOverlay marks={clickMarks} /> : null}
       </div>
 
@@ -161,11 +170,5 @@ export function VideoStage({
   );
 }
 
-/** How far the element may sit from the page's position before it is seeked, while paused. */
-const SEEK_MS = 200;
-
-/**
- * And while playing: more than a second's worth of divergence is a drag, not the player
- * running on, so it is followed; anything smaller is the player doing its job.
- */
-const DRAG_MS = 1200;
+/** The page's position is whole seconds, and this is one of them. */
+const A_SECOND = 1000;

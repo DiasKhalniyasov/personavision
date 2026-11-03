@@ -441,10 +441,12 @@ function attentionWords(input: {
   const area = run.aois.find((aoi) => aoi.id === fixation.aoiId);
   const held = `held ${(fixation.durationMs / 1000).toFixed(1)} seconds`;
   const where = area === undefined ? 'away from any area this test names' : `on ${area.label}`;
+  // What happened on this screen, not what is currently drawn over it: the switches are
+  // the reader's own, and a frame's reading must not change because a layer is off.
   const clicks =
     marks.length === 0
-      ? 'no clicks are marked on this screen'
-      : `${marks.length} click${marks.length === 1 ? '' : 's'} marked on this screen: ${marks.map((mark) => mark.label).join(', ')}`;
+      ? 'nothing has been clicked on this screen'
+      : `${marks.length} thing${marks.length === 1 ? '' : 's'} clicked on this screen so far: ${marks.map((mark) => mark.label).join(', ')}`;
 
   return `${at}: fixation ${fixation.index + 1} of ${session.fixations.length}, ${where}, ${held}. And ${clicks}.`;
 }

@@ -132,7 +132,10 @@ export function VideoBar({
   /** Seconds into the recording. */
   onSeek: (seconds: number) => void;
 }) {
-  const seconds = Math.round(durationMs / 1000);
+  // Floored, not rounded: the last second a reader can drag to has to be a second the
+  // recording has, or dragging to the right-hand end would ask for a moment past its end
+  // and the screen would say the link overshot when nobody had followed a link.
+  const seconds = Math.floor(durationMs / 1000);
 
   return (
     <div className={styles.vidbar}>

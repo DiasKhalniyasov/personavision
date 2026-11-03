@@ -269,12 +269,17 @@ describe('one clock', () => {
     expect(router.state.location.search).toBe('?t=30');
     expect(router.state.historyAction).toBe('REPLACE');
 
+    // Part-way through the second the page names, which is where pausing really happens.
+    playedTo(30.85);
     await userEvent.click(screen.getByRole('button', { name: 'Pause the recording' }));
     expect(screen.getByRole('button', { name: 'Play the recording' })).toBeTruthy();
     // Paused leaves the four where the frame was, and leaves the link citing it.
     expect(theFour().clock).toBe('0:30 / 0:38');
     expect(theFour().fixation).toBe('fixation 20 of 23');
     expect(router.state.location.search).toBe('?t=30');
+    // And it leaves the frame alone: the element is inside the second the page names, so
+    // it is not snapped back to the start of it.
+    expect(stage().currentTime).toBeCloseTo(30.85, 2);
   });
 });
 
@@ -307,6 +312,19 @@ describe('a link to one moment of the recording', () => {
     expect(clock()).toBe('0:01 / 0:38');
   });
 
+  it('reads a second before the page had loaded as before the session, not into it', async () => {
+    await serveRecordings({ sessions: shifted() });
+    mountApp(replay('S-15', '?t=10'));
+    await ready();
+
+    // The recorder's clock starts when the browser opens, before the page is navigated to,
+    // so the first 32 seconds of this recording are before the session's own first figure.
+    // The first screen's offset is what says so.
+    expect(clock()).toBe('0:10 / 1:10');
+    expect(fixation()).toBe('before the first of 23');
+    expect(activeCard()).toContain('Screen 1 of 3 · Cart');
+  });
+
   it('opens at the start on ?t=0, before this person had looked at anything', async () => {
     await serveRecordings({ sessions: recorded() });
     mountApp(replay('S-15', '?t=0'));
@@ -329,6 +347,23 @@ describe('a link to one moment of the recording', () => {
       'This link asks for 1:30, which is past the end of a 0:38 recording, so the replay ' +
         'opens on its last frame.',
     );
+  });
+
+  it('does not call the scrubber’s own right-hand end a link past the end', async () => {
+    // A recording that ran on for six tenths of a second after the session's last figure.
+    await serveRecordings({ sessions: { 'S-15': recordedSession('S-15', { plusMs: 600 }) } });
+    const { container, router } = mountApp(replay('S-15', '?t=16'));
+    await ready();
+
+    const slider = screen.getByRole('slider', { name: 'Scrub the recording' });
+    expect(slider.getAttribute('aria-valuemax')).toBe('38');
+
+    slider.focus();
+    await userEvent.keyboard('{End}');
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('?t=38');
+    });
+    expect(container.querySelector('[data-past-end]')).toBeNull();
   });
 
   it('names the cap when the recording a link overshoots was cut short by one', async () => {
@@ -414,6 +449,10 @@ describe('the overlay switches', () => {
     await waitFor(() => {
       expect(clicks()).toHaveLength(0);
     });
+    // The scanpath is its own layer and is still drawn with the gaze off: the order of
+    // attention, without the dwell rings over the picture.
+    expect(hops().length).toBeGreaterThan(0);
+    expect(marks()).toHaveLength(0);
   });
 
   it('keeps them out of the URL, because what a link carries is the timestamp', async () => {
@@ -440,8 +479,8 @@ describe('the overlay switches', () => {
 
     expect(prose(screen.getByRole('img').getAttribute('aria-label'))).toBe(
       'Where this person was looking at 0:28: fixation 19 of 23, on Primary action — A: ' +
-        '"Continue to review", B: "Place order", held 0.4 seconds. And 1 click marked on ' +
-        'this screen: Primary action — A: "Continue to review", B: "Place order".',
+        '"Continue to review", B: "Place order", held 0.4 seconds. And 1 thing clicked on ' +
+        'this screen so far: Primary action — A: "Continue to review", B: "Place order".',
     );
 
     // The name is on the box and not on a layer, so turning the gaze off does not take the
@@ -528,6 +567,16 @@ describe('the outcome card over a recording', () => {
     metadataArrives({ width: 332, height: 720 });
     await waitFor(() => {
       expect(cardRow('Video')).toBe('videos/S-15.webm · 0:38 · 11.4 MB · 332 × 720');
+    });
+  });
+
+  it('reports a file under a megabyte in kB rather than rounding it into one', async () => {
+    await serveRecordings({ sessions: recorded(), videoBytes: 2048 });
+    mountApp(replay('S-15', '?t=16'));
+    await ready();
+
+    await waitFor(() => {
+      expect(cardRow('Video')).toContain('0:38 · 2 kB');
     });
   });
 

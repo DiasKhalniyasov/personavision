@@ -224,8 +224,15 @@ function SupportedFinding({ finding, runId }: { finding: Finding; runId: string 
   return <Link to={href}>{named}</Link>;
 }
 
-/** `11.4 MB`, as the prototype's row reads it: one decimal, and never a rounded-down zero. */
-const megabytes = (bytes: number): string => `${Math.max(bytes / 1_000_000, 0.1).toFixed(1)} MB`;
+/**
+ * `11.4 MB`, as the prototype's row reads it. A file under a megabyte is reported in kB
+ * rather than rounded into one: `0.1 MB` for a two-kilobyte stub would be a measurement
+ * nobody made, on the one row whose job is to state the file as it is.
+ */
+const fileSize = (bytes: number): string =>
+  bytes < 1_000_000
+    ? `${Math.max(Math.round(bytes / 1000), 1)} kB`
+    : `${(bytes / 1_000_000).toFixed(1)} MB`;
 
 /** Which cap cut a recording, with the figure the contract holds it to. */
 const truncationWords = (cap: 'screen' | 'session'): string =>
@@ -248,7 +255,7 @@ function videoWords(session: Session, recording: RecordingFacts | undefined): st
   parts.push(
     recording?.sizeBytes === null || recording?.sizeBytes === undefined
       ? 'size not read'
-      : megabytes(recording.sizeBytes),
+      : fileSize(recording.sizeBytes),
   );
   const resolution = recording?.resolution ?? null;
   parts.push(
