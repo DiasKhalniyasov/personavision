@@ -37,7 +37,7 @@ import { dirname, join } from 'node:path';
 import { totalUsage } from './decision.js';
 import { createMetaModelApiProvider } from './meta-model.js';
 import type { ModelFailureKind, ModelTransport, TrajectoryRecord } from './meta-model.js';
-import { estimateCostUsd, MODEL_SPEC_BY_ID } from './meta-pricing.js';
+import { estimateCostUsd, MODEL_ID_BY_MODE } from './meta-pricing.js';
 import type { ModelId, ModelMode } from './meta-pricing.js';
 import { readTokens } from './meta-request.js';
 import type { DecisionProvider, DecisionUsage, TrajectoryEntry, TrajectorySink } from './types.js';
@@ -348,7 +348,18 @@ const ZERO: DecisionUsage = {
   estimatedCostUsd: 0,
 };
 
-const isModelId = (modelId: string): modelId is ModelId => modelId in MODEL_SPEC_BY_ID;
+/**
+ * The decision models, as a set, so that a line naming any other model is refused.
+ *
+ * This asks `MODEL_ID_BY_MODE` and **not** the price table. The price table holds every
+ * model this project has a rate for, Muse Wonder included (#248), and a trajectory is a
+ * browsing session's record: a Wonder id in one is a line that belongs to some other
+ * caller, and costing it here would quietly fold a one-shot call's $20-per-1M output into
+ * a session's decision totals. "Has a price" is not "is a decision".
+ */
+const DECISION_MODEL_IDS: ReadonlySet<string> = new Set(Object.values(MODEL_ID_BY_MODE));
+
+const isModelId = (modelId: string): modelId is ModelId => DECISION_MODEL_IDS.has(modelId);
 
 /**
  * What one turn spent, read off its response and priced at its own model's rates.

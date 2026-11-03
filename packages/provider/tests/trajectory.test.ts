@@ -19,7 +19,7 @@ import { validate } from '@personavision/contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totalUsage } from '../src/decision.js';
 import { createMetaModelApiProvider, META_RESPONSES_ENDPOINT } from '../src/meta-model.js';
-import { estimateCostUsd, MODEL_ID_BY_MODE } from '../src/meta-pricing.js';
+import { estimateCostUsd, MODEL_ID_BY_MODE, WONDER_MODEL_ID } from '../src/meta-pricing.js';
 import { MODEL_API_KEY_ENV } from '../src/select.js';
 import {
   auditRunTrajectories,
@@ -441,6 +441,26 @@ describe('the trajectory one session writes', () => {
       } finally {
         await rm(standardDir, { recursive: true, force: true });
       }
+    });
+
+    it('refuses a turn naming a model that is not a decision model, rather than costing it', async () => {
+      // `MODEL_SPEC_BY_ID` holds a rate for every model this project calls, Muse Wonder
+      // included (#248). A trajectory is a browsing session's record, so "has a price" is
+      // not "is a decision": a Wonder line here belongs to some other caller, and costing
+      // it would fold a one-shot call's $20-per-1M output into a session's decision totals.
+      const recorded = await record(runDir);
+      const lines = (await readFile(recorded.path, 'utf8')).trimEnd().split('\n');
+      const rewritten = lines
+        .map((line) => {
+          const parsed = JSON.parse(line) as { modelId: string };
+          return JSON.stringify({ ...parsed, modelId: WONDER_MODEL_ID });
+        })
+        .join('\n');
+      await writeFile(recorded.path, `${rewritten}\n`, 'utf8');
+
+      await expect(auditTrajectory({ runDir, sessionId: 'S-01' })).rejects.toThrow(
+        /has no price here/,
+      );
     });
 
     it('reports a session that recorded nothing as nothing rather than as an error', async () => {

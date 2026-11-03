@@ -1,17 +1,21 @@
 # The Meta Model API protocol
 
-This is the one place the Meta Model API is written down: the endpoint, the two model ids, the shape of a request and
-of a response, the exact path of every usage figure, what caching really does, and what a call costs. The provider in
+This is the one place the Meta Model API is written down: the endpoint, the model ids, the shape of a request and of a
+response, the exact path of every usage figure, what caching really does, and what a call costs. The provider in
 `packages/provider/src/` (#43) is built against this document, and the trajectory log (#139) stores the request and
 response bodies described here verbatim.
 
-**Scope: the text models the decision loop calls.** SAM 3.1 segmentation is a different endpoint on the same
-credential and is written down by the ticket that built it, in `packages/engine/docs/sam-segmenter.md`. Muse Wonder and
-Muse Image are not called by anything in this project, and are documented when a ticket needs them.
+**Scope: the text models this project calls.** Two of the three are the Muse Spark tiers the decision loop runs a
+browsing session on, and everything up to "Errors" below is about them. The third is **Muse Wonder**, the one-shot
+model behind the audience, the goal, the analysis and the change (#219), and it has a section of its own further down.
+SAM 3.1 segmentation is a different endpoint on the same credential and is written down by the ticket that built it, in
+`packages/engine/docs/sam-segmenter.md`. **Muse Image** is not called by anything in this project, and is documented
+when a ticket needs it.
 
 Everything below was either read on the vendor's documentation or **observed live**. The two are labelled separately
-throughout, because they disagree in three places and the observed answer is the one the code has to be written
-against. The live calls were made on **2026-10-27** from the owner's machine (#133).
+throughout, because they disagree in six places and the observed answer is the one the code has to be written against.
+The decision models' live calls were made on **2026-10-27** from the owner's machine (#133); Muse Wonder's on
+**2026-11-03** (#248).
 
 ## The credential
 
@@ -76,6 +80,10 @@ states no long-context premium, so the rate is the same whether the context wind
 
 Reasoning tokens are billed as output tokens at the output rate; they are not a row of their own. They are most of what
 a decision costs — see "Reasoning" below.
+
+Muse Wonder's rates are its own, read on a different day, and are in its section below. One further published rate
+applies to both models and is charged by neither today: **web search grounding, $2.50 per 1,000 queries** on top of a
+request's tokens, for the `web_search` tool. Nothing in this project sends that tool.
 
 ### Rate limits
 
@@ -505,10 +513,11 @@ are accepted and nothing else:
 > ticket that flips `acceptsImages` owes that branch a base64 `data:` URL built from the file (or a files-API upload),
 > and a test that asserts the encoding rather than the presence of the field.
 
-`meta-pricing.ts` currently has `acceptsImages: false` for both models, and the swarm therefore decides from fixated
-elements alone. **By the API that flag is wrong** — both models read images. Whether a persona *should* see the
-screenshot is a product question (a simulated person who reads the pixels is not reading the fixation list), not an
-API one, so this document records only that the API accepts it.
+`meta-pricing.ts` has `acceptsImages: true` for both models, on the strength of these calls, and the swarm still
+decides from the fixated elements alone and sends no screenshot. The two are not in conflict: the flag records what
+the **API** accepts, and whether a persona *should* see the screenshot is a product question (a simulated person who
+reads the pixels is not reading the fixation list), not an API one. A ticket that starts attaching the screenshot owes
+the `buildScreenMessage` branch above a `data:` URL and a test that asserts the encoding.
 
 ## Errors
 
@@ -523,24 +532,497 @@ API one, so this document records only that the API accepts it.
 Every one of these is an automation failure in this project's vocabulary (`docs/FLOW.md` section 8): a screen lost to a
 timeout, a refusal or a bad request is our breakage, never a person who abandoned the task.
 
+## Muse Wonder
+
+Everything above is the decision loop's two models. **Muse Wonder** is the other model this project calls: one-shot,
+a document in and a structured object out, with no session and no screen. It is what writes the structured audience
+from a sentence, the goal from a URL and a feature description, the recommendations from a finished run's aggregate,
+and the one change with its patch (#219, `docs/FLOW.md` sections 12, 14 and 16).
+
+It is the **same endpoint, the same credential, the same protocol and the same usage object** as a decision call. Four
+things differ, and they are what this section is for: the model id and the tier it has, the price, the default
+reasoning effort, and how a structured reply is asked for. The response envelope is the decision call's with a handful
+of small differences, each listed where it sits.
+
+The live calls were made on **2026-11-03** from the owner's machine (#248). Nothing here was taken from the
+documentation alone; where the two disagree, both are given.
+
+### The model, and the tier it has
+
+| What             | Value                                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| Model id         | `muse-wonder-1.0`                                                  |
+| Tier             | **standard only**                                                  |
+| Cheaper tier     | **none** — there is no `muse-wonder-1.0-contributor`                |
+| Training on your content | No                                                         |
+| Live status (2026-11-03) | `200` / `completed`                                        |
+
+**One id, and no cheap tier to develop against.** The pricing page states that contributor mode "isn't available for
+Muse Wonder on Model API", and the API agrees: `muse-wonder-1.0-contributor` is not a model that exists.
+
+```
+HTTP 404
+{"error": {"type": "invalid_request_error", "code": "model_not_found",
+           "message": "The requested model was not found.", "param": null}}
+```
+
+So every Wonder call — a test's, the demo's, a customer's — is billed at the standard rate. What keeps that affordable
+is not a tier but arithmetic: Wonder is called **a handful of times per test**, where Spark is called once per screen
+per persona. The other lever is `reasoning.effort`, and on Wonder it matters more than on Spark — see below.
+
+`muse-wonder-1.0` is one of nine ids the key can see. `GET /v1/models` on the owner's key returned, observed
+2026-11-03: `muse-wonder-1.0`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-spark-1.2`,
+`muse-spark-1.2-contributor`, `muse-spark-1.1`, `muse-image-1.0`, `muse-voice-transcribe-1.0` and `sam-3.1`. There is
+no second Wonder version.
+
+It is deliberately **not** a `ModelMode` in `meta-pricing.ts`. A mode is what a browsing session decides in; keeping
+Wonder out of `MODEL_ID_BY_MODE` is what stops a run being told to make its decisions on it.
+
+### Endpoint and auth: the same one
+
+| What     | Value                                      |
+| -------- | ------------------------------------------ |
+| Endpoint | `POST https://api.meta.ai/v1/responses`    |
+| Auth     | `Authorization: Bearer $MODEL_API_KEY`     |
+| Content  | `Content-Type: application/json`           |
+| Protocol | the responses protocol                     |
+
+**The same endpoint, the same header and the same key.** There is no Wonder base URL, no second credential and no
+separate rate-limit pool to discover: the limits came back identical to standard Spark's, 3,000 requests and 4,000,000
+tokens per minute, on the same four `x-ratelimit-*` headers.
+
+### Prices
+
+Per 1M tokens, from https://dev.meta.ai/docs/pricing-rate-limits, **read 2026-11-03**. A price change is a dated edit
+to this table and a one-line change in `packages/provider/src/meta-pricing.ts`, which is the only place in the code a
+rate appears.
+
+| Usage        | `muse-wonder-1.0` (standard) | Contributor mode |
+| ------------ | ---------------------------- | ---------------- |
+| Input        | $4.00                        | Not available    |
+| Cached input | $0.20                        | Not available    |
+| Output       | $20.00                       | Not available    |
+
+Against the tier this project develops in, that is **40× Spark contributor on input and 100× on output**. Against
+standard Spark it is 3.2× and 4.7×. There is no per-call fee and no long-context premium, and the cost formula is the
+decision models' unchanged:
+
+```
+((input_tokens − cached_tokens) × input_rate + cached_tokens × cached_rate + output_tokens × output_rate) ÷ 1e6
+```
+
+`estimateCostUsd` in `meta-pricing.ts` prices a Wonder call from this table with the same arithmetic it prices a
+decision with. There is no second estimator and no Wonder-shaped exception anywhere.
+
+### The request, field by field
+
+One Wonder use is one `POST /v1/responses`. This is a real request, sent live on 2026-11-03 — the goal call, trimmed
+to its two messages:
+
+```json
+{
+  "model": "muse-wonder-1.0",
+  "input": [
+    {
+      "role": "developer",
+      "content": [{ "type": "input_text", "text": "You write the goal of one usability test from a site and a description of the feature under test. … `successCriterion`: what has to be OBSERVABLE IN THE PAGE …" }]
+    },
+    {
+      "role": "user",
+      "content": [{ "type": "input_text", "text": "Site: https://shop.example.kz/\nFeature under test: the new one-page checkout, reached from the basket." }]
+    }
+  ],
+  "text": {
+    "format": {
+      "type": "json_schema",
+      "name": "Goal",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "task": { "type": "string" },
+          "successCriterion": { "type": "string" },
+          "author": { "type": "string", "enum": ["model", "user"] }
+        },
+        "required": ["task", "successCriterion", "author"],
+        "additionalProperties": false
+      },
+      "strict": true
+    }
+  },
+  "reasoning": { "effort": "minimal" },
+  "max_output_tokens": 4096
+}
+```
+
+It sent no `store`, which is why the response below reports `"store": true` — the API default. A Wonder use that
+keeps nothing server-side sends `store: false`, as the decision provider does on every call.
+
+| Field                    | Type                               | Required | What it does on Wonder                                                            |
+| ------------------------ | ---------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| `model`                  | string                             | yes      | `muse-wonder-1.0`. There is no other value.                                        |
+| `input`                  | string, or array of typed items    | yes      | The document. Same roles and same content-part types as a decision call.            |
+| `text.format`            | object                             | no       | **How a structured reply is asked for.** See below. Omitted, the reply is prose.    |
+| `reasoning.effort`       | enum                               | no       | Accepted, and load-bearing: Wonder's own default is `"max"`.                         |
+| `max_output_tokens`      | integer, minimum 16                | no       | Caps visible output **and reasoning together**, exactly as on Spark.                |
+| `store`                  | boolean, default `true`            | no       | Whether the response is kept server-side. Changes the response — see below.         |
+| `prompt_cache_key`       | string                             | no       | Routing hint. Echoed back in the response. Not what turns caching on.               |
+| `prompt_cache_retention` | `"in_memory"` \| `"24h"` \| `null` | no       | A hint. Accepted, and **not** echoed back in the response.                           |
+| `response_format`        | —                                  | **no**   | **Rejected.** `400 unknown parameter`. It is the Chat Completions spelling.          |
+
+The `input` array, the roles (`developer`, `system`, `user`, `assistant`), the content-part types (`input_text`,
+`input_image`, `input_file`, `input_video`, and `output_text` for a replayed assistant turn) and the append-only rule
+are all exactly as documented for the decision models above. A Wonder use is one turn, so most of that machinery is
+simply unused — but a use that does send a second turn gets the same cache behaviour, which is the next section but
+one.
+
+### How a structured reply is asked for, and what comes back
+
+**A JSON Schema in `text.format`.** That is the Responses protocol's structured-output parameter, and decoding itself
+is constrained against the schema, so the reply is guaranteed to parse and to carry the fields asked for.
+
+```json
+"text": {
+  "format": {
+    "type": "json_schema",
+    "name": "Goal",
+    "schema": { "type": "object", "properties": { … }, "required": [ … ], "additionalProperties": false },
+    "strict": true
+  }
+}
+```
+
+The reply arrives as **one `output_text` part on the assistant `message` item**, holding the JSON as a string. There is
+no `parsed` field and no separate structured-output envelope: the caller reads the text and calls `JSON.parse` on it,
+and the parse cannot fail because the decoding was constrained.
+
+```json
+{ "author": "model",
+  "successCriterion": "The screen shows an order confirmation message such as 'Order confirmed' on the one-page checkout after the order is submitted.",
+  "task": "I want to buy the items in my basket by completing the new one-page checkout." }
+```
+
+Three things about it are load-bearing.
+
+**The three mechanisms are not three choices.** The protocol offers a schema in the request, a function tool, and
+plain JSON asked for in prose and parsed by the caller. Only the first is constrained decoding; the third is the one
+that needs the recovery logic #219's seventh user story is about. The `tools` array and `parallel_tool_calls` are
+accepted and echoed on Wonder, and a function tool's `parameters` schema goes through the same validator with the
+same limits — but no Wonder use in this project needs a tool, so **no tool call was made live and nothing here is
+written about one**. `text.format` is what the four uses send.
+
+**`response_format` does not work here, and does not fail quietly.** The documentation says OpenAI-only top-level
+fields "may be accepted for compatibility" but do not configure structured output on Responses. Observed, the request
+is rejected outright:
+
+```
+HTTP 400
+{"error": {"type": "invalid_request_error", "code": null,
+           "message": "unknown parameter `response_format`", "param": "response_format"}}
+```
+
+That is the better of the two behaviours — a silently ignored schema would have produced prose where an object was
+expected — and it is the opposite of what the page implies. **Observed, not documented.**
+
+**The schema constrains the shape, never the meaning.** This is the finding that matters most to the tickets after
+this one. The "one change with a patch" call was given a schema of five strings — `recommendation`, `filePath`,
+`patch`, `pullRequestTitle`, `pullRequestBody` — and returned all five, correctly typed, parseable, schema-valid. And
+`filePath` was `"patches/startup-project-asteria-ksa.md"`, a file named after nothing in the request, while the actual
+unified diff sat inside `patch` wrapped in Markdown fences rather than as the plain diff asked for. **Structured
+output is a guarantee about JSON, not about truth.** Every Wonder use therefore validates the *content* after the
+parse — a path that exists, a diff that applies, a citation that names a session in the run — and reports what was
+wrong in words rather than accepting it. A schema is not a validator.
+
+One cosmetic observation, recorded because it would otherwise look like a bug in a diff: **the keys come back in
+alphabetical order, not in the schema's order.** The audience schema declared `size` first and `ageGroups` sixth; the
+reply began with `ageGroups` and ended with `techSavviness`.
+
+#### What `strict: true` buys, and what it costs
+
+`strict` defaults to `false` on every surface and, for structured output, **changes nothing about the reply** — the
+output is schema-constrained either way. What it turns on is server-side validation of the schema against the strict
+subset: a plain object at the root, `additionalProperties: false` on every object, and `required` listing every key in
+`properties`. A schema that breaks the subset is a `400` rather than a quietly normalised schema:
+
+```
+HTTP 400
+{"error": {"type": "invalid_request_error", "code": null,
+           "message": "'required' is required to be supplied and to be an array including every key in properties. Missing 'b'.",
+           "param": "schema"}}
+```
+
+Worth sending `strict: true` for exactly that reason: it turns a schema this project got wrong into a failure at the
+first call rather than a field that silently never arrives. The schema limits are shared with Chat Completions and
+with function tools — 10 levels of nesting, 5,000 properties, 1,000 enum values, 120,000 characters of names and
+values — and **recursive schemas are rejected**, so a tree is flattened to a fixed depth or it is a `400`.
+
+### The response envelope
+
+The same envelope as a decision call, with one field more and two conditional. This is the goal call's real response
+of 2026-11-03, verbatim but for the schema it echoes:
+
+```json
+{
+  "id": "resp_6ae9c3b54161aff4886042a3",
+  "object": "response",
+  "status": "completed",
+  "created_at": 1793704885,
+  "completed_at": 1793704885,
+  "error": null,
+  "incomplete_details": null,
+  "model": "muse-wonder-1.0",
+  "store": true,
+  "background": false,
+  "temperature": 1,
+  "top_p": 1,
+  "top_logprobs": 0,
+  "max_output_tokens": 4096,
+  "reasoning": { "effort": "minimal" },
+  "text": { "format": { "type": "json_schema", "name": "Goal", "schema": { … }, "strict": true } },
+  "service_tier": "auto",
+  "tools": [],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "truncation": "disabled",
+  "instructions": null,
+  "output": [
+    {
+      "type": "reasoning",
+      "id": "rs_6ae9c3b54161aff4886042a3:rs_5e900659-390c-4193-8fa6-2f9513114cb6",
+      "summary": [],
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "id": "msg_91ee93fd-5a59-4b81-9063-0e60a54ee25d",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"author\": \"model\", \"successCriterion\": \"The screen shows an order confirmation message such as 'Order confirmed' …\", \"task\": \"I want to buy the items in my basket by completing the new one-page checkout.\"}",
+          "annotations": [],
+          "logprobs": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 178,
+    "input_tokens_details": { "cached_tokens": 0 },
+    "output_tokens": 321,
+    "output_tokens_details": { "reasoning_tokens": 255 },
+    "total_tokens": 499
+  }
+}
+```
+
+That call sent no `store`, so it got the API default of `true` — and its reasoning item therefore carries no
+`encrypted_content`, which is the relationship the last bullet below is about.
+
+The envelope's keys, exactly, on every observed Wonder response: `background`, `completed_at`, `created_at`, `error`,
+`id`, `incomplete_details`, `instructions`, `max_output_tokens`, `model`, `object`, `output`, `parallel_tool_calls`,
+`reasoning`, `service_tier`, `status`, `store`, `temperature`, `text`, `tool_choice`, `tools`, `top_logprobs`,
+`top_p`, `truncation`, `usage` — and `prompt_cache_key` **only on a response whose request sent one**. A request that
+sent no cache key got an envelope with no such field at all, rather than a `null`, so read it with that in mind.
+
+What holds, unchanged from a decision response:
+
+- **`output` is an array and the reply is not the first item.** Every observed Wonder response put a `reasoning` item
+  first and the assistant `message` second. Read the reply from `output` items of `type: "message"` only, and from
+  their `output_text` content parts. A reader that takes `output[0]` gets the chain of thought.
+- **`status` is the response's own, separate from the HTTP status.** `completed`, or `incomplete` with
+  `incomplete_details` when `max_output_tokens` cut it off. An `incomplete` response is a lost call that was billed.
+- **A refusal is an item, not an error** — a `refusal` content part on HTTP `200`.
+
+What is different:
+
+- **`top_logprobs` is in the envelope** (`0`). The decision-call response recorded above does not list it, but that
+  body was written down six days earlier by a different ticket: this is a difference between the two *records*, and
+  whether the field is new or was simply not transcribed then was not re-checked on Spark.
+- **`prompt_cache_key` is echoed when it was sent, and absent otherwise; `prompt_cache_retention` is never echoed.**
+  A request that sent both got back an envelope carrying the key and no retention field at all. Do not read retention
+  back off a response, and do not expect the key on a response whose request omitted it.
+- **`reasoning.effort` is echoed even when the request did not send it**, and what came back was `"max"` — which is
+  how Wonder's default was found.
+- **`encrypted_content` on the reasoning item tracks `store`, not the model.** With `store: true` (the API default,
+  so: with the field omitted) the reasoning item is `{ type, id, summary, status }` and carries **no**
+  `encrypted_content`. With `store: false` it carries one, ~1.4 kB of base64url — about half the size of Spark's
+  ~2.4 kB. The decision provider sends `store: false` on every call, which is why the Spark section above records the
+  blob as always present; it is the parameter that decides, not the model. A Wonder use that stores response bodies
+  verbatim stores one of these per call.
+
+### The usage figures, and the exact path of each
+
+Identical to a decision call's. All five are present on every observed Wonder response.
+
+| Figure              | Path                                           | Notes                                                     |
+| ------------------- | ---------------------------------------------- | --------------------------------------------------------- |
+| Total input tokens  | `usage.input_tokens`                           | Includes the cached ones. Not an extra charge.             |
+| Of which from cache | `usage.input_tokens_details.cached_tokens`     | A **subset** of `input_tokens`, billed at the cached rate. |
+| Total output tokens | `usage.output_tokens`                          | Includes the reasoning ones.                               |
+| Of which reasoning  | `usage.output_tokens_details.reasoning_tokens` | A **subset** of `output_tokens`, billed at the output rate. |
+| Total               | `usage.total_tokens`                           | `input_tokens + output_tokens`, on every observed call.    |
+
+So a Wonder call is recorded in a run's existing `usage` block with no new fields and no second block: it adds to
+`calls`, `inputTokens`, `outputTokens` and `estimatedCostUsd` like any other call. A figure the response does not
+report is **zero, never a guess**.
+
+### Caching: automatic here too, and block-granular
+
+**Caching is automatic on Wonder**, with no flag, exactly as on the decision models. Two calls of one task sharing one
+`prompt_cache_key` and a byte-identical 371-token developer prefix, with `prompt_cache_retention: "24h"`
+(2026-11-03, HTTP `200` on all three):
+
+| Call                                              | `input_tokens` | `cached_tokens` | Response status |
+| ------------------------------------------------- | -------------- | --------------- | --------------- |
+| Turn 1 — the prefix and one sentence              | 371            | **0**           | `completed`     |
+| Turn 2 — the same bytes, plus the reply and a second sentence | 559 | **244**     | `completed`     |
+| Turn 1 again, byte-identical, minutes later       | 371            | **244**         | `completed`     |
+
+Two things to take from it. **The cache is block-granular, and the block is not the prefix**: 244 tokens came back of
+a 371-token shared prefix, and the same 244 on the repeat — not 371, and not a figure that moved between the two. And
+**a repeated first turn hits the cache**, so a second run of the same audience minutes later pays the cached rate from
+its opening call. The amount served is **read from `cached_tokens`, never predicted** — the same rule as above, for
+the same reason.
+
+### `reasoning.effort`: Wonder's default is `"max"`, and that is the whole cost story
+
+The one field that changes what Wonder costs. Observed 2026-11-03, the same short question each time:
+
+| `reasoning.effort`        | `output_tokens` | of which reasoning | Cost of the call |
+| ------------------------- | --------------- | ------------------ | ---------------- |
+| not sent (so: `"max"`)    | 381             | 357                | $0.0077          |
+| `"minimal"`               | 56              | 40                 | $0.0012          |
+
+**Omitting `reasoning` is not a neutral default on Wonder — it is the most expensive setting there is.** The response
+echoed `"effort": "max"` for a request that never mentioned reasoning, and spent 357 reasoning tokens of 381 output on
+a question whose answer is one word. At `"minimal"` the same question cost a sixth as much. Every Wonder use in this
+project therefore sets an effort deliberately, and `acceptsReasoningEffort` is `true` for `muse-wonder-1.0` in
+`meta-pricing.ts` on the strength of a live call rather than a page.
+
+The supported values are the API's own, from the `400` it returns for the one that is not:
+
+```
+HTTP 400
+{"error": {"type": "invalid_request_error", "code": null,
+           "message": "reasoning_effort 'none' is not supported for model 'muse-wonder-1.0'. Supported values: [minimal, low, medium, high, xhigh, max]",
+           "param": "reasoning.effort"}}
+```
+
+So `minimal`, `low`, `medium`, `high`, `xhigh`, `max` — the same six as the contributor Spark model, and `none` is a
+`400` on both.
+
+### Image input
+
+**Accepted.** A 64×64 PNG sent as a base64 `data:` URL in an `input_image` content part was described correctly on
+2026-11-03, HTTP `200` / `completed`, and `acceptsImages` is `true` for `muse-wonder-1.0` on that basis. The rules are
+the decision models': `image_url` is a plain string, and only `http://`, `https://` and `data:` are accepted — a
+run-relative path is a `400`. A corrupt payload is its own error, and names where it was:
+
+```
+HTTP 400
+{"error": {"type": "invalid_request_error", "code": null,
+           "message": "invalid image data at input[0].content[1]: the `image/png` payload could not be decoded (it may be corrupt or truncated).",
+           "param": null}}
+```
+
+No Wonder use in this project sends an image: the audience comes from a sentence, the goal from a URL and a
+description, and the analysis from the aggregate's numbers. The flag records what the API accepts.
+
+### Errors
+
+Every error observed on Wonder came back as an HTTP `4xx` with a **body wrapped in `error`**:
+
+```json
+{ "error": { "type": "invalid_request_error", "code": null, "message": "…", "param": "…" } }
+```
+
+| HTTP  | `type`                   | `code`             | `param`            | What provoked it                                     |
+| ----- | ------------------------ | ------------------ | ------------------ | ---------------------------------------------------- |
+| `404` | `invalid_request_error`  | `model_not_found`  | `null`             | `muse-wonder-1.0-contributor` — no such model          |
+| `400` | `invalid_request_error`  | `null`             | `"input"`          | `input` omitted: `` `input` is required ``             |
+| `400` | `invalid_request_error`  | `null`             | `"response_format"`| the Chat Completions parameter on this endpoint        |
+| `400` | `invalid_request_error`  | `null`             | `"schema"`         | a `strict: true` schema outside the strict subset      |
+| `400` | `invalid_request_error`  | `null`             | `"reasoning.effort"` | `reasoning.effort: "none"`                           |
+| `400` | `invalid_request_error`  | `null`             | `null`             | an undecodable image payload                           |
+
+`param` names the field when the endpoint can name one and is `null` when it cannot; `code` was `null` on every `400`
+and carried a value only on the `404`.
+
+> **The wrapper is the endpoint's, not Wonder's.** The "Errors" table above records the inner object, because that is
+> the shape #133 wrote down. Sent the same malformed request on 2026-11-03, `muse-spark-1.3-contributor` answered with
+> the identical wrapped body — byte for byte, `{"error": {…}}`. So a single error reader serves both models, and it
+> reads `body.error.type`, `body.error.message`, `body.error.param` and `body.error.code`. **Observed, not
+> documented.**
+
+Each of these is an automation failure in this project's vocabulary (`docs/FLOW.md` section 8), exactly as a lost
+screen is: a goal that could not be written is our breakage, never a person who gave up.
+
+### What a call of each of the four kinds cost
+
+The four shapes the step needs, each sent once, live, on 2026-11-03. The effort column is what was asked for, and is
+most of what the output column says.
+
+| The call                            | `effort`    | `input` | `cached` | `output` | of which reasoning | Cost     | Latency |
+| ----------------------------------- | ----------- | ------- | -------- | -------- | ------------------ | -------- | ------- |
+| A structured audience from a sentence | `minimal` | 371     | 0        | 487      | 308                | $0.0112  | 7.9s    |
+| The goal: task and success criterion  | `minimal` | 178     | 0        | 321      | 255                | $0.0071  | 5.1s    |
+| Ranked recommendations with citations | `low`     | 344     | 0        | 1,208    | 903                | $0.0255  | 11.0s   |
+| One change, with a patch              | `low`     | 189     | 0        | 2,272    | 1,638              | $0.0462  | 22.1s   |
+
+**One test's whole Wonder budget is about nine cents** — $0.0900 for all four — against a 100-persona Spark swarm that
+costs cents per screen in contributor mode. Wonder is not the expensive part of a test; it is the slow part. Every one
+of the four took seconds and the change call took twenty-two, so a screen a user is waiting on shows progress rather
+than a spinner, and nothing in the onboarding flow blocks on a Wonder call it could have started earlier.
+
+Two things those figures say about how to spend it:
+
+- **Reasoning is 63% to 79% of every output**, on all four shapes. It is the bill, exactly as on Spark, and it is
+  inside `output_tokens`, so costing a call from `output_tokens` at the output rate is correct and complete.
+- **The harder the shape, the more it costs, by a lot.** The change call produced **seven times** the output of the
+  goal call for 6% more input, and cost six and a half times as much. A cheap call is a small answer, not a short
+  question — the length of the question barely enters it.
+
+### What `docs/FLOW.md` needs from this, and what it does not settle
+
+The protocol is settled: one model, one endpoint, a schema in `text.format`, a parse that cannot fail, five usage
+paths, automatic caching and six reasoning efforts. Three things are deliberately left to the tickets that need them,
+because a live call cannot answer them:
+
+- **The prompts.** Nothing above is a prompt this project ships. The developer messages used here were written to
+  exercise a shape, not to be good at the job, and the four uses own their own wording.
+- **The seam.** `DecisionProvider` is session-scoped and none of these four calls is that shape; #219 adds the
+  one-shot interface beside it, with an offline deterministic implementation as the default and a contract suite both
+  pass. Nothing in this section requires a key for any of that.
+- **What to do with a reply that is schema-valid and wrong.** The `filePath` finding above says that will happen.
+  Validating the content, sending a bad success criterion back once, and refusing with a reason rather than returning
+  an empty list are `docs/FLOW.md` section 12's rules, not the API's.
+
 ## What was observed rather than documented
 
-The three places where the live API and the documentation disagree, collected so that nobody has to re-derive them:
+The six places where the live API and the documentation disagree, collected so that nobody has to re-derive them. The
+first three were found on the decision models (2026-10-27, #133), the last three on Muse Wonder (2026-11-03, #248),
+and the last two hold for both models because they are the endpoint's behaviour rather than a model's:
 
-| Subject                              | Documented                                                   | Observed 2026-10-27                                                   |
-| ------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `reasoning.effort: "max"`            | Not available on `muse-spark-1.3-contributor`                | Accepted: `200` / `completed`, and listed as supported in a `400` body |
-| `reasoning.encrypted_content`        | Omitted unless asked for with `include`                      | Present on every response, ~2.4 kB, with `store: false`                |
-| `previous_response_id` accounting    | Follow-up bills only the new turn, not the reconstructed prefix | Follow-up billed 535 tokens — about the full prefix                 |
+| Subject                           | Documented                                                      | Observed live                                                         |
+| --------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `reasoning.effort: "max"`         | Not available on `muse-spark-1.3-contributor`                   | Accepted: `200` / `completed`, and listed as supported in a `400` body |
+| `reasoning.encrypted_content`     | Omitted unless asked for with `include`                         | Present on every response, ~2.4 kB, with `store: false`                |
+| `previous_response_id` accounting | Follow-up bills only the new turn, not the reconstructed prefix | Follow-up billed 535 tokens — about the full prefix                    |
+| `response_format` on Responses    | "May be accepted for compatibility", with no effect             | **Rejected**: `400`, `unknown parameter`, `param: "response_format"`   |
+| What governs `encrypted_content`  | The `include` parameter                                         | **`store`**: present with `store: false`, absent with `store: true`    |
+| The error body                    | The inner object (`{"type", "message", "param", "code"}`)       | **Wrapped**: `{"error": {…}}`, identically on Wonder and on Spark      |
 
-And the two things the documentation does not state at all, settled by measurement: **caching is automatic** (no flag,
-no key required), and **the minimum cacheable prefix is somewhere under ~100 billed input tokens, below which nothing
-is served** — with the amount served block-granular and therefore always to be read from `cached_tokens` rather than
-predicted.
+And the four things the documentation does not state at all, settled by measurement: **caching is automatic** (no flag,
+no key required) and works the same way on Wonder; **the minimum cacheable prefix is somewhere under ~100 billed input
+tokens, below which nothing is served** — with the amount served block-granular and therefore always to be read from
+`cached_tokens` rather than predicted; **Muse Wonder's default `reasoning.effort` is `"max"`**, which is the most
+expensive setting it has and is what a request that omits `reasoning` gets; and **a schema-constrained reply can be
+schema-valid and factually wrong**, so every structured reply is validated for content after it is parsed.
 
 ## How this was verified
 
-39 live calls on 2026-10-27 from the owner's machine: 7 to `muse-spark-1.3` and 32 to
+**The decision models — 39 live calls on 2026-10-27** from the owner's machine: 7 to `muse-spark-1.3` and 32 to
 `muse-spark-1.3-contributor`, the cheap tier carrying the protocol probing. Total cost well under ten cents. The key
 was read from the environment, never printed, and the recorded request and response bodies were checked not to contain
 it before anything was written down.
@@ -550,3 +1032,23 @@ floor; all seven `reasoning.effort` values on the contributor model; image input
 a run-relative path; `previous_response_id` alone and combined with a resent history; and the provider's own live test
 (`packages/provider/tests/meta-model-live.test.ts`), which walks two screens of one session through the real request
 builder. The figures quoted throughout are from those calls, and the statuses are reported on #133.
+
+**Muse Wonder — 18 live calls on 2026-11-03** from the owner's machine (#248): 16 to `muse-wonder-1.0`, one to
+`muse-wonder-1.0-contributor` (the `404` that proved there is no cheap tier), and one to `muse-spark-1.3-contributor`
+(the malformed request that showed the error wrapper is the endpoint's and not Wonder's) — plus one `GET /v1/models`
+to establish that `muse-wonder-1.0` is the only Wonder id the key can see. **Total cost $0.1222**, of which the four
+shape calls were $0.0900 and the single most expensive call — the change with its patch — was $0.0462. Eleven answered
+`200`; the seven that answered `4xx` were all deliberate: a model id that does not exist (`404`), and six `400`s — a
+request with no `input`, the Chat Completions structured-output parameter, a schema outside the strict subset,
+`reasoning.effort: "none"`, a corrupt image payload, and the same `input`-less request sent to
+`muse-spark-1.3-contributor` to see whether the error envelope was Wonder's or the endpoint's.
+
+What was covered: one call of each of the four shapes the step needs (the structured audience, the goal, the ranked
+recommendations with citations, the change with a patch); structured replies through `text.format` with `strict: true`
+and `strict` omitted; a cached pair sharing one `prompt_cache_key` plus a byte-identical repeat of the first turn;
+`reasoning.effort` at `minimal`, `low` and unset, and the `400` for `none`; `store: true` against `store: false` to
+find what governs `encrypted_content`; image input as a `data:` URL, valid and corrupt; and the package's own live
+test (`packages/provider/tests/wonder-live.test.ts`), which asserts the envelope this section describes and prints the
+figures it observed so they can be checked against a run rather than taken on trust. The key was read from the
+environment, never printed, and every recorded request and response body was checked not to contain it before anything
+was written down. The statuses are reported on #248.
