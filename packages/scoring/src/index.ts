@@ -41,6 +41,9 @@ export type { Aoi, AoiMetric, Task, VariantScore } from './score.js';
 export { verdict } from './verdict.js';
 export type { VerdictWriter } from './verdict.js';
 
+export { judgeHoldout } from './holdout.js';
+export type { ChangeUnderTest, HoldoutInput, HoldoutLine } from './holdout.js';
+
 export { findings, findingRuleIdOf } from './findings/index.js';
 export type { Finding, FindingsGenerator } from './findings/index.js';
 

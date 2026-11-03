@@ -2,6 +2,7 @@ import type { Audience, Verdict } from '@personavision/contract';
 import { audienceSentenceFor, completionReason, reasonFrom } from './audienceSentence.js';
 import { bandOf, bandsDisjoint, type Band } from './bands.js';
 import type { Finding } from './findings/index.js';
+import { judgeHoldout, type ChangeUnderTest, type OnTheOriginalSeeds } from './holdout.js';
 import type { VariantScore } from './score.js';
 
 /**
@@ -20,17 +21,32 @@ import type { VariantScore } from './score.js';
  * headline says this test did not separate the two versions. The screen formats what it is
  * given, so a verdict that read as a clean win would be shown as one.
  *
+ * **The holdout is one judgement on top of it, never a second comparison.** A path-2 run
+ * names its baseline and its change, and the verdict then also says whether the people the
+ * change was never chosen against moved with the rest: confirmed, not confirmed, or none.
+ * It is decided in `holdout.ts` from the bands and the seed-group agreement this function
+ * has already computed, so there is one standard for a gain and not two, and it is stated
+ * in the audience sentence rather than in a footnote. Nothing above it changes.
+ *
  * Pure: contract types only, no disk, no network, no browser. The thresholds the acceptance
  * table measures against are presentation and live in `bands.ts`, mirroring
  * `docs/design/tokens.css`; nothing here reads them, because nothing here decides whether
  * a score is good — it decides whether two scores came apart.
  */
 
-/** The signature #27 implements. */
+/**
+ * The signature #27 implements, with #304's fourth argument.
+ *
+ * `change` names the two versions of a path-2 run — the site as it is and the pull
+ * request's — and is the whole of what this function needs to read the holdout beside
+ * them. A path-1 run passes none and gets today's verdict, with no holdout field: the
+ * contract refuses a holdout verdict on a run that tested no change.
+ */
 export type VerdictWriter = (
   scores: readonly VariantScore[],
   findings: readonly Finding[],
   audience: Audience,
+  change?: ChangeUnderTest,
 ) => Verdict;
 
 /** The Verdict screen shows at most three findings; the cap is the artifact contract's. */
@@ -173,12 +189,19 @@ const headlineOf = (findings: readonly Finding[]): Finding[] =>
  * When nothing is left — an empty findings list, or headline findings that are all ours —
  * the completion figures are the reason. The contract refuses an empty `reasons`, and the
  * figures are what the screen leads with anyway.
+ *
+ * A run that ran a holdout spends the **second** slot on it, as the prototype's Before and
+ * after does: the holdout line is a reason to trust the first one, and it reads under it.
+ * There are two slots and never three, so the holdout costs the second finding its place
+ * rather than being added beside it.
  */
 const reasonsOf = (
   headline: readonly Finding[],
   preferred: VariantScore,
   other: VariantScore | null,
+  holdoutReason: string | null,
 ): string[] => {
+  const slots = holdoutReason === null ? MAX_REASONS : MAX_REASONS - 1;
   const product = headline.filter((finding) => finding.attribution === 'product');
   const aboutPreferred = (finding: Finding): boolean => finding.variant === preferred.variant;
   const fromFindings = [
@@ -188,8 +211,10 @@ const reasonsOf = (
         ...product.filter(aboutPreferred),
       ].map((finding) => reasonFrom(finding)),
     ),
-  ].slice(0, MAX_REASONS);
-  return fromFindings.length > 0 ? fromFindings : [completionReason(preferred, other)];
+  ].slice(0, slots);
+  const fromRun =
+    fromFindings.length > 0 ? fromFindings : [completionReason(preferred, other)].slice(0, slots);
+  return holdoutReason === null ? fromRun : [...fromRun, holdoutReason];
 };
 
 /**
@@ -311,7 +336,7 @@ const sentenceOf = ({ harder, easiest, gapPoints, disjoint, agreement }: Sentenc
  * is refused rather than invented: there is no variant to name, and a `verdict` naming one
  * would be the only part of the artifact nobody measured.
  */
-export const verdict: VerdictWriter = (scores, findings, audience) => {
+export const verdict: VerdictWriter = (scores, findings, audience, change) => {
   if (scores.length === 0) {
     throw new Error(
       'a verdict needs at least one scored variant: there is no variant to name and no gap to measure',
@@ -342,6 +367,42 @@ export const verdict: VerdictWriter = (scores, findings, audience) => {
     other === null ? false : bandsDisjoint(bandOf(preferred), bandOf(other));
 
   const headline = headlineOf(findings);
+  const audienceSentence = audienceSentenceFor({
+    audience,
+    preferred,
+    other,
+    separated: headlineSeparated,
+  });
+
+  // What the change did on the seeds it was chosen on, by the verdict's own two gates and
+  // no others: the bands it has already compared and the seed groups it has already
+  // counted. A group that put the baseline lower is a group that disagreed.
+  //
+  // The gain also has to be **this** comparison. The bands and the groups above are the
+  // hardest variant against the easiest, which on a run of more than two need not be the
+  // baseline and the change; and the variant the headline recommends is the one more of
+  // the audience completed, which is not always the one that scored easier. When either
+  // comes apart from the change, the run has not shown the change ahead, and the holdout
+  // is told that rather than being asked to confirm a gain nothing measured.
+  const onTheOriginalSeeds = (tested: ChangeUnderTest): OnTheOriginalSeeds => {
+    if (!disjoint || agreement.comparable === 0 || agreement.agreeing !== agreement.comparable) {
+      return 'did-not-separate';
+    }
+    const isThisComparison =
+      harder.variant === tested.baselineVariant && easiest?.variant === tested.changeVariant;
+    return isThisComparison && preferred.variant === tested.changeVariant ? 'won' : 'not-ahead';
+  };
+
+  const holdout =
+    change === undefined
+      ? null
+      : judgeHoldout({
+          scores,
+          change,
+          onTheOriginalSeeds: onTheOriginalSeeds(change),
+          headline: audienceSentence,
+          audience,
+        });
 
   return {
     harderVariant: harder.variant,
@@ -350,14 +411,10 @@ export const verdict: VerdictWriter = (scores, findings, audience) => {
     seedGroupsAgreeing: agreement.agreeing,
     sentence: sentenceOf({ harder, easiest, gapPoints, disjoint, agreement }),
     preferredVariant: preferred.variant,
-    audienceSentence: audienceSentenceFor({
-      audience,
-      preferred,
-      other,
-      separated: headlineSeparated,
-    }),
-    reasons: reasonsOf(headline, preferred, other),
+    audienceSentence: holdout === null ? audienceSentence : holdout.audienceSentence,
+    reasons: reasonsOf(headline, preferred, other, holdout?.reason ?? null),
     headlineFindingIds: headline.map((finding) => finding.id),
     heroEvidence: heroEvidenceOf(findings, harder),
+    ...(holdout === null ? {} : { holdout: holdout.verdict }),
   };
 };
