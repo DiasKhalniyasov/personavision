@@ -152,7 +152,14 @@ export interface SiteCheckResult {
    * composed from this field, so the line shown and the line searched for are one string.
    */
   readonly lookedFor: string;
-  /** Everywhere this check looked, in the order it looked. */
+  /**
+   * Every address this check was prepared to ask, in the order it would ask them — the whole
+   * walk and not the part of it that was reached, since a check that finds the line on the
+   * first address stops there.
+   *
+   * What a sentence names is `found.at`, which is only ever where the outcome actually
+   * happened. A screen printing "we looked at …" should print that.
+   */
   readonly lookedIn: readonly SiteCheckTarget[];
   readonly found: SiteCheckFinding;
   /**

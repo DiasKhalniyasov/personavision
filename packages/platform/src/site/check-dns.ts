@@ -54,30 +54,63 @@ const LOOKUP_TIMEOUT_MS = 2_500;
 const LOOKUP_TRIES = 1;
 
 /**
- * Why a rejected lookup did not answer, in the user's words — or `null` for a name that
- * resolved and simply publishes no TXT record, which is a finding and not a silence.
+ * How many names one check may ask for.
+ *
+ * The walk is sequential and each lookup has its own timeout, so the number of labels in a
+ * hostname is the number of seconds a request can be held open — and nothing stops a user
+ * adding a site at a sixty-label host. Five keeps every real hostname whole.
  */
-const becauseOf = (error: unknown): string | null => {
-  const code = (error as { code?: unknown }).code;
+const MAX_DOMAINS = 5;
+
+/**
+ * A lookup that did not answer: why, in the user's words, and whether that leaves what is
+ * published on the name **unknown**.
+ *
+ * The difference decides the outcome. A name that does not exist publishes nothing, so a
+ * walk that only met those is a walk that found no record; a name that timed out may well
+ * carry the record the user added, so a walk that met one has not established anything.
+ */
+interface Silence {
+  readonly because: string;
+  readonly unreadable: boolean;
+}
+
+/**
+ * Why a rejected lookup did not answer — or `null` for a name that resolved and simply
+ * publishes no TXT record, which is a finding and not a silence.
+ */
+const becauseOf = (error: unknown): Silence | null => {
+  // Whatever the resolver rejected with, including `undefined` and a string: reading `.code`
+  // off it unguarded is the one way this check could throw rather than answer, and the
+  // resolver is an injected seam that a caller — or a later check — supplies.
+  const code =
+    typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
   switch (code) {
     // The name exists and has no TXT records at all. Not "did not answer": DNS answered.
     case 'ENODATA':
       return null;
+    // Also an answer, and a definite one — there is no such name, so nothing is published on
+    // it. Still worth a sentence of its own, because a site whose own host does not resolve
+    // is the news rather than the missing record.
     case 'ENOTFOUND':
     case 'NXDOMAIN':
-      return 'that domain does not exist';
+      return { because: 'that domain does not exist', unreadable: false };
     case 'ETIMEOUT':
     case 'ETIMEDOUT':
-      return 'the lookup timed out';
+      return { because: 'the lookup timed out', unreadable: true };
     case 'ESERVFAIL':
-      return 'the name servers for that domain would not answer';
+      return { because: 'the name servers for that domain would not answer', unreadable: true };
     case 'EREFUSED':
     case 'ECONNREFUSED':
-      return 'the name servers for that domain refused the query';
+      return { because: 'the name servers for that domain refused the query', unreadable: true };
     default:
-      return typeof code === 'string'
-        ? `the lookup failed with ${code}`
-        : 'the lookup did not complete';
+      return {
+        because:
+          typeof code === 'string'
+            ? `the lookup failed with ${code}`
+            : 'the lookup did not complete',
+        unreadable: true,
+      };
   }
 };
 
@@ -114,7 +147,13 @@ export const verificationDomains = (hostname: string): readonly string[] => {
   if (isIP(host) !== 0) return [host];
   const labels = host.split('.');
   if (labels.length < 2) return [host];
-  return labels.slice(0, labels.length - 1).map((_label, index) => labels.slice(index).join('.'));
+  const walk = labels
+    .slice(0, labels.length - 1)
+    .map((_label, index) => labels.slice(index).join('.'));
+  if (walk.length <= MAX_DOMAINS) return walk;
+  // Past the cap, both ends are kept — the host the user is proving and the two-label suffix
+  // the screen tells them to add the record on — and the parents between them are dropped.
+  return [...walk.slice(0, MAX_DOMAINS - 1), ...walk.slice(-1)];
 };
 
 /** One TXT record, whose 255-byte chunks are one value (RFC 1035) and are joined as one. */
@@ -142,18 +181,18 @@ export const checkDnsTxt: SiteCheck = async (
 
   /** Domains that published TXT records, none of them the line. */
   const published: { domain: string; values: string[] }[] = [];
-  /** Domains that did not answer, with why. */
-  const silent: { domain: string; because: string }[] = [];
+  /** Domains that did not answer, with why and whether that leaves them unread. */
+  const silent: { domain: string; because: string; unreadable: boolean }[] = [];
 
   for (const domain of domains) {
     let records: string[][];
     try {
       records = await resolveTxt(domain);
     } catch (error) {
-      const because = becauseOf(error);
+      const silence = becauseOf(error);
       // A domain that did not answer does not end the walk: the record the user added on
       // the parent still verifies the site when the host itself has no TXT records of its own.
-      if (because !== null) silent.push({ domain, because });
+      if (silence !== null) silent.push({ domain, ...silence });
       continue;
     }
     const values = records.map(valueOf);
@@ -172,8 +211,24 @@ export const checkDnsTxt: SiteCheck = async (
       ),
     );
   }
-  // Every domain asked, and not one of them answered: the one outcome that is about the
-  // host rather than about what it publishes, and it says which it was.
+  // Nothing is published on anything we could read, and at least one name we could not read
+  // at all. The line may well be on that one, so this is **not** "no TXT record found": that
+  // sentence would send a user to re-add a record they have already added.
+  const unreadable = silent.filter((entry) => entry.unreadable);
+  if (unreadable.length > 0) {
+    // One reason, and only the names it is true of. Lending one domain's reason to another —
+    // telling a user that a domain which timed out does not exist — is exactly the invented
+    // explanation the screen contract rules out.
+    const because = unreadable[0]?.because ?? 'the lookup did not complete';
+    return result(
+      noAnswer(
+        unreadable.filter((entry) => entry.because === because).map(({ domain }) => domain),
+        because,
+      ),
+    );
+  }
+  // Every name was read, and not one of them exists: that is the sentence, rather than one
+  // about a record missing from domains that are not there to carry it.
   if (silent.length > 0 && silent.length === domains.length) {
     return result(
       noAnswer(
@@ -182,6 +237,7 @@ export const checkDnsTxt: SiteCheck = async (
       ),
     );
   }
+  // Every name answered — or does not exist, which is an answer — and none carries a record.
   return result(nothingPublished(domains));
 };
 

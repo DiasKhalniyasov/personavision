@@ -107,7 +107,9 @@ const body = (record: SiteRecord): SiteBody => ({
   url: record.url,
   token: record.token,
   verification: record.verification,
-  lastCheck: record.lastCheck,
+  // `?? null` for a record written before this field existed: a reader is promised the key,
+  // and `JSON.stringify` drops an `undefined` one altogether.
+  lastCheck: record.lastCheck ?? null,
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
   deletedAt: record.deletedAt,
@@ -236,7 +238,10 @@ export const siteRoutes = (options: SiteRouteOptions): Route[] => {
         // that was never there — before the body is read and whatever method it names. A
         // 400 about the method would otherwise tell the asker that the site exists.
         const site = await sites.byId(workspaceId, siteIdOf(request, SITE_VERIFY_PATH));
-        if (site === null) {
+        // A removed site is readable and is not checkable, which is the answer the audiences
+        // routes give for editing a removed audience: the user said they were done with this
+        // address, and proving control of one they have taken away verifies nothing.
+        if (site === null || site.deletedAt !== null) {
           notFound(response);
           return;
         }

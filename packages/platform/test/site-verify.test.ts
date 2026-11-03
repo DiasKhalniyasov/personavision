@@ -470,6 +470,23 @@ describe('POST /sites/:siteId/verify', () => {
     });
   });
 
+  describe('a site that has been removed', () => {
+    it('answers 404 and runs no check, as editing a removed audience does', async () => {
+      // A removed site is readable and is not checkable: the user said they were done with
+      // this address, and proving control of one they have taken away verifies nothing.
+      const site = await add();
+      publish(HOST, site);
+      expect((await send(`/sites/${site.id}`, 'DELETE')).status).toBe(200);
+
+      const response = await verify(site.id);
+
+      expect(response.status).toBe(404);
+      expect((await bodyOf(response)).error).toBe('There is no such site.');
+      expect(asked).toEqual([]);
+      expect((await read(site.id)).verification).toEqual(UNVERIFIED);
+    });
+  });
+
   describe('a site of another workspace', () => {
     it('answers 404, as reading one does, and runs no check', async () => {
       const mine = await add();

@@ -280,6 +280,44 @@ describe('the DNS TXT check', () => {
     });
   });
 
+  describe('a walk where only some of the names could be read', () => {
+    it('does not call a record missing from a domain it could not read', async () => {
+      // The host exists and publishes no TXT record; the domain — the one the screen tells
+      // the user to add the record on — timed out. "No TXT record found on beta… or
+      // clipforge…" would send a user to re-add a record they have already added.
+      const { result } = await check({ [DOMAIN]: { rejects: 'ETIMEOUT' } });
+
+      expect(result.found).toEqual({
+        outcome: 'no-answer',
+        at: [DOMAIN],
+        values: [],
+        because: 'the lookup timed out',
+      });
+      expect(result.sentence).toBe(`${DOMAIN} did not answer: the lookup timed out`);
+    });
+
+    it('names only the domains the reason is true of', async () => {
+      const { result } = await check({
+        [HOST]: { rejects: 'ENOTFOUND' },
+        [DOMAIN]: { rejects: 'ETIMEOUT' },
+      });
+
+      // One of them does not exist and the other timed out. Naming both after one reason
+      // would tell the user that `clipforge.example` does not exist, which it does.
+      expect(result.found.at).toEqual([DOMAIN]);
+      expect(result.found.because).toBe('the lookup timed out');
+    });
+
+    it('is still “no record found” when every name was read', async () => {
+      // A name that does not exist is an answer and not a silence: nothing is published on
+      // a name that is not there, so the walk did establish that the record is missing.
+      const { result } = await check({ [HOST]: { rejects: 'ENOTFOUND' } });
+
+      expect(result.found.outcome).toBe('nothing-published');
+      expect(result.found.at).toEqual([HOST, DOMAIN]);
+    });
+  });
+
   it('never says “something went wrong”, in any state it can end in', async () => {
     const zones: Record<string, Answer>[] = [
       { [HOST]: [[PAIR]] },
@@ -307,6 +345,23 @@ describe('the DNS TXT check', () => {
 
     expect(result.passed).toBe(false);
     expect(result.found.outcome).toBe('no-answer');
+  });
+
+  it('is a result for a rejection that is not an error object at all', async () => {
+    // The resolver is an injected seam, so what it rejects with is a caller's choice. A
+    // `TypeError` reading `.code` off `undefined` would escape this check, past the route's
+    // one catch, and answer the user a 500 instead of a sentence.
+    for (const thrown of [undefined, null, 'ETIMEOUT', 7]) {
+      const result = await checkDnsTxt(SITE, {
+        resolveTxt: async () => {
+          throw thrown;
+        },
+        now: () => new Date(CHECKED_AT),
+      });
+
+      expect(result.found.outcome).toBe('no-answer');
+      expect(result.found.because).toBe('the lookup did not complete');
+    }
   });
 });
 
@@ -351,6 +406,18 @@ describe('the domains a TXT record verifies a host on', () => {
       'beta.clipforge.example',
       'clipforge.example',
     ]);
+  });
+
+  it('asks at most five names, keeping the host and the two-label suffix', () => {
+    const deep = `${'a.'.repeat(60)}clipforge.example`;
+    const walked = verificationDomains(deep);
+
+    // The walk is sequential and each lookup has its own timeout, so the label count is the
+    // number of seconds one request can be held open. Both ends survive the cap: the host
+    // being proved, and the domain the screen tells the user to add the record on.
+    expect(walked).toHaveLength(5);
+    expect(walked[0]).toBe(deep);
+    expect(walked.at(-1)).toBe('clipforge.example');
   });
 
   it('looks a dev server up as its one host', async () => {
