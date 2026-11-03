@@ -41,6 +41,14 @@ const HOLDOUT_FIGURES = {
   scoredSessionCount: 2,
 } as const;
 
+/**
+ * The one person held out: **generated beside the four the audience asked for, not taken
+ * from them** (`docs/FLOW.md` section 15, point 4, as `runSchema` holds it since #306). So
+ * a path-2 variant of the fixture run carries five people, and the change was chosen on
+ * four of them.
+ */
+const HELD_OUT_PERSONA_ID = 'held-out';
+
 /** The `improve` block of a run that tested a change, as `improveSchema` spells it. */
 const CHANGE = {
   recommendationId: 'R-1',
@@ -57,7 +65,7 @@ const CHANGE = {
   patch: FIXTURE_PATCH,
   baselineVariant: 'A',
   changeVariant: 'B',
-  holdout: { personaIds: ['price'], confirmed: true },
+  holdout: { personaIds: [HELD_OUT_PERSONA_ID], confirmed: true },
 } as const;
 
 /** How a holdout reads: the three spellings the contract allows. */
@@ -107,6 +115,11 @@ export const pathTwoRun = (options: ChangeOptions = {}): Run => {
 
   return runSchema.parse({
     ...run,
+    // The holdout is people generated beside the participants, so a run that ran one
+    // carries them in `personas` too: the audience's four, plus the one held out.
+    personas: ran
+      ? [...run.personas, { ...run.personas[0], id: HELD_OUT_PERSONA_ID, name: 'Held out' }]
+      : run.personas,
     improve,
     // A score carries the holdout's figures only on a run that ran one: the contract
     // refuses a figure recorded for nobody.

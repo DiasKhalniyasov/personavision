@@ -194,9 +194,10 @@ describe('the pull request it wrote', () => {
       expect(section('tested-with')).not.toBeNull();
     });
     const tested = sectionText('tested-with');
-    // The fixture run: four people generated, one of them held out, three seed groups.
+    // The fixture run: four people the change was chosen on, one more held out beside
+    // them, three seed groups.
     expect(tested).toContain('Outdoor-gear shoppers');
-    expect(tested).toContain('the same 3 people');
+    expect(tested).toContain('the same 4 people');
     expect(tested).toContain('the same 3 seeds');
     expect(tested).toContain('holdout of 1 person');
     expect(tested).toContain('seeds this change was never chosen against');
