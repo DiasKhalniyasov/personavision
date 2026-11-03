@@ -4,7 +4,7 @@ import type { Audience, Goal, ModelMode, RunRequest } from '@personavision/contr
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
 import type { ModelId } from '@personavision/provider';
 import { audienceForNewTest } from '../audience/freeze.js';
-import { refuseTooManyAgents, refuseTooManyRunsThisHour } from '../caps.js';
+import { CAPS, refuseTooManyAgents, refuseTooManyRunsThisHour } from '../caps.js';
 import { parseSiteUrl, SiteUrlNotAcceptedError } from '../site/site.js';
 import type { AudienceStore, SiteRecord, SiteStore, WorkspaceStore } from '../store/types.js';
 
@@ -50,11 +50,24 @@ export interface StartedTest {
  * `run.json` carries it by value — resolving that id is the platform's, since only the
  * platform knows which workspace asked (`audienceForNewTest`). The pipeline copies this
  * object into the artifact and reads no audience of its own.
+ *
+ * `concurrency` is **how many of this site's sessions may be in flight at once**, and it is
+ * handed over for the same reason the audience is: only the platform knows which site is
+ * being driven, and the number is a fact about that site (`CAPS.concurrentSessionsPerSite`,
+ * `docs/FLOW.md` section 13). The swarm's pool holds whatever bound it is given and names no
+ * per-site number of its own (#275), so handing it the caps module's number is what makes
+ * the cap a cap — and is why no submitted body can raise it: `startTest` computes it, and
+ * nothing it was sent is consulted.
+ *
+ * It is optional on this type so that a pipeline with no use for it — a stand-in in a test
+ * about something else — still satisfies it. A pipeline that ignores it runs unbounded, so
+ * the real one does not.
  */
 export type TestPipeline = (
   request: RunRequest,
   audience: Audience,
   site?: SiteAtLaunch,
+  concurrency?: number,
 ) => Promise<StartedTest>;
 
 /**
@@ -255,6 +268,61 @@ const siteForNewTest = async (
   return site;
 };
 
+/**
+ * The runs in flight, by site: the tail of each site's queue, so a launch can wait for
+ * whatever is ahead of it.
+ *
+ * **One run per site at a time.** Two runs on one site would otherwise be twenty browsers
+ * on it — each run holding its own ten — which is exactly the load the cap exists to keep
+ * off a small site. A second launch therefore **waits** for the first rather than being
+ * refused: the run was allowed (its agents are under the hundred, its site has runs left
+ * this hour), so refusing it here would be refusing a launch no cap refused. What it loses
+ * is time, not sessions.
+ *
+ * It is keyed by **site id**, so a launch on another site starts at once: the ten is about
+ * one address being driven, and two addresses are two sites' worth of browsers. A site
+ * record belongs to one workspace, so one address added by two workspaces is two sites and
+ * two queues — which is the same ceiling the hourly ledger already has, since that is
+ * counted per record too.
+ *
+ * `ponytail:` an in-process gate. One server process owns its data directory, which is the
+ * same ceiling the file store already has, so a second process would not see this map — nor
+ * the file store's writes. Per-host coordination, if the platform is ever more than one
+ * process, is #229's and would replace both together.
+ */
+const queueBySite = new Map<string, Promise<void>>();
+
+/**
+ * `run`, once every launch already queued on this site has finished.
+ *
+ * The queue is a chain of promises rather than a counter, so the order launches arrived in
+ * is the order they run in — a second launch that waited ten minutes is not overtaken by a
+ * third that arrived after it.
+ *
+ * `mine` only ever **resolves**: it is settled in a `finally`, so a run that throws releases
+ * the site rather than leaving every launch behind it waiting for a run that is over. The
+ * last one out deletes the key, so the map holds an entry per site being driven rather than
+ * one per site that ever was.
+ */
+const whileNothingElseRunsOnTheSite = async <T>(
+  siteId: string,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const ahead = queueBySite.get(siteId);
+  let done: () => void = () => undefined;
+  const mine = new Promise<void>((resolve) => {
+    done = resolve;
+  });
+  queueBySite.set(siteId, mine);
+  await ahead;
+  try {
+    return await run();
+  } finally {
+    if (queueBySite.get(siteId) === mine) queueBySite.delete(siteId);
+    done();
+  }
+};
+
 export const startTest = async ({
   workspaces,
   audiences,
@@ -345,7 +413,18 @@ export const startTest = async ({
 
   let started: StartedTest;
   try {
-    started = await pipeline(request, audience, siteAtLaunch);
+    // The concurrency is **computed here and handed over**, which is the whole of the
+    // per-site concurrency cap: the swarm holds whatever bound it is given (#275), and the
+    // number it is given is the caps module's. `request` is never consulted for it, so a
+    // submitted body naming a concurrency of its own raises nothing — the contract declares
+    // no such field, so a body that invented one is refused by the parse above rather than
+    // honoured, and even a body the contract accepted would be read for no number here.
+    //
+    // `engineMode` is not consulted either: an offline run drives the same browsers at the
+    // same site, so it is held to the same ten.
+    started = await whileNothingElseRunsOnTheSite(site.id, () =>
+      pipeline(request, audience, siteAtLaunch, CAPS.concurrentSessionsPerSite),
+    );
   } catch (error) {
     // Provider selection refusing to serve the mode is this workspace's test being
     // refused (#143). For contributor it is not supposed to happen — no key means offline,
