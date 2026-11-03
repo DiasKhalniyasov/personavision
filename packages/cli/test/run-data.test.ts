@@ -111,6 +111,19 @@ describe('the run-data mount', () => {
     expect(await response.json()).toEqual({ recommendations: [] });
   });
 
+  it('serves the aggregate the funnel and heatmap screens read', async () => {
+    // `aggregate.json` is optional too, and reachable the moment the pipeline writes it: the
+    // mount holds no list of names, only the file kinds of the layout (#287).
+    const file = runPaths('').aggregate;
+    await writeFile(join(runsRoot, shown, file), '{"funnelSlices":[]}\n');
+
+    const response = await fetch(new URL(`runs/${shown}/${file}`, server.base));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({ funnelSlices: [] });
+  });
+
   it('names the methods it serves when asked for a write', async () => {
     const response = await fetch(new URL(`runs/${shown}/run.json`, server.base), {
       method: 'POST',

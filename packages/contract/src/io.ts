@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { z } from 'zod';
 import { runPaths, sessionIdFromFileName } from './paths.js';
 import type {
+  Aggregate,
   Citation,
   Findings,
   Recommendations,
@@ -12,6 +13,7 @@ import type {
   SessionProgress,
 } from './schemas.js';
 import {
+  aggregateSchema,
   findingsSchema,
   recommendationsSchema,
   runSchema,
@@ -39,6 +41,12 @@ export interface RunArtifact {
   run: Run;
   sessions: Session[];
   findings: Findings;
+  /**
+   * Every figure the funnel, timing and heatmap screens read, computed once over the
+   * sessions. Absent for a run that computed no aggregate — the file is optional, and an
+   * absent aggregate is a run that computed none rather than a run whose figures are zero.
+   */
+  aggregate?: Aggregate;
   /**
    * What Muse Wonder says to change. Absent for a run that produced no recommendation —
    * the file is optional, and a run directory without it is not a violation.
@@ -139,6 +147,7 @@ const checkReferences = (
   sessions: ReadonlyArray<Session>,
   findings: Findings | undefined,
   recommendations: Recommendations | undefined,
+  aggregate: Aggregate | undefined,
   violations: Violation[],
 ): void => {
   const declaredAois = new Set(run.aois.map((aoi) => aoi.id));
@@ -424,6 +433,88 @@ const checkReferences = (
   recommendations?.writeUp?.forEach((claim, index) => {
     checkCitations('writeUp', index, claim.citations);
   });
+  // The aggregate is every figure the Funnel and timing and Heatmaps screens read, and every
+  // one of them is addressed by a name this run declares: a funnel row naming a step
+  // `run.json` does not is a row no screen can label, and a slowest-sessions row naming a
+  // session nothing lists is a link to nothing. Held to the same rule as the citations above.
+  if (aggregate !== undefined) {
+    const inAggregate = (path: ReadonlyArray<PropertyKey>, message: string): void => {
+      violations.push(at(relative.aggregate, path, message));
+    };
+    const danglingSession = (sessionId: string): string =>
+      `"${sessionId}" names no session listed in run.json sessionIds`;
+    aggregate.funnelSlices.forEach((slice, index) => {
+      const where = (...rest: PropertyKey[]): PropertyKey[] => ['funnelSlices', index, ...rest];
+      if (slice.variant !== null && !declaredVariants.has(slice.variant)) {
+        inAggregate(where('variant'), danglingVariant(slice.variant));
+      }
+      // The funnel's own order is `run.json`'s: the steps it holds are a run of that list,
+      // which is what makes the bars read top to bottom as the journey. The slice's biggest
+      // drop needs no check of its own — the schema holds it to a row of this same funnel.
+      let furthest = { at: -1, step: '' };
+      slice.funnel.forEach((row, position) => {
+        const declaredAt = run.steps.findIndex((step) => step.id === row.step);
+        if (declaredAt === -1) {
+          inAggregate(where('funnel', position, 'step'), danglingStep(row.step));
+          return;
+        }
+        if (declaredAt < furthest.at) {
+          inAggregate(
+            where('funnel', position, 'step'),
+            `the funnel is in the order run.json declares its steps, and "${row.step}" is declared before "${furthest.step}"`,
+          );
+          return;
+        }
+        furthest = { at: declaredAt, step: row.step };
+      });
+      slice.timing.perStep.forEach((row, position) => {
+        if (!declaredSteps.has(row.step)) {
+          inAggregate(where('timing', 'perStep', position, 'step'), danglingStep(row.step));
+        }
+      });
+      slice.timing.slowest.forEach((slowest, position) => {
+        if (!seen.has(slowest.sessionId)) {
+          inAggregate(
+            where('timing', 'slowest', position, 'sessionId'),
+            danglingSession(slowest.sessionId),
+          );
+        }
+        if (!declaredSteps.has(slowest.dominantStep)) {
+          inAggregate(
+            where('timing', 'slowest', position, 'dominantStep'),
+            danglingStep(slowest.dominantStep),
+          );
+        }
+      });
+      slice.paths.forEach((path, position) => {
+        path.steps.forEach((step, place) => {
+          if (!declaredSteps.has(step)) {
+            inAggregate(where('paths', position, 'steps', place), danglingStep(step));
+          }
+        });
+      });
+    });
+    aggregate.screenSlices.forEach((slice, index) => {
+      slice.screens.forEach((screen, position) => {
+        const where = (...rest: PropertyKey[]): PropertyKey[] => [
+          'screenSlices',
+          index,
+          'screens',
+          position,
+          ...rest,
+        ];
+        if (!declaredVariants.has(screen.variant)) {
+          inAggregate(where('variant'), danglingVariant(screen.variant));
+        }
+        if (!declaredSteps.has(screen.step)) inAggregate(where('step'), danglingStep(screen.step));
+        screen.clicksByAoi.forEach((clicks, place) => {
+          if (clicks.aoiId !== null && !declaredAois.has(clicks.aoiId)) {
+            inAggregate(where('clicksByAoi', place, 'aoiId'), danglingAoi(clicks.aoiId));
+          }
+        });
+      });
+    });
+  }
 };
 
 const readSessionIds = async (sessionsDir: string): Promise<string[]> => {
@@ -455,8 +546,14 @@ const collect = async (
       ? undefined
       : parse(findingsSchema, findingsJson, relative.findings, violations);
 
-  // The one optional file of the layout: a run with no recommendations has no such file,
-  // and reads back as a run with none.
+  // The optional files of the layout: a run that computed no aggregate and a run that
+  // produced no recommendation each have no such file, and read back as a run with none.
+  const aggregateJson = await readJsonFile(paths.aggregate, relative.aggregate, violations, true);
+  const aggregate =
+    aggregateJson === undefined
+      ? undefined
+      : parse(aggregateSchema, aggregateJson, relative.aggregate, violations);
+
   const recommendationsJson = await readJsonFile(
     paths.recommendations,
     relative.recommendations,
@@ -490,7 +587,7 @@ const collect = async (
   }
 
   if (run === undefined) return { artifact: undefined, violations };
-  checkReferences(run, [...byId.values()], findings, recommendations, violations);
+  checkReferences(run, [...byId.values()], findings, recommendations, aggregate, violations);
   if (findings === undefined || violations.length > 0) return { artifact: undefined, violations };
 
   // `run.sessionIds` is the authoritative order, and it agreed with disk above.
@@ -500,6 +597,7 @@ const collect = async (
       run,
       sessions,
       findings,
+      ...(aggregate !== undefined && { aggregate }),
       ...(recommendations !== undefined && { recommendations }),
     },
     violations,
@@ -555,9 +653,41 @@ export const writeSession = async (runDir: string, session: Session): Promise<vo
 };
 
 /**
+ * The aggregate, written to `aggregate.json` and nothing else.
+ *
+ * It is the writer for a figure set that is computed while the run it is of may still be
+ * open (`docs/FLOW.md` section 14): the pipeline aggregates over the sessions that exist and
+ * lands the file here, as many times as it likes, without touching `run.json`. The
+ * references out of it — the steps, the versions, the areas of interest and the session ids
+ * — are checked against `run.json` by `validate` and `readRun`, which are the two places
+ * that hold the whole directory in hand.
+ *
+ * What it writes is what the schema parsed, so reading it back yields the same value, and it
+ * throws with every violation rather than writing an aggregate that would not read back.
+ */
+export const writeAggregate = async (runDir: string, aggregate: Aggregate): Promise<void> => {
+  const paths = runPaths(runDir);
+  const violations: Violation[] = [];
+  const parsed = parse(aggregateSchema, aggregate, relative.aggregate, violations);
+  if (parsed === undefined) throw new Error(report(runDir, violations));
+
+  await mkdir(paths.dir, { recursive: true });
+  await writeFile(paths.aggregate, serialize(parsed));
+};
+
+/**
  * A whole run directory, written. What it writes is what the schemas parsed, so reading it
  * back yields the same value. Throws with every violation rather than writing an artifact
  * that would not read back.
+ *
+ * **It is not how a pipeline lands an aggregate** — `writeAggregate` is, over the sessions
+ * that exist and as often as it likes while the run is open. What this writer does with
+ * `aggregate.json` is what it does with `recommendations.json`: it owns the directory it
+ * writes, so it writes the aggregate it is given and removes the file when it is given none.
+ * Figures from another run are worse than none, and a run rewritten over an older one would
+ * otherwise keep an aggregate naming that run's sessions, which makes the directory
+ * unreadable until somebody deletes the file by hand. A caller that means to keep the
+ * aggregate passes the artifact it read, which carries it.
  */
 export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<void> => {
   const violations: Violation[] = [];
@@ -572,13 +702,21 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
           relative.recommendations,
           violations,
         );
+  // Parsed before it is cross-checked, like every other file here: an aggregate that is not
+  // one is reported as violations of its own rather than read as though it were.
+  const aggregate =
+    artifact.aggregate === undefined
+      ? undefined
+      : parse(aggregateSchema, artifact.aggregate, relative.aggregate, violations);
   const sessions: Session[] = [];
   for (const candidate of artifact.sessions) {
     const label = relative.session(candidate.sessionId);
     const session = parse(sessionSchema, candidate, label, violations);
     if (session !== undefined) sessions.push(session);
   }
-  if (run !== undefined) checkReferences(run, sessions, findings, recommendations, violations);
+  if (run !== undefined) {
+    checkReferences(run, sessions, findings, recommendations, aggregate, violations);
+  }
   if (violations.length > 0) throw new Error(report(runDir, violations));
 
   const paths = runPaths(runDir);
@@ -586,9 +724,12 @@ export const writeRun = async (runDir: string, artifact: RunArtifact): Promise<v
   await writeFile(paths.run, serialize(run));
   await writeFile(paths.findings, serialize(findings));
   // The writer owns the run directory, so a run written over an older one must not inherit
-  // its recommendations: advice from another run is worse than none.
+  // its recommendations or its figures: advice from another run is worse than none, and so
+  // is an aggregate of another run's sessions.
   if (recommendations === undefined) await rm(paths.recommendations, { force: true });
   else await writeFile(paths.recommendations, serialize(recommendations));
+  if (aggregate === undefined) await rm(paths.aggregate, { force: true });
+  else await writeFile(paths.aggregate, serialize(aggregate));
   await Promise.all(
     sessions.map((session) => writeFile(paths.session(session.sessionId), serialize(session))),
   );

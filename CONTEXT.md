@@ -72,7 +72,7 @@ The binary is `personavision`. The library packages above exist as buildable pla
 
 **No package other than `@personavision/contract` declares an artifact field name or a run-directory path.** Not a constant, not a string literal, not a re-derived path. Readers and writers import the schemas and the inferred types, so a field name is read from the compiler rather than from prose, and a round trip through disk is type-checked at both ends.
 
-The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `recommendations.json`, `sessions/S-01.json … S-NN.json`, `screenshots/<variant>/<step>.png`, and `videos/S-NN.webm`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one. `recommendations.json` is **optional**: a run directory without it produced no recommendation, which is not a zero somebody measured.
+The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `aggregate.json`, `recommendations.json`, `sessions/S-01.json … S-NN.json`, `screenshots/<variant>/<step>.png`, and `videos/S-NN.webm`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one. `aggregate.json` and `recommendations.json` are **optional**: a run directory without them computed no aggregate and produced no recommendation, which is not a zero somebody measured. The aggregate holds every figure the funnel, timing and heatmap screens read, pre-sliced by segment, version and outcome. It is landed by `writeAggregate`, which writes that one file and may be called as often as the pipeline likes while the run is open; `writeRun` is not how a pipeline computes one, but it owns the directory it writes, so it writes the aggregate it is handed and removes the file when it is handed none — an aggregate of another run's sessions is worse than none, and a directory that kept one could not be read again.
 
 A session's **video** is optional by the same rule. `videos/S-NN.webm` is the recording of session `S-NN` — WebM, 720p, capped at 30 seconds a screen and 10 minutes a session — and the session's own JSON carries the block that names it: the run-directory-relative path, the duration, the cap it hit if it hit one, and the millisecond offset of **each screen and each action** into the recording, positionally aligned with the session's own `screens` and `actions` and length-checked, so a recommendation citing `S-62 · 0:48` resolves without replaying anything. A session recorded before session video existed carries no block, and a recording that could not be made is recorded as **absent with its reason in words** — the session is otherwise complete and still scored, because a broken recording does not lose a person's whole attempt. The path is spelt by the paths module (`runPaths(dir).videosDir`, `runPaths(dir).video(sessionId)`) and re-derived nowhere.
 
@@ -90,6 +90,7 @@ The run directory is served read-only, mirroring the on-disk layout exactly:
 
 - `GET /runs/<runId>/run.json`
 - `GET /runs/<runId>/findings.json`
+- `GET /runs/<runId>/aggregate.json` (when the run computed one)
 - `GET /runs/<runId>/recommendations.json` (when the run has one)
 - `GET /runs/<runId>/sessions/S-NN.json`
 - `GET /runs/<runId>/screenshots/<variant>/<step>.png`

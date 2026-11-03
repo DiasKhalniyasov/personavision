@@ -2,16 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
+  Aggregate,
   Audience,
   AudienceAgeGroup,
   Change,
+  Distribution,
   Findings,
+  FunnelSlice,
   Goal,
   ModelMode,
   Recommendations,
   Run,
   RunArtifact,
   RunProgress,
+  ScreenSlice,
   Session,
   SessionProgress,
   SessionVideo,
@@ -30,6 +34,8 @@ const screenshotPath = (variant: string, step: string): string =>
 const RUN_ID = '2026-10-24-1402-northwind-demo';
 const AUDIENCE_ID = 'outdoor-gear-shoppers';
 const FINDING_ID = 'F-01';
+/** The segment the run's one persona belongs to, which is what a slice of it is keyed by. */
+const SEGMENT = 'desktop · price-sensitive';
 const CART = 'cart';
 const CONFIRM = 'confirm';
 const CHECKOUT_AOI = 'a-cart-checkout';
@@ -224,7 +230,7 @@ export const validRun = (): Run => ({
       id: 'rushed-buyer',
       name: 'Rushed buyer',
       audienceId: AUDIENCE_ID,
-      segment: 'desktop · price-sensitive',
+      segment: SEGMENT,
       traits: traits(),
       device: device(),
     },
@@ -527,6 +533,139 @@ export const validRecommendations = (): Recommendations => ({
 });
 
 /**
+ * A spread of `sampleCount` sessions that all ran the same length: the quantiles are that
+ * length and the bars put every one of them in the bin it falls in, which is what the
+ * schema holds a distribution to.
+ */
+const spread = (sampleCount: number, ms: number, binWidthMs: number): Distribution => {
+  const medianBin = Math.floor(ms / binWidthMs);
+  return {
+    sampleCount,
+    p25Ms: ms,
+    p50Ms: ms,
+    p75Ms: ms,
+    p90Ms: ms,
+    binWidthMs,
+    bins: [...Array.from({ length: medianBin }, () => 0), sampleCount],
+    medianBin,
+  };
+};
+
+/** Every step reached and completed by everybody: the funnel of a run that lost nobody. */
+const reachedEverything = (sessionCount: number): FunnelSlice['funnel'] =>
+  [CART, CONFIRM].map((step) => ({
+    step,
+    reached: sessionCount,
+    completed: sessionCount,
+    abandoned: 0,
+    failed: 0,
+    reachedShare: 1,
+  }));
+
+/** The two screens the sessions were on, as one slice's rows. */
+const screensOfBothVariants = (): ScreenSlice['screens'] => [
+  {
+    variant: 'A',
+    step: CART,
+    reached: 1,
+    leftHere: 0,
+    medianMsOnIt: 12_000,
+    clicksByAoi: [{ aoiId: CHECKOUT_AOI, clicks: 1 }],
+    scrollDepth: { bins: [1], pastFoldSessions: 0 },
+  },
+  {
+    variant: 'B',
+    step: CART,
+    reached: 1,
+    leftHere: 0,
+    medianMsOnIt: 12_000,
+    // The one click of this session landed on nothing the DOM explained, which is the row
+    // the prototype prints as "9 landed on empty space".
+    clicksByAoi: [{ aoiId: null, clicks: 1 }],
+    scrollDepth: { bins: [1], pastFoldSessions: 0 },
+  },
+];
+
+/** One slowest-sessions row per session, all of them the same length as the sessions are. */
+const slowest = (sessionIds: readonly string[]): FunnelSlice['timing']['slowest'] =>
+  sessionIds.map((sessionId) => ({
+    sessionId,
+    totalMs: 38_000,
+    dominantStep: CART,
+    dominantStepMs: 12_000,
+  }));
+
+/**
+ * The aggregate of `validArtifact()`, sliced the way the two screens filter it: the whole
+ * run, the one segment its persona belongs to, and one slice per version because the run
+ * declares two (`docs/FLOW.md` section 14).
+ *
+ * Both of its sessions finished, so the funnel loses nobody and no slice carries a drop —
+ * every figure here is of the sessions the fixture actually holds, which is what makes it
+ * worth asserting as values.
+ */
+/**
+ * One funnel slice of `sessionCount` sessions, internally consistent: every step reached by
+ * all of them, the timing of all of them, and the one route they all walked.
+ */
+export const funnelSliceOf = (
+  key: string,
+  label: string,
+  sessionCount: number,
+  narrowing: { variant?: string; segment?: string } = {},
+): FunnelSlice => ({
+  key,
+  variant: narrowing.variant ?? null,
+  segment: narrowing.segment ?? null,
+  label,
+  sessionCount,
+  funnel: reachedEverything(sessionCount),
+  biggestDrop: null,
+  timing: {
+    total: spread(sessionCount, 38_000, 5_000),
+    perStep: [
+      { step: CART, distribution: spread(sessionCount, 12_000, 5_000) },
+      { step: CONFIRM, distribution: spread(sessionCount, 26_000, 5_000) },
+    ],
+    slowest: slowest(sessionCount === 2 ? ['S-01', 'S-02'] : ['S-01']),
+  },
+  paths: [{ steps: [CART, CONFIRM], sessionCount }],
+});
+
+export const validAggregate = (): Aggregate => ({
+  schemaVersion: SCHEMA_VERSION,
+  runId: RUN_ID,
+  computedAt: '2026-10-24T14:03:00.000Z',
+  runStatus: 'finished',
+  scoredSessionCount: 2,
+  excludedAutomationFailures: 0,
+  funnelSlices: [
+    funnelSliceOf('all', 'Every segment', 2),
+    funnelSliceOf(`segment:${SEGMENT}`, 'Desktop 2', 2, { segment: SEGMENT }),
+    funnelSliceOf('variant:A', 'Current checkout 1', 1, { variant: 'A' }),
+  ],
+  screenSlices: [
+    {
+      key: 'all',
+      segment: null,
+      outcome: null,
+      label: 'Every outcome',
+      sessionCount: 2,
+      screens: screensOfBothVariants(),
+    },
+    {
+      // The pair of filters the Heatmaps screen composes: one segment and one outcome.
+      key: `segment:${SEGMENT}|outcome:success`,
+      segment: SEGMENT,
+      outcome: 'success',
+      label: 'Completed · desktop 2',
+      sessionCount: 2,
+      screens: screensOfBothVariants(),
+    },
+  ],
+});
+
+/**
  * A **path-1 test**: the same run with one variant, which is all a test of one URL is
  * (`docs/FLOW.md` section 11). Nothing forks — this is a `Run` like any other — so
  * everything that was about a second version is simply absent: its screenshot, its areas of
@@ -630,4 +769,4 @@ export const temporaryRunDir = async (): Promise<{ dir: string; cleanup: () => P
   };
 };
 
-export { RUN_ID, AUDIENCE_ID, FINDING_ID, CHECKOUT_AOI, COMPLETE_AOI, CART, CONFIRM };
+export { RUN_ID, AUDIENCE_ID, FINDING_ID, CHECKOUT_AOI, COMPLETE_AOI, CART, CONFIRM, SEGMENT };

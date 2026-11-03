@@ -1867,6 +1867,520 @@ export const recommendationsSchema = z
   });
 
 /**
+ * The aggregate's own two rounding rules, declared where the file is and nowhere else, so
+ * that re-aggregating the same sessions produces the same file byte for byte: **every
+ * millisecond figure is an integer**, and **every share is rounded to four decimal places**.
+ */
+const roundedMs = z.int().min(0);
+const SHARE_PLACES = 4;
+const SHARE_SCALE = 10 ** SHARE_PLACES;
+const roundShare = (value: number): number => Math.round(value * SHARE_SCALE) / SHARE_SCALE;
+const roundedShare = unitInterval.refine((value) => roundShare(value) === value, {
+  message: `a share of the aggregate is rounded to ${SHARE_PLACES} decimal places, so that the same sessions aggregate to the same file`,
+});
+
+/**
+ * The duplicate positions of a list, by whatever addresses one of its entries. Every list in
+ * the aggregate is addressed by something — a slice by its key, a funnel row by its step, a
+ * screen by its version and step — and two entries answering to one name is a figure a
+ * screen would read twice.
+ */
+const repeatedAt = <T>(entries: ReadonlyArray<T>, keyOf: (entry: T) => string): number[] => {
+  const seen = new Set<string>();
+  return entries.flatMap((entry, index) => {
+    const key = keyOf(entry);
+    if (seen.has(key)) return [index];
+    seen.add(key);
+    return [];
+  });
+};
+
+/**
+ * A spread, stored as the four quantiles a screen prints beside the bars it draws — and never
+ * as a list of durations, which stays in the sessions (`docs/FLOW.md` section 14.5, and the
+ * prototype's *Spread* column). `bins` are `binWidthMs` wide, start at zero and account for
+ * every sample; `medianBin` is the bar the median falls in, which the prototype draws dark.
+ *
+ * A distribution of nothing is not stored: a step nobody was timed on is left out of
+ * `perStep`, by the same rule that leaves out a slice no session falls in.
+ */
+const distributionSchema = z
+  .strictObject({
+    sampleCount: z.int().positive(),
+    p25Ms: roundedMs,
+    p50Ms: roundedMs,
+    p75Ms: roundedMs,
+    p90Ms: roundedMs,
+    binWidthMs: z.int().positive(),
+    bins: z.array(count).min(1),
+    medianBin: count,
+  })
+  .superRefine((distribution, ctx) => {
+    const quantiles = ['p25Ms', 'p50Ms', 'p75Ms', 'p90Ms'] as const;
+    quantiles.forEach((quantile, index) => {
+      const lower = quantiles[index - 1];
+      if (lower !== undefined && distribution[quantile] < distribution[lower]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [quantile],
+          message: `the quantiles of a distribution rise: ${lower} is ${distribution[lower]} ms and ${quantile} is ${distribution[quantile]} ms`,
+        });
+      }
+    });
+    const binned = distribution.bins.reduce((total, bin) => total + bin, 0);
+    if (binned !== distribution.sampleCount) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['bins'],
+        message: `the bars are what the quantiles were read off, so they account for every sample: these hold ${binned} and the distribution is of ${distribution.sampleCount}`,
+      });
+    }
+    if (distribution.medianBin >= distribution.bins.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['medianBin'],
+        message: `medianBin is the bar the median falls in: ${distribution.medianBin} is past the ${distribution.bins.length} there are`,
+      });
+    } else {
+      // The bars and the quantiles are two readings of one spread, and the screen prints them
+      // side by side: a median in one bar and a dark bar somewhere else is the drift this file
+      // exists to prevent. The bin a figure falls in is the figure over the bin width.
+      const falls = Math.floor(distribution.p50Ms / distribution.binWidthMs);
+      if (distribution.medianBin !== falls) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['medianBin'],
+          message: `a median of ${distribution.p50Ms} ms falls in bar ${falls} of ${distribution.binWidthMs} ms each, and this names bar ${distribution.medianBin}`,
+        });
+      }
+    }
+    const span = distribution.bins.length * distribution.binWidthMs;
+    if (distribution.p90Ms >= span) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['bins'],
+        message: `the bars hold the samples the quantiles are of: these reach ${span} ms and the 90th is ${distribution.p90Ms} ms`,
+      });
+    }
+  });
+
+/**
+ * One step of the funnel, as the prototype's funnel rows read it: how many got there, and
+ * what became of them. `reachedShare` is `reached` of the slice's own `sessionCount` — the
+ * width of the bar — and is stored rather than divided on the screen, so that two screens
+ * cannot round one number two ways.
+ */
+const funnelStepSchema = z.strictObject({
+  step: name,
+  reached: count,
+  completed: count,
+  abandoned: count,
+  failed: count,
+  reachedShare: roundedShare,
+});
+
+/**
+ * One row of the prototype's *slowest sessions* table, with the step the time went on. The
+ * person and their segment are deliberately not here: the screen looks both up in `run.json`,
+ * which carries them already.
+ */
+const slowestSessionSchema = z
+  .strictObject({
+    sessionId,
+    totalMs: roundedMs,
+    dominantStep: name,
+    dominantStepMs: roundedMs,
+  })
+  .superRefine((slowest, ctx) => {
+    if (slowest.dominantStepMs > slowest.totalMs) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dominantStepMs'],
+        message: `the step the time went on is part of the session: ${slowest.dominantStepMs} ms of a session that lasted ${slowest.totalMs} ms`,
+      });
+    }
+  });
+
+/** The route actually walked, in step order, and how many people walked it. */
+const walkedPathSchema = z.strictObject({
+  steps: z.array(name).min(1),
+  sessionCount: z.int().positive(),
+});
+
+/**
+ * The funnel, the timing and the paths of one filter the **Funnel and timing** screen offers
+ * (`docs/FLOW.md` section 14.5): the whole run, one audience segment, or — only where a run
+ * declares more than one version — one version.
+ *
+ * `variant: null` is every version and `segment: null` is every segment, so the whole run is
+ * the slice that is both. `label` is the words the filter button carries — *Every segment*,
+ * *Phone 67* — written here rather than composed by the screen.
+ */
+const funnelSliceSchema = z
+  .strictObject({
+    /** What addresses this slice, unique in the list: what a route's `segment=` resolves to. */
+    key: name,
+    variant: name.nullable(),
+    segment: name.nullable(),
+    label: name,
+    sessionCount: z.int().positive(),
+    /** One row per step, in the order `run.json`'s own `steps` declares them. */
+    funnel: z.array(funnelStepSchema).min(1),
+    /**
+     * Where this slice lost the most people, with the commonest `outcome.reason` among them:
+     * the notice the prototype prints under the funnel. `null` for a slice with no drop.
+     */
+    biggestDrop: z
+      .strictObject({ step: name, left: count, ofReached: count, reason: z.string() })
+      .nullable(),
+    timing: z.strictObject({
+      /**
+       * The whole session, end to end. The quantiles here are the session-duration spread the
+       * Summary's *median time to complete* reads, and the cheaper source the run estimate
+       * wants in place of re-deriving it from every `run.json` (#283).
+       */
+      total: distributionSchema,
+      perStep: z.array(z.strictObject({ step: name, distribution: distributionSchema })),
+      /** Slowest first: the stored order is the order the table renders. */
+      slowest: z.array(slowestSessionSchema),
+    }),
+    paths: z.array(walkedPathSchema),
+  })
+  .superRefine((slice, ctx) => {
+    const steps = new Set(slice.funnel.map((row) => row.step));
+    slice.funnel.forEach((row, index) => {
+      if (row.reached > slice.sessionCount) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['funnel', index, 'reached'],
+          message: `a step is reached by people of this slice: ${row.reached} of ${slice.sessionCount}`,
+        });
+      }
+      const left = row.completed + row.abandoned + row.failed;
+      if (left > row.reached) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['funnel', index],
+          message: `completed, abandoned and failed are what became of the people who reached the step: ${left} of ${row.reached}`,
+        });
+      }
+      const share = roundShare(row.reached / slice.sessionCount);
+      if (row.reachedShare !== share) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['funnel', index, 'reachedShare'],
+          message: `reachedShare is ${row.reached} of this slice's ${slice.sessionCount}, rounded to ${SHARE_PLACES} places: expected ${share}, found ${row.reachedShare}`,
+        });
+      }
+    });
+    for (const index of repeatedAt(slice.funnel, (row) => row.step)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['funnel', index, 'step'],
+        message: `the funnel holds one row per step, in the order run.json declares them: "${slice.funnel[index]?.step}" is here twice`,
+      });
+    }
+    const drop = slice.biggestDrop;
+    if (drop !== null) {
+      if (!steps.has(drop.step)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['biggestDrop', 'step'],
+          message: `the biggest drop is a row of this slice's own funnel, and "${drop.step}" is not one`,
+        });
+      }
+      if (drop.left > drop.ofReached) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['biggestDrop', 'left'],
+          message: `the people who left a step are people who reached it: ${drop.left} of ${drop.ofReached}`,
+        });
+      }
+    }
+    for (const index of repeatedAt(slice.timing.perStep, (row) => row.step)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['timing', 'perStep', index, 'step'],
+        message: `the timing holds one distribution per step: "${slice.timing.perStep[index]?.step}" is here twice`,
+      });
+    }
+    slice.timing.slowest.forEach((session, index) => {
+      const faster = slice.timing.slowest[index - 1];
+      if (faster !== undefined && session.totalMs > faster.totalMs) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['timing', 'slowest', index, 'totalMs'],
+          message: `the slowest sessions are stored slowest first: ${session.totalMs} ms after ${faster.totalMs} ms`,
+        });
+      }
+    });
+    for (const index of repeatedAt(slice.timing.slowest, (session) => session.sessionId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['timing', 'slowest', index, 'sessionId'],
+        message: `one session is one row of the slowest table: "${slice.timing.slowest[index]?.sessionId}" is here twice`,
+      });
+    }
+    for (const index of repeatedAt(slice.paths, (path) => path.steps.join('\u0000'))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['paths', index, 'steps'],
+        message: 'one route is one row with its count: this route is here twice',
+      });
+    }
+  });
+
+/**
+ * One screen of one version, as the Heatmaps screen's *This screen* panel reads it: how many
+ * got there, how many it was the last thing they saw, how long they spent on it, where they
+ * clicked and how far down they scrolled.
+ */
+const screenFiguresSchema = z
+  .strictObject({
+    variant: name,
+    step: name,
+    reached: count,
+    /** How many of them this screen was the last of — the funnel's drop, per screen. */
+    leftHere: count,
+    /** `null` when nothing was measured: a screen nobody was timed on is not a zero. */
+    medianMsOnIt: roundedMs.nullable(),
+    /**
+     * The clicks of this slice, counted per area of interest. `aoiId: null` is the clicks that
+     * landed on nothing the DOM explained — the prototype's *9 landed on empty space*.
+     */
+    clicksByAoi: z.array(z.strictObject({ aoiId: name.nullable(), clicks: count })),
+    /**
+     * How far down they got: equal bins from the top of the page, and how many sessions got
+     * past the fold `run.json`'s screenshot of this screen records.
+     */
+    scrollDepth: z.strictObject({ bins: z.array(count), pastFoldSessions: count }),
+  })
+  .superRefine((screen, ctx) => {
+    const atMostReached: ReadonlyArray<[ReadonlyArray<PropertyKey>, number, string]> = [
+      [['leftHere'], screen.leftHere, 'the people who left a screen are people who reached it'],
+      [
+        ['scrollDepth', 'pastFoldSessions'],
+        screen.scrollDepth.pastFoldSessions,
+        'the people who scrolled past the fold are people who reached the screen',
+      ],
+    ];
+    for (const [path, figure, why] of atMostReached) {
+      if (figure > screen.reached) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [...path],
+          message: `${why}: ${figure} of ${screen.reached}`,
+        });
+      }
+    }
+    screen.scrollDepth.bins.forEach((bin, index) => {
+      if (bin > screen.reached) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scrollDepth', 'bins', index],
+          message: `a scroll-depth bar counts the sessions that got that far: ${bin} of the ${screen.reached} that reached the screen`,
+        });
+      }
+    });
+    for (const index of repeatedAt(screen.clicksByAoi, (entry) => entry.aoiId ?? '\u0000')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['clicksByAoi', index, 'aoiId'],
+        message:
+          'clicks are counted once per area of interest, with one row for the clicks that landed on nothing: this area is here twice',
+      });
+    }
+  });
+
+/**
+ * The outcome filter of the Heatmaps screen. **Never `automation_failure`**: those sessions
+ * are excluded from every figure in this file and counted once, in
+ * `excludedAutomationFailures`, so that no aggregate is quietly about our harness
+ * (`docs/FLOW.md` section 11).
+ */
+const scoredOutcomeSchema = outcomeStatusSchema.exclude(['automation_failure']);
+
+/**
+ * The per-screen click and scroll figures of one filter the **Heatmaps** screen offers
+ * (`docs/FLOW.md` section 14.4). It stores a slice for the whole run, for each segment, for
+ * each outcome **and for each pair of segment and outcome**, because that screen composes the
+ * two filters — *where the people who failed, on a phone, clicked* is one choice on it.
+ *
+ * `null` is "every" in both fields, so the whole run is the slice that is both.
+ */
+const screenSliceSchema = z
+  .strictObject({
+    key: name,
+    segment: name.nullable(),
+    outcome: scoredOutcomeSchema.nullable(),
+    label: name,
+    sessionCount: z.int().positive(),
+    /** At least one: a slice of people who reached no screen at all is not a slice. */
+    screens: z.array(screenFiguresSchema).min(1),
+  })
+  .superRefine((slice, ctx) => {
+    for (const index of repeatedAt(
+      slice.screens,
+      (screen) => `${screen.variant}\u0000${screen.step}`,
+    )) {
+      const screen = slice.screens[index];
+      ctx.addIssue({
+        code: 'custom',
+        path: ['screens', index],
+        message: `a slice holds one row per version and step: ${screen?.variant} ${screen?.step} is here twice`,
+      });
+    }
+    slice.screens.forEach((screen, index) => {
+      if (screen.reached > slice.sessionCount) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['screens', index, 'reached'],
+          message: `a screen is reached by people of this slice: ${screen.reached} of ${slice.sessionCount}`,
+        });
+      }
+    });
+  });
+
+/**
+ * `aggregate.json` — every figure the two filtered screens of the results page read, computed
+ * once when a run is aggregated and stored **pre-sliced** (`docs/FLOW.md` section 14, read
+ * against `#screen-funnel` and `#screen-heatmaps` of `docs/design/prototype.html`). Nothing
+ * here is derived on read: a screen that re-derived a figure is a screen that can disagree
+ * with the summary.
+ *
+ * **Optional** in a run directory: a run without the file computed no aggregate, which is
+ * never a zero somebody measured. It carries the existing `schemaVersion` — a new optional
+ * file changes how nothing else reads — and is readable for a run that is still open, which
+ * is what `runStatus` is here to tell a reader.
+ *
+ * Two rules hold the whole file together, and both are declared here:
+ *
+ * - **A slice no session falls in is left out**, rather than stored as a row of zeroes. Every
+ *   stored slice carries at least one session, so every share has a denominator.
+ * - **One rounding rule**: every millisecond figure is an integer and every share is rounded
+ *   to four decimal places, so that re-aggregating the same sessions produces the same file.
+ *
+ * **Clicks are counted per area of interest, not per pixel.** A session's `actions[]` carries
+ * `aoiId` and `target` and no coordinates, and per-area is what the Heatmaps screen's own
+ * wording and its *Clicks* column ask for — *"26 of the 41 clicks landed on Generate a second
+ * time, and 9 landed on empty space"*. Pixel-level click points would need a new field on a
+ * session's actions and are **out of scope for this step**.
+ */
+export const aggregateSchema = z
+  .strictObject({
+    schemaVersion,
+    runId: name,
+    computedAt: timestamp,
+    /** So a reader can tell the aggregate of an open run from that of a finished one. */
+    runStatus: runStatusSchema,
+    /** How many sessions every figure in this file is of. */
+    scoredSessionCount: count,
+    /** How many sessions our own harness broke, stated here rather than quietly missing. */
+    excludedAutomationFailures: count,
+    funnelSlices: z.array(funnelSliceSchema),
+    screenSlices: z.array(screenSliceSchema),
+  })
+  .superRefine((aggregate, ctx) => {
+    /** What a slice filters to, as one string: the pair the screen picks it by. */
+    const filterOf = (...values: ReadonlyArray<string | null>): string =>
+      values.map((value) => value ?? '').join('\u0000');
+    const lists: ReadonlyArray<
+      [
+        string,
+        ReadonlyArray<{ readonly key: string; readonly sessionCount: number }>,
+        ReadonlyArray<string>,
+      ]
+    > = [
+      [
+        'funnelSlices',
+        aggregate.funnelSlices,
+        aggregate.funnelSlices.map((slice) => filterOf(slice.variant, slice.segment)),
+      ],
+      [
+        'screenSlices',
+        aggregate.screenSlices,
+        aggregate.screenSlices.map((slice) => filterOf(slice.segment, slice.outcome)),
+      ],
+    ];
+    for (const [list, slices, filters] of lists) {
+      for (const index of repeatedAt(slices, (slice) => slice.key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [list, index, 'key'],
+          message: `a slice is addressed by its key: "${slices[index]?.key}" addresses two of them`,
+        });
+      }
+      // A screen picks its slice by what it filters to and takes the first that matches, so
+      // one filter is one slice: two of them narrowing to the same people is the same figure
+      // read two ways, whatever they are keyed by.
+      for (const index of repeatedAt(filters, (filter) => filter)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [list, index],
+          message:
+            'a screen picks its slice by what it filters to, so one filter is one slice: this narrows to the same people as an earlier one',
+        });
+      }
+      // Nothing scored is no slices at all, by the same rule: a filter button over nobody is
+      // not a button, and a run that scored nothing yet still has a readable aggregate.
+      if (aggregate.scoredSessionCount === 0) {
+        if (slices.length > 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [list],
+            message: `this aggregate is of no scored sessions, so there is no slice to store: found ${slices.length}`,
+          });
+        }
+        continue;
+      }
+      // Every slice is a narrowing of the same scored sessions, so none of them holds more
+      // people than the run did.
+      slices.forEach((slice, index) => {
+        if (slice.sessionCount > aggregate.scoredSessionCount) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [list, index, 'sessionCount'],
+            message: `a slice is a narrowing of the run: this carries ${slice.sessionCount} sessions and the aggregate is of ${aggregate.scoredSessionCount}`,
+          });
+        }
+      });
+    }
+    if (aggregate.scoredSessionCount === 0) return;
+    // The whole run is a slice like any other, and it is the one the summary is read off: a
+    // file whose "every segment" slice disagrees with its own count is the drift this file
+    // exists to prevent.
+    const whole: ReadonlyArray<
+      [string, { readonly key: string; readonly sessionCount: number } | undefined, string]
+    > = [
+      [
+        'funnelSlices',
+        aggregate.funnelSlices.find((slice) => slice.variant === null && slice.segment === null),
+        'every version and every segment',
+      ],
+      [
+        'screenSlices',
+        aggregate.screenSlices.find((slice) => slice.segment === null && slice.outcome === null),
+        'every segment and every outcome',
+      ],
+    ];
+    for (const [list, slice, which] of whole) {
+      if (slice === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [list],
+          message: `every figure is stored for the whole run too, as the slice of ${which}, and this list holds no such slice`,
+        });
+      } else if (slice.sessionCount !== aggregate.scoredSessionCount) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [list],
+          message: `the slice of ${which} is the whole run: it carries ${slice.sessionCount} session${slice.sessionCount === 1 ? '' : 's'} and the aggregate is of ${aggregate.scoredSessionCount}`,
+        });
+      }
+    }
+  });
+
+/**
  * The arguments a new run is started with. The CLI's `run` command and the web app's
  * New run form submit this same shape, so it is declared here once.
  */
@@ -2025,3 +2539,7 @@ export type Citation = z.infer<typeof citationSchema>;
 export type WriteUpClaim = z.infer<typeof writeUpClaimSchema>;
 export type SampleProvenance = z.infer<typeof sampleProvenanceSchema>;
 export type RunRequest = z.infer<typeof runRequestSchema>;
+export type Aggregate = z.infer<typeof aggregateSchema>;
+export type Distribution = z.infer<typeof distributionSchema>;
+export type FunnelSlice = z.infer<typeof funnelSliceSchema>;
+export type ScreenSlice = z.infer<typeof screenSliceSchema>;

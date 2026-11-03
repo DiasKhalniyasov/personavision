@@ -1,7 +1,7 @@
 /**
  * The run-directory layout: `runs/<YYYY-MM-DD-HHMM-name>/` holding `run.json`,
- * `findings.json`, the optional `recommendations.json`, `sessions/S-NN.json`,
- * `screenshots/<variant>/<step>.png` and `videos/S-NN.webm`.
+ * `findings.json`, the optional `aggregate.json` and `recommendations.json`,
+ * `sessions/S-NN.json`, `screenshots/<variant>/<step>.png` and `videos/S-NN.webm`.
  *
  * This module is the only place those names are written. No other package re-derives a
  * path or globs for a file by guesswork.
@@ -15,6 +15,7 @@
 
 const RUN_FILE = 'run.json';
 const FINDINGS_FILE = 'findings.json';
+const AGGREGATE_FILE = 'aggregate.json';
 const RECOMMENDATIONS_FILE = 'recommendations.json';
 const SESSIONS_DIR = 'sessions';
 const SCREENSHOTS_DIR = 'screenshots';
@@ -51,6 +52,12 @@ export interface RunPaths {
   readonly run: string;
   readonly findings: string;
   /**
+   * Every figure the funnel, timing and heatmap screens read, computed once over the
+   * sessions. Optional: a run directory without it computed no aggregate, which is never a
+   * zero somebody measured (`docs/FLOW.md` sections 14 and 16).
+   */
+  readonly aggregate: string;
+  /**
    * What Muse Wonder says to change. Optional: a run directory without it produced no
    * recommendation (`docs/FLOW.md` sections 14 and 16).
    */
@@ -83,6 +90,7 @@ export const runPaths = (runDir: string): RunPaths => ({
   dir: runDir,
   run: join(runDir, RUN_FILE),
   findings: join(runDir, FINDINGS_FILE),
+  aggregate: join(runDir, AGGREGATE_FILE),
   recommendations: join(runDir, RECOMMENDATIONS_FILE),
   sessionsDir: join(runDir, SESSIONS_DIR),
   screenshotsDir: join(runDir, SCREENSHOTS_DIR),
