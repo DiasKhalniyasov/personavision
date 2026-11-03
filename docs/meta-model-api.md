@@ -835,7 +835,9 @@ What holds, unchanged from a decision response:
 
 What is different:
 
-- **`top_logprobs` is in the envelope** (`0`), where the decision-call response recorded above has no such field.
+- **`top_logprobs` is in the envelope** (`0`). The decision-call response recorded above does not list it, but that
+  body was written down six days earlier by a different ticket: this is a difference between the two *records*, and
+  whether the field is new or was simply not transcribed then was not re-checked on Spark.
 - **`prompt_cache_key` is echoed when it was sent, and absent otherwise; `prompt_cache_retention` is never echoed.**
   A request that sent both got back an envelope carrying the key and no retention field at all. Do not read retention
   back off a response, and do not expect the key on a response whose request omitted it.
