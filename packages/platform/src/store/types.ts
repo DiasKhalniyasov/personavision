@@ -93,6 +93,77 @@ export interface SiteVerification {
   readonly verifiedAt: string | null;
 }
 
+/**
+ * One place a check looked, named as a screen names it: `clipforge.example`,
+ * `https://beta.clipforge.example/.well-known/…`, `clipforge/web`.
+ */
+export interface SiteCheckTarget {
+  readonly kind: 'domain' | 'url' | 'repository';
+  readonly value: string;
+}
+
+/**
+ * What a check found instead, which is the half of `docs/FLOW.md` section 13's promise that
+ * a screen cannot guess: "what it looked for, where, and what it found instead".
+ *
+ * Four outcomes and no fifth, because **"something went wrong" is not one of them**: a host
+ * that does not answer is `no-answer`, which is a finding with its own sentence rather than a
+ * failure of ours. Only `found` passes.
+ */
+export type SiteCheckOutcome =
+  /** The line was published where we looked. The one outcome that verifies a site. */
+  | 'found'
+  /** Something is published there, and none of it is this line. */
+  | 'other-values'
+  /** The address answered, and publishes nothing of this kind at all. */
+  | 'nothing-published'
+  /** The address did not answer: no such domain, a timeout, a name server that refused. */
+  | 'no-answer';
+
+export interface SiteCheckFinding {
+  readonly outcome: SiteCheckOutcome;
+  /**
+   * The addresses **this outcome** is about — where the line was found, or which addresses
+   * published something else, or which did not answer. `SiteCheckResult.lookedIn` is the
+   * whole list of places the check visited; this is the subset the sentence names.
+   */
+  readonly at: readonly string[];
+  /** What is published there instead, for `other-values`. Empty for every other outcome. */
+  readonly values: readonly string[];
+  /** Why the address did not answer, for `no-answer`. `null` for every other outcome. */
+  readonly because: string | null;
+}
+
+/**
+ * One run of one check: what it looked for, where it looked, what it found, whether it
+ * passed, and when — stored on the site as `lastCheck` so that the screen can print
+ * _"Last check: no TXT record found on clipforge.example at 09:04."_ without composing it.
+ *
+ * It is **data a screen prints**, not an error a screen interprets. A check that fails
+ * returns one of these; it does not throw (`docs/FLOW.md` section 13).
+ */
+export interface SiteCheckResult {
+  readonly method: SiteVerificationMethod;
+  /** `true` exactly when `found.outcome` is `found`. The store's `verify` refuses anything else. */
+  readonly passed: boolean;
+  /**
+   * The line the user was told to publish, spelled as they were told to spell it —
+   * `personavision-site-verification=pv_7f3c91a2d84e`. The line the screen prints to copy is
+   * composed from this field, so the line shown and the line searched for are one string.
+   */
+  readonly lookedFor: string;
+  /** Everywhere this check looked, in the order it looked. */
+  readonly lookedIn: readonly SiteCheckTarget[];
+  readonly found: SiteCheckFinding;
+  /**
+   * The one sentence the screen prints after "Last check: " and before the time — _"no TXT
+   * record found on clipforge.example"_. No full stop and no clock: the screen owns the
+   * punctuation and the reader's time zone, and `checkedAt` is the instant.
+   */
+  readonly sentence: string;
+  readonly checkedAt: string;
+}
+
 export interface SiteRecord {
   readonly id: string;
   readonly workspaceId: string;
@@ -112,6 +183,15 @@ export interface SiteRecord {
    */
   readonly token: string;
   readonly verification: SiteVerification;
+  /**
+   * The last check this site was put through, or `null` for a site nobody has checked —
+   * which is the **empty** state `#screen-site` draws as the method's unchecked state.
+   *
+   * One per site rather than one per method: a screen drawing a method compares
+   * `lastCheck.method` with its own, so "never checked" and "last checked by another
+   * method" are told apart without four stored slots.
+   */
+  readonly lastCheck: SiteCheckResult | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** A soft delete, as `AudienceRecord`'s is: the site a finished test ran against stays readable. */
@@ -191,13 +271,18 @@ export interface NewSite {
 /**
  * The workspace's sites.
  *
- * There is **no writer for `verification`** here, and that is the point: the one thing that
- * may move a site to verified is a passing check, which is a later ticket of #221. Until it
- * lands this interface cannot express the verified state at all, so no route, no screen and
- * no submitted body can reach it.
+ * **`verify` is the only writer of `verification`**, and that is structural rather than a
+ * convention: no other method on this interface takes a verification state, a method or a
+ * timestamp, so a route, a screen or a submitted body has nothing to write it through. The
+ * one argument `verify` does take is a check result, and it **refuses one that did not
+ * pass** — so the state cannot be reached by inventing a result either (`docs/FLOW.md`
+ * section 13).
+ *
+ * `recordCheck` is the other half of that split: a check that failed is still news the
+ * screen needs, so it is stored, and the method that stores it cannot change the state.
  */
 export interface SiteStore {
-  /** Unverified, with the token given, in the workspace given. */
+  /** Unverified, never checked, with the token given, in the workspace given. */
   create(workspaceId: string, site: NewSite): Promise<SiteRecord>;
   /** The site, or `null` for an id of another workspace or of no workspace — never a throw. */
   byId(workspaceId: string, siteId: string): Promise<SiteRecord | null>;
@@ -205,6 +290,20 @@ export interface SiteStore {
   list(workspaceId: string, options?: { includeDeleted?: boolean }): Promise<SiteRecord[]>;
   /** Records the removal and keeps the record. Removing one twice does not move `deletedAt`. */
   softDelete(workspaceId: string, siteId: string): Promise<SiteRecord>;
+  /**
+   * Moves the site to verified, by the method that proved it and at the moment it was
+   * proved, and stores the result as `lastCheck`.
+   *
+   * **Throws on a result that did not pass**, rather than storing it or quietly declining:
+   * a caller handing this a failed check has a bug, and a site must never be verified by
+   * one. A failed check belongs in `recordCheck`.
+   */
+  verify(workspaceId: string, siteId: string, result: SiteCheckResult): Promise<SiteRecord>;
+  /**
+   * Stores the result as `lastCheck` and **leaves `verification` exactly as it was**, even
+   * for a result that passed. The screen's _"Last check: …"_ line is written through here.
+   */
+  recordCheck(workspaceId: string, siteId: string, result: SiteCheckResult): Promise<SiteRecord>;
 }
 
 export interface NewSession {

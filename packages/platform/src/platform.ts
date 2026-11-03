@@ -7,6 +7,7 @@ import { audienceRoutes } from './server/routes/audiences.js';
 import { runRoutes } from './server/routes/runs.js';
 import { siteRoutes } from './server/routes/sites.js';
 import type { TestPipeline } from './run/start.js';
+import type { SiteCheckDeps } from './site/index.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
 import { readSessionId, sessionCookieHeader, signSessionId } from './server/session.js';
@@ -38,6 +39,12 @@ export interface PlatformOptions {
    * as though it started something.
    */
   pipeline?: TestPipeline;
+  /**
+   * What the ownership checks resolve and read the clock with (#236). Absent — as it is in
+   * `personavision serve` — means Node's own resolver and the real clock; a test passes its
+   * own, so no suite reaches DNS.
+   */
+  siteChecks?: SiteCheckDeps;
 }
 
 export interface Platform {
@@ -75,6 +82,7 @@ export const createPlatform = async ({
   dataDir,
   runsRoot,
   pipeline,
+  siteChecks,
 }: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
   const resolvedRunsRoot = resolve(runsRoot);
@@ -111,7 +119,7 @@ export const createPlatform = async ({
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
-      ...siteRoutes({ store, readSession }),
+      ...siteRoutes({ store, readSession, siteChecks }),
       ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),
