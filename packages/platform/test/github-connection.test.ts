@@ -35,9 +35,9 @@ const ANOTHER_URL = 'https://beta.clipforge.example/create';
 
 /** What `GET /github/connection` answers. Only what these tests read. */
 interface ConnectionBody {
+  registered: boolean;
   connection: { repository: string; siteId: string; connectedAt: string } | null;
   sentence: string;
-  application: { registered: boolean; reason: string | null };
   error?: string;
 }
 
@@ -234,6 +234,22 @@ describe('the connected repository', () => {
       expect(stored.filter((entry) => entry.workspaceId === workspaceId)).toHaveLength(1);
     });
 
+    it('is refused for a site of another workspace, at the one writer', async () => {
+      const mine = await addSite();
+
+      // The record is ownership proof for the site it names, so a site that is not this
+      // workspace's cannot be named by it — a connection filed this way would otherwise put
+      // a foreign site id into this workspace's own check result.
+      await expect(connect(mine.id, { workspace: theirWorkspaceId })).rejects.toThrow(/no site/);
+      expect(
+        await served.platform.store.githubInstallations.forWorkspace(theirWorkspaceId),
+      ).toBeNull();
+    });
+
+    it('is refused for a site nobody has', async () => {
+      await expect(connect('a-site-nobody-has')).rejects.toThrow(/no site/);
+    });
+
     it('carries no key, no token and no secret — in the record or on disk', async () => {
       const record = await connect((await addSite()).id);
 
@@ -317,9 +333,10 @@ describe('the connected repository', () => {
 
     it('does not verify a site with another workspace’s connection', async () => {
       const mine = await addSite();
-      // Their workspace connects a repository that names *my* site, which is the one thing a
-      // connection must not be able to do across workspaces.
-      await connect(mine.id, { workspace: theirWorkspaceId });
+      const theirs = await addSite(ANOTHER_URL, theirCookie);
+      // Their workspace connects a repository to a site of their own. Mine is untouched by
+      // it, whatever repository it is.
+      await connect(theirs.id, { workspace: theirWorkspaceId });
 
       const answered = await verify(mine.id);
 
@@ -362,7 +379,8 @@ describe('the connected repository', () => {
       const state = await connectionState();
 
       expect(state.connection).toBeNull();
-      expect(state.sentence).toBe('No GitHub repository is connected to this workspace.');
+      // No App either, today, and that is the sentence with something in it to act on.
+      expect(state.sentence).toBe(GITHUB_APP_NOT_REGISTERED);
     });
 
     it('answers the repository, the site it deploys and when it was connected', async () => {
@@ -379,21 +397,38 @@ describe('the connected repository', () => {
       expect(state.sentence).toBe(`${REPOSITORY} is connected to this workspace.`);
     });
 
-    it('says the application is not registered yet, with the reason', async () => {
-      expect((await connectionState()).application).toEqual({
-        registered: false,
-        reason: GITHUB_APP_NOT_REGISTERED,
-      });
+    it('says the application is not registered yet, in the sentence', async () => {
+      const state = await connectionState();
+
+      expect(state.registered).toBe(false);
+      expect(state.sentence).toBe(GITHUB_APP_NOT_REGISTERED);
     });
 
-    it('says it is registered, with no reason, once an application exists', async () => {
+    it('says it is registered once an application exists', async () => {
       await served.close();
       served = await startTestServer({
         githubApp: { installationUrl: async () => 'https://github.test/apps/pv/installations/new' },
       });
       cookie = await signIn(DEMO_ACCOUNT_EMAIL, served.platform.seeded?.password ?? '');
 
-      expect((await connectionState()).application).toEqual({ registered: true, reason: null });
+      const state = await connectionState();
+
+      expect(state.registered).toBe(true);
+      expect(state.sentence).toBe('No GitHub repository is connected to this workspace.');
+    });
+
+    it('answers the shape the viewer reads: registered, and the repository under connection', async () => {
+      // `apps/viewer/src/screens/settings/connection.ts` parses exactly these two fields and
+      // renders path 2 **locked** for anything it cannot parse (#271, merged first). This
+      // asserts the contract from the platform's side, where the viewer's own tests stub the
+      // request and so cannot see it.
+      const site = await addSite();
+      await connect(site.id);
+
+      const state = (await connectionState()) as unknown as Record<string, unknown>;
+
+      expect(typeof state['registered']).toBe('boolean');
+      expect((state['connection'] as { repository?: unknown }).repository).toBe(REPOSITORY);
     });
 
     it('answers each workspace its own connection and carries no credential', async () => {
@@ -437,7 +472,9 @@ describe('the connected repository', () => {
     it('answers the installation URL once an application is registered', async () => {
       const installationUrl = 'https://github.test/apps/pv/installations/new';
       await served.close();
-      served = await startTestServer({ githubApp: { installationUrl: async () => installationUrl } });
+      served = await startTestServer({
+        githubApp: { installationUrl: async () => installationUrl },
+      });
       cookie = await signIn(DEMO_ACCOUNT_EMAIL, served.platform.seeded?.password ?? '');
 
       const response = await send('/github/connect', 'POST');
@@ -449,9 +486,7 @@ describe('the connected repository', () => {
     it('writes no connection: starting one is not filing one', async () => {
       await send('/github/connect', 'POST');
 
-      expect(
-        await served.platform.store.githubInstallations.forWorkspace(workspaceId),
-      ).toBeNull();
+      expect(await served.platform.store.githubInstallations.forWorkspace(workspaceId)).toBeNull();
     });
   });
 });

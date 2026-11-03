@@ -109,9 +109,11 @@ export const siteCheckFor = (method: unknown): SiteCheck => {
  * The real resolver, the real fetcher and the real clock — what `personavision serve` runs
  * the checks with.
  *
- * The connection lookup is the default one, which answers that no repository is connected
- * anywhere: the GitHub App belongs to #227, and `createPlatform` takes the real lookup
- * through `siteConnections` once that step has one to pass.
+ * The connection lookup here is the default one, which answers that no repository is
+ * connected anywhere — because these are the deps for a caller that composed none of its
+ * own. `createPlatform` overrides it with the store's own lookup (`storedSiteConnections`,
+ * #299), so the server answers from the workspace's installation record; a caller that
+ * passes its own deps with a `connections` in them keeps that one.
  */
 export const defaultSiteCheckDeps = (): SiteCheckDeps => ({
   resolveTxt: nodeTxtResolver(),

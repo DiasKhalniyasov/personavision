@@ -316,9 +316,17 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
  */
 const fileGithubInstallationStore = (
   collection: JsonCollection<GithubInstallationRecord>,
+  sites: Pick<SiteStore, 'byId'>,
 ): GithubInstallationStore => ({
-  connect: async (workspaceId, installation: NewGithubInstallation) =>
-    collection.put({
+  connect: async (workspaceId, installation: NewGithubInstallation) => {
+    // The site has to be **this workspace's**, checked at the one writer rather than trusted
+    // of every caller: the record is ownership proof for the site it names, so a connection
+    // naming a site of another workspace would put a foreign site id into this workspace's
+    // check result — and name it back to them in a sentence.
+    if ((await sites.byId(workspaceId, installation.siteId)) === null) {
+      throw missing('site', installation.siteId);
+    }
+    return collection.put({
       id: workspaceId,
       workspaceId,
       installationId: installation.installationId,
@@ -327,7 +335,8 @@ const fileGithubInstallationStore = (
       // The store's clock, so the moment stored is the moment it was connected rather than
       // whatever reached the store in a body.
       connectedAt: now(),
-    }),
+    });
+  },
   forWorkspace: async (workspaceId) => {
     const record = await collection.get(workspaceId);
     // The id is the workspace, so this comparison can only fail on a record written by hand
@@ -360,14 +369,16 @@ const fileSessionStore = (collection: JsonCollection<SessionRecord>): SessionSto
 /** The file-backed store under `dataDir`, creating the directory if it is not there. */
 export const openFileStore = async (dataDir: string): Promise<PlatformStore> => {
   await mkdir(dataDir, { recursive: true });
+  const sites = fileSiteStore(new JsonCollection<SiteRecord>(dataDir, 'sites'));
   return {
     accounts: fileAccountStore(new JsonCollection<AccountRecord>(dataDir, 'accounts')),
     workspaces: fileWorkspaceStore(new JsonCollection<WorkspaceRecord>(dataDir, 'workspaces')),
     audiences: fileAudienceStore(new JsonCollection<AudienceRecord>(dataDir, 'audiences')),
-    sites: fileSiteStore(new JsonCollection<SiteRecord>(dataDir, 'sites')),
+    sites,
     sessions: fileSessionStore(new JsonCollection<SessionRecord>(dataDir, 'sessions')),
     githubInstallations: fileGithubInstallationStore(
       new JsonCollection<GithubInstallationRecord>(dataDir, 'github-installations'),
+      sites,
     ),
   };
 };

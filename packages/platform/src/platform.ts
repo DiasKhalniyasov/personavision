@@ -148,7 +148,15 @@ export const createPlatform = async ({
         // The real lookup unless a caller passes its own: the `connected-repository` check
         // reads the workspace's connected repository out of the store, which is the one path
         // to a site verified that way (#299).
-        siteConnections: siteConnections ?? storedSiteConnections(store.githubInstallations),
+        //
+        // The precedence is stated here rather than left to `siteRoutes`, which only folds
+        // this option in when it is given: `siteConnections` wins, then a lookup inside
+        // `siteChecks`, then the store. Without the second of those, a caller passing its
+        // deps with a lookup in them and no `siteConnections` would have it ignored.
+        siteConnections:
+          siteConnections ??
+          siteChecks?.connections ??
+          storedSiteConnections(store.githubInstallations),
       }),
       ...githubRoutes({ store, readSession, app: githubApp }),
       ...runRoutes({ store, readSession, pipeline }),

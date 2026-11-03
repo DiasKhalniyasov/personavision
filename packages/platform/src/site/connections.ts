@@ -71,10 +71,12 @@ export interface SiteConnections {
 /**
  * The default lookup: **no repository is connected**, to any site, in any workspace.
  *
- * This is what `personavision serve` runs until #227 supplies the real one, and it is a
- * truthful answer rather than a stub — nothing has installed the GitHub App, because there is
- * no GitHub App yet. The method's panel on `#screen-site` therefore draws its empty state
- * with the sentence that says so, which is the state every site is in today.
+ * It is no longer what `personavision serve` runs — `createPlatform` hands the checks
+ * `storedSiteConnections` below, which reads the workspace's own installation record (#299).
+ * This stays as the answer where the seam is unwired: a check handed deps with no lookup in
+ * them, and a test that wants a site with nothing connected to it. It is a truthful answer
+ * rather than a stub, and the sentence the method's panel draws from it is the one every
+ * site gets until somebody connects a repository.
  */
 export const noSiteConnections: SiteConnections = {
   forWorkspace: async () => [],

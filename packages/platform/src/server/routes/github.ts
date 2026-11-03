@@ -60,8 +60,7 @@ export const GITHUB_APP_TICKET = 231;
  * carry it: the connection state a screen renders, and the refusal of starting a connection.
  */
 export const GITHUB_APP_NOT_REGISTERED =
-  'PersonaVision’s GitHub App is not registered yet, so there is no repository to connect — ' +
-  'Test my site needs nothing from GitHub.';
+  'PersonaVision’s GitHub App is not registered yet, so there is no repository to connect today.';
 
 /** No connection, said as a sentence rather than left to a screen to invent for a blank. */
 export const NO_CONNECTION = 'No GitHub repository is connected to this workspace.';
@@ -69,21 +68,30 @@ export const NO_CONNECTION = 'No GitHub repository is connected to this workspac
 /** The one sentence a request with no session gets, as the other route families answer it. */
 const SIGNED_OUT = 'Sign in to read this.';
 
-/** The connection a route answers with: what a screen prints, and nothing else. */
+/**
+ * The connection a route answers with: what a screen prints, and nothing else.
+ *
+ * The two field names are **the viewer's**, not a shape invented here:
+ * `apps/viewer/src/screens/settings/connection.ts` is the one read of this route (#271,
+ * merged before this ticket) and it parses `{ registered, connection: { repository } }` at
+ * the top level, treating anything else as a state nobody knows — which renders path 2
+ * locked. Adding a level around `registered` would lock the path for good, so this answer
+ * matches that reader and adds beside it rather than around it.
+ */
 export interface GithubConnectionBody {
+  /** Whether there is a GitHub App to connect to at all (#231, read by #319). */
+  readonly registered: boolean;
   /** The repository and the site it deploys, or `null` for a workspace with no connection. */
   readonly connection: {
     readonly repository: string;
     readonly siteId: string;
     readonly connectedAt: string;
   } | null;
-  /** The state in words, for either case — the empty one included. */
+  /**
+   * The state in one sentence — the empty one and the no-App one included, so that a reader
+   * that is not a screen with its own words has something to print rather than a blank.
+   */
   readonly sentence: string;
-  /** Whether there is an App to connect to, and why not when there is not. */
-  readonly application: {
-    readonly registered: boolean;
-    readonly reason: string | null;
-  };
 }
 
 export interface GithubRouteOptions {
@@ -126,6 +134,7 @@ export const githubRoutes = (options: GithubRouteOptions): Route[] => {
         // The installation id is not in the answer: a screen prints the repository, and the
         // id is of use only to the module that mints a token for it (#319).
         const body: GithubConnectionBody = {
+          registered: installationUrl !== null,
           connection:
             connected === null
               ? null
@@ -134,14 +143,14 @@ export const githubRoutes = (options: GithubRouteOptions): Route[] => {
                   siteId: connected.siteId,
                   connectedAt: connected.connectedAt,
                 },
+          // The connection first where there is one: a repository connected before the App
+          // was registered is still connected, and that is what a reader needs to hear.
           sentence:
-            connected === null
-              ? NO_CONNECTION
-              : `${connected.repository} is connected to this workspace.`,
-          application:
-            installationUrl === null
-              ? { registered: false, reason: GITHUB_APP_NOT_REGISTERED }
-              : { registered: true, reason: null },
+            connected !== null
+              ? `${connected.repository} is connected to this workspace.`
+              : installationUrl === null
+                ? GITHUB_APP_NOT_REGISTERED
+                : NO_CONNECTION,
         };
         sendJson(response, 200, body);
       }),
