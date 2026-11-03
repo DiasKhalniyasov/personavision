@@ -663,6 +663,15 @@ const pullRequestSchema = z.strictObject({
   number: z.int().positive(),
   url: webAddress,
   title: name,
+  /**
+   * The state the pull request was in when the run recorded it, which the Improve screen
+   * prints beside the repository and the number (`#screen-improve`'s `.tag`). Optional
+   * with no default: a run that recorded none says nothing about the state rather than
+   * claiming one, and the state is never derived from the fact that this product opened
+   * it — PersonaVision never merges but the owner does, so a recorded `open` is what was
+   * true when the run was written and the URL is where the live answer is.
+   */
+  state: z.enum(['open', 'closed', 'merged']).optional(),
 });
 
 /**
@@ -790,8 +799,26 @@ export const changeSchema = z.strictObject({
  */
 export const improveSchema = z.strictObject({
   ...changeTargetShape,
+  /**
+   * The recommendation's own sentence, as the Improve screen prints it under the pull
+   * request's title — *from recommendation 3, `tell people how long the video will take`*.
+   * Optional with no default: a run that recorded none is named by `recommendationId`
+   * alone, and the screen does not go looking for the sentence in `recommendations.json`
+   * to put a claim on the page the run did not record.
+   */
+  recommendationSentence: name.optional(),
   pullRequest: pullRequestSchema,
   preview: previewSchema,
+  /**
+   * The patch as the diff the Improve screen prints (`#screen-improve`'s `.diff`), a
+   * unified diff like `changeSchema.patch` and carried as text for the same reason: the
+   * repository is the only thing that can say whether a patch applies, so nothing here
+   * parses a diff dialect.
+   *
+   * Optional with no default: a run that recorded none sends the reader to the pull
+   * request for the change itself rather than drawing an empty diff.
+   */
+  patch: z.string().min(1).optional(),
   baselineVariant: name,
   changeVariant: name,
   holdout: holdoutSchema,

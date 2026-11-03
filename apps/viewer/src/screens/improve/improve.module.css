@@ -1,0 +1,121 @@
+/* =============================================================================
+   `/runs/:runId/improve` — have the first change written for you.
+
+   `#screen-improve` of `docs/design/prototype.html` is the acceptance, and
+   every value below is a custom property from `docs/design/tokens.css`, which
+   the app imports once and never copies.
+
+   What is here is only what this screen draws of its own: the lock, the pull
+   request box, its diff and its key/value rows. The frame — `.breadcrumb`,
+   `.pagehead`, `.lede`, `.section`, `.microlabel`, `.notice`, `.tag`, `.mono`,
+   `.faint`, `.footnote` — is `styles/base.css`'s, and the before/after is the
+   Verdict's own block, so `BeforeAfter.tsx` takes `screens/verdict/verdict.css`
+   rather than a second copy of `.figures` and `.reasons`.
+   ========================================================================== */
+
+/* The lock, as `.lockbar` draws it: the reason and the one control in one box,
+   which is the state nearly every user meets first and is not an error. */
+.lockbar {
+  display: flex;
+  align-items: flex-start;
+  margin-top: var(--space-5);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+
+/* The control sits inside the reason's own sentence, as the prototype sets it. */
+.connect {
+  margin-left: var(--space-2);
+}
+
+/* The pull request that was written, under the label or on its own. */
+.prbox {
+  display: grid;
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  gap: var(--space-3);
+}
+
+/* The title and the repository chip on one baseline, wrapping at narrow widths. */
+.prhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.prhead h2 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.diff {
+  overflow-x: auto;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font: var(--weight-regular) var(--text-xs) / var(--leading-relaxed) var(--font-mono);
+  white-space: pre;
+}
+
+.add {
+  color: var(--outcome-success);
+}
+
+.del {
+  color: var(--sev-critical);
+}
+
+/* A run that recorded no patch: the change itself is on the pull request. */
+.nodiff {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  gap: var(--space-2) var(--space-5);
+}
+
+.kv dt {
+  color: var(--color-text-muted);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+/* The one sentence a state with nothing to show says, at the prose measure. */
+.stated {
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+/* ---- Narrow windows ---------------------------------------------------
+   The prototype's own breakpoint, as a number of pixels and never as a colour
+   or a size: a media query cannot read a custom property. */
+
+@media (max-width: 640px) {
+  /* The rows stack rather than squash, so neither the label nor the value is
+     cut off at 390px. */
+  .kv {
+    grid-template-columns: 1fr;
+    gap: var(--space-1) var(--space-0);
+  }
+
+  .kv dd {
+    margin-bottom: var(--space-2);
+  }
+}

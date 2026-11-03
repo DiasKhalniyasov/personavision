@@ -6,6 +6,7 @@ import { AudiencesPage } from './screens/audience/AudiencesPage';
 import { BreakdownPage } from './screens/breakdown/BreakdownPage';
 import { DemoPage } from './screens/demo/DemoPage';
 import { FunnelPage } from './screens/funnel/FunnelPage';
+import { ImprovePage } from './screens/improve/ImprovePage';
 import { NewTestWizard } from './screens/newtest/wizard/NewTestWizard';
 import { SessionReplayPage } from './screens/sessions/SessionReplayPage';
 import { SessionsPage } from './screens/sessions/SessionsPage';
@@ -59,6 +60,7 @@ export const routes: RouteObject[] = [
           { path: patterns.session, element: <SessionReplayPage /> },
           { path: patterns.funnel, element: <FunnelPage /> },
           { path: patterns.analysis, element: <AnalysisPage /> },
+          { path: patterns.improve, element: <ImprovePage /> },
           { path: patterns.githubSettings, element: <GithubPage /> },
           { path: '*', element: <NotFoundRoute /> },
         ],
