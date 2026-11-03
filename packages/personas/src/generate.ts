@@ -1,8 +1,16 @@
 import { createSeededRandom, personaSchema } from '@personavision/contract';
-import type { Audience, Persona } from '@personavision/contract';
+import type { AgeGroup, Audience, Gender, Persona } from '@personavision/contract';
 import { ARCHETYPES, MAX_OFFSET, TRAIT_NAMES } from './archetypes.js';
 import type { Archetype } from './archetypes.js';
-import { parseAudience, traitCentre } from './audience.js';
+import {
+  ageBracket,
+  ageGroupApportionment,
+  genderApportionment,
+  languageApportionment,
+  parseAudience,
+  traitCentre,
+} from './audience.js';
+import type { Apportioned } from './audience.js';
 import { concreteDeviceFor, deviceQuota } from './devices.js';
 
 /**
@@ -200,6 +208,128 @@ const assignDeviceClasses = (audience: Audience, people: readonly Archetype[]): 
   });
 };
 
+/**
+ * The streams the three drawn audience fields are dealt and sampled on, as salts the set's
+ * own seed is mixed with.
+ *
+ * Each field gets a stream of its own, and none of them is the stream the traits are drawn
+ * from. Both halves of that matter:
+ *
+ * - **the traits' stream is untouched**, so an audience that declares none of the three
+ *   fields draws exactly the people it drew before they existed — byte for byte, which is
+ *   what lets `GENERATOR_VERSION` stay where it is;
+ * - **the three do not share a stream**, so adding a language list to an audience does not
+ *   move the genders of the people it already generated. A field a user has not edited is a
+ *   field whose people do not change under them.
+ *
+ * The salts are the three mixing constants of the contract's own generator, used here for
+ * what they are: three arbitrary, well-separated 32-bit numbers. `createSeededRandom` reads
+ * a seed as `seed >>> 0`, so a salt is mixed in with `^` on the same 32 bits it keeps.
+ */
+const GENDER_STREAM = 0x9e37_79b9;
+const AGE_STREAM = 0x85eb_ca6b;
+const LANGUAGE_STREAM = 0xc2b2_ae35;
+
+/**
+ * The apportioned values dealt out one per person, in a seeded order.
+ *
+ * The apportionment says **how many** people take each value and is the audience's, so a
+ * declared 54/46 is 54 and 46 at every seed. This says **who**, and is the seed's, because
+ * the order has to be shuffled rather than taken as it comes: people are placed at the four
+ * archetypes round-robin, so handing the values out in order — or alternately — would make
+ * the field a proxy for the behaviour beside it. Two languages dealt in order over four
+ * people would put both phone-shaped behaviours in one language and both desk-shaped ones in
+ * the other, and every result grouped by language would then be reporting the archetype.
+ *
+ * Fisher–Yates, one draw per person after the first, so the deal costs the same whatever the
+ * values are and no value's position depends on how many values there are.
+ */
+const dealt = <Value>(
+  apportioned: readonly Apportioned<Value>[],
+  random: () => number,
+): Value[] => {
+  const deck = apportioned.flatMap(({ value, count }) =>
+    Array.from({ length: count }, () => value),
+  );
+  for (let index = deck.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    const held = deck[index] as Value;
+    deck[index] = deck[swap] as Value;
+    deck[swap] = held;
+  }
+  return deck;
+};
+
+/** The bracket a person was drawn from, and the age they were drawn at inside it. */
+export interface DrawnAge {
+  readonly group: AgeGroup;
+  readonly age: number;
+}
+
+/**
+ * The age each person is drawn at, or `null` where the audience declares no age groups.
+ *
+ * Two steps, on one stream: the brackets are dealt out so that each one takes the share of
+ * the audience it declared, and then each person's year is drawn uniformly inside the
+ * bracket they were dealt, narrowed to the audience's own range (`ageBracket`). The bracket
+ * is the audience's claim and the year is this person's, which is the same division of
+ * labour the device mix has.
+ *
+ * Reached by module rather than exported from the package: it is the derivation, like the
+ * trait centres and the device apportionment, and `tests/drawn-fields.test.ts` holds it to
+ * every person's age lying inside the bracket they came from.
+ */
+export const drawnAges = (audience: Audience, seed: number): readonly DrawnAge[] | null => {
+  const apportioned = ageGroupApportionment(audience);
+  if (apportioned === null) return null;
+  const random = createSeededRandom(seed ^ AGE_STREAM);
+  return dealt(apportioned, random).map((group) => {
+    const { min, max } = ageBracket(audience, group);
+    // Uniform over the whole-year span, both ends included: a bracket of one year is that
+    // year, and `65+` narrowed to a range ending at 65 is 65 rather than a division by zero.
+    return { group, age: min + Math.floor(random() * (max - min + 1)) };
+  });
+};
+
+/** The gender each person is drawn as, or `null` where the audience declares no split. */
+const drawnGenders = (audience: Audience, seed: number): readonly Gender[] | null => {
+  const apportioned = genderApportionment(audience);
+  return apportioned === null ? null : dealt(apportioned, createSeededRandom(seed ^ GENDER_STREAM));
+};
+
+/** The language each person reads in, or `null` where the audience lists none. */
+const drawnLanguages = (audience: Audience, seed: number): readonly string[] | null => {
+  const apportioned = languageApportionment(audience);
+  return apportioned === null
+    ? null
+    : dealt(apportioned, createSeededRandom(seed ^ LANGUAGE_STREAM));
+};
+
+/**
+ * Person `index`'s share of a dealt field, or `undefined` where the audience declared no
+ * such field for anybody to be dealt from.
+ *
+ * The apportionment accounts for every person, so a deal that was made has a value here.
+ * Saying so by name is what keeps the two cases apart: a field the audience never declared
+ * is left off the person, and a value the deal failed to produce would otherwise be spread
+ * on as `gender: undefined` — a key the contract reads as present and a reader reads as a
+ * person who was drawn as nothing.
+ */
+const dealtTo = <Value>(
+  dealtValues: readonly Value[] | null,
+  index: number,
+  what: string,
+): Value | undefined => {
+  if (dealtValues === null) return undefined;
+  const value = dealtValues[index];
+  if (value === undefined) {
+    throw new Error(
+      `the ${what} apportionment accounts for every person, so person ${index + 1} has one`,
+    );
+  }
+  return value;
+};
+
 /** `Rushed buyer`, then `Rushed buyer 2`: a sessions list has to name people apart. */
 const numbered = (text: string, occurrence: number): string =>
   occurrence === 1 ? text : `${text} ${occurrence}`;
@@ -215,7 +345,6 @@ export const generatePersonas = (
       : checkSeedsPerPerson(options.seeds, parsed.size, options.seed);
   const seed = checkSeed(options.seed ?? parsed.generatedFrom.seed);
 
-  const centre = traitCentre(parsed);
   // Round-robin, so a swarm covers the whole spread at every size rather than leaving a
   // corner out: 4 people are one of each, 24 are six of each.
   const people = Array.from(
@@ -223,6 +352,21 @@ export const generatePersonas = (
     (_unused, index) => ARCHETYPES[index % ARCHETYPES.length] as Archetype,
   );
   const deviceClasses = assignDeviceClasses(parsed, people);
+  // The three drawn fields are the audience's and the seed's together — how many of each is
+  // the audience's, who gets which is the seed's — so they are settled for the whole set
+  // before anybody's traits are sampled, exactly as the device quota is.
+  const ages = drawnAges(parsed, seed);
+  const genders = drawnGenders(parsed, seed);
+  const languages = drawnLanguages(parsed, seed);
+  // One centre for the audience, or one per person where an age was drawn for them. The two
+  // are the same arithmetic on a different age, and an audience with no age groups takes the
+  // first — which is what keeps its people byte-identical to the ones it generated before
+  // age groups existed.
+  const audienceCentre = traitCentre(parsed);
+  const centres =
+    ages === null
+      ? people.map(() => audienceCentre)
+      : ages.map(({ age }) => traitCentre(parsed, age));
   // One stream for the whole set — what the audience carries and what every committed run was
   // written on — or one stream per person when the caller named a seed for each.
   const shared = createSeededRandom(seed);
@@ -242,6 +386,14 @@ export const generatePersonas = (
     // the archetype's own offsets gives the object every trait the contract declares without
     // a cast that would survive a trait being added to it.
     const traits = { ...archetype.offsets };
+    const gender = dealtTo(genders, index, 'gender split');
+    const language = dealtTo(languages, index, 'language');
+    const centre = centres[index];
+    if (centre === undefined) {
+      throw new Error(
+        `a centre is computed for each of the ${parsed.size} people, so person ${index + 1} has one`,
+      );
+    }
     // The per-person seeds are checked to be one for each person, so a list always has a
     // stream here. Saying so by name matters more here than anywhere else in this file: a
     // fallback to the shared stream would sample this person from the audience's own seed —
@@ -266,6 +418,11 @@ export const generatePersonas = (
       segment: `${deviceClass.name.toLowerCase()} · ${archetype.segmentClause}`,
       traits,
       device: concreteDeviceFor(deviceClass),
+      // Absent rather than empty where the audience declared nothing to draw from: a person
+      // drawn from an audience that named no language reads in none in particular, and the
+      // contract's own word for that is the field not being there.
+      ...(gender === undefined ? {} : { gender }),
+      ...(language === undefined ? {} : { language }),
     });
   });
 };

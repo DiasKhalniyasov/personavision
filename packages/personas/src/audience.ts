@@ -1,5 +1,6 @@
 import { audienceSchema } from '@personavision/contract';
-import type { Audience, Persona } from '@personavision/contract';
+import type { AgeGroup, Audience, Gender, Persona } from '@personavision/contract';
+import { largestRemainder } from './devices.js';
 
 /**
  * The audience, and the centre of the trait space it describes.
@@ -17,6 +18,14 @@ import type { Audience, Persona } from '@personavision/contract';
  * | `devices`          | the device each person gets, by share — `devices.ts`                   |
  * | `roles`            | — see the README: the generated people are named for behaviour         |
  * | `size`             | how many people are generated                                          |
+ * | `genderSplit`      | the `gender` each person is drawn as, by share                         |
+ * | `ageGroups`        | the bracket each person is drawn from and the age they are drawn at, by share — and so their own `patience` and `scanningVsReading` rather than the audience's |
+ * | `languages`        | the one `language` each person reads and types in — **apportioned evenly**, because a list declares no shares |
+ *
+ * The last three are `docs/FLOW.md` section 12's three new rows, and they fire only on an
+ * audience that carries the field: an audience declaring none of them generates exactly the
+ * people it generated before they existed, which is why `GENERATOR_VERSION` does not move
+ * (`README.md`, "Why this is not a new generator version").
  *
  * `persistence` and `riskTolerance` are not in that table, so no audience field moves them:
  * they sit at the midpoint and get their spread from the archetype and the seed. Deriving
@@ -55,11 +64,22 @@ const AGE_ON_PATIENCE = 0.25;
 
 const clampUnit = (value: number): number => Math.min(1, Math.max(0, value));
 
-/** Where the audience sits on each trait, before an archetype displaces a person from it. */
-export const traitCentre = (audience: Audience): Persona['traits'] => {
+/**
+ * Where the audience sits on each trait, before an archetype displaces a person from it.
+ *
+ * `age` is the age **this person** was drawn at, where the audience declared age groups to
+ * draw one from. Without it the age terms read the midpoint of `ageRange`, which is one
+ * centre for the whole audience and is what every audience that declares no age groups still
+ * gets, to the last digit. With it they read the person's own age instead — the same two
+ * coefficients in the same two directions the table above already states, applied to the age
+ * the person is rather than to the average of the range they came from. That is the whole of
+ * what an age group moves: an audience that is mostly in its thirties with a tail at fifty
+ * generates people whose patience is their own age's rather than the tail's.
+ */
+export const traitCentre = (audience: Audience, age?: number): Persona['traits'] => {
   const techDeviation = audience.techSavviness - 0.5;
   const priceDeviation = audience.priceSensitivity - 0.5;
-  const ageMidpoint = (audience.ageRange.min + audience.ageRange.max) / 2;
+  const ageMidpoint = age ?? (audience.ageRange.min + audience.ageRange.max) / 2;
   // Positive is older. Saturating keeps a 90-year-old audience from asking for a patience
   // above the scale and losing its spread to the clamp.
   const ageSkew = Math.min(1, Math.max(-1, (ageMidpoint - AGE_NEUTRAL) / AGE_SATURATION));
@@ -154,4 +174,183 @@ export const parseAudience = (audience: unknown): Audience => {
     ]);
   }
   return parsed.data;
+};
+
+/**
+ * One value a drawn audience field can take, and how many of the audience's people take it.
+ *
+ * The three fields `docs/FLOW.md` section 12 adds — the gender split, the age groups and the
+ * languages — are all read the same way: the audience declares the values and (for two of
+ * the three) their shares, and the apportionment says how many people each value is worth.
+ * Who then gets which is the generator's, in `generate.ts`, because that is the part a seed
+ * decides.
+ */
+export interface Apportioned<Value> {
+  readonly value: Value;
+  readonly count: number;
+}
+
+/** The declared values and their counts, by the device mix's own largest-remainder rule. */
+const apportion = <Value>(
+  size: number,
+  declared: readonly { readonly value: Value; readonly share: number }[],
+): readonly Apportioned<Value>[] =>
+  largestRemainder(
+    size,
+    declared.map((entry) => entry.share),
+  ).map((count, index) => ({
+    // `largestRemainder` returns one count per share, in the order the shares were given.
+    value: (declared[index] as { readonly value: Value }).value,
+    count,
+  }));
+
+/**
+ * How many people are drawn as each of the gender split's two words, or `null` where the
+ * audience declared no split.
+ *
+ * The two words are read off the split the people are drawn from rather than written out
+ * here, so this file cannot spell a third — the same reason `genderSchema` reads them off
+ * `genderSplitSchema` in the contract. They are then **sorted**, because reading them off
+ * the object makes their order the object's, and that is not an order to inherit by
+ * accident. As it happens zod rebuilds a parsed audience in the schema's own declaration
+ * order, so an audience written `{ female, male }` and one written `{ male, female }` reach
+ * this function identical — but that is an incidental property of the parser rather than
+ * something the contract promises, and this function is reachable with an audience nobody
+ * parsed. Sorting makes the order this file's own and the answer the same either way.
+ *
+ * Sorted, `female` is first, so a 50/50 split over an odd number of people gives the odd
+ * person to `female`: arbitrary, and the same arbitrary answer every time, which is the
+ * property that matters.
+ *
+ * Not floored. A share of zero here is a measurement the audience made, so nobody is drawn
+ * as it; `devices.ts` states that difference where the floor is.
+ */
+export const genderApportionment = (audience: Audience): readonly Apportioned<Gender>[] | null => {
+  const { genderSplit } = audience;
+  if (genderSplit === undefined) return null;
+  const words = (Object.keys(genderSplit) as Gender[]).sort((left, right) =>
+    left.localeCompare(right, 'en'),
+  );
+  return apportion(
+    audience.size,
+    words.map((value) => ({ value, share: genderSplit[value] })),
+  );
+};
+
+/**
+ * How many people are drawn from each age bracket **that carries somebody**, in the
+ * audience's own order, or `null` where the audience declared no groups.
+ *
+ * A bracket with a share of zero is left out rather than given the floor the device mix has.
+ * It is how an audience says nobody here is that age, and the contract holds `ageRange`
+ * consistent only with the brackets that carry somebody — so a person floored into an empty
+ * bracket could be an age the audience's own range excludes.
+ */
+export const ageGroupApportionment = (
+  audience: Audience,
+): readonly Apportioned<AgeGroup>[] | null => {
+  const { ageGroups } = audience;
+  if (ageGroups === undefined) return null;
+  const carrying = ageGroups.filter((entry) => entry.share > 0);
+  if (carrying.length === 0) {
+    // The contract refuses this before generation reaches it — group shares have to sum to
+    // one — so it is reachable only by calling this with an audience nobody parsed. It is
+    // still an audience path rather than a crash, because that is what an audience form
+    // renders and `peopleOf` reports on a card.
+    throw new AudienceValidationError([
+      {
+        path: 'ageGroups',
+        message: `this audience declares ${String(ageGroups.length)} age ${ageGroups.length === 1 ? 'group' : 'groups'} and puts nobody in any of them: there is no bracket to draw its ${String(audience.size)} people from`,
+      },
+    ]);
+  }
+  return apportion(
+    audience.size,
+    carrying.map((entry) => ({ value: entry.group, share: entry.share })),
+  );
+};
+
+/**
+ * How many people read in each language the audience lists, or `null` where it lists none.
+ *
+ * **Evenly**, because nobody gave shares: a list is a list, and reading a share into it
+ * would be this package inventing a claim about the audience. So the same largest-remainder
+ * rule runs over an equal share each — three languages over a hundred people are 34, 33 and
+ * 33 — and the list's own order breaks the tie, which `README.md` section 4 states.
+ */
+export const languageApportionment = (
+  audience: Audience,
+): readonly Apportioned<string>[] | null => {
+  const { languages } = audience;
+  if (languages === undefined) return null;
+  const even = 1 / languages.length;
+  return apportion(
+    audience.size,
+    languages.map((value) => ({ value, share: even })),
+  );
+};
+
+/**
+ * What a bracket's label means in years: `18–24` is 18 to 24, and `65+` is 65 and open above.
+ *
+ * Read off the label, which is the bracket's own words — the contract's enumeration is "the
+ * brackets a user actually thinks in", and 25–34 means 25 to 34 wherever it is printed. So a
+ * bracket added to the contract needs no edit here.
+ *
+ * The contract keeps a table of the same years, which is what it holds `ageRange` against,
+ * and it does not export it. This is therefore a **second reading of one fact** rather than
+ * an import, and two readings can drift: a table that disagreed with its own label — say
+ * `18–24` recorded as 18 to 25 — would have the contract accept an `ageRange` ending at 25
+ * while this clamps the bracket at 24, and a share of the audience would silently be unable
+ * to be the age the audience declared. So the two are pinned together by behaviour rather
+ * than by hope. `tests/drawn-fields.test.ts` builds, for each of the six brackets, an
+ * audience whose `ageRange` is exactly the years this function says the label means, and
+ * asserts the contract accepts it and refuses a range one year outside it. A table that
+ * disagreed with its own label fails that test, at the bracket it disagreed about.
+ */
+export const ageGroupYears = (
+  group: AgeGroup,
+): { readonly min: number; readonly max: number | null } => {
+  if (group.endsWith('+')) return { min: Number.parseInt(group, 10), max: null };
+  // The separator is the en dash the contract's own labels are written with.
+  const [from, to] = group.split('–');
+  const min = Number.parseInt(from ?? '', 10);
+  const max = Number.parseInt(to ?? '', 10);
+  if (!Number.isInteger(min) || !Number.isInteger(max)) {
+    throw new Error(`an age bracket is written "18–24" or "65+", and this one reads "${group}"`);
+  }
+  return { min, max };
+};
+
+/**
+ * The years a person drawn from `group` may be: the bracket, narrowed to the audience's own
+ * `ageRange`.
+ *
+ * The narrowing is what keeps the two facts the audience stated from contradicting each
+ * other. An audience of 28 to 40 that declares 25–34 and 35–44 said nobody here is 27, so
+ * the person drawn from 25–34 is 28 to 34 and the one drawn from 35–44 is 35 to 40. The open
+ * bracket takes `ageRange.max` as its top for the same reason: `65+` is where a person stops
+ * being asked their age, and the audience's own range is the only upper bound anybody stated.
+ *
+ * It is never empty for a bracket that carries somebody. The contract holds `ageRange` to
+ * starting inside the lowest such bracket and ending inside the highest, so the range covers
+ * every bracket between them whole; a range that does not is refused before this is reached,
+ * and the refusal below says so by its path rather than by an age nobody can explain.
+ */
+export const ageBracket = (
+  audience: Audience,
+  group: AgeGroup,
+): { readonly min: number; readonly max: number } => {
+  const years = ageGroupYears(group);
+  const min = Math.max(years.min, audience.ageRange.min);
+  const max = Math.min(years.max ?? audience.ageRange.max, audience.ageRange.max);
+  if (min > max) {
+    throw new AudienceValidationError([
+      {
+        path: 'ageGroups',
+        message: `age group "${group}" carries people this audience's own range of ${audience.ageRange.min}–${audience.ageRange.max} leaves no age for`,
+      },
+    ]);
+  }
+  return { min, max };
 };
