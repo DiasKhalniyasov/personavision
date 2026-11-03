@@ -441,6 +441,22 @@ describe('the recommendations, offline', () => {
     expect(recommendations.flatMap((one) => one.findingIds)).not.toContain('F-03');
   });
 
+  it('states no number of people for a finding whose every session is excluded', async () => {
+    // The heatmap and the funnel are still behind it, so it is advice — but nobody citable
+    // is, and a sentence reading “0 people” would be a figure nobody measured.
+    const onlyExcluded = input({
+      findings: [finding({ sessionIds: ['S-04'], sessionCount: 1 })],
+    });
+
+    const { recommendations } = await offline(onlyExcluded);
+
+    expect(recommendations).toHaveLength(1);
+    expect(recommendations[0].peopleAffected).toBe(0);
+    expect(recommendations[0].sentence).not.toContain('0 people');
+    expect(recommendations[0].sentence).toMatch(/step\.$/);
+    expect(recommendations[0].citations.some((one) => one.kind === 'session')).toBe(false);
+  });
+
   it('says in one sentence why a run with no finding recommends nothing', async () => {
     const value = await offline(input({ findings: [] }));
 

@@ -622,10 +622,19 @@ const offlineAnalysis = (input: AnalysisAskInput, seed: number): Recommendations
 
     const label = input.run.steps.find((step) => step.id === finding.step)?.label ?? finding.step;
     const opening = openings[Math.floor(random() * openings.length)](label);
+    // A finding whose every session is excluded or is one the run does not list still has
+    // the heatmap and the funnel behind it, so it is advice; what it has not got is a number
+    // of people, and *"where 0 people ran into trouble"* would be a figure nobody measured.
+    // The clause is left off rather than filled in, and `peopleAffected` stays the citable
+    // count, which puts such a recommendation last in the ranking where it belongs.
+    const who =
+      citable.length === 0
+        ? ''
+        : `, where ${citable.length === 1 ? 'one person' : `${citable.length} people`} of this run ran into trouble`;
     return [
       {
         id: `R-${String(index + 1).padStart(2, '0')}`,
-        sentence: `${opening}, where ${citable.length === 1 ? 'one person' : `${citable.length} people`} of this run ran into trouble.`,
+        sentence: `${opening}${who}.`,
         evidence: finding.evidence,
         findingIds: [finding.id],
         citations,
