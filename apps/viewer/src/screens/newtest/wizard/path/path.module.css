@@ -1,0 +1,87 @@
+/* =============================================================================
+   `/new?step=path` — the two product paths, one of them locked.
+
+   `#screen-newtest-paths` of `docs/design/prototype.html`, rule for rule &mdash; its
+   card heading is an `h2` rather than its `h3`, so the page keeps one heading
+   level per step and axe stays clean; the type size is the prototype's own. Every
+   value is a custom property from `docs/design/tokens.css`; the one number here
+   is the prototype's own breakpoint, which a media query cannot read from a
+   token.
+
+   What is deliberately **not** carried over: the prototype's `cursor` and
+   `:hover` on the card. There the whole card is a `<button>`; here a card is a
+   group with one real control inside it, so a pointer that changes over dead
+   space would promise a click that does not happen.
+   ========================================================================== */
+
+.paths {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  margin-top: var(--space-8);
+}
+
+.pathCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: left;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* The path a first visit is standing on. */
+.pathCard[aria-current='true'] {
+  border-color: var(--color-accent-strong);
+  box-shadow: var(--shadow-md);
+}
+
+/* Shown and locked, never hidden: a user sees what they do not have yet. */
+.pathCard[data-locked] {
+  background: var(--color-surface-sunken);
+}
+
+.pathCard h2 {
+  font-size: var(--text-md);
+}
+
+.cardLede {
+  font-size: var(--text-sm);
+}
+
+.delivers {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  list-style: disc;
+}
+
+.delivers li {
+  margin-top: var(--space-1);
+}
+
+/* The lock's reason, and in the connected state the repository, in one box: the
+   card is the same height before and after the connection state arrives. */
+.lockbar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+  font-size: var(--text-sm);
+}
+
+.control {
+  align-self: start;
+}
+
+@media (max-width: 860px) {
+  .paths {
+    grid-template-columns: 1fr;
+  }
+}

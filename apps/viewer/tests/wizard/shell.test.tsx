@@ -73,7 +73,7 @@ describe('the step in the query', () => {
     await serveRunData();
 
     for (const [step, name] of [
-      ['path', 'Path'],
+      ['path', 'What would you like us to do?'],
       ['audience', 'Audience & feature'],
       ['goal', 'Goal'],
       ['estimate', 'Launch'],
@@ -101,7 +101,7 @@ describe('the step in the query', () => {
     await serveRunData();
     const { router } = mountApp(paths.newTest);
 
-    expect(await heading('Path')).toBeTruthy();
+    expect(await heading('What would you like us to do?')).toBeTruthy();
     await waitFor(() => {
       expect(router.state.location.search).toBe(`?${STEP_PARAM}=path`);
     });
@@ -111,7 +111,7 @@ describe('the step in the query', () => {
     await serveRunData();
     const { router } = mountApp(newTestStep('mezzanine'));
 
-    expect(await heading('Path')).toBeTruthy();
+    expect(await heading('What would you like us to do?')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'There is no page here' })).toBeNull();
     await waitFor(() => {
       expect(stepInUrl(router.state.location.search)).toBe('path');
@@ -192,7 +192,7 @@ describe('the breadcrumb', () => {
   it('links nothing on the first step', async () => {
     await serveRunData();
     mountApp(newTestStep('path'));
-    await heading('Path');
+    await heading('What would you like us to do?');
 
     expect(within(breadcrumb()).queryAllByRole('link')).toHaveLength(0);
   });
@@ -331,7 +331,7 @@ describe('the two-URL A/B form', () => {
   it('is not offered by the path chooser, which has no second URL to ask for', async () => {
     await serveRunData();
     mountApp(paths.newTest);
-    await heading('Path');
+    await heading('What would you like us to do?');
 
     expect(
       [...document.querySelectorAll('a[href]')].map((link) => link.getAttribute('href')),
@@ -351,7 +351,7 @@ describe('the two-URL A/B form', () => {
     await servePlatform({ records: [] });
     const { router } = mountApp(paths.newTest);
 
-    expect(await heading('Path')).toBeTruthy();
+    expect(await heading('What would you like us to do?')).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.newTest);
   });
 });
