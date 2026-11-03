@@ -210,6 +210,12 @@ describe('only the one sanctioned place reads a credential', () => {
     // The live test reads it only to decide whether to run at all: with no key it skips,
     // visibly and with the reason in its name, which is how CI makes no call.
     'packages/provider/tests/meta-model-live.test.ts',
+    // `#248`'s Muse Wonder live test, for the same reason and in the same shape. It reads
+    // the key to decide whether to run and then to send one `Authorization` header, because
+    // the Wonder request builder it would otherwise go through does not exist yet — this is
+    // the ticket that observes the API the rest of the step is written against. It asserts
+    // the key appears in neither the request it built nor the response it got.
+    'packages/provider/tests/wonder-live.test.ts',
     // `#69`'s SAM 3.1 live test, for the same reason and with one more lock: it needs the
     // key *and* an explicit opt-in, because the owner deferred SAM 3.1 and a key alone is
     // present on the owner's machine for every other model call. `packages/engine` itself
