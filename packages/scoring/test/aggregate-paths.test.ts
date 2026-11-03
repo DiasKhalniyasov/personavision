@@ -1,4 +1,4 @@
-import type { Session } from '@personavision/contract';
+import { sessionSchema, type Session } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import { funnelSliceSpecs, pathsOfSlice, type FunnelSliceSpec } from '../src/index.js';
 import { smallRun, smallRunSessions } from './fixtures/aggregate.js';
@@ -33,6 +33,40 @@ const sessionOf = (sessionId: string): Session => {
 };
 
 const copyAs = (sessionId: string, of: string): Session => ({ ...sessionOf(of), sessionId });
+
+/**
+ * A copy of a fixture session that walked exactly these screens, looking once at each. The
+ * step ids may repeat: that is how a scroll and then a click on one step are two screens.
+ */
+const walking = (sessionId: string, steps: readonly string[]): Session => {
+  const base = sessionOf('S-01');
+  const [screen] = base.screens;
+  const [fixation] = base.fixations;
+  if (screen === undefined || fixation === undefined) throw new Error('S-01 walked screens');
+  const lastStep = steps[steps.length - 1];
+  if (lastStep === undefined) throw new Error('a session walks at least one screen');
+
+  return sessionSchema.parse({
+    ...base,
+    sessionId,
+    durationMs: steps.length * 1000 + 500,
+    screens: steps.map((step, index) => ({
+      ...screen,
+      index,
+      step,
+      screenshot: `screens/A-${step}.png`,
+    })),
+    fixations: steps.map((step, index) => ({
+      ...fixation,
+      index,
+      screenIndex: index,
+      tMs: index * 1000 + 100,
+      aoiId: `a-${step}-body`,
+    })),
+    actions: [],
+    outcome: { ...base.outcome, step: lastStep },
+  });
+};
 
 const handSlice = (sessions: readonly Session[]): FunnelSliceSpec => ({
   key: 'hand',
@@ -83,6 +117,35 @@ describe('the common paths of a slice', () => {
   it('keeps a route that went back and forward as one path with its repeats', () => {
     expect(pathsOf(handSlice([sessionOf('S-04'), copyAs('S-07', 'S-04')]))).toEqual([
       { steps: ['landing', 'prompt', 'generate', 'prompt', 'preview'], sessionCount: 2 },
+    ]);
+  });
+
+  it('reads a step captured twice in a row as one visit to it', () => {
+    // One of them scrolled on `prompt` and was captured again there; both walked the same
+    // three screens, and a route taken screen by screen would match neither to the other.
+    expect(
+      pathsOf(
+        handSlice([
+          walking('S-11', ['landing', 'prompt', 'prompt', 'generate']),
+          walking('S-12', ['landing', 'prompt', 'generate']),
+        ]),
+      ),
+    ).toEqual([{ steps: ['landing', 'prompt', 'generate'], sessionCount: 2 }]);
+  });
+
+  it('keeps a revisit, which is the repeat the figure is about', () => {
+    expect(
+      pathsOf(
+        handSlice([
+          walking('S-13', ['landing', 'prompt', 'generate', 'generate', 'prompt', 'preview']),
+          walking('S-14', ['landing', 'prompt', 'generate', 'prompt', 'prompt', 'preview']),
+        ]),
+      ),
+    ).toEqual([
+      {
+        steps: ['landing', 'prompt', 'generate', 'prompt', 'preview'],
+        sessionCount: 2,
+      },
     ]);
   });
 
