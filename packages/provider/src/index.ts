@@ -89,6 +89,16 @@ export type {
 export { createOfflineWonderProvider, OFFLINE_WONDER_PROVIDER_NAME } from './wonder-offline.js';
 
 export {
+  applyUnifiedPatch,
+  CHANGE_EFFORT,
+  CHANGE_REPLY_SCHEMA_NAME,
+  changeAsk,
+  decideChange,
+  SIMULATED_LABEL,
+} from './wonder-change.js';
+export type { ChangeAskInput, ChangeFile } from './wonder-change.js';
+
+export {
   createMetaWonderProvider,
   DEFAULT_WONDER_EFFORT,
   DEFAULT_WONDER_TIMEOUT_MS,
