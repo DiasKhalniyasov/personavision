@@ -150,7 +150,7 @@ describe('the two-URL A/B form cannot be filled in without an audience', () => {
 
     // The wizard's second step is where an audience is described (`docs/FLOW.md` section
     // 12), so asking for one before the chooser would be a loop (#264).
-    expect(await screen.findByRole('heading', { name: 'Path' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'What would you like us to do?' })).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.newTest);
   });
 });
@@ -197,10 +197,10 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [paths.sites, 'Your sites'],
       [paths.newSite, 'Add a site'],
       [paths.site('site-clipforge'), 'Prove this site is yours'],
-      [paths.githubSettings, 'GitHub connection'],
+      [paths.githubSettings, 'Where would the pull request go?'],
       // `/new` is one route with a step in the query: no step is the path chooser, and the
       // two-URL A/B form is the variants step.
-      [paths.newTest, 'Path'],
+      [paths.newTest, 'What would you like us to do?'],
       [newTestStep('variants'), 'New test'],
       [paths.breakdown(runId), 'How sure is this, and what drove it'],
       [paths.attention(runId, 'B', 'review'), 'Where your audience looked'],

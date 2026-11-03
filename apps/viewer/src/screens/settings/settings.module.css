@@ -1,0 +1,24 @@
+/* =============================================================================
+   `/settings/github` — where would the pull request go?
+
+   A plain `.wrap-narrow` page in the frame of `docs/design/prototype.html`,
+   which does not draw this screen: section 13 of `docs/FLOW.md` names it and
+   gives it its one question, and #271 states this as a deliberate addition.
+   Every value is a custom property from `docs/design/tokens.css`.
+   ========================================================================== */
+
+.allowed {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  list-style: disc;
+}
+
+.allowed li {
+  margin-top: var(--space-1);
+}
+
+.allowed b {
+  color: var(--color-text);
+}
