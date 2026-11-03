@@ -1,0 +1,36 @@
+/* =============================================================================
+   `#screen-signup` of `docs/design/prototype.html`, which is the sign-in card's
+   own frame with three fields in it: the band, the wordmark and the white card
+   are `../signin/signin.css`, imported by `SignUpPage.tsx` rather than restated.
+
+   What is here is the two things a sign-up has and a sign-in does not: a refusal
+   against one field, and the way on for an email that already has a workspace.
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies — no colour, size, spacing step or duration is
+   restated, and the card's controls are the shadcn primitives of
+   `src/components/ui/`, which carry their own geometry.
+   ========================================================================== */
+
+/* The sentence under the field it is about, in the same critical colour the
+   whole-form failure above the card uses. It sits inside the field group, so the
+   group's own gap is the space above it. */
+.signin-card .field-error {
+  color: var(--sev-critical);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* "That email already has a workspace. Sign in instead." — and the link that
+   makes it actionable, directly under the email field it is about. It reads as
+   part of the sentence above it, so it takes that colour and marks itself a link
+   with an underline rather than with a second colour. */
+.signin-card .field-link {
+  color: var(--sev-critical);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.signin-card .field-link a {
+  color: inherit;
+  text-decoration: underline;
+}

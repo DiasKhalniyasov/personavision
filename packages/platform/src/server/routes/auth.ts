@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { safeNextPath } from '../../auth/guard.js';
 import { signIn } from '../../auth/signin.js';
+import { signUp } from '../../auth/signup.js';
+import type { SignUpRefusal } from '../../auth/signup.js';
 import type {
   AccountRecord,
   PlatformStore,
@@ -12,8 +14,11 @@ import { sendJson } from './types.js';
 import type { Route } from './types.js';
 
 /**
- * Sign-in, sign-out and the session the signed-in chrome reads.
+ * Sign-up, sign-in, sign-out and the session the signed-in chrome reads.
  *
+ * `POST /auth/signup` — an email, a password and a name in; an account, a workspace and the
+ * same answer a completed sign-in gives, so the chrome reads one shape. Its refusals name
+ * the field they are about, which is deliberately **not** the sign-in rule below.
  * `POST /auth/signin` — email and password in, a session cookie out, or one deliberately
  * vague failure. `POST /auth/signout` — the record is deleted and the cookie emptied.
  * `GET /auth/session` — who is signed in and which workspace they are looking at, or that
@@ -31,7 +36,65 @@ import type { Route } from './types.js';
  */
 const SIGNIN_FAILED = 'That email and password do not match an account.';
 
-/** A body larger than this is not a sign-in form, and is refused before it is read. */
+/**
+ * The sentences a refused sign-up reports, each against the field it is about.
+ *
+ * `signUp` decides what is wrong and this decides what to say, which is how `SIGNIN_FAILED`
+ * above is owned here too. A taken email is told plainly — the one refusal of this route
+ * that is deliberately specific, because somebody told "those details are wrong" about an
+ * address they already have an account for has no way forward. The screen puts the link to
+ * `/signin` beside it (#265); the words are here, once.
+ */
+const SIGNUP_REFUSALS = {
+  email: {
+    missing: 'Enter your work email.',
+    'not-an-email': 'That does not look like an email address.',
+    taken: 'That email already has a workspace. Sign in instead.',
+  },
+  password: {
+    missing: 'Enter a password.',
+    // `MIN_PASSWORD_LENGTH` in words, as the screen's own hint states it.
+    'too-short': 'Use at least twelve characters.',
+  },
+  workspaceName: {
+    missing: 'Name your workspace.',
+    // `MAX_WORKSPACE_NAME_LENGTH` in figures: a cap is worth stating as a number.
+    'too-long': 'Use 60 characters or fewer.',
+  },
+} satisfies {
+  // One sentence per pair `signUp` can actually produce, and no key for a pair it cannot:
+  // a reason belongs to its field, so there is no sentence for a password that is not an
+  // email address. Adding a reason to `SignUpRefusal` fails to compile until it has words.
+  [F in SignUpRefusal['field']]: Record<Extract<SignUpRefusal, { field: F }>['reason'], string>;
+};
+
+/** The sentence a refusal reports. The switch is what holds every field above reachable. */
+const sentenceFor = (refused: SignUpRefusal): string => {
+  switch (refused.field) {
+    case 'email':
+      return SIGNUP_REFUSALS.email[refused.reason];
+    case 'password':
+      return SIGNUP_REFUSALS.password[refused.reason];
+    case 'workspaceName':
+      return SIGNUP_REFUSALS.workspaceName[refused.reason];
+  }
+};
+
+/** Where a completed sign-up lands: adding a site and proving it is yours. */
+const AFTER_SIGNUP = '/sites';
+
+/**
+ * What a sign-up that already carries a session is told.
+ *
+ * An account is a member of exactly one workspace and nothing in the product can switch
+ * between two, so a second one would be unreachable. The screen sends a signed-in visitor
+ * on before the form renders (#265); this is the same rule where it cannot be bypassed —
+ * by a stale tab, by a script, or by a cross-origin form post, which would otherwise
+ * replace a signed-in owner's cookie with one for a workspace holding none of their tests.
+ */
+const ALREADY_SIGNED_IN = 'You already have a workspace.';
+
+/** A body larger than this is not a sign-in or a sign-up form, and is refused unread. */
 const MAX_BODY_BYTES = 64 * 1024;
 
 export interface AuthRouteOptions {
@@ -45,8 +108,9 @@ export interface AuthRouteOptions {
 }
 
 /**
- * The submitted fields, as JSON — what the sign-in screen sends (#12). A body this cannot
- * read is a 400 rather than a failed sign-in, because nothing was tested.
+ * The submitted fields, as JSON — what the sign-in and sign-up screens send (#12, #265). A
+ * body this cannot read is a 400 rather than a failure, because nothing was tested and
+ * nothing was created.
  */
 const readFields = async (request: IncomingMessage): Promise<Record<string, string> | null> => {
   const chunks: Buffer[] = [];
@@ -85,6 +149,13 @@ export interface AuthBody {
   expiresAt?: string;
   /** The one sentence a failure reports. */
   error?: string;
+  /**
+   * Which submitted field a refusal is about, so the screen can mark that field rather than
+   * putting one sentence above a form the reader then has to search. A sign-up has it; a
+   * refused sign-in never does, because naming the field would say which of the two was
+   * wrong — and an unreadable body has none either, since no field was reached.
+   */
+  field?: SignUpRefusal['field'];
   /** Where a completed sign-in lands. */
   next?: string;
 }
@@ -100,6 +171,57 @@ const signedInBody = (
   workspace: { id: workspace.id, name: workspace.name },
   expiresAt: session.expiresAt,
 });
+
+const signupHandler =
+  ({ store, readSession, sessionCookie, lifetimeSeconds }: AuthRouteOptions) =>
+  async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    if ((await readSession(request)) !== null) {
+      // Nothing is created and the caller's own cookie is left exactly as it was.
+      sendJson(response, 409, {
+        error: ALREADY_SIGNED_IN,
+        signedIn: true,
+        next: '/',
+      } satisfies AuthBody);
+      return;
+    }
+
+    const fields = await readFields(request);
+    if (fields === null) {
+      // Nothing was created, so this is not a refused sign-up: it is a request that could
+      // not be read, and it names no field because none was reached.
+      sendJson(response, 400, { error: 'That sign-up could not be read.', signedIn: false });
+      return;
+    }
+
+    const outcome = await signUp(
+      {
+        email: fields.email ?? '',
+        password: fields.password ?? '',
+        workspaceName: fields.workspaceName ?? '',
+      },
+      { store, lifetimeSeconds },
+    );
+    if (!outcome.ok) {
+      const { refused } = outcome;
+      // A taken email is a conflict with what already exists; everything else is a form
+      // that was not filled in. Either way nothing was created and no cookie is set.
+      sendJson(response, refused.reason === 'taken' ? 409 : 400, {
+        error: sentenceFor(refused),
+        field: refused.field,
+        signedIn: false,
+      } satisfies AuthBody);
+      return;
+    }
+
+    const { session, account, workspace } = outcome.signedIn;
+    response.setHeader(
+      'set-cookie',
+      sessionCookie(session.id, { secure: isSecureRequest(request) }),
+    );
+    // The same body a completed sign-in answers with, so the chrome reads one shape, and
+    // where this one lands: the sign-up screen has no `?next=` to honour.
+    sendJson(response, 200, { ...signedInBody(account, workspace, session), next: AFTER_SIGNUP });
+  };
 
 const signinHandler =
   ({ store, sessionCookie, lifetimeSeconds }: AuthRouteOptions) =>
@@ -185,6 +307,7 @@ const sessionHandler =
   };
 
 export const authRoutes = (options: AuthRouteOptions): Route[] => [
+  { method: 'POST', path: /^\/auth\/signup$/, handle: signupHandler(options) },
   { method: 'POST', path: /^\/auth\/signin$/, handle: signinHandler(options) },
   { method: 'POST', path: /^\/auth\/signout$/, handle: signoutHandler(options) },
   { method: 'GET', path: /^\/auth\/session$/, handle: sessionHandler(options) },
