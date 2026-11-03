@@ -7,19 +7,28 @@ import {
   ALL,
   aoiLabel,
   isFiltered,
+  isRowsView,
   readFilter,
+  search,
+  showingLine,
   shownOfLine,
   withFilter,
+  withView,
   without,
 } from '../../src/screens/sessions/filters';
 import { noMatchWords } from '../../src/screens/sessions/noMatchWords';
 
 /**
- * The three filters as the URL carries them, over the committed seed example run.
+ * The filters as the URL carries them, over the committed seed example run.
  *
  * The point of these is that the query string is the whole of the filter state and that a
  * value the run has no entry for never becomes a filter: it is reported back so the screen
  * can drop it from the URL, rather than narrowing the list to nothing.
+ *
+ * Five of them, since the grid (#268): the version, the outcome and the area of interest of
+ * `#screen-sessions`, and the audience segment and the step it ended on that `#screen-grid`
+ * filters by. They are read in one place for both views, which is what lets the switch
+ * between them carry every one across.
  */
 
 const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../tests/fixtures/runs');
@@ -30,7 +39,16 @@ const seedRun = () =>
     JSON.parse(readFileSync(join(runsRoot, SEED, runPaths('').run), 'utf8')) as unknown,
   );
 
-const query = (search: string) => new URLSearchParams(search);
+const query = (asked: string) => new URLSearchParams(asked);
+
+/** A screen narrowed by nothing: every filter unset. */
+const NOTHING = {
+  variant: null,
+  outcome: null,
+  aoiId: null,
+  segment: null,
+  step: null,
+} as const;
 
 describe('reading the filters out of the URL', () => {
   it('reads a version, an outcome and an area the run holds', () => {
@@ -40,6 +58,8 @@ describe('reading the filters out of the URL', () => {
       variant: 'B',
       outcome: 'success',
       aoiId: 'B-review-complete',
+      segment: null,
+      step: null,
     });
     expect(read.aoi?.step).toBe('review');
     expect(read.unknown).toEqual([]);
@@ -47,22 +67,56 @@ describe('reading the filters out of the URL', () => {
   });
 
   it('treats an absent parameter and the empty string a cleared control leaves alike', () => {
-    for (const search of ['', 'variant=&outcome=&aoi=']) {
+    for (const search of ['', 'variant=&outcome=&aoi=&segment=&step=']) {
       const read = readFilter(seedRun(), query(search));
 
-      expect(read.filter, search).toEqual({ variant: null, outcome: null, aoiId: null });
+      expect(read.filter, search).toEqual(NOTHING);
       expect(read.unknown, search).toEqual([]);
       expect(isFiltered(read.filter), search).toBe(false);
     }
   });
 
   it('drops a value the run has no entry for, and says which', () => {
-    const read = readFilter(seedRun(), query('variant=Z&outcome=sideways&aoi=no-such-area'));
+    const read = readFilter(
+      seedRun(),
+      query('variant=Z&outcome=sideways&aoi=no-such-area&segment=nobody&step=nowhere'),
+    );
 
     // Not applied: a filter that cannot match would read as "nobody did this".
-    expect(read.filter).toEqual({ variant: null, outcome: null, aoiId: null });
+    expect(read.filter).toEqual(NOTHING);
     expect(read.aoi).toBeNull();
-    expect(read.unknown).toEqual(['variant', 'outcome', 'aoi']);
+    expect(read.endedOn).toBeNull();
+    expect(read.unknown).toEqual(['variant', 'outcome', 'aoi', 'segment', 'step']);
+  });
+
+  it('reads an audience segment and the step a session ended on', () => {
+    const read = readFilter(seedRun(), query('segment=mobile · in a hurry&step=review'));
+
+    expect(read.filter.segment).toBe('mobile · in a hurry');
+    expect(read.filter.step).toBe('review');
+    // The step's own label, which is what the chip and the filter group print.
+    expect(read.endedOn?.label).toBe('Review');
+    expect(read.unknown).toEqual([]);
+    expect(isFiltered(read.filter)).toBe(true);
+  });
+
+  it('reads the view, and treats anything but the rows as the grid', () => {
+    expect(isRowsView(query('view=rows'))).toBe(true);
+    for (const search of ['', 'view=', 'view=grid', 'view=tiles']) {
+      expect(isRowsView(query(search)), search).toBe(false);
+    }
+  });
+
+  it('switches view and keeps every filter, and spells no word for the default', () => {
+    const narrowed = query('outcome=success&segment=mobile · in a hurry');
+
+    expect(search(withView(narrowed, true))).toBe(
+      '?outcome=success&segment=mobile+%C2%B7+in+a+hurry&view=rows',
+    );
+    // Back to the grid: the parameter goes rather than carrying a second word meaning
+    // what an absent one already means.
+    expect(search(withView(query('outcome=success&view=rows'), false))).toBe('?outcome=success');
+    expect(search(query(''))).toBe('');
   });
 
   it('drops an area of one version asked for beside a filter on the other', () => {
@@ -70,7 +124,7 @@ describe('reading the filters out of the URL', () => {
     // about the version on screen over the other version's figures.
     const read = readFilter(seedRun(), query('variant=A&aoi=B-review-complete'));
 
-    expect(read.filter).toEqual({ variant: 'A', outcome: null, aoiId: null });
+    expect(read.filter).toEqual({ ...NOTHING, variant: 'A' });
     expect(read.aoi).toBeNull();
     expect(read.unknown).toEqual(['aoi']);
   });
@@ -85,8 +139,21 @@ describe('reading the filters out of the URL', () => {
   it('keeps the good half of a half-bad URL', () => {
     const read = readFilter(seedRun(), query('variant=A&outcome=nonsense'));
 
-    expect(read.filter).toEqual({ variant: 'A', outcome: null, aoiId: null });
+    expect(read.filter).toEqual({ ...NOTHING, variant: 'A' });
     expect(read.unknown).toEqual(['outcome']);
+  });
+});
+
+describe('the grid’s showing line', () => {
+  it('states the range and the total, with the order it is in', () => {
+    expect(showingLine(8, 100)).toBe('Showing 1–8 of 100 · newest first');
+    expect(showingLine(16, 100)).toBe('Showing 1–16 of 100 · newest first');
+  });
+
+  it('never claims more than there are', () => {
+    // The page is a ceiling, not a promise: a filter leaving three people shows three.
+    expect(showingLine(8, 3)).toBe('Showing 1–3 of 3 · newest first');
+    expect(showingLine(0, 0)).toBe('Showing none of 0 · newest first');
   });
 });
 

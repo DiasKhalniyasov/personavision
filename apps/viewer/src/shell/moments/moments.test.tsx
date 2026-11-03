@@ -358,7 +358,10 @@ describe('nowhere else moves', () => {
         paths.attention(SEED, heroEvidence.variant, heroEvidence.step),
         '[data-section="attention"]',
       ],
-      [paths.sessions(SEED), '[aria-label="The people in this test"]'],
+      // The Sessions screen opens on the grid of video thumbnails (#268); the rows are
+      // the view this list resolves on, and the grid's own stillness is asserted in
+      // `tests/sessions/grid.test.tsx`, over a run that has recordings to draw.
+      [`${paths.sessions(SEED)}?view=rows`, '[aria-label="The people in this test"]'],
       [paths.session(SEED, 'S-01'), '#rp-clock'],
     ] as const;
 

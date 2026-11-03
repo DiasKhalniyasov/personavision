@@ -17,6 +17,16 @@ import { paths } from '../../src/shell/paths';
 
 const SEED = '2026-10-24-1402-northwind-demo';
 
+/**
+ * The rows view of the Sessions screen.
+ *
+ * The screen's default view is the grid of video thumbnails (#268) and the rows are one
+ * link away, so this suite — which is about the rows — asks for them by name. What the
+ * grid shows is `grid.test.tsx`'s.
+ */
+const rowsView = (runId: string, query: string = ''): string =>
+  `${paths.sessions(runId)}?${query === '' ? '' : `${query}&`}view=rows`;
+
 /** The run's own manifest, so the test asserts the artifact's order rather than its own. */
 const sessionIds = (): string[] => readRunFile(SEED).sessionIds as string[];
 
@@ -48,7 +58,7 @@ afterEach(forgetRuns);
 describe('the Sessions screen', () => {
   it('leads with what the screen is for, and says the numbers are simulated', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     expect(
       await screen.findByRole('heading', { name: 'What happened to each person' }),
@@ -70,7 +80,7 @@ describe('the Sessions screen', () => {
 
   it('lists one row per session in run.json, in that order, named S-01 … S-NN', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     const rows = await dataRows();
     const ids = sessionIds();
@@ -84,7 +94,7 @@ describe('the Sessions screen', () => {
 
   it('shows persona and seed, variant, device, outcome, time, fixations, attribution and where it ended', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     const row = await rowFor('S-15');
     await waitFor(() => {
@@ -106,7 +116,7 @@ describe('the Sessions screen', () => {
 
   it('states the totals the run holds, rather than counting the rows on screen', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     // 24 sessions; 11 + 11 scored; one automation failure on each version.
     expect(
@@ -116,7 +126,7 @@ describe('the Sessions screen', () => {
 
   it('says in its own words why an automation failure is ours and not the checkout’s', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     const footnote = await screen.findByText(/When our own browser automation breaks/);
     expect(prose(footnote.textContent)).toContain(
@@ -133,7 +143,7 @@ describe('the Sessions screen', () => {
 describe('abandoned, failed and our automation breaking', () => {
   it('are three different things on the row, and an automation failure is attributed to us', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     // S-09 and S-23 are the run's two automation failures, one on each version.
     for (const sessionId of ['S-09', 'S-23']) {
@@ -171,7 +181,7 @@ describe('the drill-down', () => {
   it('opens that person’s replay when the row is clicked', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(paths.sessions(SEED));
+    const { router } = mountApp(rowsView(SEED));
 
     const row = await rowFor('S-15');
     await waitFor(() => {
@@ -189,7 +199,7 @@ describe('the drill-down', () => {
   it('is reachable and activatable from the keyboard', async () => {
     const user = userEvent.setup();
     await serveRunData();
-    const { router } = mountApp(paths.sessions(SEED));
+    const { router } = mountApp(rowsView(SEED));
 
     const link = await screen.findByRole('link', { name: 'S-15' });
     expect(link.getAttribute('href')).toBe(paths.session(SEED, 'S-15'));
@@ -205,7 +215,7 @@ describe('the drill-down', () => {
 describe('a run the screen cannot list', () => {
   it('renders the shell’s not-found state for a test id this workspace has no test for', async () => {
     await serveRunData();
-    mountApp(paths.sessions('2026-01-01-0000-no-such-test'));
+    mountApp(rowsView('2026-01-01-0000-no-such-test'));
 
     expect(await screen.findByRole('heading', { name: 'No test with that id' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
@@ -215,7 +225,7 @@ describe('a run the screen cannot list', () => {
   it('says a test recorded nobody, rather than drawing a table head over nothing', async () => {
     const run = { ...readRunFile(SEED), sessionIds: [], scores: [] };
     await serveRunData({ files: { [`/runs/${SEED}/run.json`]: JSON.stringify(run) } });
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     expect(
       await screen.findByRole('heading', { name: 'This test recorded no people' }),
@@ -227,7 +237,7 @@ describe('a run the screen cannot list', () => {
 
   it('keeps the row of a session whose file cannot be read, and says so in place of its numbers', async () => {
     await serveRunData({ files: { [`/runs/${SEED}/sessions/S-15.json`]: '{ not a session' } });
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     const rows = await dataRows();
     expect(rows).toHaveLength(sessionIds().length);
@@ -245,7 +255,7 @@ describe('a run the screen cannot list', () => {
 describe('a link that asked for a narrower list', () => {
   it('narrows the list to the people it asked for, and never passes everybody off as the few', async () => {
     await serveRunData();
-    mountApp(`${paths.sessions(SEED)}?outcome=automation_failure`);
+    mountApp(rowsView(SEED, 'outcome=automation_failure'));
 
     // The Verdict's excluded banner links here with this very query: the two people whose
     // sessions our own automation broke, and nobody else. #23's filters do the narrowing.
@@ -261,7 +271,7 @@ describe('a test whose figures have not been written yet', () => {
     // A run still open carries its people and no `scores`: the scoring step writes those.
     const run = { ...readRunFile(SEED), scores: [], status: 'open' };
     await serveRunData({ files: { [`/runs/${SEED}/run.json`]: JSON.stringify(run) } });
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     expect(await screen.findByText('24 people · not scored yet')).toBeTruthy();
     expect(screen.queryByText(/0 scored/)).toBeNull();
@@ -272,7 +282,7 @@ describe('a test whose figures have not been written yet', () => {
 describe('the screen as a screen reader and a keyboard reach it', () => {
   it('passes axe', async () => {
     await serveRunData();
-    mountApp(paths.sessions(SEED));
+    mountApp(rowsView(SEED));
 
     const row = await rowFor('S-24');
     await waitFor(() => {

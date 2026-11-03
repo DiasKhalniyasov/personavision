@@ -233,7 +233,9 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [newTestStep('variants'), 'New test'],
       [paths.breakdown(runId), 'How sure is this, and what drove it'],
       [paths.attention(runId, 'B', 'review'), 'Where your audience looked'],
-      [paths.sessions(runId), 'What happened to each person'],
+      // Sessions opens on the grid of video thumbnails, whose heading is the people and
+      // the recordings; the rows of `#screen-sessions` are `?view=rows` (#268).
+      [paths.sessions(runId), /^\d+ (person|people)/],
       // The replay's heading names the person, not the screen: `S-01 · Rushed buyer · …`.
       [paths.session(runId, 'S-01'), /^S-01 · /],
       // The two tabs of section 14 this ticket mounts. Their headers are the prototype's;

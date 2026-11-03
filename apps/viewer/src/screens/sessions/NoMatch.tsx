@@ -2,9 +2,8 @@ import { Link } from 'react-router';
 import type { Run } from '@personavision/contract';
 import { Button } from '@/components/ui/button';
 import { variantName } from '@/screens/replay/runWords';
-import type { SessionFilter } from '@/session';
 import { paths } from '@/shell/paths';
-import type { Aoi } from './filters';
+import type { Aoi, ScreenFilter } from './filters';
 import { noMatchWords } from './noMatchWords';
 
 /**
@@ -20,10 +19,17 @@ export function NoMatch({
   run,
   filter,
   aoi,
+  clearTo,
 }: {
   run: Run;
-  filter: SessionFilter;
+  filter: ScreenFilter;
   aoi: Aoi | null;
+  /**
+   * Where *Clear filters* goes: the same screen with every filter dropped and **the view
+   * kept**. A reader who asked for the rows and then narrowed to nobody is still reading
+   * rows, so widening the list is not also a change of view (#268).
+   */
+  clearTo: string;
 }) {
   const words = noMatchWords(run, filter, aoi);
 
@@ -38,7 +44,7 @@ export function NoMatch({
       </p>
       <div className="actions">
         <Button asChild size="lg">
-          <Link to={paths.sessions(run.runId)}>Clear filters</Link>
+          <Link to={clearTo}>Clear filters</Link>
         </Button>
         {/* An area belongs to one version and one step, which is the heatmap to open. With
             no area asked for there is no step to open one on, and the action is not drawn
