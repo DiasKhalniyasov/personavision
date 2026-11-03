@@ -407,9 +407,15 @@ export const watchingFlight = (inner: CaptureSource): WatchedSource => {
           throw error;
         }
       },
+      // Lowered whatever the close did, because a counter that leaks reports the one thing
+      // this helper exists to deny — more than the cap open against one site — and would
+      // report it about a failure somewhere else entirely.
       close: async (page) => {
-        await inner.close(page);
-        inFlight -= 1;
+        try {
+          await inner.close(page);
+        } finally {
+          inFlight -= 1;
+        }
       },
     },
     peak: () => peak,
@@ -450,7 +456,11 @@ export const readOpenRun = (
   const paths = runPaths(join(runsRoot, runId));
   const run = runSchema.parse(JSON.parse(readFileSync(paths.run, 'utf8')));
   if (run.status !== 'open') return null;
-  const [sessionId] = run.sessionIds;
+  // The **newest** listed session, which is the one the line being reported is about and
+  // the only one this observation says anything new about: `sessionIds` grows in landing
+  // order, so taking the first would re-read session one a hundred times and prove nothing
+  // about the ninety-nine after it.
+  const sessionId = run.sessionIds.at(-1);
   if (sessionId === undefined) return null;
 
   return {

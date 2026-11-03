@@ -22,7 +22,7 @@ import { closeSession, openSession } from '@personavision/browser';
 import { startRun } from '../../../packages/cli/src/run/start.js';
 import type { CaptureSource, Device, PageHandle, TaskStep } from '@personavision/browser';
 import type { StartedRun } from '../../../packages/cli/src/run/start.js';
-import type { TestPipeline } from '../../../packages/platform/src/index.js';
+import type { SiteAtLaunch, TestPipeline } from '../../../packages/platform/src/index.js';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -247,6 +247,12 @@ export interface OneUrlPipeline {
   readonly pipeline: TestPipeline;
   /** What the run wrote: its directory, its artifact and the engine that actually ran. */
   readonly ran: () => StartedRun;
+  /**
+   * The site the platform resolved and handed over, or `undefined` for a caller that named
+   * none. It is the seam #243 writes the run's own `site` block from, so a walk can see the
+   * site reach the pipeline before anything records it.
+   */
+  readonly site: () => SiteAtLaunch | undefined;
 }
 
 export const oneUrlPipeline = ({
@@ -257,8 +263,10 @@ export const oneUrlPipeline = ({
   report,
 }: OneUrlPipelineOptions): OneUrlPipeline => {
   let started: StartedRun | null = null;
+  let launchedAgainst: SiteAtLaunch | undefined;
 
-  const pipeline: TestPipeline = async (request, audience) => {
+  const pipeline: TestPipeline = async (request, audience, site) => {
+    launchedAgainst = site;
     started = await startRun({
       runsRoot,
       request,
@@ -285,5 +293,6 @@ export const oneUrlPipeline = ({
       if (started === null) throw new Error('this pipeline has not been handed a test to run');
       return started;
     },
+    site: (): SiteAtLaunch | undefined => launchedAgainst,
   };
 };

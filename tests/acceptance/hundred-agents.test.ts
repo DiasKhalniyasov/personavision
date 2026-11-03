@@ -27,9 +27,12 @@
  * `PERSONAVISION_ACCEPTANCE` tag: the two walks beside it build the viewer and launch
  * Chromium, and this one does neither.
  *
- * **It assumes nothing of step #221.** The site record, the ownership verification, the caps
- * and the run's own `site` block are #239, #241 and #243: this walk starts a test the way
- * #282 does, names the concurrency as a caller, and asserts nothing about verification.
+ * **It takes step #221's caps as they stand and owns none of them.** #239 has merged, so the
+ * walk names its site the way the product does — the record this workspace holds — and reads
+ * the hundred and the ten from that module rather than writing either down. It asserts no
+ * refusal and nothing about verification: the caps and their wording are #239's, what a run
+ * is handed is #241's, and the run's own `site` block is #243's. Nothing here needs rewriting
+ * when those land; the beats this step owns are the five above.
  */
 
 import { readdir } from 'node:fs/promises';
@@ -52,6 +55,8 @@ import {
 import { discard, oneUrlPipeline, scratch } from './helpers/platform.js';
 import {
   acceptedEstimateRequest,
+  addSite,
+  CAPS,
   createPlatform,
   DEFAULT_PARTICIPANTS,
   estimateRun,
@@ -77,17 +82,26 @@ import type { OneUrlCaptures, OpenRunObservation } from './helpers/harness.js';
 const WALK_TIMEOUT = 120_000;
 
 /**
- * How many sessions may be open at once, **named by the caller**.
+ * How many sessions may be open at once, and how many agents a run may have.
  *
- * Ten, which is `docs/FLOW.md` section 13's cap on browsers open against one site. It is
- * written here, in the caller's position: the swarm states no per-site number of its own,
- * section 13 puts every such cap in `packages/platform`, and #239 and #241 own the module
- * that will hand the real one over. A test is a caller, so the test states it.
+ * Read from `packages/platform`'s caps module (#239), which is the one place in the
+ * repository either number is written: ten browsers open against one site and a hundred
+ * agents a run, `docs/FLOW.md` section 13. The walk states neither of its own — a second
+ * copy of a cap is a second place one could be missed — and it asserts no refusal either:
+ * the caps and their wording belong to #239, and what a run is handed belongs to #241. What
+ * this walk asserts is that **the hundred is allowed** and that the pool keeps to the ten.
  */
-const TEN_AT_A_TIME = 10;
+const TEN_AT_A_TIME = CAPS.concurrentSessionsPerSite;
 
-/** A hundred participants, one attempt each, on one variant: a hundred sessions. */
-const A_HUNDRED = 100;
+/**
+ * A hundred participants, one attempt each, on one variant: a hundred sessions.
+ *
+ * The platform's default participant count (#285), not the agents-per-run cap: the cap is a
+ * maximum and this is how many people the audience has. That the one is allowed by the
+ * other is its own assertion in beat 1, so raising the cap cannot red this walk with a
+ * message about an audience's size.
+ */
+const A_HUNDRED = DEFAULT_PARTICIPANTS;
 
 /** The feature, in the words a user would have typed, carried on exactly as written. */
 const FEATURE = 'Checking out and paying for one item on my phone, start to finish.';
@@ -167,9 +181,11 @@ describe('a hundred agents on one URL', () => {
 
       const audience = aHundredParticipants(captures.device);
       // The hundred is the platform's own default for an audience created on it (#285), so
-      // the walk's audience is the size the product would have given it.
-      expect(audience.size).toBe(DEFAULT_PARTICIPANTS);
+      // the walk's audience is the size the product would have given it — and the caps
+      // module allows a run that size, which is what makes the rest of this walk a test of
+      // a hundred agents rather than of a refusal (#239).
       expect(audience.size).toBe(A_HUNDRED);
+      expect(audience.size).toBeLessThanOrEqual(CAPS.agentsPerRun);
 
       const created = await platform.store.audiences.create(workspaceId, audience);
       // Read back through the store rather than kept from the create: what the New test
@@ -221,6 +237,17 @@ describe('a hundred agents on one URL', () => {
       ).toStrictEqual(new Set([captures.device.viewport.height]));
 
       /* ── Beat 2: the estimate, quoted before launch and recomputed from its figures ─ */
+
+      // The site as the record this workspace holds, which is what a test names and what
+      // the per-site caps are counted against (#239). It is left **unverified**: the owner
+      // settled that verification gates no testing, so a hundred agents on this site are
+      // allowed either way, and what a run records about it is #243's.
+      const site = await addSite({
+        sites: platform.store.sites,
+        workspaceId,
+        url: FIXTURE_SITE,
+      });
+      expect(site.url).toBe(FIXTURE_SITE);
 
       const workspace = must(await platform.store.workspaces.byId(workspaceId), 'workspace');
       const history = await measuredHistoryOfRuns({
@@ -276,6 +303,12 @@ describe('a hundred agents on one URL', () => {
 
       /* ── Beat 3: a one-URL test started ───────────────────────────────────────────── */
 
+      // The task's declared steps are the steps the committed set records, in its order. A
+      // task that declared others would list screens its sessions never walked, and the
+      // symptom is a run where every session gives up on the first one — which every other
+      // assertion in this walk would otherwise be satisfied by.
+      expect(FIXTURE_SITE_STEPS.map((step) => step.id)).toStrictEqual([...captures.steps]);
+
       const watched = watchingFlight(createFixtureSource(captures.dir));
       const seenWhileOpen: OpenRunObservation[] = [];
       const run = oneUrlPipeline({
@@ -295,9 +328,11 @@ describe('a hundred agents on one URL', () => {
       const started = await startSiteTest({
         workspaces: platform.store.workspaces,
         audiences: platform.store.audiences,
+        sites: platform.store.sites,
         workspaceId,
         draft: {
           site: FIXTURE_SITE,
+          siteId: site.id,
           feature: FEATURE,
           goal: GOAL,
           audienceId: created.id,
@@ -318,6 +353,11 @@ describe('a hundred agents on one URL', () => {
       expect(must(await platform.store.workspaces.byId(workspaceId), 'workspace').runIds).toContain(
         started.runId,
       );
+
+      // The site reached the pipeline as the record the workspace holds — the seam the
+      // run's own `site` block is written from (#243). Nothing here asserts what it says
+      // about verification, which is that ticket's.
+      expect(run.site()).toMatchObject({ id: site.id, url: FIXTURE_SITE });
 
       // One variant, named for the site and carrying its URL. Nothing forked.
       expect(ran.run.variants).toStrictEqual([
@@ -342,7 +382,7 @@ describe('a hundred agents on one URL', () => {
       // cannot pass by having run them one after another.
       expect(watched.peak()).toBeLessThanOrEqual(TEN_AT_A_TIME);
       expect(watched.peak()).toBeGreaterThan(1);
-      expect(watched.peak()).toBe(TEN_AT_A_TIME);
+      expect(watched.peak()).toBe(Math.min(TEN_AT_A_TIME, A_HUNDRED));
 
       // A hundred observations of an open run, each one session further on, each with that
       // session's own file already complete and valid beside it. `readOpenRun` parses both
@@ -357,7 +397,13 @@ describe('a hundred agents on one URL', () => {
         expect(open.totalSessions).toBe(A_HUNDRED);
         expect(open.listedSessions).toBe(open.finishedSessions);
       }
-      expect(new Set(seenWhileOpen.map((open) => open.session.sessionId)).size).toBeGreaterThan(0);
+      // A hundred **different** sessions, each read at the landing it was listed by: the
+      // promise is that a session file is complete the moment `run.json` lists it, and one
+      // file read a hundred times would make that promise about session one alone.
+      expect(new Set(seenWhileOpen.map((open) => open.session.sessionId)).size).toBe(A_HUNDRED);
+      expect(new Set(seenWhileOpen.map((open) => open.session.sessionId))).toStrictEqual(
+        new Set(ran.run.sessionIds),
+      );
 
       /* ── Beat 5: the finished artifact ───────────────────────────────────────────── */
 
@@ -397,6 +443,23 @@ describe('a hundred agents on one URL', () => {
       expect(
         counted.filter((session) => COUNTED_OUTCOMES.includes(session.outcome.status)),
       ).toHaveLength(counted.length);
+
+      // Every screen the task declares was reached by a session that counts. Without this
+      // the walk is satisfied by a hundred people giving up on the cart, which is what a
+      // broken step declaration, a mis-minted capture set or a decision layer that stopped
+      // recognising a next-step control all look like.
+      const reached = new Set(
+        counted.flatMap((session) => session.screens.map((screen) => screen.step)),
+      );
+      expect(
+        artifact.run.steps.map((step) => step.id).filter((id) => !reached.has(id)),
+      ).toStrictEqual([]);
+      // And most of the hundred got to the end. Measured at 93 of 100 on the committed
+      // captures — deterministic, being the same audience on the same seed over the same
+      // bytes with the offline engine — so three quarters is a floor with room under it
+      // rather than a target. Lowering it is a visible edit and needs a reason written here.
+      const completed = counted.filter((session) => session.outcome.status === 'success');
+      expect(completed.length).toBeGreaterThanOrEqual(Math.floor(counted.length * 0.75));
 
       // The progress block the Running screen reads says whose each session was, for all of
       // them, which is what the automation-failure share is computed from.
