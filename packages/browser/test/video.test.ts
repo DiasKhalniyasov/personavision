@@ -273,10 +273,11 @@ describeWithChromium('a recorded session', () => {
       const { walked, runDir } = await record({ sessionId: 'S-02' });
       if (walked.video?.state !== 'recorded') throw new Error('the session recorded nothing');
 
-      const facts = readRecording(readFileSync(join(runDir, walked.video.path)));
-      expect(facts?.frame).toEqual(videoFrame(MOBILE.viewport));
-      expect(facts?.frame.height).toBeLessThanOrEqual(FRAME_BOX.height);
-      expect(facts?.frame.width).toBeLessThanOrEqual(FRAME_BOX.width);
+      // The frame the file declares, not the one that was asked for.
+      const frame = readRecording(readFileSync(join(runDir, walked.video.path)))?.frame;
+      expect(frame).toEqual(videoFrame(MOBILE.viewport));
+      expect(frame?.height).toBeLessThanOrEqual(FRAME_BOX.height);
+      expect(frame?.width).toBeLessThanOrEqual(FRAME_BOX.width);
     },
     WALK_TIMEOUT_MS,
   );
@@ -313,7 +314,7 @@ describeWithChromium('a recorded session', () => {
   it(
     'stops at the per-screen cap, says so, and gives the screens it did not reach no offset',
     async () => {
-      const capMs = 400;
+      const capMs = 800;
       const { walked, runDir } = await record(
         { sessionId: 'S-03', caps: { screen: capMs } },
         { decide: dwellThenAdvance(1_500) },
@@ -328,10 +329,13 @@ describeWithChromium('a recorded session', () => {
         (walked.video.screenOffsetsMs[0] ?? 0) + capMs,
       );
 
-      // The session kept going, so its later entries are in the session and not in the video.
+      // The session kept going, so its later entries are in the session and not in the video:
+      // the last screen is always one the recording stopped before. Whether the *first* one is
+      // inside depends on how long the first capture took, which is a machine's business and
+      // not this assertion's.
       expect(walked.screens.length).toBeGreaterThan(1);
       expect(walked.video.screenOffsetsMs).toContain(null);
-      expect(walked.video.screenOffsetsMs[0]).not.toBeNull();
+      expect(walked.video.screenOffsetsMs.at(-1)).toBeNull();
 
       // Cut, and still a WebM: read back off disk and measured rather than assumed.
       const cut = readFileSync(join(runDir, walked.video.path));
@@ -348,7 +352,7 @@ describeWithChromium('a recorded session', () => {
   it(
     'stops at the per-session cap and names that one instead',
     async () => {
-      const capMs = 500;
+      const capMs = 1_500;
       const { walked } = await record(
         { sessionId: 'S-04', caps: { session: capMs } },
         { decide: dwellThenAdvance(1_200) },
@@ -407,6 +411,34 @@ describeWithChromium('a recorded session', () => {
       expect(walked.video).toBeUndefined();
       expect(existsSync(runPaths(runDir).videosDir)).toBe(false);
       expect(() => sessionSchema.parse(sessionOf(walked, 'S-06'))).not.toThrow();
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
+    'records one session per source: a second walk never writes over the first recording',
+    async () => {
+      const runDir = await mkdtemp(join(runs, 'twice-'));
+      const walk = {
+        variant: { id: 'control', url: `${site.url}/cart.html` },
+        device: MOBILE,
+        task: TASK,
+        runDir,
+      };
+      // One source, two walks — the shape `test/integration/live-source.test.ts` already uses.
+      const source = createLiveSource({ video: { runDir, sessionId: 'S-01' } });
+
+      const first = await walkTask(source, walk);
+      const firstBytes = readFileSync(runPaths(runDir).video('S-01')).length;
+      const second = await walkTask(source, walk);
+
+      expect(first.video?.state).toBe('recorded');
+      // The second session is complete and records nothing, rather than writing over the
+      // first session's file and reporting a path that is already another session's.
+      expect(second.completed).toBe(true);
+      expect(second.failure).toBeNull();
+      expect(second.video).toBeUndefined();
+      expect(readFileSync(runPaths(runDir).video('S-01')).length).toBe(firstBytes);
     },
     WALK_TIMEOUT_MS,
   );

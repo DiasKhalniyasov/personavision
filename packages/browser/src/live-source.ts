@@ -208,16 +208,33 @@ const captureOnce: CaptureSource['capture'] = async (page, ctx) => {
  * and the tests are written against.
  *
  * `options` is what every session this source opens is opened with — the navigation cap, the
- * load state, and `video` to record each one into the run directory as `videos/S-NN.webm`.
+ * load state, and `video` to record one into the run directory as `videos/S-NN.webm`.
  * `CaptureSource.openSession` takes a variant and a device and nothing else, by design, so
  * what a session is opened *with* is declared once, here.
+ *
+ * **A source with `video` records one session**, because a `video` request names the session
+ * the file belongs to and one file cannot be two sessions. A source opened a second time
+ * records nothing rather than writing over the first recording and reporting its path twice —
+ * two sessions claiming one file is a run nothing can read. A caller recording many sessions
+ * therefore builds a source per session (it is an object literal) or opens them itself with
+ * `openSession(variant, device, { video })`, which is what the swarm does.
  */
-export const createLiveSource = (options: OpenSessionOptions = {}): CaptureSource => ({
-  openSession: (variant, device) => openSession(variant, device, options),
-  capture: captureOnce,
-  act,
-  close: closeSession,
-});
+export const createLiveSource = (options: OpenSessionOptions = {}): CaptureSource => {
+  const recorded = { already: false };
+  return {
+    openSession: (variant, device) => {
+      if (options.video === undefined) return openSession(variant, device, options);
+      if (recorded.already) {
+        return openSession(variant, device, { ...options, video: undefined });
+      }
+      recorded.already = true;
+      return openSession(variant, device, options);
+    },
+    capture: captureOnce,
+    act,
+    close: closeSession,
+  };
+};
 
 /** A capture of a screen the task declares: the only kind a walk can go on from. */
 type OnAStep = Capture & { step: string };
@@ -354,9 +371,10 @@ const walkSession = async (
       } catch (error) {
         return broke(error, capturing, expected?.id ?? null);
       }
-      // Where this screen is in the recording, marked once the capture succeeded: an offset
-      // belongs to a screen the walk kept, and the two lists are positional.
-      page.video?.screen();
+      // Where this screen is in the recording, measured now and marked when the screen is
+      // kept: an action that breaks on the way leaves its screen out of the walk's own
+      // `screens`, and an offset list has to be exactly as long as the array it indexes.
+      const capturedAt = page.video?.at();
       reached = screen.step;
 
       const declared = taskStep(walk.task, screen.step);
@@ -365,6 +383,7 @@ const walkSession = async (
         // The task's last step, or a decision layer that stopped here: either way nothing
         // was done to this screen.
         screens.push({ capture: screen, action: null });
+        page.video?.screen(capturedAt);
         return report(null, null);
       }
 
@@ -383,6 +402,7 @@ const walkSession = async (
       // navigated before it failed, and a second attempt at the same target would act on a
       // screen no capture covers and be classified by whatever that screen made of it.
       screens.push({ capture: screen, action: acted });
+      page.video?.screen(capturedAt);
       // An action that did not work still happened, and the session records it: it is marked
       // like any other, which is what keeps the offsets aligned with the actions.
       page.video?.action();

@@ -102,8 +102,12 @@ export const openSession = async (
     throw error;
   }
 
+  // Kept out of the try so that a session which never opened can still throw away the
+  // recording it started.
+  let opened;
   try {
     const page = await context.newPage();
+    opened = page;
     // The recording's clock starts with the page, which is when the browser starts recording
     // it — before the opening navigation, so the first screen's offset is inside the video.
     const video = recording?.start(page);
@@ -125,6 +129,17 @@ export const openSession = async (
       });
     return { variant, device, headless, browser, context, page, ...(video ? { video } : {}) };
   } catch (error) {
+    // A session that never opened has no recording to keep, and the partial file Playwright
+    // flushes when the context closes belongs to nothing: it is deleted rather than left in
+    // the run directory under the name Playwright chose, which nothing would ever ask for.
+    // The context is closed first because that is what finishes the file `delete()` removes.
+    if (opened !== undefined) {
+      await context.close().catch(() => undefined);
+      await opened
+        .video()
+        ?.delete()
+        .catch(() => undefined);
+    }
     await browser.close();
     throw error;
   }

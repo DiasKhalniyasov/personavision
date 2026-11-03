@@ -29,7 +29,7 @@
  * `walkTask` marks its own; a consumer that drives `openSession` itself marks its own.
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { VIDEO_CAP_MS, runPaths } from '@personavision/contract';
 import type { SessionVideo, VideoCap } from '@personavision/contract';
 import type { Page, Video } from 'playwright';
@@ -56,10 +56,23 @@ export interface VideoRequest {
 
 /** A recording in progress: where its offsets are marked, and how it is finished. */
 export interface SessionRecording {
-  /** Marks where the screen about to be captured begins in the recording. */
-  screen(): void;
-  /** Marks where the action about to be taken happens in it. */
-  action(): void;
+  /**
+   * The offset into the recording right now, for a caller that measures a moment before it
+   * knows whether the entry it belongs to will be kept.
+   *
+   * A screen is captured and only becomes an entry of the session once the walk has acted on
+   * it, and an action that breaks on the way leaves the screen out of the trace. An offset
+   * list has to be exactly as long as the array it indexes — `sessionSchema` length-checks it
+   * — so the moment is taken here and the mark is made when the entry is kept.
+   */
+  at(): number;
+  /**
+   * Marks where a screen begins in the recording: at `atMs` if a moment was measured with
+   * `at()`, and now otherwise.
+   */
+  screen(atMs?: number): void;
+  /** Marks where an action happens in it, on the same terms. */
+  action(atMs?: number): void;
   /**
    * Closes the context, saves the file at the contract's path, cuts it at a cap it reached,
    * and reports what is on disk. Called **before** the session's browser is closed, and safe
@@ -114,6 +127,7 @@ const neverStarted = (reason: string): PreparedRecording => ({
   dir: null,
   failed: reason,
   start: () => ({
+    at: () => 0,
     screen: () => undefined,
     action: () => undefined,
     finish: () => Promise.resolve(absent(reason)),
@@ -194,6 +208,10 @@ const startRecording = (page: Page, request: VideoRequest): SessionRecording => 
 
     const facts = readRecording(cut);
     if (facts === null) {
+      // Nothing is left where a reader would look for a recording: a session that reports
+      // none may not also have a file at its own path, and bytes this module could not
+      // measure are not a video somebody should find and try to play.
+      await rm(onDisk, { force: true }).catch(() => undefined);
       return absent(
         `the recording at ${recorded} is not a WebM this module can measure, so its duration would be a guess`,
       );
@@ -215,20 +233,23 @@ const startRecording = (page: Page, request: VideoRequest): SessionRecording => 
     };
   };
 
+  const offsetNow = (): number => now() - startedAt;
+
   return {
-    screen: () => {
-      const atMs = now() - startedAt;
-      mark(screenOffsetsMs, atMs);
+    at: offsetNow,
+    screen: (atMs) => {
+      const at = atMs ?? offsetNow();
+      mark(screenOffsetsMs, at);
       // The cap is per screen, so the clock it is measured against restarts here — after the
       // mark, which belongs to the screen that is beginning.
-      screenAtMs = atMs;
+      screenAtMs = at;
     },
-    action: () => mark(actionOffsetsMs, now() - startedAt),
+    action: (atMs) => mark(actionOffsetsMs, atMs ?? offsetNow()),
     finish: () => {
       finished ??= (async () => {
         // A session that sat on its last screen past the cap reached it without marking
         // anything afterwards.
-        check(now() - startedAt);
+        check(offsetNow());
         const video = page.video();
         if (video === null) return absent('the browser opened no recording for this session');
         try {
@@ -249,10 +270,14 @@ const startRecording = (page: Page, request: VideoRequest): SessionRecording => 
  *
  * Read out of the file rather than echoed back from what was asked for, so that the duration
  * a session reports is the duration the file has and the 720p claim is the file's own.
+ *
+ * The frame is `null` for a recording whose track declares no pixel size. The duration is
+ * what a session reports, so a file that has one is a recording even if this reader cannot
+ * find the other: nothing worth keeping is discarded over a field nothing reports.
  */
 export interface RecordingFacts {
   readonly durationMs: number;
-  readonly frame: Viewport;
+  readonly frame: Viewport | null;
 }
 
 /*
@@ -274,9 +299,11 @@ const PIXEL_HEIGHT = 'ba';
 const CLUSTER = '1f43b675';
 const CLUSTER_TIMECODE = 'e7';
 /**
- * The frame. Playwright's recorder writes nothing but simple blocks, so a `BlockGroup` — the
- * other way a frame can be written — is not read for its timecode here; it is copied as it
- * stands, like a cluster's own timecode, and the duration is still the last simple block kept.
+ * The frame, and the only shape of one this module reads. Playwright's recorder writes
+ * nothing else; a `BlockGroup` — the other way a frame can be written — carries its timecode
+ * one element deeper, so a cut keeps it only along with the simple blocks of its own cluster
+ * and drops a cluster it can find no simple block in rather than keeping pictures whose
+ * place in the recording it does not know.
  */
 const SIMPLE_BLOCK = 'a3';
 
@@ -400,7 +427,7 @@ const structureOf = (bytes: Uint8Array): Structure | null => {
  */
 export const readRecording = (bytes: Uint8Array): RecordingFacts | null => {
   const tree = structureOf(bytes);
-  if (tree === null || tree.duration.ticks === null || tree.frame === null) return null;
+  if (tree === null || tree.duration.ticks === null) return null;
   return {
     durationMs: Math.round((tree.duration.ticks * tree.scaleNs) / 1_000_000),
     frame: tree.frame,
@@ -473,7 +500,9 @@ export const cutRecording = (bytes: Uint8Array, atMs: number): Uint8Array => {
       anyFrame = true;
       frames++;
     }
-    // A cluster whose every frame is past the cap is dropped with them.
+    // A cluster whose every frame is past the cap is dropped with them, and so is one that
+    // holds no simple block at all: a cluster this reader finds no frame in is a cluster it
+    // cannot place, and keeping it would put pictures past the cap back into the file.
     if (frames === 0) continue;
     const content = Buffer.concat(body);
     clusters.push(
@@ -484,6 +513,11 @@ export const cutRecording = (bytes: Uint8Array, atMs: number): Uint8Array => {
       ]),
     );
   }
+
+  // No frame was found, so there is nothing to cut and no duration to rewrite: a file whose
+  // pictures this reader cannot place comes back as it is, measured at what it says it is,
+  // rather than rewritten to a duration of zero that would read as a recording of nothing.
+  if (!anyFrame) return bytes;
 
   const patchedInfo = Buffer.from(bytes.subarray(info.at, info.end));
   const durationAt = tree.duration.at - info.at;

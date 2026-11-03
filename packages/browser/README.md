@@ -106,6 +106,11 @@ is produced nowhere else, and `walked.video` is the block a session JSON records
 duration the file has, the cap it hit, and the millisecond offset of every screen and every
 action, so that a recommendation citing `S-62 · 0:48` opens on the frame it means.
 
+**A source with `video` records one session.** The request names the session the file belongs to,
+and one file cannot be two sessions, so a source opened a second time records nothing rather than
+writing over the first recording and reporting its path twice. A caller recording many sessions
+builds a source per session — it is an object literal — or opens them itself.
+
 A caller that drives sessions itself — the swarm does — opens with `openSession(variant, device,
 { video })`, marks its own entries with `handle.video?.screen()` and `handle.video?.action()` in
 the order its own `screens` and `actions` arrays record them, and **finishes before closing**:
@@ -120,6 +125,11 @@ await closeSession(session);
 `finish()` is what closes the context, saves the recording at the contract's path and measures
 it, so nothing ever reads a file that is still being written. Closing the browser first leaves
 the file where Playwright chose to put it instead.
+
+An **offset is measured when the entry it belongs to is recorded, and marked when the entry is
+kept** — `video.at()` gives the moment, `video.screen(atMs)` marks it — because an offset list
+has to be exactly as long as the array it indexes, and a screen whose action breaks on the way
+never becomes an entry of the session at all.
 
 **A recording is 720p.** The frame is the device's own viewport scaled to fit inside
 1280 × 720 — a 390 × 844 phone records at 332 × 720 — so the cap is on the pixels while the
