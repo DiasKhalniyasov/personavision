@@ -34,6 +34,10 @@ const CALLS = [
   'readDeploymentStatuses',
   'readFile',
   'readPullRequest',
+  // The read that makes the loop idempotent: the pull request already opened from a branch
+  // of ours, found rather than opened again (#306). A read, and nothing it answers is a
+  // write — the branch it names is this product's own and it is never written to here.
+  'readPullRequestsForBranch',
   'writeFile',
 ] as const;
 

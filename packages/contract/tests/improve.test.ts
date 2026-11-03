@@ -43,11 +43,15 @@ const PULL_REQUEST: PullRequest = {
 };
 
 /**
- * The run fixture generates one person, so the holdout names that one. Seeds the change was
- * never chosen against are the generator's invariant and are proved there (#298): what the
- * contract holds is that the ids are people this run carries.
+ * The one person held out, who is a person **beside** the participant the run fixture's
+ * audience generates: `audience.size` is the participants the user approved and the holdout
+ * is people the run generated as well as them (#306, following #303's recommendation).
+ * Seeds the change was never chosen against are the generator's invariant and are proved
+ * there (#298): what the contract holds is that the ids are people this run carries.
  */
-const HOLDOUT: Holdout = { personaIds: ['rushed-buyer'], confirmed: true };
+const HELD_OUT_ID = 'held-out-1';
+
+const HOLDOUT: Holdout = { personaIds: [HELD_OUT_ID], confirmed: true };
 
 /** One scored holdout session, and it completed: the rate the counts underneath it state. */
 const FIGURES: HoldoutFigures = {
@@ -66,12 +70,31 @@ const CHANGE: Improve = {
   holdout: HOLDOUT,
 };
 
+/**
+ * One more person for each person the change was held out from, named `held-out-1` upwards.
+ *
+ * It is the count that matters here and not the names: a run carries its participants plus
+ * the people it held out beside them, so a fixture that names two ids carries two more
+ * people — whether or not the ids it named are theirs. That is what lets the tests below
+ * name somebody the run never generated without also making the run the wrong size.
+ */
+const heldOutPeople = (howMany: number): Run['personas'] => {
+  const [first] = validRun().personas;
+  if (first === undefined) throw new Error('the run fixture generates nobody');
+  return Array.from({ length: howMany }, (_unused, index) => ({
+    ...structuredClone(first),
+    id: `held-out-${String(index + 1)}`,
+    name: `${first.name} (holdout)`,
+  }));
+};
+
 /** The fixture run as a path-2 test: a change, its preview, a holdout, and its figures. */
 const withChange = (change: Partial<Improve> = {}): Run => {
   const run = validRun();
   // Deep, because two tests here delete and add fields inside the block: a test that
   // mutates a fixture must not reach the next one.
   run.improve = structuredClone({ ...CHANGE, ...change });
+  run.personas = [...run.personas, ...heldOutPeople(run.improve.holdout.personaIds.length)];
   run.verdict.holdout = 'confirmed';
   run.scores[0].holdout = { ...FIGURES };
   return run;
@@ -269,7 +292,7 @@ describe('the preview the change was tested at', () => {
 describe('the holdout the change was never chosen against', () => {
   it('names people the run generated, and is rejected on the first id it does not carry', () => {
     const [rejection] = rejections(
-      withChange({ holdout: { personaIds: ['rushed-buyer', 'nobody-at-all'], confirmed: true } }),
+      withChange({ holdout: { personaIds: [HELD_OUT_ID, 'nobody-at-all'], confirmed: true } }),
     );
 
     expect(rejection).toContain('improve/holdout/personaIds/1');
@@ -277,13 +300,30 @@ describe('the holdout the change was never chosen against', () => {
     expect(rejection).toContain('people the run generated');
   });
 
-  it('records whether it confirmed the gain, and is rejected when it ran and does not', () => {
-    const [rejection] = rejections(
-      withChange({ holdout: { personaIds: ['rushed-buyer'], confirmed: null } }),
-    );
+  /**
+   * The third state, and the common one on twenty people: the holdout ran, its own bands
+   * overlapped, and `judgeHoldout` answered `null` rather than accusing the change
+   * (`@personavision/scoring`, #304). It reads as the verdict `none`, and the people it ran
+   * on are still named — which is how it is told apart from a run that held nobody out.
+   */
+  it('records a holdout that ran and could not judge as confirmed nothing', () => {
+    const run = withChange({ holdout: { personaIds: [HELD_OUT_ID], confirmed: null } });
+    run.verdict.holdout = 'none';
 
-    expect(rejection).toContain('improve/holdout/confirmed');
-    expect(rejection).toContain('whether the holdout confirmed the gain');
+    const parsed = accepted(run);
+
+    expect(parsed.improve?.holdout).toEqual({ personaIds: [HELD_OUT_ID], confirmed: null });
+    expect(parsed.verdict.holdout).toBe('none');
+  });
+
+  it('is rejected when a holdout that could not judge is reported as a verdict anyway', () => {
+    const run = withChange({ holdout: { personaIds: [HELD_OUT_ID], confirmed: null } });
+    run.verdict.holdout = 'confirmed';
+
+    const [rejection] = rejections(run);
+
+    expect(rejection).toContain('verdict/holdout');
+    expect(rejection).toContain('one claim');
   });
 
   it('is nobody and nothing confirmed when no holdout ran', () => {
@@ -306,7 +346,7 @@ describe('the holdout the change was never chosen against', () => {
   it('is rejected when the same person is held out twice', () => {
     const [rejection] = rejections(
       withChange({
-        holdout: { personaIds: ['rushed-buyer', 'rushed-buyer'], confirmed: true },
+        holdout: { personaIds: [HELD_OUT_ID, HELD_OUT_ID], confirmed: true },
       }),
     );
 
@@ -321,6 +361,28 @@ describe('the holdout the change was never chosen against', () => {
 
     expect(paths(run)).toContain('improve/holdout/personaIds');
   });
+
+  /**
+   * The count rule a path-2 run is held to: the participants the user approved, **plus**
+   * the people held out beside them. `audience.size` is not raised to cover the holdout,
+   * because it is the number the user approved and `holdoutSize` reads it back.
+   */
+  it('is people the run carries as well as its participants, and the count says so', () => {
+    const run = withChange();
+
+    expect(run.audience.size).toBe(1);
+    expect(accepted(run).personas).toHaveLength(2);
+  });
+
+  it('is rejected when the run carries no more people than its audience generates', () => {
+    const run = withChange();
+    run.personas = run.personas.filter((persona) => persona.id !== HELD_OUT_ID);
+
+    const rejection = rejections(run).find((issue) => issue.startsWith('personas'));
+
+    expect(rejection).toContain('holds out 1 person beside them');
+    expect(rejection).toContain('it carries 1');
+  });
 });
 
 describe('the verdict on the holdout', () => {
@@ -329,7 +391,7 @@ describe('the verdict on the holdout', () => {
   });
 
   it('renders a change that did not hold from data, not from the sentence', () => {
-    const run = withChange({ holdout: { personaIds: ['rushed-buyer'], confirmed: false } });
+    const run = withChange({ holdout: { personaIds: [HELD_OUT_ID], confirmed: false } });
     run.verdict.holdout = 'not_confirmed';
 
     expect(accepted(run).verdict.holdout).toBe('not_confirmed');
@@ -346,7 +408,7 @@ describe('the verdict on the holdout', () => {
   });
 
   it('is rejected when it says the opposite of what the run recorded', () => {
-    const run = withChange({ holdout: { personaIds: ['rushed-buyer'], confirmed: false } });
+    const run = withChange({ holdout: { personaIds: [HELD_OUT_ID], confirmed: false } });
     run.verdict.holdout = 'confirmed';
 
     const [rejection] = rejections(run);

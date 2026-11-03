@@ -171,6 +171,20 @@ export interface GitHubClient {
     repository: GitHubRepository,
     pullNumber: number,
   ) => Promise<PullRequestOpened>;
+  /**
+   * The pull requests opened from one branch of ours — open and closed alike, newest first
+   * as GitHub lists them, and empty where that branch has none.
+   *
+   * It is a **read**, and it is what makes the loop idempotent against the repository rather
+   * than against our own disk (#306): a run whose earlier attempt already opened its change
+   * finds that pull request here and resumes from it, instead of opening a second one on
+   * somebody's repository. Without it the only thing a second attempt could learn from a
+   * branch that already exists is that it exists, which is a refusal and not a resume.
+   */
+  readonly readPullRequestsForBranch: (
+    repository: GitHubRepository,
+    branch: string,
+  ) => Promise<readonly PullRequestOpened[]>;
   readonly readDeployments: (
     repository: GitHubRepository,
     input: { readonly sha: string },
@@ -441,6 +455,20 @@ export const createGitHubClient = (options: GitHubClientOptions): GitHubClient =
         path: repoPath(repository, `/pulls/${String(pullNumber)}`),
       };
       return pullRequest(await send(call), call);
+    },
+
+    readPullRequestsForBranch: async (repository, branch) => {
+      // GitHub's own spelling of "from this branch" is `owner:ref`. Every branch this
+      // product writes is in the repository itself, so the owner is the repository's.
+      const head = `${repository.owner}:${branch}`;
+      const call: Call = {
+        method: 'GET',
+        path: repoPath(
+          repository,
+          `/pulls?head=${encodeURIComponent(head)}&state=all&per_page=100`,
+        ),
+      };
+      return list(await send(call), call, 'pull requests').map((entry) => pullRequest(entry, call));
     },
 
     readDeployments: async (repository, input) => {

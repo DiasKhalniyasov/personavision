@@ -277,6 +277,14 @@ describe('a run driven with a holdout', () => {
     };
     const run: Run = {
       ...artifact.run,
+      // `audience.size` is the participants the change was chosen on; the holdout is people
+      // the run generated beside them, and the contract adds them to the count it expects
+      // (#306). The open run this harness wrote declares no holdout, so it declares an
+      // audience of everybody it generated; the path-2 run below declares both apart.
+      audience: {
+        ...artifact.run.audience,
+        size: artifact.run.personas.length - holdoutPersonaIds.length,
+      },
       scores: ['A', 'B'].map((variant) => scoreRow(variant, figuresOf(variant))),
       verdict: { ...artifact.run.verdict, holdout: 'confirmed' },
       improve: {

@@ -24,6 +24,7 @@
     "@personavision/calibration": "workspace:*",
     "@personavision/contract": "workspace:*",
     "@personavision/engine": "workspace:*",
+    "@personavision/improve": "workspace:*",
     "@personavision/personas": "workspace:*",
     "@personavision/platform": "workspace:*",
     "@personavision/provider": "workspace:*",

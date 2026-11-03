@@ -959,11 +959,26 @@ export const runSchema = z
 
     // The personas are generated from the audience, so the audience's size is how many of
     // them there are and the audience's id is the one every one of them carries.
-    if (run.personas.length !== audience.size) {
+    //
+    // A path-2 run generates **more** people than that: the holdout is people from the same
+    // audience on seeds the change was never chosen against (`docs/FLOW.md` section 15,
+    // point 4), and they are the run's own personas too, because
+    // `improve.holdout.personaIds` names them into this list. So a run carrying a recorded
+    // holdout carries the participants **plus** the people held out beside them, and
+    // `audience.size` stays the participant count the user approved rather than being
+    // raised to cover the holdout — which would misreport what was approved and change
+    // `holdoutSize(audience.size)` for anything re-reading this copy. Recommended on #303,
+    // decided on #306.
+    const heldOut = run.improve?.holdout.personaIds.length ?? 0;
+    const peopleCount = (count: number): string => `${count} ${count === 1 ? 'person' : 'people'}`;
+    if (run.personas.length !== audience.size + heldOut) {
       ctx.addIssue({
         code: 'custom',
         path: ['personas'],
-        message: `the audience generates ${audience.size} ${audience.size === 1 ? 'person' : 'people'}, but this run carries ${run.personas.length}`,
+        message:
+          heldOut === 0
+            ? `the audience generates ${peopleCount(audience.size)}, but this run carries ${run.personas.length}`
+            : `the audience generates ${peopleCount(audience.size)} and this run holds out ${peopleCount(heldOut)} beside them, so it carries ${String(audience.size + heldOut)}, but it carries ${run.personas.length}`,
       });
     }
     const generated = new Set<string>();
@@ -1283,14 +1298,16 @@ export const runSchema = z
       // not confirmed, and says so in the sentence" — which is only renderable from data.
       // So a run that ran a holdout records whether it held, in both places, and the two
       // cannot say different things.
+      //
+      // `confirmed: null` on a holdout that **ran** is the third state and not a missing
+      // one: *the holdout could not judge*. `judgeHoldout` in `@personavision/scoring`
+      // (#304) answers it whenever the holdout's own ±1σ bands overlap — the common case on
+      // twenty people — because reporting *not confirmed* on too few people is a false
+      // accusation against a change that may be fine. `holdoutVerdictOf` already maps it to
+      // the verdict `none`, and the rule below holds the two to saying the same thing, so
+      // what is still refused is a record that disagrees with its own notice, not a holdout
+      // that found nothing. Decided on #306.
       const ran = holdout.personaIds.length > 0;
-      if (ran && holdout.confirmed === null) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['improve', 'holdout', 'confirmed'],
-          message: `this run ran a holdout of ${holdout.personaIds.length} ${holdout.personaIds.length === 1 ? 'person' : 'people'}, so it records whether the holdout confirmed the gain`,
-        });
-      }
       if (!ran && holdout.confirmed !== null) {
         ctx.addIssue({
           code: 'custom',

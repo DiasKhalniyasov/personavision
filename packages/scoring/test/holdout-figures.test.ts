@@ -155,8 +155,10 @@ describe('the holdout’s figures on a score', () => {
     const run: Run = {
       ...base,
       // "A holdout is people the run generated": the four held-out people are the run's own
-      // personas, marked, beside the four the change was chosen on.
-      audience: { ...base.audience, size: base.personas.length + HELD_OUT_IDS.length },
+      // personas, marked, beside the four the change was chosen on. `audience.size` stays
+      // the participants the change was chosen on, and the contract adds the people this
+      // run holds out beside them to get the count it expects (#306).
+      audience: { ...base.audience, size: base.personas.length },
       personas: [
         ...base.personas,
         ...HELD_OUT_IDS.map((id, index) => ({

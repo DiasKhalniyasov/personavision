@@ -73,6 +73,22 @@ export type { CommentDraft, CommentInput, CommentRefused, RunComment } from './c
 export { findRunComment, postRunComment } from './comment/post.js';
 export type { RunCommentPosted, RunCommentResult, RunCommentUpdated } from './comment/post.js';
 
+export { IMPROVE_STEPS, improveRunId, runImproveLoop } from './loop.js';
+export type {
+  ChangeUnderWay,
+  ComparisonDriven,
+  ComparisonRequest,
+  ComparisonVariant,
+  DriveComparison,
+  ImproveDryRun,
+  ImproveFinished,
+  ImproveRequest,
+  ImproveResult,
+  ImproveStep,
+  ImproveStopped,
+  SourceRun,
+} from './loop.js';
+
 export { createFetchProbe, DEFAULT_PROBE_TIMEOUT_MS } from './preview/probe.js';
 export type { PreviewProbe, PreviewProbeAnswer } from './preview/probe.js';
 
