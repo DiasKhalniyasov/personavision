@@ -130,11 +130,32 @@ export type ChangeRecord = Pick<Improve, 'recommendationId' | 'changedFile' | 'p
 const refused = (reason: string): ChangeRefused => ({ kind: 'refused', reason });
 
 /**
- * What may be a run id here: it becomes a git ref and a URL path segment, so the characters
- * are held to the ones both read the same way. A run id outside them is refused rather than
- * rewritten — a branch named for a run the user cannot recognise is worse than a sentence.
+ * What may be a run id or a repository segment here: it becomes a git ref and a URL path
+ * segment, so the characters are held to the ones both read the same way. One outside them
+ * is refused rather than rewritten — a branch named for a run the user cannot recognise is
+ * worse than a sentence.
  */
 const PLAIN = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * **A name may not be made of dots.** `encodeURIComponent` leaves `..` alone, so a
+ * repository of `../web` would send `/repos/../web/git/refs` and a client that normalised it
+ * would have left the repository it was confined to — and the contract refuses those two
+ * segments for the same reason (`pullRequestSchema`). A run id of `..` is additionally not a
+ * ref name git will take.
+ */
+const DOTS = /^\.+$/;
+
+/** A name both a URL path and a git ref read as the one thing it says. */
+const spellable = (value: string): boolean => PLAIN.test(value) && !DOTS.test(value);
+
+/**
+ * What git will not take as a branch name, on top of {@link spellable}: two dots in a row, a
+ * leading or trailing dot, and the `.lock` suffix it keeps for itself. A run id carrying one
+ * of those is refused here rather than turned into GitHub's 422 further down, where it would
+ * be reported as a branch that already exists.
+ */
+const NOT_A_REF = /\.\.|^\.|\.$|\.lock$/;
 
 /**
  * Whitespace collapsed and folded to one case, so a sentence wrapped across the lines of a
@@ -187,14 +208,14 @@ const refusalBeforeAnything = (request: ChangeRequest): ChangeRefused | undefine
     );
   }
 
-  if (!PLAIN.test(request.runId)) {
+  if (!spellable(request.runId) || NOT_A_REF.test(request.runId)) {
     return refused(
-      `"${request.runId}" is not a run id a branch can be named for: a branch of ours is ${IMPROVE_BRANCH_PREFIX} and the run's own id, in letters, digits, dots, dashes and underscores`,
+      `"${request.runId}" is not a run id a branch can be named for: a branch of ours is ${IMPROVE_BRANCH_PREFIX} and the run's own id, in letters, digits, dots, dashes and underscores, as a name git takes for a ref`,
     );
   }
 
   const { owner, repo } = request.repository;
-  if (!PLAIN.test(owner) || !PLAIN.test(repo)) {
+  if (!spellable(owner) || !spellable(repo)) {
     return refused(
       `"${owner}/${repo}" is not a repository as GitHub spells one, so a pull request opened on it could not be recorded: nothing was opened`,
     );
@@ -242,9 +263,19 @@ export const openChange = async (
   try {
     await client.createBranch(repository, { branch, fromSha: base.sha });
   } catch (error) {
-    if (error instanceof GitHubCallError && error.kind === 'unprocessable') {
+    /**
+     * The one GitHub refusal that is this product's own rule: a branch of that name is
+     * already there, and a run writes its own rather than over one. Every other 422 — an
+     * unknown base commit, a ref name GitHub will not take — is GitHub not answering what
+     * was asked, and is reported in its own words rather than as a branch that exists.
+     */
+    if (
+      error instanceof GitHubCallError &&
+      error.kind === 'unprocessable' &&
+      /already exists/i.test(error.answered)
+    ) {
       return refused(
-        `the branch ${branch} already exists on ${repository.owner}/${repository.repo}, and this run writes a branch of its own rather than over one that is there: GitHub answered "${error.answered}". Nothing was opened and nothing was overwritten.`,
+        `the branch ${branch} already exists on ${repository.owner}/${repository.repo}, and this run writes a branch of its own rather than over one that is there: GitHub answered "${error.answered}". Nothing was opened and nothing was overwritten — a run whose earlier attempt stopped after creating this branch opens its change under a new run id.`,
       );
     }
     throw error;

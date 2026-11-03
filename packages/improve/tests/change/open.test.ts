@@ -446,6 +446,49 @@ describe('a change touching more than its recommendation is refused', () => {
     expect(reason).toContain('run 1/../main');
     expect(recorded.requests).toEqual([]);
   });
+
+  it('refuses every run id git would not take as a ref, before any call', async () => {
+    for (const runId of ['run 1/../main', '..', '.', 'run..1', '.run', 'run.', 'run.lock']) {
+      const { recorded, client } = over(WHOLE_RUN);
+
+      const reason = asRefused(await openChange(client, request({ runId })));
+
+      expect(reason, runId).toContain('is not a run id a branch can be named for');
+      expect(recorded.requests, runId).toEqual([]);
+    }
+  });
+
+  it('refuses a repository whose segment is made of dots, which would leave the repository', async () => {
+    const { recorded, client } = over(WHOLE_RUN);
+
+    const reason = asRefused(
+      await openChange(client, request({ repository: { owner: '..', repo: 'web' } })),
+    );
+
+    expect(reason).toContain('"../web" is not a repository');
+    expect(recorded.requests).toEqual([]);
+  });
+
+  it('reports a 422 that is not an existing branch as the GitHub failure it is', async () => {
+    const { client } = over([
+      READ_BRANCH,
+      readFileReply(REPOSITORY_FILE),
+      {
+        method: 'POST',
+        path: '/repos/clipforge/web/git/refs',
+        reply: { status: 422, body: { message: 'Object does not exist' } },
+      },
+    ]);
+
+    const error = await openChange(client, request()).then(
+      () => undefined,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(GitHubCallError);
+    expect((error as GitHubCallError).message).toContain('Object does not exist');
+    expect((error as GitHubCallError).message).not.toContain('already exists');
+  });
 });
 
 describe('nothing on any path merges, closes or writes to the default branch', () => {
