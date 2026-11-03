@@ -5,6 +5,8 @@ import {
   createOfflineWonderProvider,
   OFFLINE_WONDER_PROVIDER_NAME,
 } from '../src/wonder-offline.js';
+import { createMetaWonderProvider, WONDER_PROVIDER_NAME } from '../src/wonder-model.js';
+import { fakeTransport, TEST_ENV } from './wonder-fake.js';
 
 /**
  * The exported one-shot suite, run against the offline implementation — which is the
@@ -39,4 +41,22 @@ describe('what the one-shot suite deliberately does not assert', () => {
       assertions.filter((line) => /document|prompt|instruction|wording|developer/i.test(line)),
     ).toEqual([]);
   });
+});
+
+/**
+ * The same suite, against the model implementation with its transport injected: no key, no
+ * network, and every guarantee the seam publishes (#255). Running both from one file is what
+ * stops the offline default and the model implementation drifting apart — a guarantee one
+ * keeps and the other does not is a red test here rather than a surprise in a run.
+ *
+ * `deterministic: false` because the real model's answer comes from a sampler, not because
+ * this fake's does. `free: false` because a Wonder call costs money and the usage it reports
+ * is checked for shape and for its price rather than for zeroes.
+ */
+describeWonderProviderContract({
+  name: `${WONDER_PROVIDER_NAME} (injected transport)`,
+  createProvider: () =>
+    createMetaWonderProvider({ env: TEST_ENV, transport: fakeTransport().transport }),
+  deterministic: false,
+  free: false,
 });

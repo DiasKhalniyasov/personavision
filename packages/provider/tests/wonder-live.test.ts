@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { META_RESPONSES_ENDPOINT } from '../src/meta-model.js';
 import { estimateCostUsd, WONDER_MODEL_ID } from '../src/meta-pricing.js';
-import { MODEL_API_KEY_ENV } from '../src/select.js';
+import { MODEL_API_KEY_ENV, selectWonderProvider } from '../src/select.js';
+import { wonderRefusal } from '../src/testing.js';
+import type { WonderAsk } from '../src/wonder.js';
+import { createMetaWonderProvider, WONDER_PROVIDER_MODE } from '../src/wonder-model.js';
 
 /**
  * The one test in this package that calls **Muse Wonder** (#248).
@@ -178,6 +181,109 @@ describe('the live Muse Wonder API', () => {
       // test logged, not in the request it built.
       expect(raw).not.toContain(apiKey);
       expect(JSON.stringify(request)).not.toContain(apiKey);
+    },
+    180_000,
+  );
+});
+
+/**
+ * The same API, walked through the provider rather than through `fetch` (#255).
+ *
+ * The case above is the record of the protocol; this one is the implementation held to it.
+ * It asks for the model **by name**, because a Wonder request that names nothing is offline
+ * even on a machine with a key — there is no cheap tier to default into — and it goes through
+ * `selectWonderProvider` so that the one path a run takes is the path this test takes. It
+ * skips, visibly and with the reason in its name, when the key is absent.
+ *
+ * What it holds still is the documented envelope as the provider reads it: that one ask
+ * becomes one schema-constrained object the ask's own validator accepts, that the model and
+ * its tier travel with the answer, and that the five usage figures come back priced by the
+ * one estimator. It costs about half a cent, at `reasoning.effort: "minimal"`.
+ */
+
+interface AudiencePlace {
+  readonly region: string;
+  readonly phoneShare: number;
+}
+
+const audiencePlaceAsk: WonderAsk<AudiencePlace> = {
+  use: 'audience',
+  document: [
+    'You read one sentence about an audience and answer with the object asked for.',
+    'The share of phone users is a number between 0 and 1.',
+    '',
+    'busy parents in Almaty who shop on their phones',
+  ].join('\n'),
+  seed: 7,
+  replySchema: {
+    name: 'AudiencePlace',
+    schema: {
+      type: 'object',
+      properties: { region: { type: 'string' }, phoneShare: { type: 'number' } },
+      required: ['region', 'phoneShare'],
+      additionalProperties: false,
+    },
+  },
+  effort: 'minimal',
+  // The content, after the parse: a schema guarantees JSON and not truth, so a share outside
+  // `[0, 1]` is refused with its path rather than accepted.
+  parse: (reply) => {
+    const { region, phoneShare } = (reply ?? {}) as Partial<AudiencePlace>;
+    if (typeof region !== 'string' || region.trim() === '') {
+      throw wonderRefusal(['region'], 'an audience names the place it is in');
+    }
+    if (typeof phoneShare !== 'number' || !(phoneShare >= 0 && phoneShare <= 1)) {
+      throw wonderRefusal(['phoneShare'], 'a share of phone users is on [0, 1]');
+    }
+    return { region, phoneShare };
+  },
+  offline: () => ({ region: 'Almaty', phoneShare: 0.5 }),
+};
+
+describe('the live Muse Wonder provider', () => {
+  live(
+    `answers one ask with the object its validator accepts, and prices it from the one table${skipped}`,
+    async () => {
+      // Named, not defaulted: asked for nothing, selection is offline even with a key.
+      const selected = selectWonderProvider({
+        requestedMode: { mode: 'model', modelId: WONDER_MODEL_ID },
+        createModelProvider: createMetaWonderProvider,
+      });
+
+      expect(selected.mode).toBe('model');
+      expect(selected.modelId).toBe(WONDER_MODEL_ID);
+
+      const reply = await selected.provider.ask(audiencePlaceAsk);
+
+      // The ask's own validator ran, so this is its object and not the raw reply.
+      expect(typeof reply.value.region).toBe('string');
+      expect(reply.value.phoneShare).toBeGreaterThanOrEqual(0);
+      expect(reply.value.phoneShare).toBeLessThanOrEqual(1);
+
+      // The model that answered, in the one tier Muse Wonder has.
+      expect(reply.model).toEqual({ mode: WONDER_PROVIDER_MODE, modelId: WONDER_MODEL_ID });
+
+      // The five figures, from the paths `docs/meta-model-api.md` names, priced by the one
+      // estimator at the rates of the model actually called.
+      expect(reply.usage.inputTokens).toBeGreaterThan(0);
+      expect(reply.usage.outputTokens).toBeGreaterThan(0);
+      expect(reply.usage.cachedInputTokens).toBeLessThanOrEqual(reply.usage.inputTokens);
+      expect(reply.usage.reasoningTokens).toBeLessThanOrEqual(reply.usage.outputTokens);
+      expect(reply.usage.estimatedCostUsd).toBe(
+        estimateCostUsd(WONDER_MODEL_ID, {
+          inputTokens: reply.usage.inputTokens,
+          cachedInputTokens: reply.usage.cachedInputTokens,
+          outputTokens: reply.usage.outputTokens,
+        }),
+      );
+
+      // The reply and what it cost, so the figures written down can be checked against a run
+      // of this test. Never a request header.
+      console.info(
+        'live Muse Wonder through the provider',
+        JSON.stringify({ value: reply.value, model: reply.model, usage: reply.usage }),
+      );
+      expect(JSON.stringify(reply)).not.toContain(apiKey);
     },
     180_000,
   );

@@ -207,6 +207,13 @@ describe('only the one sanctioned place reads a credential', () => {
     // everything it emits; its own tests assert that no trajectory record, no error message
     // and no log line carries it, with a key set in the environment.
     'packages/provider/src/meta-model.ts',
+    // `#255`'s Muse Wonder provider reads the same variable at call time and for the same
+    // reason: the key a run was selected with and the key a one-shot call is made with have
+    // to be the same one at the moment of the call. It puts it in one `Authorization`
+    // header, redacts it out of every message it emits, writes no record and logs no line;
+    // its own tests assert that with a key in the environment no thrown error and no log
+    // line carries it.
+    'packages/provider/src/wonder-model.ts',
     // The live test reads it only to decide whether to run at all: with no key it skips,
     // visibly and with the reason in its name, which is how CI makes no call.
     'packages/provider/tests/meta-model-live.test.ts',
