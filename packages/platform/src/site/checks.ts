@@ -63,11 +63,39 @@ export interface CheckedSite {
 /** TXT records for a name, shaped as `node:dns/promises`' `resolveTxt` answers them. */
 export type TxtResolver = (hostname: string) => Promise<string[][]>;
 
+/**
+ * One HTTP request, shaped as the platform's `fetch` is — the seam the two HTTP checks reach
+ * the web through (#237).
+ *
+ * It is the whole of `fetch` deliberately narrowed to what the policy sends: a URL and the
+ * options `fetchOnce` composes. A test passes a stand-in or lets the real one reach a local
+ * fixture server, and either way **no check calls `fetch` itself** — the policy is in one
+ * place, which is the point of `fetch-once.ts`.
+ */
+export type SiteFetch = (url: string, init: RequestInit) => Promise<Response>;
+
 /** What the checks are given instead of reaching for the world themselves. */
 export interface SiteCheckDeps {
   readonly resolveTxt: TxtResolver;
   /** The clock, so `checkedAt` is the caller's and a test can fix it. */
   readonly now: () => Date;
+  /**
+   * How the two HTTP checks make their one request (#237).
+   *
+   * Optional, and absent means `nodeFetch` — the real one. It is optional rather than
+   * required because the DNS and repository checks neither have nor need it, so a caller
+   * that only runs those states the two deps it uses; `defaultSiteCheckDeps` passes the
+   * real fetcher, and a test passes a stand-in or points the real one at a local fixture.
+   */
+  readonly fetch?: SiteFetch;
+  /**
+   * How long one HTTP check is given, start to finish. Absent means `FETCH_TIMEOUT_MS`, the
+   * five seconds `#screen-site`'s single bounded request is drawn as.
+   *
+   * It is here rather than inside the policy so a test can assert the timeout's own sentence
+   * in milliseconds instead of waiting five seconds for it.
+   */
+  readonly fetchTimeoutMs?: number;
   /**
    * Whether a GitHub repository is connected to a site (#238), asked rather than looked for.
    *
