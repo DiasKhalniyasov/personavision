@@ -44,10 +44,21 @@ export { workspaceForAccount } from './workspace/membership.js';
 export {
   DraftNotAcceptedError,
   NoSuchWorkspaceError,
+  ONE_URL_VARIANT_ID,
+  seedForLaunchDay,
+  startSiteTest,
   startTest,
   TestRefusedError,
+  variantForSite,
 } from './run/start.js';
-export type { StartedTest, StartTestOptions, TestDraft, TestPipeline } from './run/start.js';
+export type {
+  SiteTestDraft,
+  StartedTest,
+  StartSiteTestOptions,
+  StartTestOptions,
+  TestDraft,
+  TestPipeline,
+} from './run/start.js';
 
 export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
 export { withPeople } from './audience/people.js';

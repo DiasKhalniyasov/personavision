@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ModelModeUnavailableError } from '@personavision/provider';
+import { runSchema } from '@personavision/contract';
 import type { Audience, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
-import { validRun } from '../../contract/tests/fixtures.js';
+import {
+  oneVariantArtifact,
+  USERS_FEATURE,
+  validGoal,
+  validRun,
+} from '../../contract/tests/fixtures.js';
 import { hashPassword } from '../src/store/password.js';
-import type { StartedTest } from '../src/run/start.js';
+import { startSiteTest } from '../src/run/start.js';
+import type { StartedTest, TestPipeline } from '../src/run/start.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 
@@ -252,5 +259,323 @@ describe('a deployment with no swarm wired in', () => {
     } finally {
       await served.close();
     }
+  });
+});
+
+/**
+ * `POST /runs` with **one URL**: the test the New test wizard starts (#273, #276, #279) —
+ * a site, the feature in the user's own words, the goal as they approved it, and an
+ * audience (`docs/FLOW.md` section 11).
+ *
+ * The criteria are about **what the pipeline is handed**, so the stand-in records it: one
+ * variant named for the site, the feature exactly as it was written, and the goal with its
+ * author, which is what a reader a month later sees the test by. The run directory is the
+ * pipeline's to write (#284 writes the blocks into it from this request), and the last test
+ * here is the handover: what this platform built, recorded as a run the contract accepts.
+ *
+ * The two-variant cases above are untouched, and so is the form that submits them: a
+ * path-1 test is a run with one variant and a path-2 test is a run with two.
+ */
+describe('starting a one-URL test over HTTP', () => {
+  let served: TestServer;
+  let calls: Call[];
+  let cookie: string;
+  let audienceId: string;
+
+  /** The site of the wizard's own worked example (`#screen-newtest-feature`). */
+  const SITE = 'https://app.clipforge.example/create';
+
+  /** The stand-in swarm, as above: it records what it was handed and opens no directory. */
+  const recording: TestPipeline = async (request, audience) => {
+    calls.push({ request, audience });
+    return { runId: RUN_ID, engineMode: 'offline' };
+  };
+
+  const post = (body: unknown): Promise<Response> =>
+    served.request('/runs', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        cookie,
+      },
+      body: JSON.stringify(body),
+    });
+
+  /** What the launch step submits: no task, no repeats, no seed and no engine of its own. */
+  const submission = (): Record<string, unknown> => ({
+    site: SITE,
+    feature: USERS_FEATURE,
+    goal: validGoal(),
+    audienceId,
+  });
+
+  /** The paths a refusal named, which is what a wizard step renders itself against. */
+  const refusedAt = async (body: unknown): Promise<{ paths: string[]; messages: string[] }> => {
+    const response = await post(body);
+    const read = (await response.json()) as { issues?: { path: string; message: string }[] };
+
+    expect(response.status).toBe(400);
+    return {
+      paths: (read.issues ?? []).map((issue) => issue.path),
+      messages: (read.issues ?? []).map((issue) => issue.message),
+    };
+  };
+
+  beforeEach(async () => {
+    calls = [];
+    served = await startTestServer({
+      runs: [{ stamp: '2026-10-24T14:02:00.000Z', name: 'northwind-demo' }],
+      pipeline: recording,
+    });
+    const seeded = served.platform.seeded;
+    expect(seeded).not.toBeNull();
+    const signedIn = await served.signIn({
+      email: seeded?.email ?? '',
+      password: seeded?.password ?? '',
+    });
+    expect(signedIn.status).toBe(200);
+    cookie = cookieOf(signedIn);
+    audienceId = seeded?.audienceId ?? '';
+  });
+
+  afterEach(async () => {
+    await served.close();
+  });
+
+  it('runs one variant, named for the site and carrying its URL', async () => {
+    const response = await post(submission());
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toStrictEqual({ runId: RUN_ID });
+    expect(calls[0]?.request.variants).toStrictEqual([
+      { id: 'site', name: 'app.clipforge.example', url: SITE },
+    ]);
+  });
+
+  it('carries the feature sentence exactly as it was written', async () => {
+    await post(submission());
+
+    // The fixture is deliberately untidy — leading and trailing spaces, two sentences, a
+    // doubled space and a shouted word — so an equality here is a test that nothing
+    // trimmed it, split it, collapsed it or folded its case.
+    expect(calls[0]?.request.feature).toBe(USERS_FEATURE);
+  });
+
+  it('carries the goal with who last wrote it', async () => {
+    await post(submission());
+
+    expect(calls[0]?.request.goal).toStrictEqual(validGoal());
+  });
+
+  it('takes the task each person attempts from the goal, rather than asking twice', async () => {
+    await post(submission());
+
+    expect(calls[0]?.request.task).toStrictEqual({ prompt: validGoal().task });
+  });
+
+  it('puts the workspace’s mode on it and resolves the audience by value', async () => {
+    await post(submission());
+
+    expect(calls[0]?.request.modelMode).toBe('contributor');
+    expect(calls[0]?.audience.id).toBe(validRun().audience.id);
+  });
+
+  it('runs at the seed of the day it was launched on, one attempt each, on a model', async () => {
+    // Called directly, because the day is the point: over HTTP there is no clock to state.
+    await startSiteTest({
+      workspaces: served.platform.store.workspaces,
+      audiences: served.platform.store.audiences,
+      workspaceId: served.platform.seeded?.workspaceId ?? '',
+      draft: { site: SITE, feature: USERS_FEATURE, goal: validGoal(), audienceId },
+      pipeline: recording,
+      now: () => new Date('2026-11-03T09:14:00.000Z'),
+    });
+
+    // The seed `#screen-results` prints under the audience, for a test launched that day.
+    expect(calls[0]?.request.seed).toBe(20261103);
+    // A hundred people attempt the feature once each, so the agents are the audience.
+    expect(calls[0]?.request.repeats).toBe(1);
+    expect(calls[0]?.request.engineMode).toBe('model');
+  });
+
+  it('obeys a caller that names the seed, the repeats or the engine itself', async () => {
+    await post({ ...submission(), seed: 7, repeats: 3, engineMode: 'offline' });
+
+    expect(calls[0]?.request.seed).toBe(7);
+    expect(calls[0]?.request.repeats).toBe(3);
+    expect(calls[0]?.request.engineMode).toBe('offline');
+  });
+
+  it('refuses a draft with no feature, naming the field and what it expected', async () => {
+    const { paths, messages } = await refusedAt({ ...submission(), feature: '   ' });
+
+    expect(paths).toStrictEqual(['feature']);
+    expect(messages[0]).toContain('nothing was written here');
+    expect(messages[0]).toContain("in the user's own words");
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a draft missing either half of the goal, naming both halves', async () => {
+    const { paths, messages } = await refusedAt({
+      ...submission(),
+      goal: { task: '', successCriterion: '', lastWrittenBy: 'model' },
+    });
+
+    expect(paths).toStrictEqual(['goal.task', 'goal.successCriterion']);
+    expect(messages[1]).toContain('observable in the page');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a draft with no goal at all, as one field rather than two', async () => {
+    const { site, feature, audienceId: audience } = submission();
+    const { paths } = await refusedAt({ site, feature, audienceId: audience });
+
+    expect(paths).toStrictEqual(['goal']);
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a draft with no site, in the words the Add-a-site form uses', async () => {
+    const { paths, messages } = await refusedAt({ ...submission(), site: '' });
+
+    expect(paths).toStrictEqual(['site']);
+    expect(messages[0]).toContain('a site needs a URL');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a site that is not a whole web address', async () => {
+    const { paths, messages } = await refusedAt({
+      ...submission(),
+      site: 'app.clipforge.example/create',
+    });
+
+    expect(paths).toStrictEqual(['site']);
+    expect(messages[0]).toContain('absolute URL');
+    expect(calls).toEqual([]);
+  });
+
+  it('names every field at once: a missing site and a missing feature in one refusal', async () => {
+    const { paths } = await refusedAt({ ...submission(), site: '', feature: '' });
+
+    expect(paths).toStrictEqual(['site', 'feature']);
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a goal whose author is neither the model nor the user, at its own field', async () => {
+    const { paths, messages } = await refusedAt({
+      ...submission(),
+      goal: { ...validGoal(), lastWrittenBy: 'the intern' },
+    });
+
+    // The contract's own refusal, reaching the caller with the field it is about named.
+    expect(paths).toStrictEqual(['goal.lastWrittenBy']);
+    expect(messages[0]).toContain('model');
+    expect(messages[0]).toContain('user');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a submission that is both forms at once, naming the variants it found', async () => {
+    const { paths, messages } = await refusedAt({ ...submission(), variants: validRun().variants });
+
+    expect(paths).toStrictEqual(['variants']);
+    expect(messages[0]).toContain('two versions');
+    expect(calls).toEqual([]);
+  });
+
+  it('names no field the wizard does not have, whatever it refuses', async () => {
+    const wizardFields = new Set([
+      'site',
+      'feature',
+      'goal',
+      'goal.task',
+      'goal.successCriterion',
+      'goal.lastWrittenBy',
+      'audienceId',
+    ]);
+
+    for (const body of [
+      { ...submission(), site: '', feature: '', goal: { task: '', successCriterion: '' } },
+      { ...submission(), goal: { ...validGoal(), task: 'Generate a video. Then share it.' } },
+      { ...submission(), site: 'ftp://app.clipforge.example/create' },
+    ]) {
+      const { paths } = await refusedAt(body);
+
+      expect(paths.length).toBeGreaterThan(0);
+      expect(paths.filter((path) => !wizardFields.has(path))).toEqual([]);
+    }
+  });
+
+  it('lets no account id, workspace id or credential into the request', async () => {
+    const workspaceId = served.platform.seeded?.workspaceId ?? '';
+    const { paths } = await refusedAt({
+      ...submission(),
+      workspaceId,
+      sessionToken: 'pv_not-a-real-credential',
+    });
+
+    // Refused at its own path rather than dropped: the closed-object rule the contract
+    // holds every artifact file to, applied to the submission that starts one.
+    expect(paths).toStrictEqual(['workspaceId', 'sessionToken']);
+    expect(calls).toEqual([]);
+  });
+
+  it('hands the pipeline the request the contract declares and nothing else', async () => {
+    await post(submission());
+    const request = calls[0]?.request;
+
+    expect(Object.keys(request ?? {}).toSorted()).toStrictEqual([
+      'audienceId',
+      'engineMode',
+      'feature',
+      'goal',
+      'modelMode',
+      'repeats',
+      'seed',
+      'task',
+      'variants',
+    ]);
+    // Nothing of the session that asked travels with it into the artifact.
+    expect(JSON.stringify(request)).not.toContain(served.platform.seeded?.workspaceId ?? '—');
+    expect(JSON.stringify(request)).not.toContain(served.platform.seeded?.email ?? '—');
+  });
+
+  it('builds a one-variant run the contract accepts, feature and goal and all', async () => {
+    await post(submission());
+    const request = calls[0]?.request;
+    const { run } = oneVariantArtifact();
+    const variant = request?.variants[0]?.id ?? '';
+    const on = (rows: readonly { readonly variant: string }[]): unknown[] =>
+      rows.map((row) => ({ ...row, variant }));
+
+    // The contract's own one-variant artifact, with what this platform built in place of
+    // what the fixture declared: the run a pipeline writes from this request (#284).
+    const recorded = runSchema.parse({
+      ...run,
+      feature: request?.feature,
+      goal: request?.goal,
+      task: { id: run.task.id, prompt: request?.task.prompt },
+      variants: [...(request?.variants ?? [])],
+      progress: {
+        ...run.progress,
+        perVariant: on(run.progress?.perVariant ?? []),
+        sessions: on(run.progress?.sessions ?? []),
+      },
+      stepCaptions: on(run.stepCaptions),
+      screenshots: on(run.screenshots),
+      aois: on(run.aois),
+      scores: on(run.scores),
+      verdict: {
+        ...run.verdict,
+        harderVariant: variant,
+        preferredVariant: variant,
+        heroEvidence: { ...run.verdict.heroEvidence, variant },
+      },
+    });
+
+    expect(recorded.variants).toStrictEqual([
+      { id: 'site', name: 'app.clipforge.example', url: SITE },
+    ]);
+    expect(recorded.feature).toBe(USERS_FEATURE);
+    expect(recorded.goal).toStrictEqual(validGoal());
   });
 });
