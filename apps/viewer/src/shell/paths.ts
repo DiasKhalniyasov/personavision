@@ -1,10 +1,17 @@
 /**
  * The route table's paths, in one place.
  *
- * `docs/FLOW.md` sections 3 and 13 fix them. `routes.tsx` mounts these patterns and every link
- * in the product is built from the helpers below, so no screen writes a URL of its own and
- * renaming a route is one edit here.
+ * `docs/FLOW.md` sections 3, 13 and 14 fix them. `routes.tsx` mounts these patterns and every
+ * link in the product is built from the helpers below, so no screen writes a URL of its own
+ * and renaming a route is one edit here.
+ *
+ * The builders at the foot are the other half of that promise: a citation names a screen and
+ * a handful of parameters (`docs/FLOW.md` section 16), and this is where those become a URL.
+ * Their parameter names are the contract's own closed list rather than strings spelled again
+ * here, so a link can only ask for something a screen honours.
  */
+
+import type { EvidenceLinkParam } from '@personavision/contract';
 
 /** The query parameter a protected route carries the intended path to `/signin` in. */
 export const NEXT_PARAM = 'next';
@@ -27,6 +34,8 @@ export const patterns = {
   attention: '/runs/:runId/attention/:variant/:step',
   sessions: '/runs/:runId/sessions',
   session: '/runs/:runId/sessions/:sessionId',
+  funnel: '/runs/:runId/funnel',
+  analysis: '/runs/:runId/analysis',
   githubSettings: '/settings/github',
 } as const;
 
@@ -67,8 +76,116 @@ export const paths = {
   sessions: (runId: string) => `/runs/${segment(runId)}/sessions`,
   session: (runId: string, sessionId: string) =>
     `/runs/${segment(runId)}/sessions/${segment(sessionId)}`,
+  /** Where the hundred of them went (`docs/FLOW.md` section 14.5). */
+  funnel: (runId: string) => `/runs/${segment(runId)}/funnel`,
+  /** The model's full write-up, every claim cited (`docs/FLOW.md` section 14.6). */
+  analysis: (runId: string) => `/runs/${segment(runId)}/analysis`,
   githubSettings: patterns.githubSettings,
 } as const;
+
+/**
+ * The parameters each evidence screen takes, **named from the contract's closed list**.
+ *
+ * `satisfies` is what holds them to it: a name this list carries that
+ * `EVIDENCE_LINK_PARAMS` does not is a type error here rather than a link that quietly
+ * leads nowhere. Between them the four lists cover the whole list, which is the point of
+ * closing it — a citation can only name a parameter some screen honours.
+ *
+ * The order inside each list is the order `docs/FLOW.md` sections 3 and 14 write the query,
+ * so two links to the same place are the same string.
+ */
+const FUNNEL_PARAMS = ['segment'] as const satisfies readonly EvidenceLinkParam[];
+const HEATMAP_PARAMS = [
+  'aoi',
+  'overlay',
+  'segment',
+  'outcome',
+] as const satisfies readonly EvidenceLinkParam[];
+const SESSIONS_PARAMS = [
+  'variant',
+  'step',
+  'aoi',
+  'outcome',
+  'segment',
+] as const satisfies readonly EvidenceLinkParam[];
+const REPLAY_PARAMS = ['t'] as const satisfies readonly EvidenceLinkParam[];
+
+/**
+ * Which parameters each builder below writes. Exported so that a test can hold the four
+ * lists to the contract's own list rather than to a copy of it.
+ */
+export const RESULT_LINK_PARAMS = {
+  funnel: FUNNEL_PARAMS,
+  heatmap: HEATMAP_PARAMS,
+  sessions: SESSIONS_PARAMS,
+  session: REPLAY_PARAMS,
+} as const;
+
+/**
+ * What a caller may narrow a screen to: the screen's own subset of the contract's
+ * parameters, each optional, because every one of them is a filter nobody has to ask for.
+ *
+ * A number is accepted beside a string for `t`, which a citation writes as seconds. What a
+ * *value* may be is the contract's rule and is checked there, when the citation is read off
+ * disk (`EVIDENCE_LINK_PARAM_RULES`); what the key may be is this file's, above.
+ */
+type Narrowing<Key extends EvidenceLinkParam> = Readonly<Partial<Record<Key, string | number>>>;
+
+export type FunnelNarrowing = Narrowing<(typeof FUNNEL_PARAMS)[number]>;
+export type HeatmapNarrowing = Narrowing<(typeof HEATMAP_PARAMS)[number]>;
+export type SessionsNarrowing = Narrowing<(typeof SESSIONS_PARAMS)[number]>;
+
+/**
+ * The query, written in the list's order and percent-encoded by `URLSearchParams` — so a
+ * segment called `first time` or an area called `a&b` survives the round trip through the
+ * browser's own parsing. A parameter nobody asked for is left out rather than written
+ * empty: `?segment=` is a filter on nothing, which is not what an absent filter means.
+ */
+const query = (
+  keys: readonly EvidenceLinkParam[],
+  narrowing: Readonly<Partial<Record<EvidenceLinkParam, string | number>>>,
+): string => {
+  const search = new URLSearchParams();
+  for (const key of keys) {
+    const value = narrowing[key];
+    if (value !== undefined && value !== '') search.append(key, String(value));
+  }
+  const written = search.toString();
+  return written === '' ? '' : `?${written}`;
+};
+
+/** `/runs/<id>/funnel?segment=…`: where they dropped out, for one segment or for all. */
+export const funnelLink = (runId: string, narrowing: FunnelNarrowing = {}): string =>
+  `${paths.funnel(runId)}${query(FUNNEL_PARAMS, narrowing)}`;
+
+/**
+ * `/runs/<id>/attention/<variant>/<step>?aoi=&overlay=&segment=&outcome=`: one heatmap.
+ *
+ * The version and the step are path segments because a heatmap is of one of them
+ * (`docs/FLOW.md` section 14.4); the overlay a link opens on and the two filters are query.
+ */
+export const heatmapLink = (
+  runId: string,
+  variant: string,
+  step: string,
+  narrowing: HeatmapNarrowing = {},
+): string => `${paths.attention(runId, variant, step)}${query(HEATMAP_PARAMS, narrowing)}`;
+
+/**
+ * `/runs/<id>/sessions?variant=&step=&aoi=&outcome=&segment=`: the list, narrowed by any
+ * composition of the five things a citation can name.
+ */
+export const sessionsLink = (runId: string, narrowing: SessionsNarrowing = {}): string =>
+  `${paths.sessions(runId)}${query(SESSIONS_PARAMS, narrowing)}`;
+
+/**
+ * `/runs/<id>/sessions/<session>?t=…`: the replay, paused on the second a citation reads.
+ *
+ * Seconds from the start of the recording, as the contract's `t` means them and as the
+ * citation prints them (*S-07 · 0:48*) — never milliseconds.
+ */
+export const sessionAtSecond = (runId: string, sessionId: string, seconds: number): string =>
+  `${paths.session(runId, sessionId)}${query(REPLAY_PARAMS, { t: seconds })}`;
 
 /**
  * `/runs/<id>/sessions?outcome=…`: the Sessions list, narrowed to one outcome.
@@ -78,7 +195,7 @@ export const paths = {
  * through here rather than writing the query itself.
  */
 export const sessionsWithOutcome = (runId: string, outcome: string): string =>
-  `${paths.sessions(runId)}?${new URLSearchParams({ outcome }).toString()}`;
+  sessionsLink(runId, { outcome });
 
 /**
  * `/runs/<id>/sessions?variant=…`: the Sessions list, narrowed to one version.
@@ -88,7 +205,7 @@ export const sessionsWithOutcome = (runId: string, outcome: string): string =>
  * than assembled on that screen.
  */
 export const sessionsWithVariant = (runId: string, variant: string): string =>
-  `${paths.sessions(runId)}?${new URLSearchParams({ variant }).toString()}`;
+  sessionsLink(runId, { variant });
 
 /**
  * `/runs/<id>/sessions?variant=…&aoi=…`: the people who looked at one area of interest.
@@ -99,7 +216,7 @@ export const sessionsWithVariant = (runId: string, variant: string): string =>
  * the other version is a pair no session can satisfy.
  */
 export const sessionsWithArea = (runId: string, variant: string, aoi: string): string =>
-  `${paths.sessions(runId)}?${new URLSearchParams({ variant, aoi }).toString()}`;
+  sessionsLink(runId, { variant, aoi });
 
 /** `/signin?next=…`: where sign-in sends a visitor back to once they are in. */
 export const signInWithNext = (intended: string): string =>

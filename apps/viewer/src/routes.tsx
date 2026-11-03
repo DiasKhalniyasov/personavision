@@ -1,9 +1,11 @@
 import type { RouteObject } from 'react-router';
+import { AnalysisPage } from './screens/analysis/AnalysisPage';
 import { AttentionPage } from './screens/attention/AttentionPage';
 import { AudienceSetupPage } from './screens/audience/AudienceSetupPage';
 import { AudiencesPage } from './screens/audience/AudiencesPage';
 import { BreakdownPage } from './screens/breakdown/BreakdownPage';
 import { DemoPage } from './screens/demo/DemoPage';
+import { FunnelPage } from './screens/funnel/FunnelPage';
 import { NewTestWizard } from './screens/newtest/wizard/NewTestWizard';
 import { SessionReplayPage } from './screens/sessions/SessionReplayPage';
 import { SessionsPage } from './screens/sessions/SessionsPage';
@@ -55,6 +57,8 @@ export const routes: RouteObject[] = [
           { path: patterns.attention, element: <AttentionPage /> },
           { path: patterns.sessions, element: <SessionsPage /> },
           { path: patterns.session, element: <SessionReplayPage /> },
+          { path: patterns.funnel, element: <FunnelPage /> },
+          { path: patterns.analysis, element: <AnalysisPage /> },
           { path: patterns.githubSettings, element: <GithubPage /> },
           { path: '*', element: <NotFoundRoute /> },
         ],

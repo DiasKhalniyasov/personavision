@@ -2,6 +2,7 @@
 import { waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runSchema } from '@personavision/contract';
+import type { Run } from '@personavision/contract';
 import { loadDesignTokens } from './setup';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from './app';
 import { paths } from '../src/shell/paths';
@@ -130,22 +131,58 @@ describe('the simulated-audience badge', () => {
   });
 });
 
+/** The tab bar once the run has been read, with the number of links it should carry. */
+const tabbar = async (links: number): Promise<HTMLElement> =>
+  waitFor(() => {
+    const found = document.querySelector('[data-shell="tabbar"]') as HTMLElement;
+    expect(found.querySelectorAll('a')).toHaveLength(links);
+    return found;
+  });
+
+/** Every tab in the bar, in order: what it reads and where it goes. */
+const tabsOf = (bar: HTMLElement): (string | null)[][] =>
+  [...bar.querySelectorAll('a')].map((tab) => [tab.textContent, tab.getAttribute('href')]);
+
+/**
+ * The same run with one variant: a test of one URL, which is all a path-1 run is
+ * (`docs/FLOW.md` section 11). Nothing forks — this is a `Run` like any other — so
+ * everything that was about a second version is simply absent, and the verdict leads with
+ * the one version there is and reports no gap, because a version is not harder than itself.
+ */
+const oneVariant = (run: Run): Run => {
+  const only = run.variants[0] as Run['variants'][number];
+  const aois = run.aois.filter((aoi) => aoi.variant === only.id);
+  const kept = new Set(aois.map((aoi) => aoi.id));
+  return {
+    ...run,
+    variants: [only],
+    screenshots: run.screenshots.filter((shot) => shot.variant === only.id),
+    aois,
+    aoiMetrics: run.aoiMetrics.filter((metric) => kept.has(metric.aoiId)),
+    scores: run.scores.filter((score) => score.variant === only.id),
+    verdict: {
+      ...run.verdict,
+      harderVariant: only.id,
+      preferredVariant: only.id,
+      gapPoints: 0,
+      bandsDisjoint: false,
+      seedGroupsAgreeing: 1,
+      sentence: 'The audience completed the task on the one version this test ran.',
+      audienceSentence: 'Your audience buys the boots, and reads the total twice first.',
+      reasons: ['The total was read twice before anybody paid.'],
+      heroEvidence: { ...run.verdict.heroEvidence, variant: only.id },
+    },
+  };
+};
+
 describe('the tabs', () => {
   it('are links, in the prototype’s order, with Sites and Audiences at the end', async () => {
     const { runId, run } = await exampleRun();
     mountApp(paths.run(runId));
 
-    const bar = await waitFor(() => {
-      const found = document.querySelector('[data-shell="tabbar"]') as HTMLElement;
-      expect(found.querySelectorAll('a')).toHaveLength(6);
-      return found;
-    });
+    const bar = await tabbar(8);
 
-    const tabs = [...bar.querySelectorAll('a')].map((tab) => [
-      tab.textContent,
-      tab.getAttribute('href'),
-    ]);
-    expect(tabs).toEqual([
+    expect(tabsOf(bar)).toEqual([
       ['Verdict', paths.run(runId)],
       ['Score breakdown', paths.breakdown(runId)],
       [
@@ -153,6 +190,8 @@ describe('the tabs', () => {
         paths.attention(runId, run.verdict.heroEvidence.variant, run.verdict.heroEvidence.step),
       ],
       ['Sessions', paths.sessions(runId)],
+      ['Funnel & timing', paths.funnel(runId)],
+      ['Analysis', paths.analysis(runId)],
       // About the workspace rather than about this test, which is why `#tabbar` puts them
       // after the gap. A signed-in user reaches their sites from any screen (#264).
       ['Sites', paths.sites],
@@ -164,15 +203,74 @@ describe('the tabs', () => {
     const { runId } = await exampleRun();
     mountApp(paths.session(runId, 'S-01'));
 
-    const bar = await waitFor(() => {
-      const found = document.querySelector('[data-shell="tabbar"]') as HTMLElement;
-      expect(found.querySelectorAll('a')).toHaveLength(6);
-      return found;
-    });
+    const bar = await tabbar(8);
     const current = [...bar.querySelectorAll('a[aria-current="page"]')].map(
       (tab) => tab.textContent,
     );
     expect(current).toEqual(['Sessions']);
+  });
+
+  it('marks the tab you are on when it is one of the two new ones', async () => {
+    const { runId } = await exampleRun();
+    mountApp(paths.funnel(runId));
+
+    const bar = await tabbar(8);
+    expect(
+      [...bar.querySelectorAll('a[aria-current="page"]')].map((tab) => tab.textContent),
+    ).toEqual(['Funnel & timing']);
+  });
+
+  it('leaves Improve and a Sites tab of this test out: they are later steps’ (#227, #221)', async () => {
+    const { runId } = await exampleRun();
+    mountApp(paths.run(runId));
+
+    const bar = await tabbar(8);
+    const ofThisTest = tabsOf(bar).filter(([, href]) => href?.startsWith(`/runs/`));
+    expect(ofThisTest.map(([label]) => label)).toEqual([
+      'Verdict',
+      'Score breakdown',
+      'Attention',
+      'Sessions',
+      'Funnel & timing',
+      'Analysis',
+    ]);
+  });
+});
+
+describe('the same tabs, not a second set (docs/FLOW.md section 14)', () => {
+  const runId = '2026-10-24-1402-northwind-demo';
+
+  /** The example run, served with its second version taken away. */
+  const servingOneVariant = async (): Promise<void> => {
+    const run = oneVariant(runSchema.parse(readRunFile(runId)));
+    await serveRunData({ files: { [`/runs/${runId}/run.json`]: JSON.stringify(run) } });
+  };
+
+  it('leads with Verdict and offers Score breakdown for a run with two versions', async () => {
+    await exampleRun();
+    mountApp(paths.funnel(runId));
+
+    const labels = tabsOf(await tabbar(8)).map(([label]) => label);
+    expect(labels[0]).toBe('Verdict');
+    expect(labels).toContain('Score breakdown');
+  });
+
+  it('leads with Summary and drops Score breakdown for a run with one', async () => {
+    await servingOneVariant();
+    mountApp(paths.funnel(runId));
+
+    // One fewer tab: a run with one version has nothing to compare, so the screen that
+    // compares them is not offered. Everything else about the bar is unchanged.
+    const labels = tabsOf(await tabbar(7)).map(([label]) => label);
+    expect(labels).toEqual([
+      'Summary',
+      'Attention',
+      'Sessions',
+      'Funnel & timing',
+      'Analysis',
+      'Sites',
+      'Audiences',
+    ]);
   });
 });
 
