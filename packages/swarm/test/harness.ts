@@ -444,11 +444,28 @@ export const writeOpenRun = async (
     device?: Device;
     /** The audience the run's people were generated from, when it is not this harness's. */
     audienceId?: string;
+    /**
+     * The holdout this run drives, as the swarm is handed it: more people, each driven once
+     * per variant on the seed they were sampled on rather than on every seed group.
+     *
+     * They are the run's own personas too — "a holdout is people the run generated", which
+     * is what the contract holds `improve.holdout.personaIds` to — so they are appended to
+     * `personas` and the audience generates all of them.
+     */
+    holdout?: readonly Persona[];
+    /**
+     * The plan's total, when a test means the run to declare one the swarm does not plan.
+     * Defaults to what the swarm plans, which is what a caller writes.
+     */
+    totalPerVariant?: number;
   },
 ): Promise<Run> => {
   const steps = plan.steps ?? STEPS;
   const device = plan.device ?? MOBILE;
-  const total = plan.personas.length * plan.seedGroups.length;
+  const holdout = plan.holdout ?? [];
+  const people = [...plan.personas, ...holdout];
+  const total =
+    plan.totalPerVariant ?? plan.personas.length * plan.seedGroups.length + holdout.length;
   const run: Run = {
     schemaVersion: SCHEMA_VERSION,
     runId: RUN_ID,
@@ -471,11 +488,11 @@ export const writeOpenRun = async (
     steps: [...steps],
     stepCaptions: [],
     audience: {
-      ...audienceOf(plan.personas.length),
+      ...audienceOf(people.length),
       ...(plan.audienceId === undefined ? {} : { id: plan.audienceId }),
       devices: [{ ...device, share: 1 }],
     },
-    personas: [...plan.personas],
+    personas: people,
     seedGroups: plan.seedGroups,
     engine: plan.engine ?? {
       mode: 'offline',
