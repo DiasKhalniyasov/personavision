@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AudienceNotOfferedError } from '../../audience/freeze.js';
-import { DraftNotAcceptedError, startTest, TestRefusedError } from '../../run/start.js';
-import type { TestDraft, TestPipeline } from '../../run/start.js';
+import {
+  DraftNotAcceptedError,
+  startSiteTest,
+  startTest,
+  TestRefusedError,
+} from '../../run/start.js';
+import type { SiteTestDraft, TestDraft, TestPipeline } from '../../run/start.js';
 import type { PlatformStore, SessionRecord } from '../../store/types.js';
 import { notImplemented, readJsonBody, sendJson } from './types.js';
 import type { Route } from './types.js';
@@ -19,6 +24,14 @@ import type { Route } from './types.js';
  * the body can name it, the audience is resolved against the workspace that asked, and a
  * standard workspace whose test cannot run on the standard model is refused rather than
  * answered by another (#144). This route is the HTTP skin on that, and the status codes.
+ *
+ * **Two forms, one route and one run.** A submission naming its `variants` is the
+ * two-variant comparison, unchanged down to its refusals; anything else is read as the
+ * one-URL test the New test wizard collects (#273, #276, #279) — the site, the feature in
+ * the user's words, the goal as they approved it and the audience. Both answer with
+ * the id of one run directory: a path-1 test is a run with one variant and a path-2 test is
+ * a run with two, and nothing here branches on a "path" (the auto-decision of 2026-11-03 on
+ * #222).
  *
  * The swarm itself is #54. Until it lands, `personavision serve` passes no pipeline and this
  * answers 501 naming that ticket, so a screen built against it fails loudly.
@@ -51,6 +64,22 @@ const started = (response: ServerResponse, runId: string): void =>
 const refuse = (response: ServerResponse, status: number, error: string, extra = {}): void =>
   sendJson(response, status, { error, ...extra });
 
+/**
+ * Which of the two forms was submitted: a comparison **names its `variants`** and a test of
+ * one site does not.
+ *
+ * Read off `variants` rather than off `site`, because the site is the field most likely to
+ * be missing from a one-URL submission — a launch step serialising a draft whose site was
+ * never chosen leaves the key out altogether — and such a draft has to be refused at `site`
+ * rather than answered with a page of refusals about `task` and `variants`, which are the
+ * fields the New test wizard cannot render. A submission naming both is two forms at once,
+ * and the one-URL path refuses it with the `variants` it found named rather than guessing
+ * which half was meant. `variants` is required of a comparison by the contract, so a body
+ * that names none was never one.
+ */
+const namesTwoVersions = (body: unknown): boolean =>
+  typeof body === 'object' && body !== null && 'variants' in body && !('site' in body);
+
 export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Route[] => [
   {
     method: 'POST',
@@ -70,17 +99,19 @@ export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Ro
               return;
             }
 
+            // The body is whatever was submitted; both functions below parse it against
+            // the contract with the workspace's mode over it, and a mode the body named is
+            // dropped on the way.
+            const test = {
+              workspaces: store.workspaces,
+              audiences: store.audiences,
+              workspaceId: session.workspaceId,
+              pipeline,
+            };
             try {
-              const run = await startTest({
-                workspaces: store.workspaces,
-                audiences: store.audiences,
-                workspaceId: session.workspaceId,
-                // The body is whatever was submitted; `startTest` parses it against the
-                // contract with the workspace's mode over it, and a mode the body named is
-                // dropped on the way.
-                draft: body.value as TestDraft,
-                pipeline,
-              });
+              const run = namesTwoVersions(body.value)
+                ? await startTest({ ...test, draft: body.value as TestDraft })
+                : await startSiteTest({ ...test, draft: body.value as SiteTestDraft });
               started(response, run.runId);
             } catch (error) {
               if (error instanceof DraftNotAcceptedError) {
