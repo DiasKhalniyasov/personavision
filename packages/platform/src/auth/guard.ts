@@ -14,13 +14,16 @@ import type { SessionRecord } from '../store/types.js';
  * `fetch` that followed one would parse the sign-in page as its payload and the viewer
  * could not tell "sign in" from "this is the answer".
  *
- * What is public is fixed by `docs/FLOW.md` section 3: the landing page at `/`, the
- * read-only `/demo`, `/signin` itself, and the two auth routes those pages use. Nothing
- * else is, including every app screen and every route the next tickets fill in.
+ * What is public is fixed by `docs/FLOW.md` sections 3 and 13: the landing page at `/`, the
+ * read-only `/demo`, `/signin` and `/signup` themselves, and the auth routes those pages
+ * use. Nothing else is, including every app screen and every route the next tickets fill in.
  */
 
 /** Where a signed-out page request is sent. The screen is `apps/viewer`'s (#12). */
 export const SIGNIN_PATH = '/signin';
+
+/** The way in for somebody who has no account yet. The screen is #265's. */
+export const SIGNUP_PATH = '/signup';
 
 /**
  * The paths that answer without a session. `/` is the landing page and `/demo` the
@@ -30,7 +33,12 @@ export const SIGNIN_PATH = '/signin';
 const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   '/',
   SIGNIN_PATH,
+  // Creating a workspace is how a person gets a session in the first place, so the screen
+  // and the route behind it answer without one: a sign-up behind the guard is a door with
+  // no key (#265, `docs/FLOW.md` section 13).
+  SIGNUP_PATH,
   '/demo',
+  '/auth/signup',
   '/auth/signin',
   // Reading the session is how the chrome on a public page knows there is nobody signed
   // in; it answers that rather than 401, so the landing page renders without an error.

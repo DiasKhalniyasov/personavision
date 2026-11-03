@@ -97,7 +97,7 @@ describe('a signed-out visitor', () => {
     await serveRunData();
     const { router } = mountApp(paths.signUp, { session: SIGNED_OUT });
 
-    expect(await screen.findByRole('heading', { name: 'Sign up' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Create your workspace' })).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.signUp);
     // There is no workspace to name before one has been created (#265).
     expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
@@ -193,9 +193,11 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [paths.audiences, 'Who does your business serve?'],
       [paths.newAudience, 'Describe your audience'],
       [paths.audience('aud-outdoor-gear-shoppers'), 'Outdoor-gear shoppers'],
-      // The onboarding screens of section 13. Each is mounted and each names the ticket
-      // that fills it (#264); the wizard's steps are `tests/wizard/shell.test.tsx`.
-      [paths.signUp, 'Sign up'],
+      // The onboarding screens of section 13. The ones not built yet name the ticket that
+      // fills them (#264); the wizard's steps are `tests/wizard/shell.test.tsx`. Sign-up is
+      // checked signed out, as `/signin` is: since #265 a visitor who already has a
+      // workspace is sent on rather than offered a second one.
+      [paths.signUp, 'Create your workspace', { status: 'signed-out' }],
       [paths.sites, 'Your sites'],
       [paths.newSite, 'Add a site'],
       [paths.site('site-clipforge'), 'Prove this site is yours'],
