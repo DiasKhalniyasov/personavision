@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import sharp from 'sharp';
 import { validateDecision } from './decision.js';
 import {
   assistantMessage,
@@ -18,6 +20,7 @@ import type {
   Decision,
   DecisionContext,
   DecisionProvider,
+  DecisionScreenshot,
   DecisionSessionIdentity,
   DecisionSessionScope,
   DecisionUsage,
@@ -51,6 +54,23 @@ import type {
  */
 
 /** As `run.json`'s `engine.provider` records it. */
+/**
+ * The screenshot as the person saw it: a full-page capture at device pixels runs to tens of
+ * thousands of pixels, past what the API decodes, and shows what nobody had scrolled to.
+ */
+const screenImage = async (shot: DecisionScreenshot): Promise<Buffer> => {
+  if (shot.view === undefined) return readFile(shot.path);
+  const image = sharp(shot.path);
+  const { width = 0, height = 0 } = await image.metadata();
+  const scale = width / shot.view.width;
+  const top = Math.min(Math.round(shot.view.top * scale), Math.max(0, height - 1));
+  return image
+    .extract({ left: 0, top, width, height: Math.min(Math.round(shot.view.height * scale), height - top) })
+    .resize({ width: shot.view.width })
+    .png()
+    .toBuffer();
+};
+
 export const META_MODEL_PROVIDER_NAME = 'meta-model-api';
 
 /** The responses protocol: https://dev.meta.ai/docs/protocols/responses */
@@ -210,22 +230,43 @@ const isTimeout = (error: unknown, signal: AbortSignal): boolean => {
   return name === 'AbortError' || name === 'TimeoutError';
 };
 
+/**
+ * What the API answers now and then (503) or over a rate limit (429), and a connection that
+ * drops before any answer ("fetch failed"): asked again, after these waits.
+ */
+const RETRIED_STATUSES = new Set([429, 502, 503, 504]);
+const RETRY_WAITS_MS = [2000, 5000];
+
 /** The default transport: `fetch`, and nothing a test ever reaches. */
 const fetchTransport: ModelTransport = async (request) => {
-  const response = await fetch(request.url, {
-    method: request.method,
-    headers: { ...request.headers },
-    body: JSON.stringify(request.body),
-    signal: request.signal,
-  });
-  const text = await response.text();
-  let body: unknown = text;
-  try {
-    body = JSON.parse(text) as unknown;
-  } catch {
-    // Not JSON: the text itself is what came back, and the trajectory keeps it as it is.
+  for (let attempt = 0; ; attempt += 1) {
+    const wait = RETRY_WAITS_MS[attempt];
+    let response: Response;
+    try {
+      response = await fetch(request.url, {
+        method: request.method,
+        headers: { ...request.headers },
+        body: JSON.stringify(request.body),
+        signal: request.signal,
+      });
+    } catch (error) {
+      if (wait === undefined || request.signal.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      continue;
+    }
+    const text = await response.text();
+    if (RETRIED_STATUSES.has(response.status) && wait !== undefined && !request.signal.aborted) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      continue;
+    }
+    let body: unknown = text;
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      // Not JSON: the text itself is what came back, and the trajectory keeps it as it is.
+    }
+    return { status: response.status, body };
   }
-  return { status: response.status, body };
 };
 
 export interface MetaModelApiProviderOptions {
@@ -248,6 +289,11 @@ export interface MetaModelApiProviderOptions {
   /** Where every request and response is recorded (#139). Absent records nothing. */
   readonly trajectory?: MetaTrajectorySink;
   readonly timeoutMs?: number;
+  /**
+   * Real people's narrated eye-tracking sessions, sent after the tools in every session's
+   * prefix so the model copies how eyes move. Absent sends nothing.
+   */
+  readonly gazeExamples?: string;
 }
 
 /**
@@ -351,7 +397,7 @@ export const createMetaModelApiProvider = (
     // per turn would be the one change that throws the whole session's cache away, and a
     // caller that changes a session's persona or task halfway through is a bug we refuse
     // rather than silently pay for.
-    const prefix = buildPrefix(context);
+    const prefix = buildPrefix(context, options.gazeExamples);
     if (conversation.prefix === undefined) {
       conversation.prefix = prefix;
     } else if (JSON.stringify(conversation.prefix) !== JSON.stringify(prefix)) {
@@ -361,7 +407,15 @@ export const createMetaModelApiProvider = (
       );
     }
 
-    const screen = buildScreenMessage(context, { acceptsImages: spec.acceptsImages });
+    let imageUrl: string | undefined;
+    if (spec.acceptsImages && context.screenshot !== undefined) {
+      try {
+        imageUrl = `data:image/png;base64,${(await screenImage(context.screenshot)).toString('base64')}`;
+      } catch (thrown) {
+        return fail('conversation', `the screenshot could not be read: ${messageOf(thrown)}`);
+      }
+    }
+    const screen = buildScreenMessage(context, { acceptsImages: spec.acceptsImages, imageUrl });
     const body = buildRequestBody({
       modelId,
       input: [...conversation.prefix, ...conversation.turns, screen],
@@ -426,6 +480,7 @@ export const createMetaModelApiProvider = (
 
     const decision: Decision = {
       intent: reply.value.intent,
+      ...(reply.value.looks === undefined ? {} : { looks: reply.value.looks }),
       action: reply.value.action,
       ...(hints.length === 0 ? {} : { relevanceHints: Object.fromEntries(hints) }),
       usage,
@@ -453,10 +508,14 @@ export const createMetaModelApiProvider = (
     conversation: Conversation,
     context: DecisionContext,
   ): Promise<Decision> => {
-    const turn = conversation.queue.then(
-      () => takeTurn(identity, conversation, context),
-      () => takeTurn(identity, conversation, context),
-    );
+    // A reply that could not be read is asked for once more. The failed screen never joined
+    // the conversation, so the second request is the first one again.
+    const ask = (): Promise<Decision> =>
+      takeTurn(identity, conversation, context).catch((thrown: unknown) => {
+        if (!(thrown instanceof ModelDecisionError) || thrown.kind !== 'unparseable') throw thrown;
+        return takeTurn(identity, conversation, context);
+      });
+    const turn = conversation.queue.then(ask, ask);
     conversation.queue = turn.catch(() => undefined);
     return turn;
   };
@@ -473,7 +532,7 @@ export const createMetaModelApiProvider = (
      */
     decide: (context) => {
       const conversation: Conversation = {
-        promptCacheKey: anonymousCacheKey(buildPrefix(context)),
+        promptCacheKey: anonymousCacheKey(buildPrefix(context, options.gazeExamples)),
         ...(options.trajectory === undefined ? {} : { trajectory: options.trajectory }),
         turns: [],
         calls: 0,

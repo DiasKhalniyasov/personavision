@@ -377,9 +377,10 @@ describeWithChromium('a capture in a run directory', () => {
       const files = await filesUnder(runDir);
       expect(files.filter((file) => file.endsWith('.png'))).toEqual([
         join(runPaths('').screenshot('A', 'cart')),
+        join(runPaths('').screenshot('A', 'cart').replace(/\.png$/, '.view.png')),
       ]);
-      // The screenshot and one cache entry: nothing else is written into a run.
-      expect(files).toHaveLength(2);
+      // The screenshot, its visible-screen picture and one cache entry: nothing else.
+      expect(files).toHaveLength(3);
     },
     BROWSER_TIMEOUT_MS,
   );
@@ -467,9 +468,10 @@ describeWithChromium('a capture in a run directory', () => {
 
       expect(screenshotOf(second)).toBe(screenshotOf(first));
       expect(existsSync(join(fresh, screenshotOf(second)))).toBe(true);
-      // One screenshot and one cache entry in each: the second run wrote into its own.
-      expect(await filesUnder(fresh)).toHaveLength(2);
-      expect(await filesUnder(runDir)).toHaveLength(2);
+      // One screenshot, its visible-screen picture and one cache entry in each: the second
+      // run wrote into its own.
+      expect(await filesUnder(fresh)).toHaveLength(3);
+      expect(await filesUnder(runDir)).toHaveLength(3);
       expect((await readdir(parent)).sort()).toEqual(['fresh-run', 'run']);
     },
     BROWSER_TIMEOUT_MS,

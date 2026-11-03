@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { DECISION_ACTION_KINDS } from './types.js';
 import type {
+  DecisionLook,
   DecisionAction,
   DecisionContext,
-  DecisionScreenshot,
   DecisionSessionIdentity,
   FixatedElement,
   PastAction,
@@ -84,9 +84,10 @@ export interface ResponsesRequestBody {
  * of it: a live contributor call on the fixture screen spent 1,697 of its 1,763 output
  * tokens on reasoning (observed 2026-10-27). The cap is well clear of that, because a screen
  * whose reasoning runs into the cap comes back `incomplete` and is lost to the run as an
- * automation failure, which costs more than the tokens would have.
+ * automation failure, which costs more than the tokens would have. Reporting looks took
+ * one 2026-10-28 reply to 3,933 reasoning tokens and the old 4,096 cap.
  */
-export const MAX_OUTPUT_TOKENS = 4096;
+export const MAX_OUTPUT_TOKENS = 12288;
 
 const developer = (text: string): ResponsesMessage => ({
   role: 'developer',
@@ -100,14 +101,20 @@ const developer = (text: string): ResponsesMessage => ({
  */
 export const INSTRUCTIONS = [
   'You are one simulated person using a website, and you report what you do one screen at a time.',
-  'You can see only what this screen’s list of looked-at elements says you looked at. There is no',
-  'page source, no selector and no element you were not told about: an element that is not on the',
-  'list does not exist for you, and naming one invalidates your whole answer.',
+  'You see each screen through what you looked at and, when one comes with the screen, its screenshot.',
+  'There is no page source and no selector. Act only on an element id this screen lists; naming any',
+  'other id invalidates your whole answer.',
   '',
   'Answer with one JSON object and nothing else — no prose around it, no code fence:',
-  '{"intent": "<what you are doing, in your own words, first person>",',
+  '{"looks": [{"elementId": "<an element id>", "ms": <how long your eyes stay>, "saw": "<what your eye takes in there>", "thought": "<what goes through your head>"}],',
+  ' "intent": "<what you are doing, in your own words, first person>",',
   ' "action": {"kind": "<one of the kinds below>", "targetElementId": "<an element id>" or null},',
   ' "relevanceHints": {"<element id>": <0..1>}}',
+  '',
+  '"looks" is where your eyes go on this screen before you act, in the order they go there,',
+  'as this person really would look: where the eye lands first, what it skims past, what it',
+  'comes back to. Two to ten looks; "ms" from 100 to 2000, longer where you read; every',
+  'elementId from this screen’s list. The element you act on is one of your looks.',
   '',
   '"relevanceHints" is optional: include it only for elements you actually weighed, and score how',
   'much each one looked like the thing you are after.',
@@ -142,6 +149,13 @@ const trait = (name: string, value: number): string => `- ${name}: ${value}`;
 const personaMessage = (context: DecisionContext): ResponsesMessage =>
   developer(
     [
+      ...(context.profile === undefined
+        ? []
+        : [
+            `Who you are: ${context.profile.about} You are ${String(context.profile.age)}.`,
+            ...context.profile.habits.map((habit) => `- ${habit}`),
+            '',
+          ]),
       'Who you are, as behaviour on a scale of 0 to 1:',
       trait('persistence', context.traits.persistence),
       trait('scanning vs reading (0 reads every word, 1 scans)', context.traits.scanningVsReading),
@@ -151,19 +165,25 @@ const personaMessage = (context: DecisionContext): ResponsesMessage =>
       trait('risk tolerance', context.traits.riskTolerance),
       '',
       'What you came to do:',
-      context.goal.text,
+      // the errand, never the step goal: this message is the frozen cached prefix
+      (context.task ?? context.goal).text,
     ].join('\n'),
   );
 
 /**
  * The three messages that open every request of a session, in the order the owner fixed:
- * instructions, persona and task, tools. Built once per session from its first screen and
+ * instructions, persona and task, tools — and a fourth when the run was given real people's
+ * narrated gaze to copy how eyes move. Built once per session from its first screen and
  * never rebuilt — see `conversationPrefix`'s note in `meta-model.ts`.
  */
-export const buildPrefix = (context: DecisionContext): readonly ResponsesMessage[] => [
+export const buildPrefix = (
+  context: DecisionContext,
+  gazeExamples?: string,
+): readonly ResponsesMessage[] => [
   developer(INSTRUCTIONS),
   personaMessage(context),
   developer(TOOLS),
+  ...(gazeExamples === undefined ? [] : [developer(gazeExamples)]),
 ];
 
 const elementLine = (element: FixatedElement): string => {
@@ -191,7 +211,7 @@ const historyLine = (action: PastAction, index: number): string =>
  */
 export const buildScreenMessage = (
   context: DecisionContext,
-  options: { readonly acceptsImages: boolean },
+  options: { readonly acceptsImages: boolean; readonly imageUrl?: string },
 ): ResponsesMessage => {
   const step =
     context.step.label === undefined
@@ -199,13 +219,27 @@ export const buildScreenMessage = (
       : `${context.step.id} — ${context.step.label}`;
   const text = [
     `Screen ${context.step.index + 1} of this session; step: ${step}`,
+    ...(context.task === undefined || context.task.text === context.goal.text
+      ? []
+      : [`What you want on this screen: ${context.goal.text}`]),
     '',
     context.fixatedElements.length === 0
-      ? 'You have looked at nothing on this screen yet.'
+      ? context.screenElements === undefined
+        ? 'You have looked at nothing on this screen yet.'
+        : 'You have not looked at this screen yet: your looks are yours to report.'
       : [
           'What you have looked at on this screen:',
           ...context.fixatedElements.map(elementLine),
         ].join('\n'),
+    ...(context.screenElements === undefined || context.screenElements.length === 0
+      ? []
+      : [
+          '',
+          'Everything on this screen you can act on, as the screenshot shows it:',
+          ...context.screenElements.map(
+            (element) => `- ${element.id} · ${element.role ?? 'no role'} · “${element.text}”`,
+          ),
+        ]),
     '',
     context.history.length === 0
       ? 'You have done nothing yet this session.'
@@ -214,18 +248,17 @@ export const buildScreenMessage = (
     'What do you do now? One JSON object.',
   ].join('\n');
 
-  const screenshot: DecisionScreenshot | undefined = options.acceptsImages
-    ? context.screenshot
-    : undefined;
+  // A data URL the caller built from the file: the API takes no file path (docs/meta-model-api.md).
+  const imageUrl = options.acceptsImages ? options.imageUrl : undefined;
 
   return {
     role: 'user',
     content:
-      screenshot === undefined
+      imageUrl === undefined
         ? [{ type: 'input_text', text }]
         : [
             { type: 'input_text', text },
-            { type: 'input_image', image_url: screenshot.path },
+            { type: 'input_image', image_url: imageUrl },
           ],
   };
 };
@@ -382,6 +415,7 @@ export const readResponse = (body: unknown): ResponseReading => {
 /** What the model said it does, before the interface's own check is applied to it. */
 export interface ReadReply {
   readonly intent: string;
+  readonly looks?: readonly DecisionLook[];
   readonly action: DecisionAction;
   readonly relevanceHints?: RelevanceHints;
 }
@@ -412,7 +446,7 @@ export const readReply = (replyText: string): ReplyReading => {
   }
 
   if (!isObject(parsed)) return { ok: false, detail: 'the reply is not a JSON object' };
-  const { intent, action, relevanceHints } = parsed;
+  const { intent, action, relevanceHints, looks } = parsed;
   if (typeof intent !== 'string') return { ok: false, detail: 'the reply carries no intent' };
   if (!isObject(action)) return { ok: false, detail: 'the reply carries no action' };
 
@@ -433,10 +467,27 @@ export const readReply = (replyText: string): ReplyReading => {
       )
     : undefined;
 
+  // A look that is not one is dropped, not fatal: the action is what the screen turns on.
+  const gaze = Array.isArray(looks)
+    ? looks.flatMap((look): DecisionLook[] =>
+        isObject(look) && typeof look.elementId === 'string' && typeof look.ms === 'number'
+          ? [
+              {
+                targetElementId: look.elementId,
+                durationMs: Math.min(2000, Math.max(100, look.ms)),
+                saw: typeof look.saw === 'string' ? look.saw : '',
+                thought: typeof look.thought === 'string' ? look.thought : '',
+              },
+            ]
+          : [],
+      )
+    : [];
+
   return {
     ok: true,
     value: {
       intent,
+      ...(gaze.length === 0 ? {} : { looks: gaze }),
       action: {
         kind: kind as DecisionAction['kind'],
         targetElementId: typeof target === 'string' ? target : null,

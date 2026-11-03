@@ -123,6 +123,26 @@ describeWithChromium('a browser session', () => {
   );
 
   it(
+    'presents a touch device to the site as a phone browser, and a desktop as a desktop one',
+    async () => {
+      const iphone = await open({ ...MOBILE, name: 'iPhone 13' });
+      const android = await open(MOBILE);
+      const desktop = await open(DESKTOP);
+      try {
+        const agent = (handle: PageHandle): Promise<string> =>
+          handle.page.evaluate(() => navigator.userAgent);
+
+        expect(await agent(iphone)).toContain('iPhone');
+        expect(await agent(android)).toContain('Android');
+        expect(await agent(desktop)).not.toMatch(/Mobile|iPhone|Android/);
+      } finally {
+        await Promise.all([iphone, android, desktop].map((handle) => closeSession(handle)));
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'reports the desktop device it was opened with, as the page sees it',
     async () => {
       const handle = await open(DESKTOP);

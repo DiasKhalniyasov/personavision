@@ -143,6 +143,36 @@ const settle = async (handle: PageHandle): Promise<void> => {
   await handle.page.waitForLoadState('domcontentloaded');
 };
 
+/** How long a click is given to ask for a new document, if it asks for one. */
+const NAVIGATION_START_MS = 1000;
+
+/**
+ * Runs a click and, when it asked the main frame for a new document, waits until that document
+ * has answered. A click returns once the request is out, and on a slow site the answer takes
+ * seconds: a page read in between is read while it unloads, and the reading goes down with it.
+ */
+const following = async (handle: PageHandle, click: () => Promise<void>): Promise<void> => {
+  const { page } = handle;
+  const before = page.url();
+  const asked = page
+    .waitForRequest(
+      (request) => request.isNavigationRequest() && request.frame() === page.mainFrame(),
+      { timeout: NAVIGATION_START_MS },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  await click();
+  if (await asked) {
+    await page.waitForURL((url) => url.href !== before, { waitUntil: 'commit' }).catch(() => undefined);
+  }
+};
+
+/** A tap at a position, landing as a person's does: on whatever is on top there. */
+const tapAt = (handle: PageHandle, x: number, y: number): Promise<void> =>
+  following(handle, () => handle.page.mouse.click(x, y));
+
 /**
  * Puts the page back where it was after a back navigation that went nowhere a session can
  * act on.
@@ -226,6 +256,30 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
       : { ok: false, action, url, scrollY, step, failure };
   };
 
+  /**
+   * A tap where a person would put it, for a control that will not take Playwright's click:
+   * where the control is now, or, when it is not there any more, where the screenshot showed
+   * it. False when the action is no click or there is nowhere to tap.
+   */
+  const tapWhereSeen = async (
+    now: { x: number; y: number; width: number; height: number } | null,
+  ): Promise<boolean> => {
+    if (action.type !== 'click') return false;
+    try {
+      if (now !== null) {
+        await tapAt(handle, now.x + now.width / 2, now.y + now.height / 2);
+        return true;
+      }
+      const seen = options.screen?.elements.find((element) => element.id === action.elementId)?.bbox;
+      if (seen === undefined) return false;
+      const { scrollY } = await readPosition(handle, timeoutMs);
+      await tapAt(handle, seen.x + seen.width / 2, seen.y + seen.height / 2 - scrollY);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // One step back in history, whatever else the action names.
   //
   // Whether it worked is judged by where the page ended up **and** whether the navigation
@@ -277,13 +331,22 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     // what this catch answers is decided by where it sits, not by reading the error.
     await target.waitFor({ state: 'visible', timeout: timeoutMs });
   } catch {
-    return report('selector_not_found');
+    // A page that rebuilt its DOM after the capture, or a carousel that turned the control
+    // away, leaves the recorded path pointing at nothing, while the control was where the
+    // screenshot shows it: a person taps there, so the tap goes there.
+    if (!(await tapWhereSeen(null))) return report('selector_not_found');
+    try {
+      await settle(handle);
+    } catch {
+      return report('selector_not_found');
+    }
+    return report();
   }
 
   try {
     switch (action.type) {
       case 'click':
-        await target.click({ timeout: timeoutMs });
+        await following(handle, () => target.click({ timeout: timeoutMs }));
         break;
       case 'scroll':
         // The minimum scroll that puts the element on screen; an element already in view
@@ -309,7 +372,12 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
   } catch (error) {
     const reason = mapToAutomationFailure(error);
     if (reason === null) throw error;
-    return report(reason);
+    // A control that never holds still (a playing video, a carousel) or sits under another
+    // layer times out Playwright's checks, while a person taps where it is anyway: so the tap
+    // goes there, and lands on whatever is on top, as theirs would.
+    if (reason !== 'timeout') return report(reason);
+    const now = await target.boundingBox({ timeout: timeoutMs }).catch(() => null);
+    if (!(await tapWhereSeen(now))) return report(reason);
   }
 
   // Only a click can navigate, and a click that navigates must report the page it arrived

@@ -205,20 +205,22 @@ export const detectStep: DetectStep = async (page, task) => {
  * caller's list exactly as it was.
  *
  * A declared control that cannot be resolved on the page is an automation failure whether or
- * not anything was extracted. A candidate list that is **empty** is the one case that resolves
- * to nothing without failing: there is no element to mark, none left silently false, and no
- * screen attention could have been attributed on either way.
+ * not anything was extracted, unless the step declares it `optional`: then the page carries
+ * none. A candidate list that is **empty** is the one other case that resolves to nothing
+ * without failing: there is no element to mark, none left silently false, and no screen
+ * attention could have been attributed on either way.
  */
 export const resolvePrimaryAction: ResolvePrimaryAction = async (page, elements, step) => {
   const resolved = elements.map((element) => ({ ...element, isPrimaryAction: false }));
   if (step === null) return resolved;
 
-  const { selector } = step.primaryAction;
+  const { selector, optional = false } = step.primaryAction;
   const probe = await probeSelector(page, selector);
   if (probe.found === 'unparseable') {
     throw unparseable(step, 'primary action', selector);
   }
   if (probe.found !== 'box') {
+    if (optional) return resolved;
     throw new AutomationFailure(
       'selector_not_found',
       `the ${step.id} step's primary action ${selector} is ${probe.found} on ${page.page.url()}`,
@@ -229,6 +231,7 @@ export const resolvePrimaryAction: ResolvePrimaryAction = async (page, elements,
 
   const match = closestMatch(probe.box, resolved);
   if (match === null) {
+    if (optional) return resolved;
     throw new AutomationFailure(
       'selector_not_found',
       `the ${step.id} step's primary action ${selector} is ${boxText(probe.box)}, which is none of the ${resolved.length} candidate elements of ${page.page.url()}`,

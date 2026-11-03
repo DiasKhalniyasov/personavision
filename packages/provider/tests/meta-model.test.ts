@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,7 +9,7 @@ import {
   ModelDecisionError,
 } from '../src/meta-model.js';
 import type { ModelTransport, TrajectoryRecord } from '../src/meta-model.js';
-import { buildScreenMessage, INSTRUCTIONS, readTokens, TOOLS } from '../src/meta-request.js';
+import { buildScreenMessage, INSTRUCTIONS, readReply, readTokens, TOOLS } from '../src/meta-request.js';
 import type { ResponsesMessage, ResponsesRequestBody } from '../src/meta-request.js';
 import { estimateCostUsd, MODEL_ID_BY_MODE } from '../src/meta-pricing.js';
 import {
@@ -130,28 +132,32 @@ describe('the Meta Model API provider', () => {
       }
     });
 
-    it('sends no screenshot to a model that does not accept image input', async () => {
+    it('sends the screenshot as a base64 data URL, never as a path (both models read images)', async () => {
       const { provider, fake } = withFake();
-      expect(provider.readsImages).toBe(false);
+      expect(provider.readsImages).toBe(true);
+      const dir = mkdtempSync(join(tmpdir(), 'pv-shot-'));
+      const path = join(dir, 'a-browse.png');
+      writeFileSync(path, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 
-      await provider
-        .beginSession(anna)
-        .decide(contextOf({ screenshot: { path: 'screenshots/a-browse.png' } }));
+      await provider.beginSession(anna).decide(contextOf({ screenshot: { path } }));
 
-      expect(JSON.stringify(fake.requests[0]?.body)).not.toContain('a-browse.png');
-      expect(JSON.stringify(fake.requests[0]?.body)).not.toContain('input_image');
+      const body = JSON.stringify(fake.requests[0]?.body);
+      expect(body).toContain('"image_url":"data:image/png;base64,iVBORw=="');
+      expect(body).not.toContain('a-browse.png');
     });
 
-    it('sends the screenshot to a model that does accept image input', () => {
-      const message = buildScreenMessage(
-        contextOf({ screenshot: { path: 'screenshots/a-browse.png' } }),
-        { acceptsImages: true },
+    it('attaches an image only when the caller built its URL', () => {
+      const context = contextOf({ screenshot: { path: 'screenshots/a-browse.png' } });
+      expect(
+        buildScreenMessage(context, { acceptsImages: true, imageUrl: 'data:image/png;base64,AA==' })
+          .content,
+      ).toContainEqual({ type: 'input_image', image_url: 'data:image/png;base64,AA==' });
+      expect(JSON.stringify(buildScreenMessage(context, { acceptsImages: true }))).not.toContain(
+        'input_image',
       );
-
-      expect(message.content).toContainEqual({
-        type: 'input_image',
-        image_url: 'screenshots/a-browse.png',
-      });
+      expect(
+        JSON.stringify(buildScreenMessage(context, { acceptsImages: false, imageUrl: 'data:,x' })),
+      ).not.toContain('input_image');
     });
   });
 
@@ -271,6 +277,24 @@ describe('the Meta Model API provider', () => {
       expect(JSON.stringify(requests[2]?.input.slice(0, 5))).toBe(
         JSON.stringify(requests[1]?.input.slice(0, 5)),
       );
+    });
+
+    it('asks once more, with the same request, when a session’s reply could not be read', async () => {
+      const requests: ResponsesRequestBody[] = [];
+      const garbled = answering({
+        status: 'completed',
+        output: [{ type: 'message', content: [{ type: 'output_text', text: '{"intent": "half' }] }],
+      });
+      const transport: ModelTransport = (request) => {
+        requests.push(request.body);
+        return requests.length === 1 ? garbled(request) : fakeTransport().transport(request);
+      };
+      const provider = createMetaModelApiProvider({ mode: 'contributor', env: TEST_ENV, transport });
+      const session = provider.beginSession(anna);
+
+      await expect(session.decide(contextOf({ step: SESSION_STEPS[0] }))).resolves.toBeDefined();
+      expect(requests).toHaveLength(2);
+      expect(JSON.stringify(requests[1])).toBe(JSON.stringify(requests[0]));
     });
   });
 
@@ -826,5 +850,25 @@ describe('the Meta Model API provider', () => {
         }
       }
     });
+  });
+});
+
+describe('the gaze a model reports', () => {
+  it('reads its looks in order, clamps their time and drops what is not a look', () => {
+    const reply = readReply(
+      JSON.stringify({
+        looks: [
+          { elementId: 'menu', ms: 40, saw: 'a menu', thought: 'maybe here' },
+          { elementId: 'tile', ms: 9000, saw: 'Supercomputer', thought: 'that is it' },
+          { ms: 300 },
+        ],
+        intent: 'I click the tile',
+        action: { kind: 'click', targetElementId: 'tile' },
+      }),
+    );
+    expect(reply.ok && reply.value.looks).toEqual([
+      { targetElementId: 'menu', durationMs: 100, saw: 'a menu', thought: 'maybe here' },
+      { targetElementId: 'tile', durationMs: 2000, saw: 'Supercomputer', thought: 'that is it' },
+    ]);
   });
 });

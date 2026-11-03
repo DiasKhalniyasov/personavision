@@ -109,6 +109,7 @@ export const runFixture = async ({ size = 2 } = {}): Promise<RunFixture> => {
       repeats: '1',
       seed: '11',
       mode: 'contributor',
+      engine: 'offline',
       steps,
       log: (line) => void lines.push(line),
       source: createFixtureSource(captures),

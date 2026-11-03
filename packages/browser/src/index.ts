@@ -24,7 +24,7 @@ export type { ExtractElements } from './extract/elements.js';
 export { stableElementId } from './extract/stable-id.js';
 export type { StableElementIdParts } from './extract/stable-id.js';
 
-export { writeScreenshot } from './screenshot.js';
+export { viewScreenshotPath, writeScreenshot } from './screenshot.js';
 export type { ScreenshotTarget, WriteScreenshot } from './screenshot.js';
 
 export { toAoiEntries, toScreenshotEntries } from './run-projection.js';

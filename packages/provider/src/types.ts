@@ -129,8 +129,14 @@ export interface PastAction {
  * the provider that wants the pixels reads the file, and the offline policy never looks.
  */
 export interface DecisionScreenshot {
+  /** The screenshot file; a provider that sends it reads the bytes itself. */
   readonly path: string;
+  /** The part of it on the person's screen, in CSS pixels; absent sends the whole file. */
+  readonly view?: { readonly top: number; readonly width: number; readonly height: number };
 }
+
+/** An element on the screen, looked at or not: what the screenshot shows and a decision may target. */
+export type ScreenElement = Pick<FixatedElement, 'id' | 'role' | 'text' | 'name'>;
 
 /**
  * Everything a provider is given, and so everything the agent knows.
@@ -139,8 +145,17 @@ export interface DecisionScreenshot {
  * boundary is written down above rather than left to each implementation.
  */
 export interface DecisionContext {
+  /** What the person wants on this screen: the step's own goal, or the whole errand. */
   readonly goal: Goal;
+  /** The whole errand, the same on every screen; absent means `goal` is the errand. */
+  readonly task?: Goal;
   readonly traits: PersonaTraits;
+  /** Who the person is, in words, where the persona carries a profile. */
+  readonly profile?: {
+    readonly age: number;
+    readonly about: string;
+    readonly habits: readonly string[];
+  };
   readonly step: DecisionStep;
   /** The elements it has fixated on this screen. A decision may target no other element. */
   readonly fixatedElements: readonly FixatedElement[];
@@ -148,6 +163,11 @@ export interface DecisionContext {
   readonly history: readonly PastAction[];
   /** Present only when the provider reads images; the offline policy ignores it. */
   readonly screenshot?: DecisionScreenshot;
+  /**
+   * Every element on this screen, present when the provider reads images (owner decision,
+   * 2026-10-27): the agent sees the screenshot, so it may act on anything it shows.
+   */
+  readonly screenElements?: readonly ScreenElement[];
 }
 
 /**
@@ -197,9 +217,21 @@ export interface DecisionModel {
 }
 
 /** What a provider decided: the agent's words, one action, and the call's cost. */
+/** One place the agent's eyes went on a screen, in its own words: the model's gaze. */
+export interface DecisionLook {
+  readonly targetElementId: string;
+  readonly durationMs: number;
+  /** What the eye took in there. */
+  readonly saw: string;
+  /** What went through the person's head. */
+  readonly thought: string;
+}
+
 export interface Decision {
   /** The agent's intent, in its own words — what the replay shows it was thinking. */
   readonly intent: string;
+  /** Where its eyes went on this screen before it acted, in order; absent where no model looked. */
+  readonly looks?: readonly DecisionLook[];
   readonly action: DecisionAction;
   readonly relevanceHints?: RelevanceHints;
   readonly usage: DecisionUsage;

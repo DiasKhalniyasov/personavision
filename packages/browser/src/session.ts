@@ -12,7 +12,7 @@
 /// <reference lib="dom" />
 // The callbacks below run inside the page, not in Node: this module needs the DOM
 // types, and the reference travels with the file (see `geometry.ts`).
-import { chromium } from 'playwright';
+import { chromium, devices, errors } from 'playwright';
 import type { Device, PageHandle, Variant, Viewport } from './types.js';
 
 export interface OpenSessionOptions {
@@ -28,6 +28,16 @@ export interface OpenSessionOptions {
 }
 
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
+
+/**
+ * The browser a touch device runs. Sites choose their phone layout by the user agent as well
+ * as by the width (higgsfield.ai serves phones an app-style home page), so a phone given only
+ * a phone's viewport is shown the desktop site squeezed to fit.
+ */
+// ponytail: two phone browsers told apart by the device's name; a device that needs another
+// can carry its own user agent when one does.
+const mobileUserAgent = (device: Device): string =>
+  (/iphone|ipad/i.test(device.name) ? devices['iPhone 13'] : devices['Pixel 7']).userAgent;
 
 /** What a page says about the device it is being shown on, read out of the page itself. */
 export interface SessionState {
@@ -52,7 +62,7 @@ export const openSession = async (
   device: Device,
   options: OpenSessionOptions = {},
 ): Promise<PageHandle> => {
-  const headless = options.headless ?? true;
+  const headless = options.headless ?? process.env.PV_HEADED !== '1'; // local only: PV_HEADED=1 shows the window
   const browser = await chromium.launch({ headless });
 
   let context;
@@ -61,6 +71,12 @@ export const openSession = async (
       viewport: { width: device.viewport.width, height: device.viewport.height },
       deviceScaleFactor: device.deviceScaleFactor,
       hasTouch: device.touch,
+      // A touch device is a phone or a tablet, and the site is told so.
+      ...(device.touch ? { isMobile: true, userAgent: mobileUserAgent(device) } : {}),
+      // Every session is a first visit, so a site's service worker installs every time, and a
+      // site that reloads once its worker takes over (higgsfield.ai, ~16 s in) pulls the page
+      // out from under whatever is reading it.
+      serviceWorkers: 'block',
     });
   } catch (error) {
     await browser.close();
@@ -69,8 +85,20 @@ export const openSession = async (
 
   try {
     const page = await context.newPage();
+    // A string, not a function: a bundler's helpers would not exist inside the page.
+    await page.addInitScript(
+      "document.addEventListener('click', (e) => { const a = e.target instanceof Element && e.target.closest('a[target]'); if (a) a.target = '_self'; }, true);",
+    );
     page.setDefaultNavigationTimeout(options.navigationTimeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS);
-    await page.goto(variant.url, { waitUntil: options.waitUntil ?? 'load' });
+    await page.goto(variant.url, { waitUntil: options.waitUntil ?? 'load' }).catch(async (error: unknown) => {
+      // A page heavy with media can take longer than the cap to fire `load` while it has long
+      // been usable (higgsfield.ai: parsed in 5 s, `load` at 38 s): a parsed one is taken as it is.
+      // (A navigation that never got an answer is still on about:blank: that one is a timeout.)
+      const parsed =
+        page.url() !== 'about:blank' &&
+        (await page.evaluate(() => document.readyState !== 'loading').catch(() => false));
+      if (!(error instanceof errors.TimeoutError) || !parsed) throw error;
+    });
     return { variant, device, headless, browser, context, page };
   } catch (error) {
     await browser.close();

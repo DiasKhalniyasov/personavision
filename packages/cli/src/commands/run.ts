@@ -1,8 +1,11 @@
-import { modelModeSchema, runRequestSchema } from '@personavision/contract';
+import { readFile } from 'node:fs/promises';
+import { modelModeSchema, personaSchema, runRequestSchema } from '@personavision/contract';
+import { z } from 'zod';
 import { AudienceValidationError } from '@personavision/personas';
 import { CliError } from '../cli-error.js';
 import { resolveAudience } from '../run/audience.js';
 import { engineFailureNotice } from '../run/progress.js';
+import { createMetaModelApiProvider } from '@personavision/provider';
 import { RunNotStartedError, RunStoppedError, startRun } from '../run/start.js';
 import { readTaskSteps } from '../run/task.js';
 import type { CaptureSource } from '@personavision/browser';
@@ -67,6 +70,7 @@ const FINISHING_ACTS = [
   'donate',
   'download',
   'enable',
+  'find',
   'finish',
   'install',
   'join',
@@ -135,7 +139,21 @@ export interface RunCommandArguments {
   mode: string;
   /** `--steps`: a JSON file declaring the task's steps, for a task that has more than one. */
   steps?: string;
+  /** `--people`: a JSON file of hand-written personas, run instead of the generated ones. */
+  people?: string;
+  /**
+   * `--gaze-examples`: narrated eye-tracking sessions of real people (the gaze-example.txt
+   * files `.local/eyetrack/narrate.py` writes), shown to a model run as how real eyes move.
+   */
+  gazeExamples?: readonly string[];
 }
+
+/** What a model run is told before the real people's sessions it is given. */
+const GAZE_EXAMPLES_HEADER = [
+  'How real people’s eyes moved on websites, from an eye-tracking study with a webcam tracker. Each line is one fixation: how long it lasted, what kind of look it was, where on the screen, what they saw and what they thought; their taps and scrolls are in between.',
+  'They are not you. Copy how eyes behave — where they land first, the quick glances that take nothing in, what pulls them off-task, coming back to check — not what these people looked at or thought: you have your own profile, task and screen.',
+  'Real eyes make more looks than two to ten: report as many as your eyes would really make on the screen, up to twenty, most of them short.',
+].join('\n');
 
 /** One argument the test was not started over, reported where the form reports its field. */
 interface Problem {
@@ -276,7 +294,7 @@ export const parseRunRequest = (
     audienceId: argv.audience.trim(),
     repeats: (repeats as { parsed: number }).parsed,
     seed: (seed as { parsed: number }).parsed,
-    engineMode: argv.engine ?? (argv.mode === 'standard' ? 'model' : 'offline'),
+    engineMode: argv.engine ?? 'model',
     modelMode: argv.mode,
   });
   if (request.success) return { request: request.data };
@@ -398,6 +416,20 @@ export const runCommand = async ({
   // half-made run directory behind.
   const audience = await resolveAudience(argv.audience);
   const steps = argv.steps === undefined ? null : await readTaskSteps(argv.steps);
+  const people =
+    argv.people === undefined
+      ? undefined
+      : z.array(personaSchema).min(1).parse(JSON.parse(await readFile(argv.people, 'utf8')));
+  const gazeExamples =
+    argv.gazeExamples === undefined || argv.gazeExamples.length === 0
+      ? undefined
+      : [GAZE_EXAMPLES_HEADER, ...(await Promise.all(argv.gazeExamples.map((f) => readFile(f, 'utf8'))))].join('\n\n');
+  const modelProvider: CreateModelProvider | undefined =
+    createModelProvider ??
+    (gazeExamples === undefined
+      ? undefined
+      : // More looks are a longer answer: a call gets two minutes rather than one.
+      ({ apiKey, modelMode }) => createMetaModelApiProvider({ mode: modelMode, apiKey, gazeExamples, timeoutMs: 120_000 }));
 
   let stopping = false;
   const release = onStop(() => {
@@ -410,11 +442,12 @@ export const runCommand = async ({
       request,
       audience,
       steps,
+      ...(people === undefined ? {} : { people }),
       report: log,
       stopping: () => stopping,
       ...(env === undefined ? {} : { env }),
       ...(source === undefined ? {} : { source }),
-      ...(createModelProvider === undefined ? {} : { createModelProvider }),
+      ...(modelProvider === undefined ? {} : { createModelProvider: modelProvider }),
       ...(now === undefined ? {} : { now }),
     });
     log(started.runDir);

@@ -33,6 +33,10 @@ import { dirname } from 'node:path';
 import { runPaths } from '@personavision/contract';
 import type { PageHandle } from './types.js';
 
+/** Where the visible-screen picture of a step's screenshot goes: beside it, `<step>.view.png`. */
+export const viewScreenshotPath = (screenshot: string): string =>
+  screenshot.replace(/\.png$/, '.view.png');
+
 export interface ScreenshotTarget {
   readonly runDir: string;
   readonly variant: string;
@@ -97,6 +101,10 @@ export const writeScreenshot: WriteScreenshot = async (page, target) => {
     scale: 'device',
     animations: 'disabled',
   });
+  // And the screen as the person sees it, at CSS pixels: a full-page capture shows the
+  // document, which misses a layer a single-page app draws over it (higgsfield.ai's
+  // Supercomputer opens as one), and it is the picture a model is sent.
+  await page.page.screenshot({ path: viewScreenshotPath(onDisk), type: 'png', scale: 'css' });
 
   return runPaths('').screenshot(variant, step);
 };

@@ -264,8 +264,16 @@ describe('the trajectory one session writes', () => {
         }),
       );
 
-      expect(written.map((line) => line.kind)).toEqual(['request', 'response', 'failure']);
-      expect(written[2]?.kind === 'failure' && written[2].failure.kind).toBe('unparseable');
+      // A reply that could not be read is asked for once more, and both tries are on the record.
+      expect(written.map((line) => line.kind)).toEqual([
+        'request',
+        'response',
+        'failure',
+        'request',
+        'response',
+        'failure',
+      ]);
+      expect(written[5]?.kind === 'failure' && written[5].failure.kind).toBe('unparseable');
     });
 
     it('records a non-2xx answer with its status and its error body', async () => {

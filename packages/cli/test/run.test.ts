@@ -93,20 +93,19 @@ describe('a run that goes through', () => {
     expect(run.seedGroups).toEqual([11]);
   });
 
-  it('records the offline engine, and no model mode, when no key is in the environment', async () => {
+  it('refuses a contributor run with no key rather than running it offline', async () => {
     fixture = await runFixture({ size: 2 });
 
-    await runCommand(fixture.options({ engine: 'model' }));
+    const options = fixture.options({ engine: 'model', env: {} });
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
 
+    expect(error.message).toContain('Test failed to start');
     const { run } = await theRun(fixture.runsRoot);
-    // A model run was asked for and this environment has no key, so offline it is — and the
-    // artifact says offline, because a run's mode is never silently upgraded either way.
-    expect(run.engine.mode).toBe('offline');
-    expect(run.engine.modelMode).toBeUndefined();
-    expect(run.engine.provider).toBe('offline-deterministic');
-    expect(run.engine.models).toBeNull();
-    expect(run.usage?.calls).toBe(0);
-    expect(run.usage?.estimatedCostUsd).toBe(0);
+    expect(run.status).toBe('failed');
+    expect(run.engine.mode).toBe('model');
+    expect(run.sessionIds).toEqual([]);
   });
 
   it('carries the engine’s calibration block and the version that earned it', async () => {

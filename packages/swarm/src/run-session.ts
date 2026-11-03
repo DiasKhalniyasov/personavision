@@ -41,9 +41,17 @@
  * each session lands), and the trajectory sink (#139 opens one around the decider).
  */
 
-import { SessionBudget, taskStep, toAutomationFailure } from '@personavision/browser';
+import { SessionBudget, taskStep, toAutomationFailure, viewScreenshotPath } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeSession } from '@personavision/contract';
-import { buildAois, noSegmenter, sampleFixations } from '@personavision/engine';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  buildAois,
+  fixationDurationMedianMsFor,
+  noSegmenter,
+  sampleFixations,
+  saccadeDurationMsFor,
+} from '@personavision/engine';
 import { openTrajectoryFile, validateDecision } from '@personavision/provider';
 import { decideOutcome } from './outcome.js';
 import type {
@@ -74,6 +82,7 @@ import type {
   FixatedElement,
   Goal,
   PastAction,
+  ScreenElement,
 } from '@personavision/provider';
 import type { AutomationFailure, OutcomePolicy, SessionTrace } from './outcome.js';
 
@@ -292,6 +301,14 @@ const pageAction = (kind: DecisionActionKind, aoi: Aoi | null, capture: Capture)
  * did. No selector, no box, no below-the-fold flag and no unfixated area: the knowledge
  * boundary `DecisionContext` declares is enforced here, where the context is built.
  */
+/** Every area on the screen as the agent can name it: what a screenshot-reading agent may act on. */
+const screenElementsOf = (aois: readonly Aoi[], capture: Capture): ScreenElement[] =>
+  aois.map((aoi) => {
+    const visible = elementBehind(aoi, capture)?.text?.trim();
+    const text = visible === undefined || visible === '' ? aoi.label : visible;
+    return { id: aoi.id, role: aoi.role, text, ...(aoi.label === text ? {} : { name: aoi.label }) };
+  });
+
 const fixatedElementsOf = (
   aois: readonly Aoi[],
   fixations: readonly SampledFixation[],
@@ -504,7 +521,12 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         variant: variant.id,
         segmenter: input.segmenter ?? noSegmenter,
       });
-      const scan = sampleFixations({
+      // A model that sees the screenshot reports its own looks (owner decision, 2026-10-28):
+      // nothing is sampled for it, and its looks become this screen's fixations below.
+      const modelGaze = provider.readsImages === true;
+      const scan = modelGaze
+        ? { fixations: [], saccades: [] }
+        : sampleFixations({
         // Only what is on the agent's screen. The sampler draws over the areas it is handed
         // and takes no viewport, so this is where the page's own extent becomes a limit on
         // where a look can land: handed every area of the page it puts fixations on content
@@ -524,7 +546,7 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         weights: input.weights,
         screenIndex,
         scrollY,
-      });
+        });
       fixations.push(...scan.fixations);
       saccades.push(...scan.saccades);
       const lastLook = scan.fixations.at(-1);
@@ -533,7 +555,9 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       const declared = taskStep(task, step);
       const context: DecisionContext = {
         goal,
+        task: { text: task.prompt },
         traits: persona.traits,
+        ...(persona.profile === undefined ? {} : { profile: persona.profile }),
         step: {
           id: step,
           index: screenIndex,
@@ -543,13 +567,62 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         // A copy: the running list goes on growing, and a provider that kept the one it was
         // handed would find this screen's context holding actions taken after it.
         history: [...history],
-        ...(provider.readsImages ? { screenshot: { path: screenshot } } : {}),
+        ...(provider.readsImages
+          ? {
+              // The visible screen as captured where there is one; the full page cut to the
+              // viewport where there is not (a recorded capture has only the full page).
+              screenshot: existsSync(resolve(input.runDir, viewScreenshotPath(screenshot)))
+                ? { path: resolve(input.runDir, viewScreenshotPath(screenshot)) }
+                : {
+                    path: resolve(input.runDir, screenshot),
+                    view: { top: scrollY, width: capture.viewport.width, height: capture.viewport.height },
+                  },
+              // Only what the screenshot shows: an element left or right of the viewport is
+              // one nobody could click, and the model picks it as readily as the real one.
+              screenElements: screenElementsOf(
+                onScreen(aois, scrollY, capture.viewport.height).filter(
+                  (area) => area.bbox.x < capture.viewport.width && area.bbox.x + area.bbox.width > 0,
+                ),
+                capture,
+              ),
+            }
+          : {}),
       };
 
       // The control that advances the step the session is on: what a reader of the outcome
       // wants to know whether the agent ever looked at.
       primaryActionAoiId = aois.find((area) => area.isPrimaryAction)?.id ?? primaryActionAoiId;
       completed = step === finalStepId;
+
+      /** One look at an area, after the screen's last one: where the eye went and for how long. */
+      const lookAt = (area: Aoi, durationMs: number): SampledFixation => {
+        const previous = fixations.at(-1);
+        // Clamped to the page: a box a sticky header or an animation puts partly above it
+        // has a centre the contract refuses as a place anybody looked.
+        const pageX = Math.max(0, area.bbox.x + area.bbox.width / 2);
+        const pageY = Math.max(0, area.bbox.y + area.bbox.height / 2);
+        const amplitudePx =
+          previous === undefined ? 0 : Math.hypot(pageX - previous.pageX, pageY - previous.pageY);
+        const gapMs = previous === undefined ? 0 : saccadeDurationMsFor(amplitudePx);
+        const look: SampledFixation = {
+          index: fixations.length,
+          screenIndex,
+          tMs: clockMs + gapMs,
+          durationMs,
+          x: pageX,
+          // An area the page has scrolled partly past sits above the viewport: its look, at the top edge.
+          y: Math.max(0, pageY - scrollY),
+          pageX,
+          pageY,
+          aoiId: area.id,
+        };
+        if (previous !== undefined && previous.screenIndex === screenIndex) {
+          saccades.push({ fromFixation: previous.index, toFixation: look.index, amplitudePx, durationMs: gapMs });
+        }
+        fixations.push(look);
+        clockMs = look.tMs + look.durationMs;
+        return look;
+      };
 
       let decision: Decision | null = null;
       try {
@@ -575,6 +648,19 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         usable === null
           ? null
           : (aois.find((area) => area.id === usable.action.targetElementId) ?? null);
+
+      const seenHere: SampledFixation[] = [...scan.fixations];
+      if (modelGaze && usable !== null) {
+        for (const seen of usable.looks ?? []) {
+          const area = aois.find((candidate) => candidate.id === seen.targetElementId);
+          if (area === undefined) continue; // a look at nothing on this screen is not a look
+          seenHere.push(lookAt(area, seen.durationMs));
+        }
+      }
+
+      if (aoi !== null && !seenHere.some((f) => f.aoiId === aoi.id)) {
+        seenHere.push(lookAt(aoi, fixationDurationMedianMsFor(persona.traits)));
+      }
 
       // This screen happened whatever the decision layer did with it, and its fixations are
       // already on the session: a screen left out here would leave them pointing past the end.

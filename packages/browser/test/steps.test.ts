@@ -656,6 +656,29 @@ describeWithChromium('primary-action resolution', () => {
   );
 
   it(
+    'marks nothing, rather than failing, when an optional control is not rendered',
+    async () => {
+      const handle = await open(CART.path);
+      try {
+        await handle.page.evaluate(() => {
+          document
+            .querySelector<HTMLElement>('#cart-checkout')
+            ?.style.setProperty('display', 'none');
+        });
+        const cart = stepNamed('cart');
+        const optional: TaskStep = { ...cart, primaryAction: { ...cart.primaryAction, optional: true } };
+
+        const resolved = await resolvePrimaryAction(handle, candidatesFor(CART), optional);
+
+        expect(resolved.some((element) => element.isPrimaryAction)).toBe(false);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'raises selector_not_found when the control resolves but is none of the candidates',
     async () => {
       const handle = await open(CART.path);
