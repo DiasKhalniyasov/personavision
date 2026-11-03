@@ -377,7 +377,11 @@ describeWithChromium('a capture in a run directory', () => {
       const files = await filesUnder(runDir);
       expect(files.filter((file) => file.endsWith('.png'))).toEqual([
         join(runPaths('').screenshot('A', 'cart')),
-        join(runPaths('').screenshot('A', 'cart').replace(/\.png$/, '.view.png')),
+        join(
+          runPaths('')
+            .screenshot('A', 'cart')
+            .replace(/\.png$/, '.view.png'),
+        ),
       ]);
       // The screenshot, its visible-screen picture and one cache entry: nothing else.
       expect(files).toHaveLength(3);

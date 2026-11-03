@@ -666,7 +666,10 @@ describeWithChromium('primary-action resolution', () => {
             ?.style.setProperty('display', 'none');
         });
         const cart = stepNamed('cart');
-        const optional: TaskStep = { ...cart, primaryAction: { ...cart.primaryAction, optional: true } };
+        const optional: TaskStep = {
+          ...cart,
+          primaryAction: { ...cart.primaryAction, optional: true },
+        };
 
         const resolved = await resolvePrimaryAction(handle, candidatesFor(CART), optional);
 

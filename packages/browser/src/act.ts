@@ -165,7 +165,9 @@ const following = async (handle: PageHandle, click: () => Promise<void>): Promis
     );
   await click();
   if (await asked) {
-    await page.waitForURL((url) => url.href !== before, { waitUntil: 'commit' }).catch(() => undefined);
+    await page
+      .waitForURL((url) => url.href !== before, { waitUntil: 'commit' })
+      .catch(() => undefined);
   }
 };
 
@@ -270,7 +272,9 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
         await tapAt(handle, now.x + now.width / 2, now.y + now.height / 2);
         return true;
       }
-      const seen = options.screen?.elements.find((element) => element.id === action.elementId)?.bbox;
+      const seen = options.screen?.elements.find(
+        (element) => element.id === action.elementId,
+      )?.bbox;
       if (seen === undefined) return false;
       const { scrollY } = await readPosition(handle, timeoutMs);
       await tapAt(handle, seen.x + seen.width / 2, seen.y + seen.height / 2 - scrollY);

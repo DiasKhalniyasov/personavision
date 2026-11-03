@@ -609,6 +609,146 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
   .segbar { grid-template-columns: 1fr; }
   .strip { padding: var(--space-10) 0; }
 }
+/* ===== 2026-11-03 revision: the two paths, onboarding, the results page =====
+   docs/FLOW.md sections 11-17. Every value below is a token; nothing new is
+   introduced here that tokens.css does not already declare. */
+
+/* The two product paths, one of them locked until a repository is connected. */
+.paths { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); margin-top: var(--space-8); }
+.path-card {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-6); text-align: left; cursor: pointer;
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface); color: inherit; font: inherit;
+}
+.path-card:hover { border-color: var(--color-accent-strong); box-shadow: var(--shadow-sm); }
+.path-card[aria-current="true"] { border-color: var(--color-accent-strong); box-shadow: var(--shadow-md); }
+.path-card[data-locked] { background: var(--color-surface-sunken); cursor: not-allowed; }
+.path-card[data-locked]:hover { border-color: var(--color-border); box-shadow: none; }
+.path-card h3 { font-size: var(--text-md); }
+.path-card ul { margin: 0; padding-left: var(--space-5); color: var(--color-text-muted); font-size: var(--text-sm); list-style: disc; }
+.path-card ul li { margin-top: var(--space-1); }
+.lockbar {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-3); border-radius: var(--radius-md);
+  background: var(--sev-info-bg); color: var(--sev-info); font-size: var(--text-sm);
+}
+
+/* Add a site: the four ways to prove it is yours, and the line to copy. */
+.verify { display: grid; gap: var(--space-3); margin-top: var(--space-5); }
+.verify-method {
+  display: grid; gap: var(--space-2);
+  padding: var(--space-5); border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.verify-method[aria-current="true"] { border-color: var(--color-accent-strong); background: var(--color-surface-raised); }
+.verify-method header { display: flex; align-items: center; gap: var(--space-3); }
+.verify-method h3 { font-size: var(--text-base); }
+.verify-method p { color: var(--color-text-muted); font-size: var(--text-sm); }
+.tokenline {
+  display: block; overflow-x: auto; padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font: var(--weight-regular) var(--text-xs)/var(--leading-normal) var(--font-mono);
+  color: var(--color-text); white-space: pre;
+}
+.sitestate { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
+
+/* The estimate, above the launch button. */
+.estimate { display: grid; gap: var(--space-4); grid-template-columns: repeat(3, 1fr); margin-top: var(--space-6); }
+.estimate > div {
+  padding: var(--space-5); border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.estimate .microlabel { display: block; }
+.estimate b { display: block; margin-top: var(--space-2); font-family: var(--font-display); font-size: var(--text-xl); letter-spacing: var(--tracking-tight); }
+
+/* A ranked recommendation, with the evidence it cites. */
+.recs { display: grid; gap: var(--space-4); }
+.rec {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--space-4);
+  padding: var(--space-5); border: var(--border-width) solid var(--color-border);
+  border-left: var(--border-width-strong) solid var(--color-accent-strong);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.rec .rank {
+  font-family: var(--font-display); font-size: var(--text-lg); font-weight: var(--weight-extrabold);
+  color: var(--color-text-faint); line-height: var(--leading-snug);
+}
+.rec h3 { font-size: var(--text-md); line-height: var(--leading-snug); }
+.cites { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); font-size: var(--text-xs); }
+.cites a, .cites span {
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-full);
+  background: var(--color-surface-sunken); color: var(--color-link);
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+}
+
+/* Sessions as a grid of video thumbnails. */
+.vidgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--space-4); }
+.vidtile {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: 0; cursor: pointer;
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); color: inherit; font: inherit; text-align: left; overflow: hidden;
+}
+.vidtile:hover { border-color: var(--color-accent-strong); box-shadow: var(--shadow-sm); }
+.vidtile .thumb {
+  position: relative; aspect-ratio: 16 / 10;
+  background: var(--color-canvas-dark-mid); border-bottom: var(--border-width) solid var(--color-border);
+}
+.vidtile .thumb .play {
+  position: absolute; inset: auto var(--space-2) var(--space-2) auto;
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-full);
+  background: var(--screenshot-scrim); color: var(--color-on-canvas-dark);
+  font: var(--weight-medium) var(--text-2xs)/1 var(--font-mono);
+}
+.vidtile .thumb .gaze { position: absolute; width: 18%; aspect-ratio: 1; border-radius: var(--radius-full); background: var(--gaze-fixation); opacity: var(--heat-opacity); }
+.vidtile .meta { display: grid; gap: var(--space-1); padding: var(--space-3); font-size: var(--text-xs); }
+.vidtile .meta strong { font-size: var(--text-sm); }
+
+/* The replay stage: the video, with the gaze and click overlay on top of it. */
+.vidstage { position: relative; aspect-ratio: 16 / 10; border-radius: var(--radius-md); background: var(--color-canvas-dark-mid); overflow: hidden; }
+.vidstage .scrim { position: absolute; inset: 0; display: grid; place-items: center; color: var(--color-on-canvas-dark); font-size: var(--text-sm); }
+.vidstage .click { position: absolute; width: var(--space-5); aspect-ratio: 1; margin: calc(var(--space-5) / -2); border: var(--border-width-strong) solid var(--gaze-fixation-current); border-radius: var(--radius-full); }
+.vidbar { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); font-family: var(--font-mono); font-size: var(--text-xs); }
+.vidbar input[type="range"] { flex: 1; }
+
+/* The funnel, and the time-per-step distribution. */
+.funnel { display: grid; gap: var(--space-3); }
+.funnel-row { display: grid; grid-template-columns: 144px 1fr 176px; align-items: center; gap: var(--space-4); }
+.funnel-bar { height: var(--space-6); border-radius: var(--radius-sm); background: var(--color-surface-sunken); overflow: hidden; }
+.funnel-bar i { display: block; height: 100%; background: var(--color-accent-grass); }
+.funnel-bar i[data-drop] { background: var(--outcome-abandoned); }
+.dist { display: grid; grid-template-columns: repeat(12, 1fr); align-items: end; gap: var(--space-1); height: var(--space-20); margin-top: var(--space-4); }
+.dist i { display: block; border-radius: var(--radius-xs) var(--radius-xs) 0 0; background: var(--color-accent-soft); }
+.dist i[data-median] { background: var(--color-accent-strong); }
+
+/* Path 2: the pull request, and the before/after. */
+.prbox {
+  display: grid; gap: var(--space-3); padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.prbox .diff {
+  overflow-x: auto; padding: var(--space-4); border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font: var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-mono); white-space: pre;
+}
+.prbox .diff .add { color: var(--outcome-success); }
+.prbox .diff .del { color: var(--sev-critical); }
+
+/* Running, with a hundred sessions finishing. */
+.swarmgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--space-6), 1fr)); gap: var(--space-1); margin-top: var(--space-5); }
+.swarmgrid i { display: block; aspect-ratio: 1; border-radius: var(--radius-xs); background: var(--color-surface-sunken); }
+.swarmgrid i[data-done="success"] { background: var(--outcome-success); }
+.swarmgrid i[data-done="abandoned"] { background: var(--outcome-abandoned); }
+.swarmgrid i[data-done="failed"] { background: var(--outcome-failed); }
+.swarmgrid i[data-done="running"] { background: var(--color-accent-soft); }
+
+@media (max-width: 860px) {
+  .paths, .estimate { grid-template-columns: 1fr; }
+  .funnel-row { grid-template-columns: 112px 1fr; }
+  .funnel-row > .funnel-note { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -631,6 +771,22 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
   <button data-go="newrun-invalid">New test &middot; invalid</button>
   <button data-go="running">Running</button>
   <button data-go="error">Test failed</button>
+  <b>2026-11-03</b>
+  <button data-go="signup">Sign up</button>
+  <button data-go="sites">Sites</button>
+  <button data-go="site">Add a site</button>
+  <button data-go="newtest-paths">Paths</button>
+  <button data-go="newtest-feature">Audience &amp; feature</button>
+  <button data-go="newtest-goal">Goal</button>
+  <button data-go="newtest-estimate">Estimate</button>
+  <button data-go="running-swarm">Running &middot; 100</button>
+  <button data-go="results">Results</button>
+  <button data-go="grid">Session videos</button>
+  <button data-go="replay-video">Replay &middot; video</button>
+  <button data-go="heatmaps">Heatmaps</button>
+  <button data-go="funnel">Funnel &amp; timing</button>
+  <button data-go="analysis">Analysis</button>
+  <button data-go="improve">Improve my site</button>
   <span class="spacer"></span>
   <button id="themebtn">Dark mode</button>
 </div>
@@ -661,7 +817,11 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
     <button class="tab" data-go="breakdown">Score breakdown</button>
     <button class="tab" data-go="attention">Attention</button>
     <button class="tab" data-go="sessions">Sessions</button>
+    <button class="tab" data-go="funnel">Funnel &amp; timing</button>
+    <button class="tab" data-go="analysis">Analysis</button>
+    <button class="tab" data-go="improve">Improve</button>
     <span class="grow"></span>
+    <button class="tab" data-go="sites">Sites</button>
     <button class="tab" data-go="audiences">Audiences</button>
   </div>
 </div>
@@ -1442,6 +1602,904 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
   </div>
 </section>
 
+<!-- =====================================================================
+     2026-11-03 revision: docs/FLOW.md sections 11-17.
+     One worked path-1 example throughout: the site app.clipforge.example,
+     the feature "generating a video from a prompt", the audience
+     "First-time creators" (100 people), 93 scored after 7 automation
+     failures, 38 of them finished. Every number is representative.
+     ================================================================== -->
+
+<!-- ===================== 11a. sign up ================================== -->
+<section class="screen" id="screen-signup" hidden>
+  <div class="strip-dark">
+    <div class="signin">
+      <div>
+        <p class="signin-mark">PersonaVision</p>
+        <form class="signin-card" onsubmit="return false">
+          <div>
+            <h1>Create your workspace</h1>
+            <p class="lede">Point it at your site, describe the people you serve, and watch a hundred of them try it.</p>
+          </div>
+          <div class="field-group">
+            <label for="su-email">Work email</label>
+            <input id="su-email" type="email" value="owner@clipforge.example" autocomplete="username">
+          </div>
+          <div class="field-group">
+            <label for="su-pass">Password</label>
+            <input id="su-pass" type="password" value="" autocomplete="new-password">
+            <p class="footnote">At least twelve characters. We store a verifier, never the password.</p>
+          </div>
+          <div class="field-group">
+            <label for="su-ws">Workspace name</label>
+            <input id="su-ws" type="text" value="ClipForge">
+          </div>
+          <button class="btn btn-primary btn-lg" data-go="sites">Create workspace</button>
+          <p class="footnote" style="margin-top: 0">No card. Next step is adding a site and proving it is yours.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11b. sites ==================================== -->
+<section class="screen" id="screen-sites" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <div class="pagehead"><h1>Your sites</h1></div>
+      <p class="lede">A site is a URL in this workspace. Before a hundred simulated people visit it, we ask you to prove
+        you control it &mdash; a hundred browsers against somebody else&rsquo;s site is abuse and load, not a test.</p>
+
+      <div class="section" style="margin-top: var(--space-10)">
+        <div class="aud-grid">
+          <button class="card aud-card" aria-current="true" data-go="site">
+            <span class="microlabel">Verified by DNS &middot; 2 Nov</span>
+            <h3>app.clipforge.example</h3>
+            <div class="aud-facts">
+              <span><b>100</b> agents per run allowed</span>
+              <span><b>4</b> runs an hour &middot; <b>10</b> browsers at a time</span>
+              <span class="faint">Last test: generating a video from a prompt &middot; 3 Nov 09:12</span>
+            </div>
+          </button>
+          <button class="card aud-card" data-go="site">
+            <span class="microlabel">Unverified</span>
+            <h3>beta.clipforge.example</h3>
+            <div class="aud-facts">
+              <span><b>3 of 100</b> agents until this site is verified</span>
+              <span><b>1</b> run an hour</span>
+              <span class="faint">Three ways to verify it &mdash; one of them takes a minute</span>
+            </div>
+          </button>
+          <button class="card aud-card" data-go="site">
+            <h3>+ Add a site</h3>
+            <p class="lede" style="font-size: var(--text-sm)">The URL of the page the feature starts on. You can add
+              more later.</p>
+          </button>
+        </div>
+      </div>
+
+      <p class="footnote">Connecting a GitHub repository counts as verification for the site that repository deploys, and
+        is what unlocks <b>Improve my site</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11c. add a site, and verify it ================ -->
+<section class="screen" id="screen-site" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap-narrow">
+      <p class="breadcrumb"><a href="#" data-go="sites">Sites</a> / beta.clipforge.example</p>
+      <div class="pagehead"><h1>Prove this site is yours</h1></div>
+      <p class="lede">Any one of these four. We check it ourselves &mdash; there is no box to tick.</p>
+
+      <form class="form card card-lg" style="margin-top: var(--space-6)" onsubmit="return false">
+        <div class="field-group">
+          <label for="site-url">The URL the feature starts on</label>
+          <input id="site-url" type="url" value="https://beta.clipforge.example/create">
+        </div>
+      </form>
+
+      <div class="sitestate">
+        <span class="tag tag-abandoned">Unverified</span>
+        <span class="faint">3 of 100 agents until this site is verified &middot; 1 run an hour</span>
+      </div>
+
+      <div class="verify">
+        <div class="verify-method" aria-current="true">
+          <header><h3>DNS TXT record</h3><span class="tag tag-success">Recommended</span></header>
+          <p>Add this record on <b>clipforge.example</b>. It covers every site on the domain, and it survives a deploy.</p>
+          <code class="tokenline">beta.clipforge.example.  TXT  "personavision-site-verification=pv_7f3c91a2d84e"</code>
+          <div class="formfoot"><button class="btn btn-primary btn-sm" data-go="sites">Check the record</button>
+            <span class="faint">Last check: no TXT record found on clipforge.example at 09:04.</span></div>
+        </div>
+        <div class="verify-method">
+          <header><h3>Meta tag</h3></header>
+          <p>Put this in the <code class="mono">&lt;head&gt;</code> of the page above. We fetch the page once and read it.</p>
+          <code class="tokenline">&lt;meta name="personavision-site-verification" content="pv_7f3c91a2d84e"&gt;</code>
+          <div class="formfoot"><button class="btn btn-sm" data-go="sites">Check the page</button></div>
+        </div>
+        <div class="verify-method">
+          <header><h3>File</h3></header>
+          <p>Serve this file with the token as its only contents.</p>
+          <code class="tokenline">https://beta.clipforge.example/.well-known/personavision-site-verification.txt</code>
+          <div class="formfoot"><button class="btn btn-sm" data-go="sites">Check the file</button></div>
+        </div>
+        <div class="verify-method">
+          <header><h3>Connect the GitHub repository</h3><span class="tag tag-info">Also unlocks Improve my site</span></header>
+          <p>Install the PersonaVision app on the repository that deploys this site. One repository, read and write to
+            pull requests, and it never merges anything.</p>
+          <div class="formfoot"><button class="btn btn-sm" data-go="improve">Connect GitHub</button></div>
+        </div>
+      </div>
+
+      <p class="footnote">A failed check says what it looked for, where, and what it found instead. Nothing here is
+        &ldquo;something went wrong&rdquo;.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11d. new test: the two paths ================== -->
+<section class="screen" id="screen-newtest-paths" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <p class="breadcrumb">New test / <b>Path</b> / Audience / Feature / Goal / Launch</p>
+      <div class="pagehead"><h1>What would you like us to do?</h1></div>
+      <p class="lede">Both paths put a hundred simulated people through your site. The second one also writes the change.</p>
+
+      <div class="paths">
+        <button class="path-card" aria-current="true" data-go="newtest-feature">
+          <span class="microlabel">Path 1</span>
+          <h3>Test my site</h3>
+          <p class="lede" style="font-size: var(--text-sm)">A URL and the feature you want tested, in your own words.</p>
+          <ul>
+            <li>Up to 100 people attempt the feature, each recorded on video</li>
+            <li>Completion, time, where they gave up, click and attention heatmaps</li>
+            <li>Ranked recommendations, each citing the session and the second it happened</li>
+          </ul>
+          <span class="btn btn-primary btn-sm" style="justify-self: start">Start here</span>
+        </button>
+        <button class="path-card" data-locked aria-disabled="true">
+          <span class="microlabel">Path 2</span>
+          <h3>Improve my site &middot; locked</h3>
+          <p class="lede" style="font-size: var(--text-sm)">Everything in path 1, and then the change itself.</p>
+          <ul>
+            <li>One targeted change, written as a pull request on your repository</li>
+            <li>The same audience and the same seeds on the before and the after, plus a holdout set</li>
+            <li>The before/after verdict, on the platform and as a comment on the pull request</li>
+          </ul>
+          <span class="lockbar"><b>Connect a GitHub repository</b> and PersonaVision can write the change and open the
+            pull request for you. It never merges: you do.</span>
+          <span class="btn btn-sm" style="justify-self: start" data-go="improve">Connect GitHub</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11e. new test: audience and feature =========== -->
+<section class="screen" id="screen-newtest-feature" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap-narrow">
+      <p class="breadcrumb"><a href="#" data-go="newtest-paths">Path</a> / <b>Audience</b> &amp; feature / Goal / Launch</p>
+      <div class="pagehead"><h1>Who should try it, and what should they try?</h1></div>
+
+      <form class="form card card-lg" style="margin-top: var(--space-6)" onsubmit="return false">
+        <div class="field-group">
+          <label for="nt-site">Site</label>
+          <input id="nt-site" type="url" value="https://app.clipforge.example/create">
+          <p class="footnote">Verified by DNS on 2 Nov &middot; up to 100 agents.</p>
+        </div>
+
+        <div class="field-group">
+          <label for="nt-feature">The feature whose experience you want tested</label>
+          <textarea id="nt-feature" rows="2">generating a video from a prompt</textarea>
+          <p class="footnote">Your sentence, kept as you wrote it. &ldquo;checking out with a promo code&rdquo;,
+            &ldquo;signing up with Google&rdquo;, &ldquo;finding the refund policy&rdquo; all work.</p>
+        </div>
+
+        <div class="field-group">
+          <label for="nt-aud-text">Describe your audience in a sentence &mdash; or pick a saved one</label>
+          <textarea id="nt-aud-text" rows="2">first-time creators in Kazakhstan, mostly on phones, who have never used a video tool</textarea>
+          <div class="formfoot">
+            <button class="btn btn-sm" data-go="newtest-feature">Turn this into an audience</button>
+            <a href="#" data-go="audiences">Use a saved audience instead</a>
+          </div>
+        </div>
+      </form>
+
+      <div class="card card-lg" style="margin-top: var(--space-6)">
+        <span class="microlabel">What we read from that sentence &mdash; edit anything</span>
+        <h2 style="margin-top: var(--space-2); font-size: var(--text-md)">First-time creators</h2>
+        <div class="segbar" style="margin-top: var(--space-4)">
+          <div class="field-group"><label for="nt-size">Participants</label><input id="nt-size" type="number" value="100"></div>
+          <div class="field-group"><label for="nt-age">Age groups</label><input id="nt-age" type="text" value="18-24 30% · 25-34 45% · 35-44 25%"></div>
+          <div class="field-group"><label for="nt-gender">Gender split</label><input id="nt-gender" type="text" value="54% female · 46% male"></div>
+          <div class="field-group"><label for="nt-region">Region and language</label><input id="nt-region" type="text" value="Kazakhstan, Uzbekistan · Russian, Kazakh, English"></div>
+          <div class="field-group"><label for="nt-devices">Device mix</label><input id="nt-devices" type="text" value="72% phone · 28% desktop"></div>
+          <div class="field-group"><label for="nt-tech">How tech-confident</label><input id="nt-tech" type="text" value="Low · first time with a tool like this"></div>
+        </div>
+        <p class="footnote">This is the audience object the personas are generated from, from a seed: the same audience
+          and the same seed always produce the same hundred people, so next month&rsquo;s test compares like with like.</p>
+        <div class="formfoot"><button class="btn btn-primary" data-go="newtest-goal">Write the goal</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11f. new test: review the goal ================ -->
+<section class="screen" id="screen-newtest-goal" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap-narrow">
+      <p class="breadcrumb"><a href="#" data-go="newtest-paths">Path</a> / <a href="#" data-go="newtest-feature">Audience &amp; feature</a> / <b>Goal</b> / Launch</p>
+      <div class="pagehead"><h1>This is what the hundred of them will try to do</h1></div>
+      <p class="lede">Written by Muse Wonder from your URL and your sentence. Read it, change anything, and it is the
+        edited text the test records.</p>
+
+      <form class="form card card-lg" style="margin-top: var(--space-6)" onsubmit="return false">
+        <div class="field-group">
+          <label for="goal-task">The task each person attempts</label>
+          <textarea id="goal-task" rows="2">Generate a video from a text prompt on this page, and wait until it is ready to watch.</textarea>
+        </div>
+        <div class="field-group">
+          <label for="goal-success">What counts as success</label>
+          <textarea id="goal-success" rows="2">A video preview is visible on the page.</textarea>
+          <p class="footnote">It has to be something we can see in the page &mdash; an element, a URL or a piece of text.
+            &ldquo;The user is happy&rdquo; is not a success criterion, and Wonder is asked again until it names one we
+            can observe.</p>
+        </div>
+        <div class="notice info">
+          <b>Written by Muse Wonder, 3 Nov 09:08.</b> If you change it, the test records you as the author of the goal,
+          because a completion rate is only as meaningful as the criterion behind it.
+        </div>
+        <div class="formfoot">
+          <button class="btn btn-primary" data-go="newtest-estimate">Looks right &mdash; see the estimate</button>
+          <button class="btn btn-quiet" data-go="newtest-goal">Ask for another wording</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11g. new test: the estimate and launch ======== -->
+<section class="screen" id="screen-newtest-estimate" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap-narrow">
+      <p class="breadcrumb"><a href="#" data-go="newtest-paths">Path</a> / <a href="#" data-go="newtest-feature">Audience &amp; feature</a> / <a href="#" data-go="newtest-goal">Goal</a> / <b>Launch</b></p>
+      <div class="pagehead"><h1>100 agents on app.clipforge.example</h1></div>
+      <p class="lede">Generating a video from a prompt, for first-time creators. Here is what it will take.</p>
+
+      <div class="estimate">
+        <div><span class="microlabel">Agents</span><b class="num">100</b><span class="faint">10 at a time, the per-site cap</span></div>
+        <div><span class="microlabel">Time</span><b class="num">18&ndash;26 min</b><span class="faint">10 batches &times; a 1:50 median session</span></div>
+        <div><span class="microlabel">Model cost</span><b class="num">$2.10&ndash;$3.40</b><span class="faint">~6.8k tokens a session at the standard price</span></div>
+      </div>
+
+      <div class="card" style="margin-top: var(--space-5)">
+        <span class="microlabel">What the estimate is made of</span>
+        <dl class="kv">
+          <dt>Time</dt><dd>100 sessions &divide; 10 concurrent &times; the 1:50 median session on this site, plus a minute to start the browsers. A range, because a session that gives up early is faster than one that finishes.</dd>
+          <dt>Cost</dt><dd>One model call per screen, around 6.8k input and 500 output tokens a session, at the prices in <span class="mono">docs/meta-model-api.md</span>. The offline engine costs nothing and says so instead of showing $0.00.</dd>
+          <dt>Storage</dt><dd>About 1.4&nbsp;GB of video: 100 sessions &times; ~14&nbsp;MB at 720p, kept inside the run directory.</dd>
+        </dl>
+      </div>
+
+      <div class="formfoot" style="margin-top: var(--space-6)">
+        <button class="btn btn-primary btn-lg" data-go="running-swarm">Launch 100 agents</button>
+        <span class="faint">Every number this test produces is simulated, and none of it is a conversion-lift estimate.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11h. running, a hundred of them =============== -->
+<section class="screen" id="screen-running-swarm" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap-narrow">
+      <div class="pagehead"><h1>63 of 100 people have finished</h1></div>
+      <p class="lede">Generating a video from a prompt &middot; first-time creators &middot; started 09:12, about 9
+        minutes left. You can open a session the moment it lands.</p>
+
+      <div class="progress" style="margin-top: var(--space-6)"><span style="width: 63%"></span></div>
+      <div class="swarmgrid" aria-hidden="true">
+        <i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="failed"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="abandoned"></i>
+        <i data-done="success"></i><i data-done="failed"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i>
+        <i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="failed"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i>
+        <i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="failed"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i>
+        <i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="failed"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i>
+        <i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="failed"></i><i data-done="abandoned"></i>
+        <i data-done="success"></i><i data-done="abandoned"></i><i data-done="success"></i><i data-done="running"></i><i data-done="running"></i><i data-done="running"></i><i data-done="running"></i><i data-done="running"></i><i data-done="running"></i><i data-done="running"></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <p class="footnote">One square a person: finished, gave up, failed, still going, not started. 10 run at once,
+        which is the cap this site is set to.</p>
+
+      <div class="card" style="margin-top: var(--space-6)">
+        <span class="microlabel">Just finished</span>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Session</th><th>Person</th><th>Outcome</th><th class="n">Time</th><th>Ended on</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="mono">S-63</td><td>Aisulu, 29 &middot; phone</td><td><span class="tag tag-success">Success</span></td><td class="n">2:41</td><td class="muted">Preview</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+              <tr><td class="mono">S-62</td><td>Daniyar, 34 &middot; phone</td><td><span class="tag tag-abandoned">Abandoned</span></td><td class="n">1:08</td><td class="muted">Waiting</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+              <tr><td class="mono">S-61</td><td>Marina, 41 &middot; desktop</td><td><span class="tag tag-success">Success</span></td><td class="n">2:02</td><td class="muted">Preview</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+              <tr><td class="mono">S-60</td><td>Olzhas, 22 &middot; phone</td><td><span class="tag tag-automation">Automation failure</span></td><td class="n">0:36</td><td class="muted">Prompt &middot; excluded</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="formfoot" style="margin-top: var(--space-5)">
+        <button class="btn" data-go="results">Open the results so far</button>
+        <button class="btn btn-quiet" data-go="results">Stop the test</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11i. results: the summary is the lead ========= -->
+<section class="screen" id="screen-results" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <div class="audbar">
+        <span class="who" data-go="newtest-feature">&#9679; First-time creators</span>
+        <span>18&ndash;44 &middot; 72% phone &middot; Kazakhstan &amp; Uzbekistan &middot; first time with a tool like this</span>
+        <span class="faint">100 simulated people, generated from this audience with seed 20261103</span>
+        <span class="grow"></span>
+        <button class="btn btn-sm btn-quiet" data-go="newtest-goal">Goal and feature</button>
+      </div>
+
+      <div class="hero">
+        <h1>Two in five of your audience got a video. Most of the rest gave up waiting.</h1>
+        <p class="sub">Feature tested: &ldquo;generating a video from a prompt&rdquo;. Success was a video preview being
+          visible on the page.</p>
+      </div>
+
+      <div class="figures">
+        <div class="figure">
+          <span class="figure-value completion-bad num">41%</span>
+          <span class="figure-label">Completed</span>
+          <span class="figure-pop">38 of 93 people</span>
+        </div>
+        <div class="figure">
+          <span class="figure-value num">2:14</span>
+          <span class="figure-label">Median time to complete</span>
+          <span class="figure-pop">slowest finisher 6:52</span>
+        </div>
+        <div class="figure">
+          <span class="figure-value num">33</span>
+          <span class="figure-label">Gave up on the waiting screen</span>
+          <span class="figure-pop">of the 55 who dropped out</span>
+        </div>
+      </div>
+
+      <div class="notice">
+        <span><b>7 of 100 sessions were our own automation failing</b>, not your site. They are excluded from every
+          figure on this page and from every recommendation. <a href="#" data-go="grid">See them</a>.</span>
+      </div>
+
+      <div class="section">
+        <div class="pagehead"><h2>What to change, in order</h2></div>
+        <p class="lede">Written by Muse Wonder from the aggregate and 20 of the sessions. Each one cites the people it
+          comes from, the second it happens, and the step it happens on.</p>
+
+        <div class="recs" style="margin-top: var(--space-6)">
+          <div class="rec">
+            <span class="rank num">1</span>
+            <div>
+              <h3>Tell people how long the video will take before they press Generate.</h3>
+              <p class="lede" style="font-size: var(--text-sm)">33 people left on the waiting screen, 22 of them in the
+                first 20 seconds, with nothing on the page saying anything was happening.</p>
+              <p class="cites">
+                <a href="#" data-go="replay-video">S-07 &middot; 0:48</a>
+                <a href="#" data-go="replay-video">S-24 &middot; 0:19</a>
+                <a href="#" data-go="replay-video">S-62 &middot; 1:08</a>
+                <a href="#" data-go="heatmaps">heatmap &middot; waiting &middot; progress area</a>
+                <a href="#" data-go="funnel">funnel &middot; waiting</a>
+                <span>simulated</span>
+              </p>
+            </div>
+          </div>
+          <div class="rec">
+            <span class="rank num">2</span>
+            <div>
+              <h3>Move Generate above the fold on phones.</h3>
+              <p class="lede" style="font-size: var(--text-sm)">On a 390&nbsp;px phone the button sits 180&nbsp;px below
+                the fold. 17 people scrolled past it twice before finding it, and 6 never did.</p>
+              <p class="cites">
+                <a href="#" data-go="replay-video">S-22 &middot; 1:12</a>
+                <a href="#" data-go="replay-video">S-48 &middot; 0:57</a>
+                <a href="#" data-go="heatmaps">heatmap &middot; prompt &middot; primary action</a>
+                <a href="#" data-go="funnel">funnel &middot; generate</a>
+                <span>simulated</span>
+              </p>
+            </div>
+          </div>
+          <div class="rec">
+            <span class="rank num">3</span>
+            <div>
+              <h3>Name the prompt box. &ldquo;Describe it&rdquo; reads as a heading, not as somewhere to type.</h3>
+              <p class="lede" style="font-size: var(--text-sm)">11 people clicked an example chip instead of typing, and
+                4 of them never wrote a prompt of their own.</p>
+              <p class="cites">
+                <a href="#" data-go="replay-video">S-41 &middot; 0:31</a>
+                <a href="#" data-go="heatmaps">heatmap &middot; prompt &middot; input</a>
+                <a href="#" data-go="funnel">funnel &middot; prompt</a>
+                <span>simulated</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <p class="footnote"><a href="#" data-go="analysis">Read the full analysis</a> &mdash; the same claims, with every
+          number and every citation behind them.</p>
+      </div>
+
+      <div class="doors">
+        <button class="door" data-go="grid"><strong>Sessions</strong><span>100 videos, filterable by outcome, segment and the step they stopped on</span></button>
+        <button class="door" data-go="heatmaps"><strong>Heatmaps</strong><span>Clicks, attention and scroll depth, per screen</span></button>
+        <button class="door" data-go="funnel"><strong>Funnel and timing</strong><span>Where they dropped, and what took so long</span></button>
+        <button class="door" data-go="improve"><strong>Improve my site</strong><span>Have the first change written as a pull request</span></button>
+      </div>
+
+      <p class="footnote">Every figure on this page is simulated for the audience named above. It ranks what to fix for
+        these people; it does not estimate a conversion lift.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11j. sessions as a video grid ================= -->
+<section class="screen" id="screen-grid" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <div class="pagehead"><h1>100 people, 100 videos</h1></div>
+      <p class="lede">Each tile is one person&rsquo;s whole attempt, recorded. Filter down to the ones you want to watch.</p>
+
+      <div class="toggles" style="margin-top: var(--space-6)">
+        <div class="seg" id="grid-outcome">
+          <button aria-current="true">All 100</button>
+          <button>Completed 38</button>
+          <button>Gave up 41</button>
+          <button>Failed 14</button>
+          <button>Automation 7</button>
+        </div>
+        <div class="seg">
+          <button aria-current="true">Every segment</button>
+          <button>Phone</button>
+          <button>Desktop</button>
+          <button>18&ndash;24</button>
+          <button>First time</button>
+        </div>
+        <div class="seg">
+          <button aria-current="true">Any step</button>
+          <button>Prompt</button>
+          <button>Generate</button>
+          <button>Waiting</button>
+        </div>
+        <span class="faint">Showing 1&ndash;8 of 100 &middot; newest first</span>
+      </div>
+
+      <div class="vidgrid" style="margin-top: var(--space-5)">
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 54%; top: 38%"></i><span class="play">2:41</span></span>
+          <span class="meta"><strong>S-63 &middot; Aisulu, 29</strong><span class="faint">phone &middot; first time</span><span><span class="tag tag-success">Success</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 22%; top: 61%"></i><span class="play">1:08</span></span>
+          <span class="meta"><strong>S-62 &middot; Daniyar, 34</strong><span class="faint">phone &middot; first time</span><span><span class="tag tag-abandoned">Gave up &middot; waiting</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 61%; top: 29%"></i><span class="play">2:02</span></span>
+          <span class="meta"><strong>S-61 &middot; Marina, 41</strong><span class="faint">desktop &middot; returning</span><span><span class="tag tag-success">Success</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 44%; top: 48%"></i><span class="play">0:36</span></span>
+          <span class="meta"><strong>S-60 &middot; Olzhas, 22</strong><span class="faint">phone &middot; first time</span><span><span class="tag tag-automation">Automation &middot; excluded</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 33%; top: 22%"></i><span class="play">3:19</span></span>
+          <span class="meta"><strong>S-59 &middot; Zarina, 26</strong><span class="faint">phone &middot; first time</span><span><span class="tag tag-abandoned">Gave up &middot; waiting</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 68%; top: 55%"></i><span class="play">1:44</span></span>
+          <span class="meta"><strong>S-58 &middot; Timur, 31</strong><span class="faint">desktop &middot; first time</span><span><span class="tag tag-failed">Failed &middot; generate</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 48%; top: 35%"></i><span class="play">2:08</span></span>
+          <span class="meta"><strong>S-57 &middot; Gulnara, 38</strong><span class="faint">phone &middot; returning</span><span><span class="tag tag-success">Success</span></span></span>
+        </button>
+        <button class="vidtile" data-go="replay-video">
+          <span class="thumb"><i class="gaze" style="left: 26%; top: 44%"></i><span class="play">0:51</span></span>
+          <span class="meta"><strong>S-56 &middot; Nurlan, 23</strong><span class="faint">phone &middot; first time</span><span><span class="tag tag-abandoned">Gave up &middot; prompt</span></span></span>
+        </button>
+      </div>
+
+      <div class="formfoot" style="margin-top: var(--space-6)">
+        <button class="btn">Show the next 8</button>
+        <a href="#" data-go="sessions">Show these as rows instead</a>
+      </div>
+      <p class="footnote">Automation failures are shown and marked, never dropped: a video you cannot see is a figure you
+        cannot check.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11k. replay, over the video ================== -->
+<section class="screen" id="screen-replay-video" hidden>
+  <div class="strip strip-sm">
+    <div class="wrap">
+      <p class="breadcrumb"><a href="#" data-go="grid">Sessions</a> / S-62 &middot; Daniyar, 34</p>
+      <div class="pagehead"><h1>Daniyar waited 48 seconds, then left</h1></div>
+      <p class="lede">34 &middot; phone (390&times;844) &middot; first time with a tool like this &middot; speaks Russian
+        &middot; seed 3 &middot; gave up on the waiting screen</p>
+
+      <div class="replay" style="margin-top: var(--space-6)">
+        <div>
+          <div class="vidstage">
+            <span class="scrim">the recorded session &middot; 0:48 of 1:08</span>
+            <i class="click" style="left: 52%; top: 64%"></i>
+          </div>
+          <div class="vidbar">
+            <button class="btn btn-sm">Play</button>
+            <input type="range" min="0" max="68" value="48" aria-label="Scrub the recording">
+            <span>0:48 / 1:08</span>
+            <span class="faint">fixation 21 of 29</span>
+          </div>
+          <div class="toggles" style="margin-top: var(--space-3)">
+            <label><input type="checkbox" checked> Gaze</label>
+            <label><input type="checkbox" checked> Clicks</label>
+            <label><input type="checkbox"> Scanpath</label>
+            <span class="faint">The scrubber moves the video, the gaze, the timeline and the log together.</span>
+          </div>
+        </div>
+        <div class="sidepanel">
+          <div class="timeline">
+            <div class="tl-screen">
+              <header><span class="microlabel">Screen 1 &middot; prompt</span><span class="faint" style="font-size: var(--text-xs)">0:00&ndash;0:14</span></header>
+              <p class="intent">&ldquo;I want a short video for my daughter&rsquo;s birthday. Where do I type that?&rdquo;</p>
+              <ul class="events">
+                <li><span class="t">0:04</span><span><span class="kind">fixate</span> &middot; the heading &ldquo;Describe it&rdquo;</span></li>
+                <li><span class="t">0:09</span><span><span class="kind">type</span> &middot; &ldquo;birthday video for my daughter&rdquo;</span></li>
+              </ul>
+            </div>
+            <div class="tl-screen">
+              <header><span class="microlabel">Screen 2 &middot; generate</span><span class="faint" style="font-size: var(--text-xs)">0:14&ndash;0:20</span></header>
+              <p class="intent">&ldquo;Now where is the button? I have to scroll for it.&rdquo;</p>
+              <ul class="events">
+                <li><span class="t">0:16</span><span><span class="kind">scroll</span> &middot; 420 px, past the button and back</span></li>
+                <li><span class="t">0:19</span><span><span class="kind">click</span> &middot; Generate</span></li>
+              </ul>
+            </div>
+            <div class="tl-screen" data-active="true">
+              <header><span class="microlabel">Screen 3 &middot; waiting</span><span class="faint" style="font-size: var(--text-xs)">0:20&ndash;1:08</span></header>
+              <p class="intent">&ldquo;Is it doing anything? There is nothing to look at. I think it is broken.&rdquo;</p>
+              <ul class="events">
+                <li><span class="t">0:28</span><span><span class="kind">fixate</span> &middot; the empty area under the prompt, twice</span></li>
+                <li><span class="t">0:41</span><span><span class="kind">click</span> &middot; Generate again</span></li>
+                <li><span class="t">0:48</span><span><span class="kind">hesitate</span> &middot; 7 s, no fixation moves</span></li>
+                <li><span class="t">1:06</span><span><span class="kind">abandon</span> &middot; closed the tab</span></li>
+              </ul>
+            </div>
+            <div class="outcome-card">
+              <h3>Gave up at 1:06 &middot; your site was at fault, not our simulation</h3>
+              <p>Nothing on the waiting screen said the video was being made. He pressed Generate a second time, waited
+                seven more seconds without moving his eyes, and left. A progress indicator was never on the page.</p>
+              <dl class="kv">
+                <dt>Supports</dt><dd><a href="#" data-go="results">Recommendation 1 &mdash; say how long it will take</a> &middot; <a href="#" data-go="results">Recommendation 2 &mdash; Generate below the fold</a></dd>
+                <dt>Automation integrity</dt><dd><span class="tag tag-automation">no selector failures</span> every action resolved, so the outcome is the site&rsquo;s and not the harness&rsquo;s</dd>
+                <dt>Video</dt><dd class="mono">videos/S-62.webm &middot; 1:08 &middot; 11.4 MB &middot; 720p</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11l. heatmaps: three overlays, two filters ==== -->
+<section class="screen" id="screen-heatmaps" hidden>
+  <div class="wrap">
+    <p class="breadcrumb"><a href="#" data-go="results">Results</a> / Heatmaps</p>
+    <div class="pagehead"><h1>Where they looked, clicked and stopped scrolling</h1></div>
+    <p class="lede">One screen at a time, three overlays, and the filter that answers the question worth asking:
+      <b>where did the people who failed click?</b></p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-5) 0">
+      <div class="seg">
+        <button aria-pressed="true">Clicks</button>
+        <button aria-pressed="false">Attention</button>
+        <button aria-pressed="false">Scroll depth</button>
+      </div>
+      <div class="seg">
+        <button aria-pressed="false">All 93</button>
+        <button aria-pressed="true">Gave up 41</button>
+        <button aria-pressed="false">Completed 38</button>
+      </div>
+      <div class="seg">
+        <button aria-pressed="true">Phone 67</button>
+        <button aria-pressed="false">Desktop 26</button>
+      </div>
+      <span class="grow"></span>
+      <span class="microlabel">Clicks of the 41 people who gave up &middot; phone &middot; the 7 our automation broke are excluded</span>
+    </div>
+
+    <div class="filmstrip">
+      <button class="step" aria-pressed="false"><span class="microlabel">Prompt</span><span class="reach">88 of 93 reached it</span></button>
+      <button class="step" aria-pressed="false"><span class="microlabel">Generate</span><span class="reach">71 of 93 reached it</span></button>
+      <button class="step" aria-pressed="true"><span class="microlabel">Waiting</span><span class="reach">54 of 93 reached it</span></button>
+      <button class="step" aria-pressed="false"><span class="microlabel">Preview</span><span class="reach">38 of 93 reached it</span></button>
+    </div>
+
+    <div class="stage">
+      <div>
+        <div class="frame dim is-mobile">
+          <div class="page"><h3>Making your video</h3><p class="muted">&nbsp;</p></div>
+          <div class="layer heat"></div>
+          <div class="fold"><span>fold &middot; 390 &times; 844</span></div>
+        </div>
+        <p class="footnote">26 of the 41 clicks on this screen landed on <b>Generate</b> a second time, and 9 landed on
+          empty space where a progress indicator would be. Nothing on this screen tells anybody the video is coming.</p>
+      </div>
+      <div class="sidepanel">
+        <div class="panel">
+          <h3>Overlays</h3>
+          <div class="toggles">
+            <label><input type="checkbox" checked> Clicks <span class="faint">where they pressed</span></label>
+            <label><input type="checkbox"> Attention <span class="faint">dwell-weighted</span></label>
+            <label><input type="checkbox"> Scroll depth <span class="faint">how far down they got</span></label>
+            <label><input type="checkbox"> Areas of interest</label>
+          </div>
+          <div class="heatkey"></div>
+          <div class="scale-legend"><span>one click</span><span>many</span></div>
+        </div>
+        <div class="panel">
+          <h3>This screen</h3>
+          <dl class="kv">
+            <dt>Reached it</dt><dd>54 of 93</dd>
+            <dt>Left here</dt><dd>33 &middot; 22 of them inside 20 s</dd>
+            <dt>Median time on it</dt><dd>41 s</dd>
+            <dt>Scrolled past the fold</dt><dd>12 of 54</dd>
+            <dt>Second click on Generate</dt><dd>26 of 41 who gave up</dd>
+          </dl>
+        </div>
+        <div class="panel">
+          <h3>Reading this</h3>
+          <p class="lede">Filters compose: an overlay, an outcome and a segment. Every count is the people left after the
+            filters, and automation failures are never among them.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Areas of interest on this screen</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Area</th><th>Source</th><th class="n">Clicks</th><th class="n">Time to first fixation</th><th class="n">Total dwell</th><th class="n">Looked at it</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Generate (still on screen)</td><td class="faint">dom</td><td class="n">26</td><td class="n">1.8 s</td><td class="n">4.1 s</td><td class="n">88%</td><td><a href="#" data-go="grid">36 people</a></td></tr>
+            <tr><td>Empty area under the prompt</td><td class="faint">sam</td><td class="n">9</td><td class="n">3.2 s</td><td class="n">6.7 s</td><td class="n">72%</td><td><a href="#" data-go="grid">30 people</a></td></tr>
+            <tr><td>Progress indicator</td><td class="faint">dom</td><td class="n never">never</td><td class="n never">never</td><td class="n never">&mdash;</td><td class="n never">0%</td><td><span class="faint">there is none</span></td></tr>
+            <tr><td>Help link, below the fold</td><td class="faint">dom</td><td class="n">3</td><td class="n">22.4 s</td><td class="n">1.2 s</td><td class="n">11%</td><td><a href="#" data-go="grid">6 people</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">A row that reads <b>never</b> and <b>0%</b> is a result, not missing data: on this screen there
+        is no progress indicator to look at. Every number here is simulated for this audience.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11m. funnel and timing ======================== -->
+<section class="screen" id="screen-funnel" hidden>
+  <div class="wrap">
+    <p class="breadcrumb"><a href="#" data-go="results">Results</a> / Funnel and timing</p>
+    <div class="pagehead"><h1>Where the hundred of them went</h1></div>
+    <p class="lede">93 scored sessions, screen by screen. The biggest drop carries the reason beside it.</p>
+
+    <div class="toggles" style="margin-top: var(--space-5)">
+      <div class="seg">
+        <button aria-current="true">Every segment</button>
+        <button>Phone 67</button>
+        <button>Desktop 26</button>
+        <button>18&ndash;24</button>
+        <button>First time</button>
+      </div>
+    </div>
+
+    <div class="card card-lg" style="margin-top: var(--space-5)">
+      <div class="funnel">
+        <div class="funnel-row">
+          <span><strong>Landing</strong></span>
+          <div class="funnel-bar"><i style="width: 100%"></i></div>
+          <span class="funnel-note faint num">93 reached &middot; 5 left</span>
+        </div>
+        <div class="funnel-row">
+          <span><strong>Prompt</strong></span>
+          <div class="funnel-bar"><i style="width: 95%"></i></div>
+          <span class="funnel-note faint num">88 reached &middot; 17 left</span>
+        </div>
+        <div class="funnel-row">
+          <span><strong>Generate</strong></span>
+          <div class="funnel-bar"><i style="width: 76%"></i></div>
+          <span class="funnel-note faint num">71 reached &middot; 17 left</span>
+        </div>
+        <div class="funnel-row">
+          <span><strong>Waiting</strong></span>
+          <div class="funnel-bar"><i data-drop style="width: 58%"></i></div>
+          <span class="funnel-note faint num">54 reached &middot; <b>33 left</b></span>
+        </div>
+        <div class="funnel-row">
+          <span><strong>Preview</strong></span>
+          <div class="funnel-bar"><i style="width: 41%"></i></div>
+          <span class="funnel-note faint num">38 finished &middot; 41%</span>
+        </div>
+      </div>
+      <div class="notice info" style="margin: var(--space-6) 0 0">
+        <span><b>The biggest drop is the waiting screen: 33 of 54.</b> 22 of them left inside the first 20 seconds, and
+          26 pressed Generate a second time first. Nothing on that screen says the video is being made.
+          <a href="#" data-go="heatmaps">See where they clicked</a>.</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>How long each screen took</h2>
+      <p class="lede">A distribution, not a mean: the median is the dark bar. The people who finished took 2:14 in the
+        middle, and the slowest took nearly seven minutes.</p>
+      <div class="tablewrap" style="margin-top: var(--space-5)">
+        <table>
+          <thead><tr><th>Screen</th><th class="n">25th</th><th class="n">Median</th><th class="n">75th</th><th class="n">90th</th><th>Spread</th></tr></thead>
+          <tbody>
+            <tr><td>Prompt</td><td class="n">0:09</td><td class="n">0:14</td><td class="n">0:23</td><td class="n">0:41</td><td><span class="dist"><i style="height: 20%"></i><i style="height: 48%"></i><i data-median style="height: 100%"></i><i style="height: 72%"></i><i style="height: 40%"></i><i style="height: 24%"></i><i style="height: 16%"></i><i style="height: 12%"></i><i style="height: 8%"></i><i style="height: 6%"></i><i style="height: 4%"></i><i style="height: 2%"></i></span></td></tr>
+            <tr><td>Generate</td><td class="n">0:04</td><td class="n">0:06</td><td class="n">0:18</td><td class="n">0:33</td><td><span class="dist"><i style="height: 60%"></i><i data-median style="height: 100%"></i><i style="height: 44%"></i><i style="height: 28%"></i><i style="height: 32%"></i><i style="height: 20%"></i><i style="height: 14%"></i><i style="height: 10%"></i><i style="height: 8%"></i><i style="height: 6%"></i><i style="height: 4%"></i><i style="height: 2%"></i></span></td></tr>
+            <tr><td><b>Waiting</b></td><td class="n">0:19</td><td class="n">0:41</td><td class="n">1:12</td><td class="n">2:04</td><td><span class="dist"><i style="height: 12%"></i><i style="height: 34%"></i><i style="height: 78%"></i><i data-median style="height: 100%"></i><i style="height: 88%"></i><i style="height: 64%"></i><i style="height: 52%"></i><i style="height: 40%"></i><i style="height: 30%"></i><i style="height: 22%"></i><i style="height: 14%"></i><i style="height: 8%"></i></span></td></tr>
+            <tr><td>Preview</td><td class="n">0:06</td><td class="n">0:11</td><td class="n">0:17</td><td class="n">0:25</td><td><span class="dist"><i style="height: 28%"></i><i style="height: 66%"></i><i data-median style="height: 100%"></i><i style="height: 58%"></i><i style="height: 36%"></i><i style="height: 22%"></i><i style="height: 16%"></i><i style="height: 10%"></i><i style="height: 8%"></i><i style="height: 4%"></i><i style="height: 2%"></i><i style="height: 2%"></i></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>The slowest sessions</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Session</th><th>Person</th><th>Segment</th><th class="n">Total</th><th>Where the time went</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">S-38</td><td>Bota, 44</td><td class="faint">phone &middot; first time</td><td class="n">6:52</td><td class="muted">4:10 of it on the waiting screen</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+            <tr><td class="mono">S-12</td><td>Yerlan, 36</td><td class="faint">desktop &middot; first time</td><td class="n">5:41</td><td class="muted">3:02 looking for Generate</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+            <tr><td class="mono">S-71</td><td>Dana, 27</td><td class="faint">phone &middot; returning</td><td class="n">5:18</td><td class="muted">2:48 re-reading the prompt box</td><td><a href="#" data-go="replay-video">Watch</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">Every number here is simulated for this audience, and ranks what to fix for these people rather
+        than estimating a conversion lift.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11n. the analysis, every claim cited ========== -->
+<section class="screen" id="screen-analysis" hidden>
+  <div class="wrap-narrow">
+    <p class="breadcrumb"><a href="#" data-go="results">Results</a> / Analysis</p>
+    <div class="pagehead"><h1>What Muse Wonder makes of it</h1></div>
+    <p class="lede">The whole write-up. Every claim in it carries the evidence it came from &mdash; the people, the second
+      of their recording, the heatmap region and the funnel step. A claim with nothing to cite is not published.</p>
+
+    <div class="card card-lg" style="margin-top: var(--space-6)">
+      <span class="microlabel">Read 20 of 93 sessions &middot; the aggregate of all 93 &middot; 3 Nov 09:41 &middot; muse-wonder</span>
+      <h2 style="margin-top: var(--space-3); font-size: var(--text-md)">The feature works. The wait is what loses people.</h2>
+      <p class="lede" style="margin-top: var(--space-3)">38 of 93 people got a video. Of the 55 who did not, 33 left on
+        the waiting screen and 22 of those inside twenty seconds &mdash; before any video could plausibly have been ready.
+        They were not confused by the tool: they had already written a prompt and pressed Generate. They left because the
+        page gave them no reason to believe anything was happening.</p>
+      <p class="cites">
+        <a href="#" data-go="funnel">funnel &middot; waiting &middot; 33 of 54</a>
+        <a href="#" data-go="replay-video">S-62 &middot; 0:48</a>
+        <a href="#" data-go="replay-video">S-24 &middot; 0:19</a>
+        <a href="#" data-go="heatmaps">heatmap &middot; waiting &middot; progress area</a>
+        <span>simulated</span>
+      </p>
+
+      <h2 style="margin-top: var(--space-8); font-size: var(--text-md)">The second-biggest loss is a button below the fold.</h2>
+      <p class="lede" style="margin-top: var(--space-3)">17 people left between the prompt and Generate. On a 390&nbsp;px
+        phone the button sits 180&nbsp;px under the fold: the click heatmap shows two scroll passes over it before the
+        press, and six people never pressed it at all. On desktop this does not happen.</p>
+      <p class="cites">
+        <a href="#" data-go="funnel">funnel &middot; generate &middot; 17 left</a>
+        <a href="#" data-go="replay-video">S-22 &middot; 1:12</a>
+        <a href="#" data-go="heatmaps">heatmap &middot; prompt &middot; primary action</a>
+        <span>simulated</span>
+      </p>
+
+      <h2 style="margin-top: var(--space-8); font-size: var(--text-md)">What I did not find</h2>
+      <p class="lede" style="margin-top: var(--space-3)">No evidence that the prompt itself is hard to write: the median
+        time in the box is 14 seconds and nobody abandoned mid-sentence. And nothing here says anything about what real
+        customers would do &mdash; these are a hundred simulated people generated from the audience you described.</p>
+      <p class="cites"><a href="#" data-go="funnel">funnel &middot; prompt</a><span>simulated</span></p>
+    </div>
+
+    <p class="footnote">Automation failures &mdash; 7 of the 100 &mdash; are excluded from every number above, and no claim
+      rests on one. None of this is a conversion-lift estimate.</p>
+  </div>
+</section>
+
+<!-- ===================== 11o. path 2: the closed loop ================== -->
+<section class="screen" id="screen-improve" hidden>
+  <div class="wrap">
+    <p class="breadcrumb"><a href="#" data-go="results">Results</a> / Improve my site</p>
+    <div class="pagehead"><h1>Have the first change written for you</h1></div>
+    <p class="lede">One targeted change, picked from the recommendations above, written as a pull request on your
+      repository. <b>PersonaVision never merges it.</b> You do.</p>
+
+    <div class="lockbar" style="margin-top: var(--space-5)">
+      <span><b>Not connected yet.</b> Install the PersonaVision GitHub App on the one repository that deploys
+        app.clipforge.example, and this screen fills in. It needs read access to the code and write access to pull
+        requests &mdash; nothing else, and no merge permission.
+        <button class="btn btn-sm" style="margin-left: var(--space-2)">Connect GitHub</button></span>
+    </div>
+
+    <div class="section">
+      <span class="microlabel">What it looks like once connected</span>
+      <div class="prbox" style="margin-top: var(--space-4)">
+        <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: baseline">
+          <h3>Show the expected wait before Generate</h3>
+          <span class="grow"></span>
+          <span class="tag tag-info">clipforge/web #482 &middot; open</span>
+        </div>
+        <p class="lede" style="font-size: var(--text-sm)">From recommendation 1 &mdash; <i>tell people how long the video
+          will take before they press Generate</i>. It adds a progress line with an estimate to the waiting screen and
+          nothing else: one change, so the before/after says what the change did.</p>
+        <div class="diff"><span class="del">- &lt;section class="waiting"&gt;&lt;h3&gt;Making your video&lt;/h3&gt;&lt;/section&gt;</span>
+<span class="add">+ &lt;section class="waiting"&gt;</span>
+<span class="add">+   &lt;h3&gt;Making your video&lt;/h3&gt;</span>
+<span class="add">+   &lt;p role="status"&gt;Usually ready in about 40 seconds.&lt;/p&gt;</span>
+<span class="add">+   &lt;progress aria-label="Video progress"&gt;&lt;/progress&gt;</span>
+<span class="add">+ &lt;/section&gt;</span></div>
+        <dl class="kv">
+          <dt>Preview</dt><dd class="mono">clipforge-web-git-pv-wait.preview.example <span class="faint">&mdash; your repository&rsquo;s own preview deployment for this pull request</span></dd>
+          <dt>Tested with</dt><dd>The same audience, the same 100 people, the same seeds &mdash; plus a <b>holdout</b> of 40 people generated from the same audience on seeds this change was never chosen against.</dd>
+          <dt>Comment on the pull request</dt><dd>One comment, updated rather than repeated, with the figures below, the holdout line and a link to this run. Every number in it is labelled simulated.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Before and after</h2>
+      <p class="lede">The same comparison the product has always made, with the baseline and the change as the two
+        versions, and the holdout beside them.</p>
+      <div class="figures">
+        <div class="figure">
+          <span class="figure-value completion-bad num">41%</span>
+          <span class="figure-label">Baseline</span>
+          <span class="figure-pop">38 of 93 people</span>
+        </div>
+        <div class="figure">
+          <span class="figure-value completion-good num">58%</span>
+          <span class="figure-label">With the change</span>
+          <span class="figure-pop">55 of 95 people</span>
+        </div>
+        <div class="figure">
+          <span class="figure-value completion-good num">55%</span>
+          <span class="figure-label">Holdout</span>
+          <span class="figure-pop">22 of 40 people, seeds never used to choose the change</span>
+        </div>
+      </div>
+      <div class="reasons">
+        <span class="microlabel">Why</span>
+        <div>
+          <p class="reason">17 of the 33 people who used to leave on the waiting screen now stay to the preview.</p>
+          <p class="reason">The holdout moved with them, so the gain is the change and not the swarm agreeing with itself.</p>
+        </div>
+      </div>
+      <div class="notice info" style="margin-top: var(--space-6)">
+        <span><b>Confirmed on the holdout.</b> A change that wins on the original seeds but not on the holdout is reported
+          as <i>not confirmed</i>, and says so in this sentence rather than in a footnote.</span>
+      </div>
+      <p class="footnote">Simulated for the audience named on the results page. It says this change helps these people;
+        it does not estimate what it will do to your conversion rate. Merging is yours.</p>
+    </div>
+  </div>
+</section>
+
 </main>
 
 <script>
@@ -1760,18 +2818,25 @@ function completionBand(rate) {
 
 /* ---- navigation ---- */
 /* Screens that show no test, so the test picker and the tab bar are hidden. */
-const CHROME_OFF = new Set(['empty', 'newrun', 'newrun-invalid', 'running', 'error', 'audiences', 'audience', 'no-audience']);
+const CHROME_OFF = new Set(['empty', 'newrun', 'newrun-invalid', 'running', 'error', 'audiences', 'audience',
+  'no-audience', 'sites', 'site', 'newtest-paths', 'newtest-feature', 'newtest-goal', 'newtest-estimate',
+  'running-swarm']);
 const TAB_OF = {
   verdict: 'verdict', breakdown: 'breakdown', attention: 'attention',
   sessions: 'sessions', 'sessions-empty': 'sessions', replay: 'sessions',
-  audiences: 'audiences', audience: 'audiences'
+  audiences: 'audiences', audience: 'audiences',
+  /* The 2026-11-03 revision: a path-1 run leads with Results on the same tab the
+     A/B run leads with its Verdict on, and Heatmaps is the Attention tab. */
+  results: 'verdict', grid: 'sessions', 'replay-video': 'sessions',
+  heatmaps: 'attention', funnel: 'funnel', analysis: 'analysis', improve: 'improve',
+  sites: 'sites', site: 'sites'
 };
 
 function go(name) {
   if (!$('#screen-' + name)) name = 'verdict';
   $$('.screen').forEach(s => { s.hidden = s.id !== 'screen-' + name; });
   /* Signed out: no product chrome at all. */
-  const signedOut = name === 'signin';
+  const signedOut = name === 'signin' || name === 'signup';
   $('#chrome').hidden = signedOut;
   const bare = signedOut || CHROME_OFF.has(name);
   $('#tabbar').hidden = signedOut;

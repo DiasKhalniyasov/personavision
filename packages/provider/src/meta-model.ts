@@ -65,7 +65,12 @@ const screenImage = async (shot: DecisionScreenshot): Promise<Buffer> => {
   const scale = width / shot.view.width;
   const top = Math.min(Math.round(shot.view.top * scale), Math.max(0, height - 1));
   return image
-    .extract({ left: 0, top, width, height: Math.min(Math.round(shot.view.height * scale), height - top) })
+    .extract({
+      left: 0,
+      top,
+      width,
+      height: Math.min(Math.round(shot.view.height * scale), height - top),
+    })
     .resize({ width: shot.view.width })
     .png()
     .toBuffer();

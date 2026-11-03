@@ -90,15 +90,17 @@ export const openSession = async (
       "document.addEventListener('click', (e) => { const a = e.target instanceof Element && e.target.closest('a[target]'); if (a) a.target = '_self'; }, true);",
     );
     page.setDefaultNavigationTimeout(options.navigationTimeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS);
-    await page.goto(variant.url, { waitUntil: options.waitUntil ?? 'load' }).catch(async (error: unknown) => {
-      // A page heavy with media can take longer than the cap to fire `load` while it has long
-      // been usable (higgsfield.ai: parsed in 5 s, `load` at 38 s): a parsed one is taken as it is.
-      // (A navigation that never got an answer is still on about:blank: that one is a timeout.)
-      const parsed =
-        page.url() !== 'about:blank' &&
-        (await page.evaluate(() => document.readyState !== 'loading').catch(() => false));
-      if (!(error instanceof errors.TimeoutError) || !parsed) throw error;
-    });
+    await page
+      .goto(variant.url, { waitUntil: options.waitUntil ?? 'load' })
+      .catch(async (error: unknown) => {
+        // A page heavy with media can take longer than the cap to fire `load` while it has long
+        // been usable (higgsfield.ai: parsed in 5 s, `load` at 38 s): a parsed one is taken as it is.
+        // (A navigation that never got an answer is still on about:blank: that one is a timeout.)
+        const parsed =
+          page.url() !== 'about:blank' &&
+          (await page.evaluate(() => document.readyState !== 'loading').catch(() => false));
+        if (!(error instanceof errors.TimeoutError) || !parsed) throw error;
+      });
     return { variant, device, headless, browser, context, page };
   } catch (error) {
     await browser.close();

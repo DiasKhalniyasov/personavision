@@ -419,17 +419,29 @@ export const runCommand = async ({
   const people =
     argv.people === undefined
       ? undefined
-      : z.array(personaSchema).min(1).parse(JSON.parse(await readFile(argv.people, 'utf8')));
+      : z
+          .array(personaSchema)
+          .min(1)
+          .parse(JSON.parse(await readFile(argv.people, 'utf8')));
   const gazeExamples =
     argv.gazeExamples === undefined || argv.gazeExamples.length === 0
       ? undefined
-      : [GAZE_EXAMPLES_HEADER, ...(await Promise.all(argv.gazeExamples.map((f) => readFile(f, 'utf8'))))].join('\n\n');
+      : [
+          GAZE_EXAMPLES_HEADER,
+          ...(await Promise.all(argv.gazeExamples.map((f) => readFile(f, 'utf8')))),
+        ].join('\n\n');
   const modelProvider: CreateModelProvider | undefined =
     createModelProvider ??
     (gazeExamples === undefined
       ? undefined
       : // More looks are a longer answer: a call gets two minutes rather than one.
-      ({ apiKey, modelMode }) => createMetaModelApiProvider({ mode: modelMode, apiKey, gazeExamples, timeoutMs: 120_000 }));
+        ({ apiKey, modelMode }) =>
+          createMetaModelApiProvider({
+            mode: modelMode,
+            apiKey,
+            gazeExamples,
+            timeoutMs: 120_000,
+          }));
 
   let stopping = false;
   const release = onStop(() => {
