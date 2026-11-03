@@ -23,6 +23,13 @@
  * them (#258 and #260). Each lives in its own file under `recommendations/`, so neither of
  * those tickets edits this file or `recommendations/index.ts` and the two can run at the
  * same time. `recommendations/index.ts` is where that surface is written down.
+ *
+ * The **aggregate** surface below is declared that way a third time, by #288:
+ * `aggregate/sessions.ts` — the one reading of a session every figure of the aggregate
+ * shares, and the place a quantile is defined — is built, and the five figure modules
+ * throw and name the tickets that fill them (#289, #290, #291 and #292). Each lives in
+ * its own file under `aggregate/`, so none of those tickets edits this file or
+ * `aggregate/index.ts`, which is where that surface is written down.
  */
 
 export { FINDING_RULE_IDS, scoringConfig } from './config.js';
@@ -66,3 +73,38 @@ export type {
   WriteUpGenerator,
   WriteUpInput,
 } from './recommendations/index.js';
+
+export {
+  BIN_COUNT,
+  composeAggregate,
+  distributionOf,
+  funnelOfSlice,
+  funnelSliceSpecs,
+  pathsOfSlice,
+  quantileMs,
+  SCORED_OUTCOMES,
+  scoredSessions,
+  screenFiguresOfSlice,
+  screenIndexAt,
+  screenSliceSpecs,
+  segmentOf,
+  stepWalk,
+  timingOfSlice,
+} from './aggregate/index.js';
+export type {
+  AggregateComposer,
+  AggregateInput,
+  FunnelBuilder,
+  FunnelInput,
+  FunnelSliceSpec,
+  PathsBuilder,
+  PathsInput,
+  ScoredOutcome,
+  ScoredSessions,
+  ScreenFiguresBuilder,
+  ScreenFiguresInput,
+  ScreenSliceSpec,
+  StepSpan,
+  TimingBuilder,
+  TimingInput,
+} from './aggregate/index.js';
