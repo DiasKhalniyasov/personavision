@@ -36,10 +36,12 @@ import type { GitHubClient, GitHubRepository } from '../github/client.js';
  * 4. **It never merges.** The client has no merge call (`tests/github/surface.test.ts`
  *    asserts that on its public surface) and this module adds no second path to one: it
  *    opens the pull request and stops.
- * 5. **The pull-request body is #263's, posted unchanged** — the recommendation, its
- *    evidence and the simulated label. A body arriving without the label is refused: a pull
+ * 5. **The pull-request body is #263's, posted unchanged**, and all three of the things it
+ *    must say are checked here as well as there (decision 108, option a): the
+ *    recommendation's own sentence, the evidence that recommendation cites, and the
+ *    simulated label. A body missing any of the three is refused naming which — a pull
  *    request is the one place this product's numbers reach a reader with no screen in front
- *    of them.
+ *    of them, and a reader who sees only the body still learns why the change was made.
  *
  * A GitHub call that fails is **not** a refusal: the App removed from the repository, an
  * archived repository or a protected base branch throw {@link GitHubCallError}, which names
@@ -134,6 +136,13 @@ const refused = (reason: string): ChangeRefused => ({ kind: 'refused', reason })
  */
 const PLAIN = /^[A-Za-z0-9._-]+$/;
 
+/**
+ * Whitespace collapsed and folded to one case, so a sentence wrapped across the lines of a
+ * body still reads as itself. The same reading #263 checks its own body with, because a
+ * body it accepted and a body this opens must not be two different standards.
+ */
+const flat = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
 /** The branch one run's change is written on. Two runs never collide, because run ids do not. */
 export const branchForRun = (runId: string): string => `${IMPROVE_BRANCH_PREFIX}${runId}`;
 
@@ -161,9 +170,20 @@ const refusalBeforeAnything = (request: ChangeRequest): ChangeRefused | undefine
     );
   }
 
-  if (!change.pullRequest.body.toLowerCase().includes(SIMULATED_LABEL)) {
+  const body = flat(change.pullRequest.body);
+  if (!body.includes(SIMULATED_LABEL)) {
     return refused(
       `this pull request's body does not say that the numbers behind it are ${SIMULATED_LABEL}, and a pull request is the one place this product's figures reach a reader with no screen in front of them: nothing was opened`,
+    );
+  }
+  if (!body.includes(flat(recommendation.sentence))) {
+    return refused(
+      `this pull request's body does not state the recommendation it comes from — ${JSON.stringify(recommendation.sentence)} — and a reader of the repository who sees only the body would not learn why the change was made: nothing was opened`,
+    );
+  }
+  if (!body.includes(flat(recommendation.evidence))) {
+    return refused(
+      `this pull request's body does not state the evidence recommendation ${recommendation.id} cites — ${JSON.stringify(recommendation.evidence)} — and a change in somebody's repository states what was observed: nothing was opened`,
     );
   }
 

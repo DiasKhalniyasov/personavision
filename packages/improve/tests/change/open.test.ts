@@ -381,6 +381,63 @@ describe('a change touching more than its recommendation is refused', () => {
     expect(recorded.requests).toEqual([]);
   });
 
+  it('refuses a body that does not state the recommendation it comes from', async () => {
+    const { recorded, client } = over(WHOLE_RUN);
+
+    const reason = asRefused(
+      await openChange(
+        client,
+        request({
+          change: {
+            ...CHANGE,
+            pullRequest: {
+              ...CHANGE.pullRequest,
+              body: `From recommendation R-01. ${RECOMMENDATION.evidence} The numbers are simulated.`,
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(reason).toContain(RECOMMENDATION.sentence);
+    expect(recorded.requests).toEqual([]);
+  });
+
+  it('refuses a body that does not state the evidence that recommendation cites', async () => {
+    const { recorded, client } = over(WHOLE_RUN);
+
+    const reason = asRefused(
+      await openChange(
+        client,
+        request({
+          change: {
+            ...CHANGE,
+            pullRequest: {
+              ...CHANGE.pullRequest,
+              body: `From recommendation R-01 — ${RECOMMENDATION.sentence} The numbers are simulated.`,
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(reason).toContain(RECOMMENDATION.evidence);
+    expect(recorded.requests).toEqual([]);
+  });
+
+  it('reads a body wrapped across lines as the sentences it carries', async () => {
+    const { client } = over(WHOLE_RUN);
+
+    const wrapped = `From recommendation R-01 —\n${RECOMMENDATION.sentence.replace(' before', '\nbefore')}\n\n${RECOMMENDATION.evidence}\n\nThe numbers behind it are simulated.`;
+
+    const result = await openChange(
+      client,
+      request({ change: { ...CHANGE, pullRequest: { ...CHANGE.pullRequest, body: wrapped } } }),
+    );
+
+    expect(result.kind).toBe('opened');
+  });
+
   it('refuses a run id a branch cannot be named for', async () => {
     const { recorded, client } = over(WHOLE_RUN);
 
