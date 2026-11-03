@@ -421,3 +421,128 @@ describe('a run that is stopped', () => {
     expect(run.sessionIds).toHaveLength(run.progress?.finishedSessions ?? 0);
   });
 });
+
+describe('a run of one site', () => {
+  /**
+   * The one-URL form: the site, the feature in the user's own words, and the two halves of
+   * the goal — `--task` is the task the people attempt, and `--criterion` is what has to be
+   * observable for an attempt to have worked (`docs/FLOW.md` sections 11 and 12).
+   */
+  const oneSite = (over: Partial<RunCommandOptions> = {}): Partial<RunCommandOptions> => ({
+    url: [],
+    site: 'https://fixture.test/cart.html',
+    feature: 'buying a canvas tote bag  on the phone',
+    successCriterion: 'The order confirmation is visible.',
+    ...over,
+  });
+
+  it('writes one variant named for the site, carrying the feature and the goal', async () => {
+    fixture = await runFixture({ size: 2 });
+
+    await runCommand(fixture.options(oneSite()));
+
+    const { runDir, run } = await theRun(fixture.runsRoot);
+    expect(await validate(runDir)).toEqual([]);
+    expect(run.variants).toEqual([
+      { id: 'A', name: 'fixture.test', url: 'https://fixture.test/cart.html' },
+    ]);
+    // The user's own sentence, as typed: the double space between its words survives.
+    expect(run.feature).toBe('buying a canvas tote bag  on the phone');
+    // A person typed it on the command line, so the author is the user and not the model.
+    expect(run.goal).toEqual({
+      task: 'Buy the canvas tote bag and place the order',
+      successCriterion: 'The order confirmation is visible.',
+      lastWrittenBy: 'user',
+    });
+    // Two people, one seed, one version — and the sessions on disk agree.
+    expect(run.progress?.totalSessions).toBe(2);
+    expect(run.progress?.finishedSessions).toBe(2);
+    expect(run.sessionIds).toEqual(['S-01', 'S-02']);
+  });
+
+  it('names the site where the progress report names a version', async () => {
+    fixture = await runFixture({ size: 2 });
+
+    await runCommand(fixture.options(oneSite()));
+
+    const printed = fixture.printed();
+    expect(printed[0]).toBe('Running · Buy the canvas tote bag and place the order');
+    expect(printed[1]).toBe('0 of 2 sessions finished · offline deterministic engine');
+    // One row, not two, in the shape every other row has: nothing of the feature or the
+    // goal is printed into the artifact or the log beside it.
+    expect(printed[2]).toBe('  A fixture.test · 2 sessions · https://fixture.test/cart.html');
+    expect(printed[3]).toBe('  Fixture shoppers · 2 people · seeds 11');
+  });
+
+  it('refuses a site with no feature, and writes nothing', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options(oneSite({ feature: '  ' }));
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.exitCode).not.toBe(0);
+    expect(error.message).toContain('The test was not started.');
+    expect(error.message).toContain('--feature');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses a site with no success criterion, and writes nothing', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options(oneSite({ successCriterion: undefined }));
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.message).toContain('--criterion');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses a criterion that is two sentences at the flag that carries it', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options(
+      oneSite({ successCriterion: 'The order confirmation is visible. The basket is empty.' }),
+    );
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.message).toContain('--criterion');
+    expect(error.message).toContain('one plain sentence');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses the feature of a site on a comparison of versions', async () => {
+    fixture = await runFixture({ size: 2 });
+    // The two-version form, with a flag that belongs to the other one: it is refused rather
+    // than read and dropped.
+    const options = fixture.options({ feature: 'buying a canvas tote bag' });
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.message).toContain('--feature');
+    expect(error.message).toContain('--site');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+
+  it('refuses a command that names both a site and a version, naming both', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options(oneSite({ url: ['https://fixture.test/b/cart.html'] }));
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    // Neither form is guessed at: both flags are named, with what they were given.
+    expect(error.message).toContain('--site');
+    expect(error.message).toContain('https://fixture.test/cart.html');
+    expect(error.message).toContain('--url');
+    expect(error.message).toContain('https://fixture.test/b/cart.html');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+});

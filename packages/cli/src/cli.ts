@@ -113,9 +113,22 @@ program
   .command('run')
   .description(
     [
-      'Run a swarm: the audience’s people walk the task on each version, and each session is printed as it finishes.',
+      'Run a swarm: the audience’s people walk the task, and each session is printed as it finishes.',
+      'Two forms: one site with the feature and the goal in your own words, or two versions compared. A command that names both is refused rather than guessed at.',
       'The run directory it writes is the one the app reads — the same pipeline the New test form submits to.',
     ].join('\n'),
+  )
+  .option(
+    '--site <url>',
+    'the one site to test; with it, --feature and --criterion say what the test is about, and the run carries one version named for the site',
+  )
+  .option(
+    '--feature <sentence>',
+    'what the test is about, in your own words — "generating a video from a prompt"; stored exactly as you type it',
+  )
+  .option(
+    '--criterion <sentence>',
+    'the goal’s success criterion: what has to be observable in the page for an attempt to count as a success — a visible element, a URL, a piece of text, and not a judgement',
   )
   .option(
     '--url <url>',
@@ -125,7 +138,7 @@ program
   )
   .option(
     '--task <sentence>',
-    'one sentence, in the user’s words, saying what to do; it must say what counts as finishing',
+    'one sentence, in the user’s words, saying what to do; it must say what counts as finishing. With --site it is the goal’s task',
     '',
   )
   .option(
@@ -166,6 +179,9 @@ program
   .action(
     async (options: {
       url: string[];
+      site?: string;
+      feature?: string;
+      criterion?: string;
       task: string;
       audience?: string;
       personas?: string;
@@ -180,6 +196,9 @@ program
       await runCommand({
         ...options,
         runsRoot: runsRoot(),
+        // The flag is `--criterion`; the argument is the goal's field, spelt as the contract
+        // spells it.
+        ...(options.criterion === undefined ? {} : { successCriterion: options.criterion }),
         // One argument under two names: `--audience` is what it is, `--personas` is what the
         // published surface calls it, and the newer name wins where both are passed.
         audience: options.audience ?? options.personas ?? DEFAULT_AUDIENCE.id,
@@ -188,7 +207,15 @@ program
   )
   .addHelpText(
     'after',
-    '\nExample:\n  personavision run --url http://localhost:4173/checkout-a --task "Buy the boots" --audience outdoor-gear-shoppers --repeats 3\n',
+    [
+      '',
+      'One site — the feature and the goal in your own words, and one version named for the site:',
+      '  personavision run --site https://example.com --feature "generating a video from a prompt" --task "Generate a video and download it" --criterion "A video preview is visible." --audience outdoor-gear-shoppers',
+      '',
+      'Two versions compared:',
+      '  personavision run --url http://localhost:4173/checkout-a --url http://localhost:4173/checkout-b --task "Buy the boots" --audience outdoor-gear-shoppers --repeats 3',
+      '',
+    ].join('\n'),
   );
 
 program
