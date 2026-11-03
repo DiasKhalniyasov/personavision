@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateDecision } from './decision.js';
+import { FREE_USAGE, validateDecision } from './decision.js';
 import { estimateCostUsd, MODEL_SPEC_BY_ID } from './meta-pricing.js';
 import type { PricedModelId } from './meta-pricing.js';
 import { DecisionSessionClosedError } from './session.js';
@@ -8,6 +8,7 @@ import type { WonderAsk, WonderModel, WonderProvider, WonderReply, WonderUse } f
 import type {
   Decision,
   DecisionContext,
+  DecisionUsage,
   DecisionProvider,
   DecisionSession,
   DecisionStep,
@@ -512,13 +513,13 @@ export const wonderProbeAsk = (
   ...overrides,
 });
 
-const USAGE_KEYS = [
-  'cachedInputTokens',
-  'estimatedCostUsd',
-  'inputTokens',
-  'outputTokens',
-  'reasoningTokens',
-] as const;
+/**
+ * The five figures a reply reports, read off `FREE_USAGE` rather than spelled again here:
+ * `packages/contract` is the only place an artifact field name is declared (`CONTEXT.md`),
+ * and this package already holds one value of the five. A sixth figure added to the contract
+ * is therefore a figure this suite starts asserting, rather than one it silently ignores.
+ */
+const USAGE_FIGURES = Object.keys(FREE_USAGE) as readonly (keyof DecisionUsage)[];
 
 export interface WonderProviderContractOptions {
   /** What to call the implementation in the test names. */
@@ -574,24 +575,18 @@ export const describeWonderProviderContract = (options: WonderProviderContractOp
 
     it('reports all five usage figures on every reply', async () => {
       for (const reply of await askAll((use) => wonderProbeAsk({ use, seed: 5 }))) {
-        expect(Object.keys(reply.usage).sort()).toEqual([...USAGE_KEYS]);
-        for (const key of USAGE_KEYS) {
-          const value = reply.usage[key];
+        expect(Object.keys(reply.usage).sort()).toEqual([...USAGE_FIGURES].sort());
+        for (const figure of USAGE_FIGURES) {
+          const value = reply.usage[figure];
           expect(Number.isFinite(value)).toBe(true);
           expect(value).toBeGreaterThanOrEqual(0);
         }
         // Both breakdowns are "of which", not extras, exactly as the API reports them.
         expect(reply.usage.cachedInputTokens).toBeLessThanOrEqual(reply.usage.inputTokens);
         expect(reply.usage.reasoningTokens).toBeLessThanOrEqual(reply.usage.outputTokens);
-        if (options.free) {
-          expect(reply.usage).toEqual({
-            inputTokens: 0,
-            cachedInputTokens: 0,
-            outputTokens: 0,
-            reasoningTokens: 0,
-            estimatedCostUsd: 0,
-          });
-        }
+        // A free call is the one free-usage value this package publishes, not a second
+        // five-zero literal that would have to be kept in step with it.
+        if (options.free) expect(reply.usage).toEqual(FREE_USAGE);
       }
     });
 

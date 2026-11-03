@@ -9,8 +9,9 @@
  * `docs/adr/0003-the-one-shot-wonder-seam.md` records why.
  *
  * Each has the same three parts: an offline deterministic implementation that is the
- * project's default, a model implementation behind it, and a contract suite any
- * implementation inherits. Both suites are published from the separate entry point
+ * project's default, a model implementation behind it — the decision interface's is here,
+ * the one-shot interface's arrives with #255 — and a contract suite any implementation
+ * inherits. Both suites are published from the separate entry point
  * `@personavision/provider/testing`, so that nothing in a run imports a test framework.
  * Selection for both lives in one place and follows one set of rules: offline with no key, a
  * mode never upgraded implicitly, a model request that names no model refused, and a named

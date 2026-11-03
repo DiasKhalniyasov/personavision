@@ -22,18 +22,21 @@ describeWonderProviderContract({
 describe('what the one-shot suite deliberately does not assert', () => {
   it('asserts no prompt text: no assertion in it reads the ask’s document or any wording', () => {
     const source = readFileSync(new URL('../src/testing.ts', import.meta.url), 'utf8');
-    // From the exported suite to the end of the file: the Wonder half of this module.
-    const suite = source.slice(source.indexOf('export const describeWonderProviderContract'));
+    const at = source.indexOf('export const describeWonderProviderContract');
 
-    expect(suite).not.toBe('');
+    // Found, before anything is read from it: a renamed suite would otherwise slice from
+    // `-1`, find no assertion to object to, and pass this test by having read one character.
+    expect(at).toBeGreaterThan(0);
+    // From the exported suite to the end of the file: the Wonder half of this module.
+    const suite = source.slice(at);
+    const assertions = suite.split('\n').filter((line) => line.includes('expect('));
+
+    expect(assertions.length).toBeGreaterThan(10);
     // A prompt is an implementation's own business and changes whenever its model does. A
     // suite that asserted one would fail every time a use improved its wording, and an
     // implementation would be held to words rather than to behaviour.
     expect(
-      suite
-        .split('\n')
-        .filter((line) => line.includes('expect('))
-        .filter((line) => /document|prompt|instruction|wording|developer/i.test(line)),
+      assertions.filter((line) => /document|prompt|instruction|wording|developer/i.test(line)),
     ).toEqual([]);
   });
 });

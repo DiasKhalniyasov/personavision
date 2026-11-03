@@ -127,14 +127,23 @@ const offline = (seed: number, reason: string): SelectedDecisionProvider => ({
 /**
  * The request as an object, or `undefined` for "no preference" — which a `null` from an
  * untyped caller means too, rather than a `TypeError` three lines further down.
+ *
+ * Generic over the request's shape, because the two selections in this file take two: a
+ * decision request names a tier, a one-shot request names a model. The bare mode string is
+ * widened to an object in one place for both, so neither has to spell that branch again.
  */
-const asRequest = (
-  requested: RequestedProviderMode | undefined,
-): ProviderModeRequest | undefined => {
+const asRequest = <Request extends { readonly mode: ProviderMode }>(
+  requested: ProviderMode | Request | undefined,
+): (Partial<Request> & { readonly mode: ProviderMode }) | undefined => {
   if (requested === undefined || requested === null) {
     return undefined;
   }
-  return typeof requested === 'string' ? { mode: requested } : requested;
+  // A bare mode string carries nothing but the mode, and every field a request shape may
+  // also name is optional in both of them — so widening the string to an object cannot drop
+  // anything. The compiler cannot see that through the type parameter, hence the assertion.
+  return typeof requested === 'string'
+    ? ({ mode: requested } as Partial<Request> & { readonly mode: ProviderMode })
+    : requested;
 };
 
 export const selectDecisionProvider = (
@@ -142,7 +151,7 @@ export const selectDecisionProvider = (
 ): SelectedDecisionProvider => {
   const env = options.env ?? process.env;
   const apiKey = env[MODEL_API_KEY_ENV]?.trim() ?? '';
-  const request = asRequest(options.requestedMode);
+  const request = asRequest<ProviderModeRequest>(options.requestedMode);
 
   if (request?.mode === 'offline') {
     return offline(options.seed, 'offline was asked for, and a mode is never upgraded implicitly');
@@ -255,6 +264,11 @@ export const selectDecisionProvider = (
  * fall-back could only ever be the offline implementation standing in for a model run, and a
  * simulated result standing in for a model run is worse than a refusal (owner decision,
  * 2026-10-28).
+ *
+ * It refuses with the **same** `ModelModeUnavailableError` the decision selection refuses
+ * with, although Wonder has no modes and the class's name says one: the condition is the
+ * same — this process cannot honour a model request — and a second class would make a
+ * caller catch two things to handle one.
  */
 
 /** A one-shot mode request: the mode, and the model for a request that is to call one. */
@@ -313,13 +327,7 @@ export const selectWonderProvider = (
 ): SelectedWonderProvider => {
   const env = options.env ?? process.env;
   const apiKey = env[MODEL_API_KEY_ENV]?.trim() ?? '';
-  const requested = options.requestedMode;
-  const request: WonderModeRequest | undefined =
-    requested === undefined || requested === null
-      ? undefined
-      : typeof requested === 'string'
-        ? { mode: requested }
-        : requested;
+  const request = asRequest<WonderModeRequest>(options.requestedMode);
 
   if (request === undefined) {
     return offlineWonder(

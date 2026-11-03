@@ -25,9 +25,14 @@ export const OFFLINE_WONDER_PROVIDER_NAME = 'offline-deterministic-wonder';
 
 /**
  * FNV-1a over the ask's identity, in 32-bit integer arithmetic only, so there is no
- * floating-point drift between platforms. It is the same one-liner the offline decision
- * policy mixes its own seed with; the two streams are independent — this is a utility
- * restated, not a constant the two have to agree on.
+ * floating-point drift between platforms.
+ *
+ * The offline decision policy keeps its own copy of these seven lines, private to that file.
+ * They are restated here rather than shared on purpose: the alternative is for the one-shot
+ * implementation to import from the decision policy, which would couple the two seams this
+ * package deliberately keeps apart (`docs/adr/0003-the-one-shot-wonder-seam.md`) in order to
+ * borrow a pure function. The two streams are independent — nothing requires the two copies
+ * to agree, and a change to either is correct on its own.
  */
 const hash32 = (text: string): number => {
   let hash = 0x811c9dc5;

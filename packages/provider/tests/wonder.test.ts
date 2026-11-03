@@ -9,7 +9,7 @@ import {
 } from '../src/select.js';
 import { parseWonderProbe, wonderProbeAsk, wonderRefusal } from '../src/testing.js';
 import type { WonderProbe } from '../src/testing.js';
-import { parseWonderReply, WONDER_USES, WonderReplyError } from '../src/wonder.js';
+import { parseWonderReply, WONDER_EFFORTS, WONDER_USES, WonderReplyError } from '../src/wonder.js';
 import type { WonderAsk, WonderProvider } from '../src/wonder.js';
 import {
   createOfflineWonderProvider,
@@ -45,6 +45,20 @@ const fakeWonderProvider: WonderProvider = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('the vocabulary the seam publishes', () => {
+  it('names the four uses `docs/FLOW.md` section 16 names, and no fifth', () => {
+    // A fifth use would be a fifth shape in `@personavision/contract` first (#250).
+    expect(WONDER_USES).toEqual(['audience', 'goal', 'analysis', 'change']);
+  });
+
+  it('names the six reasoning efforts the model behind it accepts, and not `none`', () => {
+    // From the `400` the API returns for the one that is not: `reasoning_effort 'none' is
+    // not supported for model 'muse-wonder-1.0'` (`docs/meta-model-api.md`, 2026-11-03).
+    expect(WONDER_EFFORTS).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(WONDER_EFFORTS).not.toContain('none');
+  });
 });
 
 describe('the offline deterministic one-shot implementation', () => {
