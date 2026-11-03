@@ -51,6 +51,10 @@ export interface RunRecord {
   /** When the test was asked for. `startedAt` is when the swarm began. */
   readonly createdAt: Date;
   readonly task: TaskDefinition;
+  /** The feature the test was asked about, in the user's words. Absent where none was. */
+  readonly feature?: Run['feature'];
+  /** The goal that was attempted, and who last wrote it. Absent where none was given. */
+  readonly goal?: Run['goal'];
   readonly variants: Run['variants'];
   /** Copied into the artifact by value: a later edit cannot restate this run. */
   readonly audience: Audience;
@@ -93,6 +97,8 @@ export const openRunRecord = (record: RunRecord, planned: PlannedSessions): Run 
     },
     usage: { ...ZERO_USAGE },
     task: { id: record.task.id, prompt: record.task.prompt },
+    ...(record.feature === undefined ? {} : { feature: record.feature }),
+    ...(record.goal === undefined ? {} : { goal: record.goal }),
     variants: [...record.variants],
     steps,
     stepCaptions: [],
