@@ -147,8 +147,11 @@ export const refuseTooManyAgents = (size: number): CapRefusedError | null =>
  *
  * **A number below one is a run of nobody**, so it is raised to one rather than passed on: a
  * pool of no workers takes no session, and what that writes is a finished run with nothing
- * in it. A surface that collects the number refuses it at the field instead, which is what
- * `personavision run` does and what a screen would do; this is the backstop under them.
+ * in it. An **unreadable** number — a `NaN` from a mistyped flag, an `Infinity` — is nobody
+ * asking, so it gets the cap rather than a sentence about the `NaN` it asked for; the swarm's
+ * own `capOf` reads a given number the same way, and for the same reason. A surface that
+ * collects the number refuses it at the field instead, which is what `personavision run`
+ * does and what a screen would do; this is the backstop under them.
  */
 export interface ConcurrencyForSite {
   /** The bound to hand the swarm. */
@@ -158,7 +161,7 @@ export interface ConcurrencyForSite {
 }
 
 export const concurrencyForSite = (asked?: number): ConcurrencyForSite =>
-  asked === undefined
+  asked === undefined || !Number.isFinite(asked)
     ? { concurrency: CAPS.concurrentSessionsPerSite, lowered: null }
     : asked <= CAPS.concurrentSessionsPerSite
       ? { concurrency: Math.max(1, Math.floor(asked)), lowered: null }

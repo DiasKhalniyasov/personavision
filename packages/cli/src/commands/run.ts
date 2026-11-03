@@ -586,10 +586,6 @@ export const runCommand = async ({
   const parsed = parseRunRequest(argv);
   if ('problems' in parsed) throw notStarted(parsed.problems);
   const { request, concurrency } = parsed;
-  // Said before the run starts, not after: a developer whose fifty became the cap should be
-  // told as the run opens, rather than left to count the sessions and work it out.
-  const lowered = concurrency?.lowered ?? null;
-  if (lowered !== null) log(lowered);
 
   // Both read before anything is written, so a test that was never going to run leaves no
   // half-made run directory behind.
@@ -621,6 +617,12 @@ export const runCommand = async ({
             gazeExamples,
             timeoutMs: 120_000,
           }));
+
+  // Said as the run opens, and **after** everything that can refuse it: a command whose
+  // audience does not resolve has no run to be bounded, and saying what it was bounded to
+  // before saying it never started is two lines in the wrong order.
+  const lowered = concurrency?.lowered ?? null;
+  if (lowered !== null) log(lowered);
 
   let stopping = false;
   const release = onStop(() => {

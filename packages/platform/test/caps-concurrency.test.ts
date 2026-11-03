@@ -87,6 +87,19 @@ describe('the concurrency a caller is handed', () => {
     expect(concurrencyForSite(-4).concurrency).toBe(1);
     expect(concurrencyForSite(2.5).concurrency).toBe(2);
   });
+
+  it('reads an unreadable number as nobody asking', () => {
+    // A `NaN` from a mistyped flag is not a request for fifty browsers, so it gets the cap
+    // rather than a sentence about the `NaN` it asked for.
+    expect(concurrencyForSite(Number.NaN)).toStrictEqual({
+      concurrency: CAPS.concurrentSessionsPerSite,
+      lowered: null,
+    });
+    expect(concurrencyForSite(Number.POSITIVE_INFINITY)).toStrictEqual({
+      concurrency: CAPS.concurrentSessionsPerSite,
+      lowered: null,
+    });
+  });
 });
 
 describe('ten concurrent sessions per site', () => {

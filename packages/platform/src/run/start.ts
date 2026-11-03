@@ -279,11 +279,12 @@ const siteForNewTest = async (
  * this hour), so refusing it here would be refusing a launch no cap refused. What it loses
  * is time, not sessions.
  *
- * It is keyed by **site id**, so a launch on another site starts at once: the ten is about
- * one address being driven, and two addresses are two sites' worth of browsers. A site
- * record belongs to one workspace, so one address added by two workspaces is two sites and
- * two queues — which is the same ceiling the hourly ledger already has, since that is
- * counted per record too.
+ * It is keyed by **site id**, so a launch on another site starts at once: the cap is about
+ * one site being driven, and two sites are two sites' worth of browsers. **Per site record,
+ * not per address** — a record belongs to one workspace, so one address added by two
+ * workspaces is two sites and two queues. That is the same ceiling the hourly ledger already
+ * has, since it is counted per record too, and moving either to the address means deciding
+ * what makes two URLs one site, which no ticket has.
  *
  * `ponytail:` an in-process gate. One server process owns its data directory, which is the
  * same ceiling the file store already has, so a second process would not see this map — nor
