@@ -3,11 +3,12 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from './setup';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from './app';
-import { NEXT_PARAM, paths, patterns } from '../src/shell/paths';
+import { newTestStep, NEXT_PARAM, paths, patterns } from '../src/shell/paths';
 import type { SessionState } from '../src/shell/useSession';
 
 /**
- * The route table of `docs/FLOW.md` section 3, over the repository's own run directories.
+ * The route table of `docs/FLOW.md` sections 3 and 13, over the repository's own run
+ * directories.
  *
  * What a test asserts here is what a reader sees and where a click lands — the rendered
  * words and the resulting path — never a component's internals.
@@ -91,12 +92,40 @@ describe('a signed-out visitor', () => {
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeTruthy();
   });
+
+  it('reads /signup with no session, outside the product chrome', async () => {
+    await serveRunData();
+    const { router } = mountApp(paths.signUp, { session: SIGNED_OUT });
+
+    expect(await screen.findByRole('heading', { name: 'Sign up' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe(paths.signUp);
+    // There is no workspace to name before one has been created (#265).
+    expect(document.querySelector('[data-shell="chrome"]')).toBeNull();
+  });
+
+  it('lands on /signin from each of the onboarding screens, carrying the one it asked for', async () => {
+    await serveRunData();
+
+    for (const intended of [
+      paths.sites,
+      paths.newSite,
+      paths.site('site-clipforge'),
+      paths.githubSettings,
+    ]) {
+      const { router, unmount } = mountApp(intended, { session: SIGNED_OUT });
+      await waitFor(() => {
+        expect(router.state.location.pathname, intended).toBe(paths.signIn);
+      });
+      expect(new URLSearchParams(router.state.location.search).get(NEXT_PARAM)).toBe(intended);
+      unmount();
+    }
+  });
 });
 
-describe('a test cannot be run without an audience', () => {
-  it('sends /new to the audience screen when the workspace has none', async () => {
+describe('the two-URL A/B form cannot be filled in without an audience', () => {
+  it('sends /new?step=variants to the audience screen when the workspace has none', async () => {
     await serveRunData({ runIds: [], audiences: [] });
-    const { router } = mountApp(paths.newTest, {
+    const { router } = mountApp(newTestStep('variants'), {
       audiences: { status: 'ready', audiences: [] },
     });
 
@@ -105,12 +134,23 @@ describe('a test cannot be run without an audience', () => {
     });
   });
 
-  it('renders the New test screen once it has one', async () => {
-    const { runIds } = await serveRunData();
-    void runIds;
-    const { router } = mountApp(paths.newTest);
+  it('renders the New test form once it has one', async () => {
+    await serveRunData();
+    const { router } = mountApp(newTestStep('variants'));
 
     expect(await screen.findByRole('heading', { name: 'New test' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe(paths.newTest);
+  });
+
+  it('opens /new itself on the path chooser, whatever the workspace has described', async () => {
+    await serveRunData({ runIds: [], audiences: [] });
+    const { router } = mountApp(paths.newTest, {
+      audiences: { status: 'ready', audiences: [] },
+    });
+
+    // The wizard's second step is where an audience is described (`docs/FLOW.md` section
+    // 12), so asking for one before the chooser would be a loop (#264).
+    expect(await screen.findByRole('heading', { name: 'Path' })).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.newTest);
   });
 });
@@ -137,7 +177,7 @@ describe('an unknown test id', () => {
   });
 });
 
-describe('every screen of docs/FLOW.md section 3 has a route', () => {
+describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
   it('resolves each one without falling through to the not-found page', async () => {
     const { runIds } = await serveRunData();
     const runId = runIds[0] as string;
@@ -151,7 +191,17 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
       [paths.audiences, 'Who does your business serve?'],
       [paths.newAudience, 'Describe your audience'],
       [paths.audience('aud-outdoor-gear-shoppers'), 'Outdoor-gear shoppers'],
-      [paths.newTest, 'New test'],
+      // The onboarding screens of section 13. Each is mounted and each names the ticket
+      // that fills it (#264); the wizard's steps are `tests/wizard/shell.test.tsx`.
+      [paths.signUp, 'Sign up'],
+      [paths.sites, 'Your sites'],
+      [paths.newSite, 'Add a site'],
+      [paths.site('site-clipforge'), 'Prove this site is yours'],
+      [paths.githubSettings, 'GitHub connection'],
+      // `/new` is one route with a step in the query: no step is the path chooser, and the
+      // two-URL A/B form is the variants step.
+      [paths.newTest, 'Path'],
+      [newTestStep('variants'), 'New test'],
       [paths.breakdown(runId), 'How sure is this, and what drove it'],
       [paths.attention(runId, 'B', 'review'), 'Where your audience looked'],
       [paths.sessions(runId), 'What happened to each person'],
@@ -170,16 +220,21 @@ describe('every screen of docs/FLOW.md section 3 has a route', () => {
     expect(Object.values(patterns)).toEqual([
       '/',
       '/signin',
+      '/signup',
       '/demo',
       '/audiences',
       '/audiences/new',
       '/audiences/:audienceId',
+      '/sites',
+      '/sites/new',
+      '/sites/:siteId',
       '/new',
       '/runs/:runId',
       '/runs/:runId/breakdown',
       '/runs/:runId/attention/:variant/:step',
       '/runs/:runId/sessions',
       '/runs/:runId/sessions/:sessionId',
+      '/settings/github',
     ]);
   });
 

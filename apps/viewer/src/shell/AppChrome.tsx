@@ -12,7 +12,11 @@ import { WorkspaceName } from './WorkspaceName';
  * The signed-in chrome of a hosted platform, as `#chrome` and `#tabbar` draw it in
  * `docs/design/prototype.html`: the product name, the workspace, the test being read, the
  * simulated-audience badge, New test, the account menu, and the tabs — Verdict, Score
- * breakdown, Attention, Sessions, with Audiences at the end.
+ * breakdown, Attention, Sessions, with Sites and Audiences at the end.
+ *
+ * Sites and Audiences are about the workspace rather than about one test, which is why
+ * `#tabbar` puts them after the gap: a signed-in user has to be able to reach their sites
+ * (`docs/FLOW.md` section 13) from any screen, including one that is about no test at all.
  *
  * Every screen behind sign-in renders inside it. The tabs are **links**, so the chrome is
  * operable by keyboard and a tab opens in a new window like any other link; the prototype's
@@ -83,6 +87,7 @@ export function AppChrome({ run }: { run: RunState | null }) {
                 ))
               : null}
           <span className="grow" />
+          <Tab label="Sites" to={paths.sites} match={matches.sites} />
           <Tab label="Audiences" to={paths.audiences} match={matches.audiences} />
         </div>
       </nav>

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { demoAudienceRecord, forgetRuns, mountApp } from '../app';
 import { serveStore } from './fixture';
-import { paths } from '../../src/shell/paths';
+import { newTestStep, paths } from '../../src/shell/paths';
 import type { AudienceRecord } from '../../src/screens/audience/store';
 
 /**
@@ -154,7 +154,9 @@ describe('a workspace with no audience', () => {
 
   it('refuses to start a test, and sends the reader here', async () => {
     await serveStore({ records: [] });
-    const { router } = mountApp(paths.newTest);
+    // The two-URL A/B form, which is the wizard's variants step since #264: it submits a
+    // saved audience record's id, so a workspace with none cannot fill it in.
+    const { router } = mountApp(newTestStep('variants'));
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.audiences);
@@ -166,7 +168,7 @@ describe('a workspace with no audience', () => {
 
   it('lets a test be started once there is one', async () => {
     await serveStore();
-    const { router } = mountApp(paths.newTest);
+    const { router } = mountApp(newTestStep('variants'));
 
     expect(await screen.findByRole('heading', { name: 'New test' })).toBeTruthy();
     expect(router.state.location.pathname).toBe(paths.newTest);
