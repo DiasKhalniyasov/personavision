@@ -8,6 +8,7 @@
  */
 
 export {
+  aggregateSchema,
   audienceSchema,
   AUTOMATION_FAILURE_NOTICE_SHARE,
   automationFailureNoticeIsDue,
@@ -35,13 +36,16 @@ export {
 } from './schemas.js';
 export type {
   AgeGroup,
+  Aggregate,
   Audience,
   AudienceAgeGroup,
   AudienceDevice,
   Change,
   Citation,
+  Distribution,
   EvidenceLinkParam,
   Findings,
+  FunnelSlice,
   Gender,
   GenderSplit,
   Goal,
@@ -64,6 +68,7 @@ export type {
   RunUsage,
   SampleProvenance,
   Score,
+  ScreenSlice,
   Session,
   SessionProgress,
   SessionVideo,
@@ -81,6 +86,7 @@ export {
   listRunDirs,
   readRun,
   validate,
+  writeAggregate,
   writeRun,
   writeSession,
 } from './io.js';

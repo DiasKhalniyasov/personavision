@@ -10,8 +10,9 @@ import { listRunDirs, runPaths, runSchema } from '@personavision/contract';
  * `docs/adr/0001-run-data-over-http-as-static-files.md`.
  *
  * - `GET /runs/index.json` → `[{ runId, name, createdAt }]`, newest first
- * - `GET /runs/<runId>/run.json`, `/findings.json`, `/recommendations.json`,
- *   `/sessions/S-NN.json`, `/screenshots/<variant>/<step>.png`, `/videos/S-NN.webm` → the
+ * - `GET /runs/<runId>/run.json`, `/findings.json`, `/aggregate.json`,
+ *   `/recommendations.json`, `/sessions/S-NN.json`, `/screenshots/<variant>/<step>.png`,
+ *   `/videos/S-NN.webm` → the
  *   files on disk, byte for byte. A new artifact file of the layout is reachable the moment
  *   it is written: the mount answers for the file kinds below and holds no list of names.
  * - A `Range: bytes=…` request for any of them is answered with that slice, so a `<video>`

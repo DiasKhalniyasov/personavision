@@ -11,9 +11,10 @@ import { temporaryRunDir } from './fixtures.js';
 describe('the run-directory layout', () => {
   const layout = runPaths('');
 
-  it('is run.json, findings.json, recommendations.json, sessions/S-NN.json, screenshots/<variant>/<step>.png and videos/S-NN.webm', () => {
+  it('is run.json, findings.json, aggregate.json, recommendations.json, sessions/S-NN.json, screenshots/<variant>/<step>.png and videos/S-NN.webm', () => {
     expect(layout.run).toBe('run.json');
     expect(layout.findings).toBe('findings.json');
+    expect(layout.aggregate).toBe('aggregate.json');
     expect(layout.recommendations).toBe('recommendations.json');
     expect(layout.sessionsDir).toBe('sessions');
     expect(layout.screenshotsDir).toBe('screenshots');
