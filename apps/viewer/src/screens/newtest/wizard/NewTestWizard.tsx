@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { createElement, useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { useSearchParams } from 'react-router';
 import { RequireAudience } from '@/shell/AppLayout';
 import { STEP_PARAM } from '@/shell/paths';
 import { NewTestPage } from '../NewTestPage';
+import { useHeldWizardDraft, WizardDraftContext } from './draft';
 import { AudienceStep } from './audience/AudienceStep';
 import { EstimateStep } from './estimate/EstimateStep';
 import { GoalStep } from './goal/GoalStep';
@@ -20,6 +21,9 @@ import { WizardFrame } from './WizardFrame';
  * vocabulary does not know is the path chooser with the URL put right, rather than a
  * not-found inside a wizard the user is halfway through.
  *
+ * The draft is held here and shared with whatever the step renders, so a form and the button
+ * beside it read one copy (`draft.ts`).
+ *
  * `?step=variants` is the two-URL A/B form as it stands — the same screen, the same tests,
  * mounted here instead of at `/new` itself (decision 78). It keeps #109's guard, because it
  * submits a saved audience record's id and a workspace with none cannot fill it in; the four
@@ -34,6 +38,7 @@ const STEP_CONTENT: Readonly<Record<CrumbStep, () => ReactElement>> = {
 };
 
 export function NewTestWizard() {
+  const held = useHeldWizardDraft();
   const [params, setParams] = useSearchParams();
   const raw = params.get(STEP_PARAM);
   const step = resolveStep(raw);
@@ -49,18 +54,15 @@ export function NewTestWizard() {
     setParams(next, { replace: true });
   }, [canonical, params, setParams, step]);
 
-  if (step === 'variants') {
-    return (
-      <RequireAudience>
-        <NewTestPage />
-      </RequireAudience>
-    );
-  }
-
-  const Content = STEP_CONTENT[step];
   return (
-    <WizardFrame step={step}>
-      <Content />
-    </WizardFrame>
+    <WizardDraftContext.Provider value={held}>
+      {step === 'variants' ? (
+        <RequireAudience>
+          <NewTestPage />
+        </RequireAudience>
+      ) : (
+        <WizardFrame step={step}>{createElement(STEP_CONTENT[step])}</WizardFrame>
+      )}
+    </WizardDraftContext.Provider>
   );
 }

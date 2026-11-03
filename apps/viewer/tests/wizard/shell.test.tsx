@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
-import { screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  cleanup as cleanupBetweenRenders,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { axeViolations, describeViolations } from '../axe';
 import { forgetRuns, mountApp, serveRunData } from '../app';
+import { ruleIn, rulesOf } from '../cssom';
 import { servePlatform } from '../newtest/fixture';
 import { newTestStep, paths, STEP_PARAM } from '../../src/shell/paths';
 import {
@@ -11,6 +22,9 @@ import {
   emptyWizardDraft,
   forgetWizardDraft,
   readWizardDraft,
+  useHeldWizardDraft,
+  useWizardDraft,
+  WizardDraftContext,
   writeWizardDraft,
 } from '../../src/screens/newtest/wizard/draft';
 import type { WizardDraft } from '../../src/screens/newtest/wizard/draft';
@@ -222,6 +236,71 @@ describe('the draft', () => {
   });
 });
 
+/**
+ * What a step ticket will really render: a control that writes the draft and, beside it, one
+ * that reads `canLaunch`. Both go through `useWizardDraft`, as the handoff on #264 says.
+ */
+function DraftProbe({ label }: { label: string }) {
+  const { draft, update } = useWizardDraft();
+
+  return (
+    <p>
+      <button
+        type="button"
+        onClick={() => {
+          update({
+            audience: { sentence: 'first-time creators', audienceId: 'aud-ftc', reviewed: true },
+          });
+        }}
+      >
+        {`Review the audience in ${label}`}
+      </button>
+      <span>{`${label} may launch: ${String(canLaunch(draft))}`}</span>
+    </p>
+  );
+}
+
+/** The wizard's own wiring: the draft held once, shared with everything the step renders. */
+function HeldByTheWizard() {
+  const held = useHeldWizardDraft();
+
+  return (
+    <WizardDraftContext.Provider value={held}>
+      <DraftProbe label="the form" />
+      <DraftProbe label="the button beside it" />
+    </WizardDraftContext.Provider>
+  );
+}
+
+describe('the draft the steps read', () => {
+  it('is one copy: what the form writes, the button beside it reads at once', async () => {
+    render(<HeldByTheWizard />);
+
+    expect(screen.getByText('the form may launch: false')).toBeTruthy();
+    expect(screen.getByText('the button beside it may launch: false')).toBeTruthy();
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: /^Review the audience in the form/ }));
+
+    expect(screen.getByText('the form may launch: true')).toBeTruthy();
+    expect(screen.getByText('the button beside it may launch: true')).toBeTruthy();
+    // And written through, so a reload in the middle of the step keeps it.
+    expect(readWizardDraft().audience?.reviewed).toBe(true);
+  });
+
+  it('is read back by a step mounted after a reload, through the same hook', async () => {
+    render(<HeldByTheWizard />);
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: /^Review the audience in the form/ }));
+
+    cleanupBetweenRenders();
+    render(<HeldByTheWizard />);
+    expect(screen.getByText('the form may launch: true')).toBeTruthy();
+  });
+});
+
 describe('canLaunch', () => {
   it('is false until the audience has been reviewed', () => {
     const draft = filledDraft();
@@ -330,16 +409,49 @@ describe('every screen this ticket mounts', () => {
     }
   });
 
-  it('lays itself out with the shared responsive classes and restates no value by hand', async () => {
+  it('lays itself out in a shared responsive column, and restates no value by hand', async () => {
+    await serveRunData();
+
+    for (const address of addresses) {
+      const { unmount } = mountApp(address);
+      await screen.findByRole('heading', { level: 1 });
+
+      // `.wrap` and `.wrap-narrow` carry the narrow gutter of `docs/design/tokens.css` under
+      // the prototype's own media query, which is what makes a screen work at 390px; a
+      // hand-written width or colour would be a value restated outside the tokens.
+      const main = document.querySelector('main') as HTMLElement;
+      expect(main.querySelector('.wrap, .wrap-narrow'), address).not.toBeNull();
+      expect([...main.querySelectorAll('[style]')], address).toHaveLength(0);
+      unmount();
+    }
+  });
+
+  it('is operable by keyboard, with the app’s own focus ring', async () => {
     await serveRunData();
     mountApp(newTestStep('goal'));
     await heading('Goal');
 
-    // `.wrap-narrow` carries the narrow gutter of `docs/design/tokens.css` under the
-    // prototype's own media query, which is what makes the step work at 390px; a hand-written
-    // width or colour on this frame would be a value restated outside the tokens.
-    const frame = document.querySelector('.strip.strip-sm') as HTMLElement;
-    expect(frame.querySelector(':scope > .wrap-narrow')).not.toBeNull();
-    expect([...frame.querySelectorAll('[style]')]).toHaveLength(0);
+    // The crumbs behind are the only controls this ticket adds, and they are links: reachable
+    // by Tab, openable in a new window, and not a button pretending to be one.
+    const crumb = within(breadcrumb()).getByRole('link', { name: 'Path' });
+    expect(crumb.tagName).toBe('A');
+    expect(crumb.getAttribute('href')).toBe(newTestStep('path'));
+    crumb.focus();
+    expect(document.activeElement).toBe(crumb);
+
+    // The ring itself is the app's one `:focus-visible` rule, in the tokens' own values —
+    // jsdom paints nothing, so it is read off the stylesheet the app ships.
+    const appCss = join(dirname(fileURLToPath(import.meta.url)), '../../src/app.css');
+    const ring = ruleIn(rulesOf(readFileSync(appCss, 'utf8')))(':focus-visible');
+    expect(ring.outline).toBe('var(--border-width-strong) solid var(--color-focus)');
+  });
+
+  it('tells a screen reader which step is the current one', async () => {
+    await serveRunData();
+    mountApp(newTestStep('goal'));
+    await heading('Goal');
+
+    const marked = breadcrumb().querySelectorAll('[aria-current="step"]');
+    expect([...marked].map((crumb) => crumb.textContent)).toEqual(['Goal']);
   });
 });

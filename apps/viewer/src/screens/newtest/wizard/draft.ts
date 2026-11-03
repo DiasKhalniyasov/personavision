@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 
 /**
@@ -103,20 +103,49 @@ export const forgetWizardDraft = (): void => {
   }
 };
 
+/** The draft as it stands, and the one way to change it. */
+export interface HeldDraft {
+  readonly draft: WizardDraft;
+  readonly update: (patch: Partial<WizardDraft>) => void;
+}
+
 /**
- * The draft, and one way to change it.
+ * The one copy of the draft, shared by everything a step renders — the same shape
+ * `shell/useAudiences.ts` shares the workspace's audiences in.
  *
- * Each step reads it for itself — one step is mounted at a time and storage is the single
- * copy — so a step is a component with no props and the wizard passes nothing down.
+ * It is a shared copy and not a hook per component on purpose: a step is a form and a button
+ * beside it, and two private copies of the draft would mean a launch button still reading
+ * `canLaunch === false` after the form beside it marked the audience reviewed.
  */
-export function useWizardDraft(): readonly [WizardDraft, (patch: Partial<WizardDraft>) => void] {
+export const WizardDraftContext = createContext<HeldDraft | null>(null);
+
+/** The holder. The wizard mounts this once and shares it through the context above. */
+export function useHeldWizardDraft(): HeldDraft {
+  // Read synchronously, on the first render: no step flashes a spinner before its content.
   const [draft, setDraft] = useState<WizardDraft>(readWizardDraft);
   const update = useCallback((patch: Partial<WizardDraft>) => {
     setDraft((previous) => {
       const next = { ...previous, ...patch };
+      // Written through at once, so a reload in the middle of a step keeps what was typed.
       writeWizardDraft(next);
       return next;
     });
   }, []);
-  return [draft, update];
+
+  return useMemo(() => ({ draft, update }), [draft, update]);
+}
+
+/**
+ * The draft, for a step of the wizard and anything it renders.
+ *
+ * Outside the wizard there is no draft to share, which is a wiring mistake rather than a
+ * state a user can reach, so it says so instead of handing back a private copy that would
+ * silently fail to reach the step beside it.
+ */
+export function useWizardDraft(): HeldDraft {
+  const held = use(WizardDraftContext);
+  if (held === null) {
+    throw new Error('useWizardDraft: a New test step has to be rendered inside the wizard.');
+  }
+  return held;
 }
