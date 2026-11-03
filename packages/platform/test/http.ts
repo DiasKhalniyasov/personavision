@@ -5,6 +5,7 @@ import type { Platform } from '../src/platform.js';
 import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
 import type { Middleware } from '../src/server/routes/types.js';
+import type { SiteCheckDeps } from '../src/site/index.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 import type { TestDirectories } from './workspace.js';
 
@@ -31,6 +32,12 @@ export interface TestServerOptions {
    * `personavision serve` does today.
    */
   pipeline?: TestPipeline;
+  /**
+   * What the ownership checks resolve and read the clock with (#236). Omitted — as every
+   * suite but the one about verifying a site omits it — leaves the real resolver in place,
+   * which nothing then calls: no route runs a check until one is asked for.
+   */
+  siteChecks?: SiteCheckDeps;
 }
 
 export interface TestServer {
@@ -57,11 +64,12 @@ const viewerStandIn: Middleware = (_request, response) => {
 export const startTestServer = async ({
   runs = [],
   pipeline,
+  siteChecks,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
   const runIds: string[] = [];
   for (const run of runs) runIds.push(await writeRunAt(directories.runsRoot, run));
-  const platform = await createPlatform({ ...directories, pipeline });
+  const platform = await createPlatform({ ...directories, pipeline, siteChecks });
   const server = await startPlatformServer({
     guard: platform.guard,
     routes: platform.routes,

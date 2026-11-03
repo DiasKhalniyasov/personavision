@@ -245,8 +245,10 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         url: site.url,
         token: site.token,
         // Unverified, stated here rather than taken from an argument: a created site has
-        // passed no check, and `SiteStore` offers nothing that could say otherwise.
+        // passed no check, and the only writer of this block refuses a check that did not pass.
         verification: { state: 'unverified', method: null, verifiedAt: null },
+        // Never checked, which is the empty state `#screen-site` draws per method.
+        lastCheck: null,
         createdAt: now(),
         updatedAt: now(),
         deletedAt: null,
@@ -268,6 +270,37 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
       if (record.deletedAt !== null) return record;
       return collection.put({ ...record, deletedAt: now(), updatedAt: now() });
     },
+    verify: async (workspaceId, siteId, result) => {
+      // The invariant, enforced before the record is even read: a site is verified by a
+      // check that passed and by nothing else. A caller handing this a failed result has a
+      // bug — storing it as a verification would make the state a matter of who called what.
+      if (!result.passed) {
+        throw new Error(
+          `A site is verified only by a check that passed, and this ${result.method} check did not: ${result.sentence}.`,
+        );
+      }
+      const record = await owned(workspaceId, siteId);
+      return collection.put({
+        ...record,
+        verification: {
+          state: 'verified',
+          method: result.method,
+          // The check's own clock, so the moment stored is the moment it was proved.
+          verifiedAt: result.checkedAt,
+        },
+        lastCheck: result,
+        updatedAt: now(),
+      });
+    },
+    recordCheck: async (workspaceId, siteId, result) =>
+      // `verification` is not in the spread's overrides and cannot be: this writes what the
+      // last check found and leaves the state where it was, for a passing result as much as
+      // for a failed one.
+      collection.put({
+        ...(await owned(workspaceId, siteId)),
+        lastCheck: result,
+        updatedAt: now(),
+      }),
   };
 };
 

@@ -61,14 +61,40 @@ export type { RunRouteOptions } from './server/routes/runs.js';
 
 export {
   addSite,
+  AVAILABLE_SITE_VERIFICATION_METHODS,
+  checkDnsTxt,
+  defaultSiteCheckDeps,
+  foundTheLine,
   mintSiteToken,
+  noAnswer,
+  nodeTxtResolver,
+  nothingPublished,
+  otherValues,
   parseSiteUrl,
   SITE_TOKEN_PREFIX,
+  SITE_VERIFICATION_METHODS,
   SITE_VERIFICATION_NAME,
+  siteCheckFor,
+  siteCheckResult,
+  SiteCheckNotAvailableError,
   siteVerificationPair,
   SiteUrlNotAcceptedError,
+  verificationDomains,
+  verifySite,
 } from './site/index.js';
-export type { SiteIssue } from './site/index.js';
+export type {
+  CheckedSite,
+  SiteCheck,
+  SiteCheckDeps,
+  SiteCheckFinding,
+  SiteCheckOutcome,
+  SiteCheckResult,
+  SiteCheckSubject,
+  SiteCheckTarget,
+  SiteIssue,
+  TxtResolver,
+  VerifiedSite,
+} from './site/index.js';
 
 export { siteRoutes } from './server/routes/sites.js';
 export type { SiteBody, SiteRouteOptions } from './server/routes/sites.js';
