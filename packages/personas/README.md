@@ -180,6 +180,54 @@ means the sessions a test runs: 4 people × 2 versions × 3 seeds. `tests/preset
 this object equals the committed example run's own audience block field for field, so the
 preset and the demo cannot drift into two different audiences.
 
+## 5. The holdout
+
+`generateHoldout({ audience, spentSeeds, size? })` — people from the same audience, on seeds a
+change was never chosen against (`docs/FLOW.md` section 15, point 4).
+
+A path-2 comparison runs the baseline and the change with the same audience and the same seeds,
+so the two sides differ only in the code. That is not enough to believe a gain: the change was
+chosen by reading those very people, so they are the people it was fitted to. The holdout is the
+second reading that cannot agree with itself — the same audience, the same apportionment, the
+same arithmetic, other seeds.
+
+```ts
+const holdout = generateHoldout({ audience, spentSeeds: run.seedGroups });
+// holdout.seeds[i] is the seed holdout.personas[i] was sampled on, and none of them was spent
+```
+
+- **Disjoint by construction.** The seeds come from the audience's own candidate sequence with
+  every spent candidate stepped over, so no path through the file returns a spent one; a request
+  that cannot be met that way is refused with the reason instead of quietly reusing a seed. The
+  audience's own `generatedFrom.seed` is spent by definition, because the main set is generated
+  from it, and every spent seed is held to being an integer — `undefined >>> 0` is 0, and a spent
+  seed taken on trust would mark the wrong stream as spent. Seeds are compared as the **stream**
+  they name — `createSeededRandom` starts from `seed >>> 0` — so two integers a multiple of 2³²
+  apart are one seed here, not two.
+- **The window, and what it means to run out.** The sequence is walked 256 candidates per person
+  wanted; without a window, "there is no holdout left here" could only be said after walking 2³²
+  candidates. The window is therefore also the ceiling on one audience: a caller that hands back
+  every seed it has ever spent on it, rather than the seeds the change in front of it was chosen
+  on, can spend the window, and is refused when it does. 256 per person is 256 holdouts of a
+  given size with no seed repeated between them. The promise is about the seed, which is where a
+  stream starts; `src/holdout.ts` states precisely what that does and does not cover.
+- **One seed per person.** `generatePersonas(audience, { seeds })` samples person _i_ from
+  `seeds[i]`'s own stream, and refuses two seeds that name one stream: two people sampled from
+  one seed are one person twice. It is the only caller of that option.
+- **The same kind of person.** The holdout is generated from the same audience object at the
+  holdout's size, so the segments, the device mix and the trait centre are the main set's rules
+  rather than a second apportionment. Only the ids and names differ — `holdout-rushed-buyer`,
+  `Rushed buyer (holdout)` — because a run carries the holdout people in its own `personas[]`,
+  where a persona id names one simulated person.
+- **The size.** `holdoutSize(participants)` is `HOLDOUT_SHARE` of them, floored at
+  `HOLDOUT_FLOOR` and capped at the audience: 40 per cent, at least 10, so a hundred
+  participants give the forty the design contract prints and the demo's four give four. Both are
+  named constants in `src/generate.ts`, beside the generator's other defaults, and a caller who
+  wants another number passes `size`.
+
+Running these people is `@personavision/swarm`'s and recording them is the contract's. Nothing
+here knows what a pull request is, and nothing here reads a run.
+
 ## Rejecting an audience
 
 `generatePersonas` validates before it samples: a bad audience is an
@@ -201,8 +249,9 @@ out.
 
 ## What a caller sees
 
-`generatePersonas`, `OUTDOOR_GEAR_SHOPPERS`, `DEMO_AUDIENCE_SEED`, `GENERATOR_VERSION`,
-`parseAudience` and `AudienceValidationError` — and nothing else. The archetype table, the
+`generatePersonas`, `generateHoldout`, `holdoutSize`, `OUTDOOR_GEAR_SHOPPERS`,
+`DEMO_AUDIENCE_SEED`, `GENERATOR_VERSION`, `parseAudience` and `AudienceValidationError` — and
+nothing else. The archetype table, the
 trait centres and the device apportionment are the derivation rather than an interface: this
 file states their choices and `tests/` reaches them by module, as the engine's own tests do.
 `tests/boundaries.test.ts` asserts that list, so behaviour cannot join the interface without

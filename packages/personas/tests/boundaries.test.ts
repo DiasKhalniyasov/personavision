@@ -70,13 +70,15 @@ describe('the package holds generation and nothing else', () => {
    * absent; this says what the package offers, so behaviour cannot be added to the interface
    * without this list changing and somebody reading why.
    */
-  it('exports generation, the preset and the audience validation, and nothing else', () => {
+  it('exports generation, the holdout, the preset and the audience validation, and nothing else', () => {
     expect(Object.keys(personas).sort()).toStrictEqual([
       'AudienceValidationError',
       'DEMO_AUDIENCE_SEED',
       'GENERATOR_VERSION',
       'OUTDOOR_GEAR_SHOPPERS',
+      'generateHoldout',
       'generatePersonas',
+      'holdoutSize',
       'parseAudience',
     ]);
   });
