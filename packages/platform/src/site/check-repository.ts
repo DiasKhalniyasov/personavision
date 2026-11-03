@@ -47,15 +47,22 @@ const LOOKED_FOR = 'a GitHub repository connected to this site';
  * The shared composer speaks of a line published at an address, which is the shape of the
  * other three methods and not of this one: what is "found" here is a connection to a site,
  * and the sentence a user needs names the site rather than the place. The vocabulary of
- * `SiteCheckSubject` and the address joiner is still this module's, so the four methods keep
+ * `SiteCheckSubject` and the address joiner are still `checks.ts`'s, so the four methods keep
  * one voice.
+ *
+ * Both numbers are spelled, as `SiteCheckSubject` exists for: a workspace can have connected
+ * repositories to several of its sites, and one site can be named by more than one connection
+ * where somebody installed the app twice.
  */
 const sentenceFor = (found: SiteCheckFinding): string => {
+  const one = found.at.length === 1;
   switch (found.outcome) {
     case 'found':
-      return `the ${REPOSITORY.one} ${places(found.at, 'and')} is connected to this site`;
+      return one
+        ? `the ${REPOSITORY.one} ${places(found.at, 'and')} is connected to this site`
+        : `the ${REPOSITORY.many} ${places(found.at, 'and')} are connected to this site`;
     case 'other-values':
-      return found.at.length === 1
+      return one
         ? `the ${REPOSITORY.one} ${places(found.at, 'and')} is connected to another site of this workspace`
         : `the ${REPOSITORY.many} ${places(found.at, 'and')} are connected to other sites of this workspace`;
     case 'nothing-published':
@@ -64,6 +71,16 @@ const sentenceFor = (found: SiteCheckFinding): string => {
       return 'GitHub did not answer, so whether a repository is connected to this site is not known';
   }
 };
+
+/**
+ * The repositories these connections name, each said once.
+ *
+ * One repository can deploy two of a workspace's sites, so the same name reaches a sentence
+ * twice without this — _"clipforge/web and clipforge/web are connected to other sites"_.
+ */
+const repositoriesOf = (connections: readonly SiteRepositoryConnection[]): readonly string[] => [
+  ...new Set(connections.map(({ repository }) => repository)),
+];
 
 export const checkConnectedRepository: SiteCheck = async (
   site: CheckedSite,
@@ -112,7 +129,7 @@ export const checkConnectedRepository: SiteCheck = async (
       // here can hand back a result that claims to have passed on anything else.
       {
         outcome: 'found',
-        at: naming.map(({ repository }) => repository),
+        at: repositoriesOf(naming),
         values: [],
         because: null,
       },
@@ -126,7 +143,7 @@ export const checkConnectedRepository: SiteCheck = async (
     // by its URL rather than printing an id at somebody.
     return result(
       otherValues(
-        elsewhere.map(({ repository }) => repository),
+        repositoriesOf(elsewhere),
         elsewhere.map(({ siteId }) => siteId),
       ),
       lookedIn,

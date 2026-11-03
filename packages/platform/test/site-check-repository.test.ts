@@ -140,6 +140,18 @@ describe('the connected-repository check', () => {
       );
     });
 
+    it('names one repository once, however many of the other sites it deploys', async () => {
+      const { result } = await check({
+        [WORKSPACE]: [connection('another-site'), connection('a-third-site')],
+      });
+
+      expect(result.found.at).toEqual([REPOSITORY]);
+      expect(result.found.values).toEqual(['another-site', 'a-third-site']);
+      expect(result.sentence).toBe(
+        `the GitHub repository ${REPOSITORY} is connected to another site of this workspace`,
+      );
+    });
+
     it('names every one of them when the workspace has several', async () => {
       const { result } = await check({
         [WORKSPACE]: [
