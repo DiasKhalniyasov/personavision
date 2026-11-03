@@ -1,7 +1,7 @@
 /**
  * The run-directory layout: `runs/<YYYY-MM-DD-HHMM-name>/` holding `run.json`,
- * `findings.json`, the optional `recommendations.json`, `sessions/S-NN.json` and
- * `screenshots/<variant>/<step>.png`.
+ * `findings.json`, the optional `recommendations.json`, `sessions/S-NN.json`,
+ * `screenshots/<variant>/<step>.png` and `videos/S-NN.webm`.
  *
  * This module is the only place those names are written. No other package re-derives a
  * path or globs for a file by guesswork.
@@ -18,8 +18,14 @@ const FINDINGS_FILE = 'findings.json';
 const RECOMMENDATIONS_FILE = 'recommendations.json';
 const SESSIONS_DIR = 'sessions';
 const SCREENSHOTS_DIR = 'screenshots';
+const VIDEOS_DIR = 'videos';
 const JSON_EXTENSION = '.json';
 const SCREENSHOT_EXTENSION = '.png';
+/**
+ * WebM, by the owner's decision on #220: VP9 at 720p is what the browser's own recorder
+ * produces without a licensed encoder in this stack.
+ */
+const VIDEO_EXTENSION = '.webm';
 
 /**
  * `/`, on every platform: an artifact path is part of the artifact — `run.json` records
@@ -51,10 +57,22 @@ export interface RunPaths {
   readonly recommendations: string;
   readonly sessionsDir: string;
   readonly screenshotsDir: string;
+  /**
+   * The recordings of the sessions. A run recorded before session video existed has no
+   * such directory, and a session whose recording could not be made has no file in it:
+   * both are an absence the session JSON states, never a path a reader has to probe for.
+   */
+  readonly videosDir: string;
   /** `sessions/S-01.json` for session id `S-01`. */
   session(sessionId: string): string;
   /** `screenshots/<variant>/<step>.png`. */
   screenshot(variant: string, step: string): string;
+  /**
+   * `videos/S-01.webm` for session id `S-01`. The relative form — `runPaths('').video(id)`
+   * — is what a session JSON's video block records, so the path is produced here and
+   * re-derived nowhere.
+   */
+  video(sessionId: string): string;
 }
 
 /**
@@ -68,9 +86,11 @@ export const runPaths = (runDir: string): RunPaths => ({
   recommendations: join(runDir, RECOMMENDATIONS_FILE),
   sessionsDir: join(runDir, SESSIONS_DIR),
   screenshotsDir: join(runDir, SCREENSHOTS_DIR),
+  videosDir: join(runDir, VIDEOS_DIR),
   session: (sessionId) => join(runDir, SESSIONS_DIR, `${sessionId}${JSON_EXTENSION}`),
   screenshot: (variant, step) =>
     join(runDir, SCREENSHOTS_DIR, variant, `${step}${SCREENSHOT_EXTENSION}`),
+  video: (sessionId) => join(runDir, VIDEOS_DIR, `${sessionId}${VIDEO_EXTENSION}`),
 });
 
 /**

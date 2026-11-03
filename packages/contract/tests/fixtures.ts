@@ -14,6 +14,7 @@ import type {
   RunProgress,
   Session,
   SessionProgress,
+  SessionVideo,
 } from '../src/index.js';
 import { runPaths, SCHEMA_VERSION, ZERO_USAGE } from '../src/index.js';
 
@@ -402,6 +403,38 @@ export const validSession = (sessionId: string, variant: string): Session => ({
     excludedFromScores: false,
   },
   integrity: { selectorFailures: 0, retries: 0 },
+});
+
+/**
+ * The two branches of the video block, narrowed. A fixture returns the branch it is, so a
+ * test can replace one of its fields without the compiler having to decide which branch a
+ * spread was.
+ */
+type RecordedVideo = Extract<SessionVideo, { state: 'recorded' }>;
+type AbsentVideo = Extract<SessionVideo, { state: 'absent' }>;
+
+/**
+ * The recording of `validSession`: the path the paths module spells, the duration the
+ * session itself records, and one offset per screen and per action, because the session has
+ * one of each. Both land inside the recording — that is what makes a cited timestamp
+ * resolvable without replaying anything.
+ */
+export const recordedVideo = (sessionId: string): RecordedVideo => ({
+  state: 'recorded',
+  path: runPaths('').video(sessionId),
+  durationMs: 38_000,
+  truncated: null,
+  screenOffsetsMs: [0],
+  actionOffsetsMs: [2400],
+});
+
+/**
+ * A recording that could not be made. The session is otherwise exactly `validSession`: a
+ * failed recording is not a failed session (`docs/FLOW.md` section 16, #220's user stories).
+ */
+export const absentVideo = (): AbsentVideo => ({
+  state: 'absent',
+  reason: 'The browser context was closed before the recording was flushed.',
 });
 
 export const validFindings = (): Findings => ({

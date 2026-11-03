@@ -60,7 +60,9 @@ The binary is `personavision`. The library packages above exist as buildable pla
 
 **No package other than `@personavision/contract` declares an artifact field name or a run-directory path.** Not a constant, not a string literal, not a re-derived path. Readers and writers import the schemas and the inferred types, so a field name is read from the compiler rather than from prose, and a round trip through disk is type-checked at both ends.
 
-The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `recommendations.json`, `sessions/S-01.json … S-NN.json`, and `screenshots/<variant>/<step>.png`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one. `recommendations.json` is **optional**: a run directory without it produced no recommendation, which is not a zero somebody measured.
+The layout it declares: `runs/<YYYY-MM-DD-HHMM-name>/` containing `run.json`, `findings.json`, `recommendations.json`, `sessions/S-01.json … S-NN.json`, `screenshots/<variant>/<step>.png`, and `videos/S-NN.webm`. Every artifact file carries `schemaVersion`, and a file written for another version is named as such rather than read as this one. `recommendations.json` is **optional**: a run directory without it produced no recommendation, which is not a zero somebody measured.
+
+A session's **video** is optional by the same rule. `videos/S-NN.webm` is the recording of session `S-NN` — WebM, 720p, capped at 30 seconds a screen and 10 minutes a session — and the session's own JSON carries the block that names it: the run-directory-relative path, the duration, the cap it hit if it hit one, and the millisecond offset of **each screen and each action** into the recording, positionally aligned with the session's own `screens` and `actions` and length-checked, so a recommendation citing `S-62 · 0:48` resolves without replaying anything. A session recorded before session video existed carries no block, and a recording that could not be made is recorded as **absent with its reason in words** — the session is otherwise complete and still scored, because a broken recording does not lose a person's whole attempt. The path is spelt by the paths module (`runPaths(dir).videosDir`, `runPaths(dir).video(sessionId)`) and re-derived nowhere.
 
 `run.json` carries the **audience** the test was run for — by value, copied when the test started, so that editing the stored audience later cannot restate a finished test. The personas it lists are generated from that audience and carry `audienceId` and a `segment`; `scores[].completionRate` and the verdict's `preferredVariant`, `audienceSentence`, `reasons`, `headlineFindingIds` and `heroEvidence` are what the Verdict screen leads with, stored rather than computed in a browser.
 
@@ -79,12 +81,13 @@ The run directory is served read-only, mirroring the on-disk layout exactly:
 - `GET /runs/<runId>/recommendations.json` (when the run has one)
 - `GET /runs/<runId>/sessions/S-NN.json`
 - `GET /runs/<runId>/screenshots/<variant>/<step>.png`
+- `GET /runs/<runId>/videos/S-NN.webm` (when the session recorded one)
 
 plus **one generated listing**:
 
 - `GET /runs/index.json` → `[{ runId, name, createdAt }]`, sorted newest first.
 
-There is no other endpoint and no server-side computation. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally scopes the mount to the workspace that owns the run — a signed-out request reaches only the seeded demo run, which the public landing page and `/demo` read, and a run of another workspace is 404 rather than 403; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
+There is no other endpoint and no server-side computation. **The mount computes nothing for a video either**: a `.webm` is the bytes that are on disk, served as a screenshot is — no transcoding, no thumbnail, no duration read on the server. What a player needs to seek it, the viewer gets from the session JSON's offsets; a run that recorded no video for a session has no file to serve and the request is a 404. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally scopes the mount to the workspace that owns the run — a signed-out request reaches only the seeded demo run, which the public landing page and `/demo` read, and a run of another workspace is 404 rather than 403; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
 
 ### 2. `docs/design/tokens.css` is imported by the app, never copied and never restated
 
