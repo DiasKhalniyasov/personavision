@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Audience } from '@personavision/contract';
+import { withLaunchRecorded } from '../caps.js';
 import type {
   AccountRecord,
   AccountStore,
@@ -232,6 +233,21 @@ const fileAudienceStore = (collection: JsonCollection<AudienceRecord>): Audience
 };
 
 const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
+  /**
+   * One ledger write at a time, so a read-modify-write of `launches` cannot interleave with
+   * another. A rejection does not break the chain: the next writer runs either way, and the
+   * caller still sees its own failure.
+   */
+  let ledgerWrites: Promise<unknown> = Promise.resolve();
+  const queued = <T>(write: () => Promise<T>): Promise<T> => {
+    const next = ledgerWrites.then(write, write);
+    ledgerWrites = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
+
   const owned = async (workspaceId: string, siteId: string): Promise<SiteRecord> => {
     const record = await collection.get(siteId);
     // A site of another workspace is not this workspace's to see, so it is missing rather
@@ -252,6 +268,8 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         verification: { state: 'unverified', method: null, verifiedAt: null },
         // Never checked, which is the empty state `#screen-site` draws per method.
         lastCheck: null,
+        // Nothing has launched against it yet, which is what the caps read.
+        launches: [],
         createdAt: now(),
         updatedAt: now(),
         deletedAt: null,
@@ -303,6 +321,26 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         ...(await owned(workspaceId, siteId)),
         lastCheck: result,
         updatedAt: now(),
+      }),
+    // Queued, not merely awaited. Every other writer here reads a record and writes it back,
+    // and two of those racing lose one of the two changes — which for most of them means a
+    // field written twice with the same value. For the ledger it means a **lost launch**,
+    // and a lost launch is a run the cap does not count: two requests arriving together
+    // would both read a ledger of three and both write a ledger of four, leaving the site
+    // one run short of its limit after five. So these writes run one after another, and the
+    // read that each is built from happens inside its own turn.
+    recordLaunch: (workspaceId, siteId, launch) =>
+      queued(async () => {
+        const record = await owned(workspaceId, siteId);
+        return collection.put({
+          ...record,
+          // Written by the same function the cap reads with, so the ledger the cap counts
+          // and the ledger the store keeps can never be two different rules. Like
+          // `recordCheck`, `verification` is not among the overrides: a launch reads that
+          // block and never writes it.
+          launches: withLaunchRecorded(record.launches ?? [], launch, new Date(now())),
+          updatedAt: now(),
+        });
       }),
   };
 };

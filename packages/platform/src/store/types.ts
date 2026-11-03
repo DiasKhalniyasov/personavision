@@ -178,6 +178,31 @@ export interface SiteCheckResult {
   readonly checkedAt: string;
 }
 
+/**
+ * One launch against a site: which run it opened, and when the browsers started on it.
+ *
+ * The ledger this belongs to is what the runs-per-site-per-hour cap is counted off (`caps.ts`),
+ * which is why `at` is **when the launch happened** rather than when the row was written: a
+ * run that took twenty minutes still used the hour it started in.
+ */
+export interface SiteLaunch {
+  /**
+   * This launch, minted where the launch is reserved. It is the ledger's key: one launch is
+   * written twice — reserved before anything runs, then annotated with the run it opened —
+   * and the second write must replace the first rather than count as a second launch.
+   */
+  readonly id: string;
+  /**
+   * The run directory this launch opened, or `null` for a launch whose run was never
+   * opened: the entry is written **before** the pipeline is called, so that a run still in
+   * flight is already counted against the site, and a launch whose pipeline crashed stays
+   * counted rather than freeing a slot for a retry loop.
+   */
+  readonly runId: string | null;
+  /** When the launch happened, ISO-8601 — the instant the cap's window is measured from. */
+  readonly at: string;
+}
+
 export interface SiteRecord {
   readonly id: string;
   readonly workspaceId: string;
@@ -206,6 +231,23 @@ export interface SiteRecord {
    * method" are told apart without four stored slots.
    */
   readonly lastCheck: SiteCheckResult | null;
+  /**
+   * Every launch against this site, oldest first, **trimmed to the last 24 hours on write**
+   * (`withLaunchRecorded`).
+   *
+   * The runs-per-site-per-hour cap reads the trailing hour off this list, so it is a ledger
+   * rather than a counter: a count would have to be reset by something, and nothing here
+   * runs on a timer. Twenty-four hours is kept rather than one so that a reader — a support
+   * question, a screen showing a site's day — can see more than the window the cap uses, and
+   * it is bounded so the record cannot grow without end.
+   *
+   * **Optional, because records already on disk do not carry it.** A site added before this
+   * field existed reads as `undefined`, which every reader resolves to an empty ledger —
+   * nothing is known to have launched against it. Declaring it required would make those
+   * `?? []` guards look like dead code to the next reader, who would then write
+   * `site.launches.length` and get `undefined` for every pre-existing site.
+   */
+  readonly launches?: readonly SiteLaunch[];
   readonly createdAt: string;
   readonly updatedAt: string;
   /** A soft delete, as `AudienceRecord`'s is: the site a finished test ran against stays readable. */
@@ -318,6 +360,21 @@ export interface SiteStore {
    * for a result that passed. The screen's _"Last check: …"_ line is written through here.
    */
   recordCheck(workspaceId: string, siteId: string, result: SiteCheckResult): Promise<SiteRecord>;
+  /**
+   * Records a launch in the ledger and drops everything older than 24 hours, so the record
+   * stays bounded without anything having to sweep it.
+   *
+   * An **upsert on the launch's `id`**: called once to reserve a launch before anything runs
+   * and again to note the run it opened, and the second call must replace the first rather
+   * than count as a second launch. Implementations must **serialise these writes per site** —
+   * two launches read-modify-writing one record would otherwise lose one of them, and a lost
+   * entry is a run the cap does not count.
+   *
+   * It writes **only** the ledger: no implementation of this may touch `verification`, which
+   * keeps `verify` the one writer of that block even though a launch reads it. Starting a
+   * test is not a way to prove you own a site.
+   */
+  recordLaunch(workspaceId: string, siteId: string, launch: SiteLaunch): Promise<SiteRecord>;
 }
 
 export interface NewSession {

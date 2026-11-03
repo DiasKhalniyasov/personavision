@@ -39,6 +39,7 @@ describe('starting a test over HTTP', () => {
   let answer: (request: RunRequest) => StartedTest | Error;
   let cookie: string;
   let audienceId: string;
+  let siteId: string;
 
   const signIn = async (email: string, password: string): Promise<string> => {
     const response = await served.signIn({ email, password });
@@ -63,6 +64,9 @@ describe('starting a test over HTTP', () => {
     task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
     variants: validRun().variants,
     audienceId,
+    // The site the run is against, which is what the per-site caps are counted against
+    // (#239). The platform refuses a launch that names none.
+    siteId,
     repeats: 3,
     seed: 1,
     engineMode: 'model',
@@ -84,6 +88,13 @@ describe('starting a test over HTTP', () => {
     expect(seeded).not.toBeNull();
     cookie = await signIn(seeded?.email ?? '', seeded?.password ?? '');
     audienceId = seeded?.audienceId ?? '';
+    // Unverified, as `create` opens one: nothing below verifies it, because no cap reads a
+    // verification state (#239, decision 71).
+    const site = await served.platform.store.sites.create(seeded?.workspaceId ?? '', {
+      url: 'https://app.clipforge.example/create',
+      token: 'pv_startrun',
+    });
+    siteId = site.id;
   });
 
   afterEach(async () => {
@@ -158,6 +169,7 @@ describe('starting a test over HTTP', () => {
     let theirCookie: string;
     let theirWorkspaceId: string;
     let theirAudienceId: string;
+    let theirSiteId: string;
 
     beforeEach(async () => {
       const them = await served.platform.store.accounts.create({
@@ -177,6 +189,15 @@ describe('starting a test over HTTP', () => {
       theirAudienceId = (
         await served.platform.store.audiences.create(workspace.id, validRun().audience)
       ).id;
+      // And their own site, for the same reason: a site belongs to the workspace that added
+      // it, so naming the demo workspace's would be refused as an unknown site (#239) and
+      // this suite would stop being about the model.
+      theirSiteId = (
+        await served.platform.store.sites.create(workspace.id, {
+          url: 'https://shop.another.example/checkout',
+          token: 'pv_anothershop',
+        })
+      ).id;
       theirCookie = await signIn('owner@another.example', 'another-shops-password');
       answer = () =>
         new ModelModeUnavailableError(
@@ -185,7 +206,10 @@ describe('starting a test over HTTP', () => {
     });
 
     it('says which model could not be used, and that nothing was simulated', async () => {
-      const response = await post({ ...submission(), audienceId: theirAudienceId }, theirCookie);
+      const response = await post(
+        { ...submission(), audienceId: theirAudienceId, siteId: theirSiteId },
+        theirCookie,
+      );
       const body = (await response.json()) as { error: string; modelMode: string };
 
       expect(response.status).toBe(503);
@@ -198,7 +222,10 @@ describe('starting a test over HTTP', () => {
     });
 
     it('stores no result: the workspace keeps the runs it had, which is none', async () => {
-      await post({ ...submission(), audienceId: theirAudienceId }, theirCookie);
+      await post(
+        { ...submission(), audienceId: theirAudienceId, siteId: theirSiteId },
+        theirCookie,
+      );
 
       const theirs = await served.platform.store.workspaces.byId(theirWorkspaceId);
 
@@ -221,7 +248,10 @@ describe('starting a test over HTTP', () => {
       // A pipeline that leaks the key in its own message: nothing of it reaches the body.
       answer = () => new ModelModeUnavailableError(`the key ${SECRET} was rejected`);
       try {
-        const response = await post({ ...submission(), audienceId: theirAudienceId }, theirCookie);
+        const response = await post(
+          { ...submission(), audienceId: theirAudienceId, siteId: theirSiteId },
+          theirCookie,
+        );
 
         expect(response.status).toBe(503);
         expect(await response.text()).not.toContain(SECRET);
@@ -281,6 +311,7 @@ describe('starting a one-URL test over HTTP', () => {
   let calls: Call[];
   let cookie: string;
   let audienceId: string;
+  let siteId: string;
 
   /** The site of the wizard's own worked example (`#screen-newtest-feature`). */
   const SITE = 'https://app.clipforge.example/create';
@@ -305,6 +336,9 @@ describe('starting a one-URL test over HTTP', () => {
   /** What the launch step submits: no task, no repeats, no seed and no engine of its own. */
   const submission = (): Record<string, unknown> => ({
     site: SITE,
+    // The same site as the record in this workspace that holds it — the wizard keeps both
+    // halves (`wizard/draft.ts` holds `{ id, url }`) and the caps are counted against the id.
+    siteId,
     feature: USERS_FEATURE,
     goal: validGoal(),
     audienceId,
@@ -337,6 +371,11 @@ describe('starting a one-URL test over HTTP', () => {
     expect(signedIn.status).toBe(200);
     cookie = cookieOf(signedIn);
     audienceId = seeded?.audienceId ?? '';
+    const site = await served.platform.store.sites.create(seeded?.workspaceId ?? '', {
+      url: SITE,
+      token: 'pv_oneurl',
+    });
+    siteId = site.id;
   });
 
   afterEach(async () => {
@@ -386,8 +425,9 @@ describe('starting a one-URL test over HTTP', () => {
     await startSiteTest({
       workspaces: served.platform.store.workspaces,
       audiences: served.platform.store.audiences,
+      sites: served.platform.store.sites,
       workspaceId: served.platform.seeded?.workspaceId ?? '',
-      draft: { site: SITE, feature: USERS_FEATURE, goal: validGoal(), audienceId },
+      draft: { site: SITE, siteId, feature: USERS_FEATURE, goal: validGoal(), audienceId },
       pipeline: recording,
       now: () => new Date('2026-11-03T09:14:00.000Z'),
     });
@@ -587,6 +627,9 @@ describe('starting a one-URL test over HTTP', () => {
       'modelMode',
       'repeats',
       'seed',
+      // The site the run is against: named by the launch step, counted against by the caps
+      // and recorded by the artifact (#239).
+      'siteId',
       'task',
       'variants',
     ]);

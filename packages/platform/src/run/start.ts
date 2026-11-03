@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { runRequestSchema } from '@personavision/contract';
 import type { Audience, Goal, ModelMode, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
 import type { ModelId } from '@personavision/provider';
 import { audienceForNewTest } from '../audience/freeze.js';
+import { refuseTooManyAgents, refuseTooManyRunsThisHour } from '../caps.js';
 import { parseSiteUrl, SiteUrlNotAcceptedError } from '../site/site.js';
-import type { AudienceStore, WorkspaceStore } from '../store/types.js';
+import type { AudienceStore, SiteRecord, SiteStore, WorkspaceStore } from '../store/types.js';
 
 /**
  * Starting a test: the one place the model mode is decided, and the one place a test that
@@ -49,7 +51,32 @@ export interface StartedTest {
  * platform knows which workspace asked (`audienceForNewTest`). The pipeline copies this
  * object into the artifact and reads no audience of its own.
  */
-export type TestPipeline = (request: RunRequest, audience: Audience) => Promise<StartedTest>;
+export type TestPipeline = (
+  request: RunRequest,
+  audience: Audience,
+  site?: SiteAtLaunch,
+) => Promise<StartedTest>;
+
+/**
+ * The site a run was launched against, as the artifact records it (`site.verifiedAtLaunch`,
+ * #243).
+ *
+ * **Recorded, not enforced.** `verifiedAtLaunch` is read off the site once, here, so that a
+ * reader of a committed run can see whether the figures came from a site somebody had proved
+ * they control. No cap reads it: the owner's answer of 2026-11-03 settled decision 71 as _no
+ * gate on testing_, and `caps.ts` is handed no site state at all. A site that is verified
+ * today and unverified tomorrow runs under exactly the same caps; the only thing that
+ * differs between the two runs is this field.
+ *
+ * Absent for `personavision run`, which has no workspace and no site.
+ */
+export interface SiteAtLaunch {
+  readonly id: string;
+  /** The URL as the user typed it when they added the site. */
+  readonly url: string;
+  /** Whether the site was verified at the moment this run was launched. */
+  readonly verifiedAtLaunch: boolean;
+}
 
 /** What the pipeline reported it ran, in the words a refusal states it in. */
 const whatRan = (started: StartedTest): string => {
@@ -134,14 +161,44 @@ export class NoSuchWorkspaceError extends Error {
   }
 }
 
+/**
+ * A site id the session's workspace does not hold — one that was never added, one that was
+ * removed, or **one of another workspace**.
+ *
+ * All three are the same answer, and deliberately: that another workspace holds this site is
+ * not news we owe anybody, which is the rule `visibleRuns` and the site routes already
+ * follow. A typed refusal rather than a 500, because a body naming a site that is not yours
+ * is a request to be told no, not a bug in the platform.
+ */
+export class NoSuchSiteError extends Error {
+  readonly siteId: string;
+
+  constructor(siteId: string) {
+    super('There is no such site.');
+    this.name = 'NoSuchSiteError';
+    this.siteId = siteId;
+  }
+}
+
 export interface StartTestOptions {
   workspaces: WorkspaceStore;
   /** The workspace's audiences: the one the draft names is resolved against these alone. */
   audiences: AudienceStore;
+  /**
+   * The workspace's sites: the one the draft names is resolved against these alone, and the
+   * one the per-site caps are counted against.
+   */
+  sites: SiteStore;
   /** The workspace the test belongs to — the session's, and the one that names the mode. */
   workspaceId: string;
   draft: TestDraft;
   pipeline: TestPipeline;
+  /**
+   * The clock the hourly cap's window is measured from, and the instant the launch is
+   * recorded at. Absent is the real one; a test fixes it so the fifth run in an hour and the
+   * run sixty-one minutes later are assertable without waiting.
+   */
+  now?: () => Date;
 }
 
 /**
@@ -162,13 +219,52 @@ const servedAsAsked = (request: RunRequest, started: StartedTest): boolean =>
     ? started.modelMode === request.modelMode
     : request.modelMode !== 'standard' || request.engineMode !== 'model';
 
+/** The field a one-URL wizard and a comparison form alike name their site in. */
+const SITE_ID = 'siteId';
+
+/**
+ * The site a request names, resolved in the workspace that asked.
+ *
+ * A request naming **no** site is refused at `siteId`, because the platform's start path
+ * requires one: a test launched through the product is a test against a site the product
+ * knows, and a cap counted against nothing is not a cap. The contract leaves the field
+ * optional for `personavision run`, which has no workspace and no site and never reaches
+ * here, so this is the platform's own rule rather than the contract's — stated once.
+ *
+ * A **removed** site resolves and launches: `list` hides a soft-deleted site from the pickers
+ * so nothing offers it, but a request that still names one is counted against it like any
+ * other, because the address is still somebody's and still gets the browsers. Refusing it
+ * here would mean a user could clear a site's hourly ledger by deleting it.
+ */
+const siteForNewTest = async (
+  sites: SiteStore,
+  workspaceId: string,
+  siteId: string | undefined,
+): Promise<SiteRecord> => {
+  if (siteId === undefined) {
+    throw new DraftNotAcceptedError([
+      {
+        path: SITE_ID,
+        message:
+          'a test names the site it runs against: the id of one of this workspace’s sites, which is what the per-site caps are counted against',
+      },
+    ]);
+  }
+  const site = await sites.byId(workspaceId, siteId);
+  if (site === null) throw new NoSuchSiteError(siteId);
+  return site;
+};
+
 export const startTest = async ({
   workspaces,
   audiences,
+  sites,
   workspaceId,
   draft,
   pipeline,
+  now,
 }: StartTestOptions): Promise<StartedTest> => {
+  const clock = now ?? ((): Date => new Date());
   const workspace = await workspaces.byId(workspaceId);
   if (workspace === null) throw new NoSuchWorkspaceError(workspaceId);
 
@@ -191,10 +287,65 @@ export const startTest = async ({
   // pipeline, which is handed no workspace to scope it against. Throws before anything
   // runs, so an unofferable audience costs no sessions either.
   const audience = await audienceForNewTest(audiences, workspaceId, request.audienceId);
+  const site = await siteForNewTest(sites, workspaceId, request.siteId);
+
+  // The caps, read from the one module that states them and enforced **before** anything
+  // runs, so a refused launch costs the site nothing — not one browser. They are checked
+  // here rather than in the pipeline because the pipeline is handed no workspace and no
+  // site, and after the audience because one of them is about how many people it generates.
+  //
+  // Nothing below consults `site.verification`. The caps take the audience's size and the
+  // site's own ledger, and no third thing: a verified site and an unverified one are refused
+  // and allowed at exactly the same numbers (decision 71, settled 2026-11-03).
+  //
+  // `engineMode` is not consulted either, and that is the point: the offline deterministic
+  // engine drives the same browsers at the same site, so it is bound by the same caps. The
+  // cap is about the site being driven, not about what a run costs us.
+  //
+  // The agents cap comes first. Both can refuse one launch — a hundred and forty people
+  // against a site that has had its four runs — and this is the one the user can act on
+  // without waiting, so it is the one they are told about.
+  const tooManyAgents = refuseTooManyAgents(audience.size);
+  if (tooManyAgents !== null) throw tooManyAgents;
+  const launchedAt = clock();
+  const tooManyRuns = refuseTooManyRunsThisHour(site.launches ?? [], launchedAt);
+  if (tooManyRuns !== null) throw tooManyRuns;
+
+  // **Reserved before the pipeline is called**, which is the difference between a cap and a
+  // count of the runs that happened to finish. The sessions start the moment the pipeline is
+  // handed the request, so that is the moment the site has taken a run:
+  //
+  // - four launches in flight at once each read an empty ledger if the entry is written
+  //   afterwards, and all four start — four hundred browsers on a site whose cap is four.
+  //   The person pressing Launch twice is the case the cap exists for.
+  // - a pipeline that **throws** leaves nothing written at all if the entry comes
+  //   afterwards, so a crash-retry loop walks straight through the cap.
+  //
+  // The run directory is not open yet, so `runId` is `null` until the pipeline reports it.
+  // `id` is what makes the second write an annotation of this launch rather than a second
+  // launch against the site.
+  const launchId = randomUUID();
+  const at = launchedAt.toISOString();
+  await sites.recordLaunch(workspaceId, site.id, { id: launchId, runId: null, at });
+
+  // What was true of the site at this instant, read **once** and only to be recorded. The
+  // pipeline copies it into the artifact (#243); no cap above has read it.
+  //
+  // What this does not check is that the request's variants are pages **of** this site: a
+  // body naming one site's id and another address's URL is counted against the site it
+  // named. The product cannot send one — the wizard holds the site record it picked, and a
+  // comparison runs two versions of one page — but the platform does not yet refuse it, and
+  // #239 was not scoped to decide what "a variant belongs to this site" means for the
+  // two-variant form. Whoever owns that next has the seam here, with the record in hand.
+  const siteAtLaunch: SiteAtLaunch = {
+    id: site.id,
+    url: site.url,
+    verifiedAtLaunch: site.verification.state === 'verified',
+  };
 
   let started: StartedTest;
   try {
-    started = await pipeline(request, audience);
+    started = await pipeline(request, audience, siteAtLaunch);
   } catch (error) {
     // Provider selection refusing to serve the mode is this workspace's test being
     // refused (#143). For contributor it is not supposed to happen — no key means offline,
@@ -204,6 +355,22 @@ export const startTest = async ({
       throw new TestRefusedError('standard');
     }
     throw error;
+  }
+
+  // The run the reserved launch opened, noted on the entry that is already there — before
+  // the substitution check below, because a run refused for having run on the wrong model
+  // still used one of the site's four.
+  //
+  // A failure here is **swallowed deliberately, and it is the only thing here that is**: the
+  // launch is already recorded and already counted against the cap, so what a failed write
+  // loses is the run id a reader would have seen beside it. Letting it throw would mean a
+  // completed run — a hundred finished sessions, an artifact on disk — never reaching
+  // `addRun` below, and so never being offered by the product. Bookkeeping for a cap does
+  // not get to discard a run that ran.
+  try {
+    await sites.recordLaunch(workspaceId, site.id, { id: launchId, runId: started.runId, at });
+  } catch {
+    // Left where it is: the cap is intact, and the deployment's own logs carry the throw.
   }
 
   if (!servedAsAsked(request, started)) throw new TestRefusedError(workspace.modelMode, started);
@@ -241,6 +408,17 @@ export const startTest = async ({
 export interface SiteTestDraft {
   /** The site under test: the URL the feature starts on, and the one variant's URL. */
   readonly site: string;
+  /**
+   * That same site as the **record** in this workspace that holds it, by id — what the
+   * per-site caps are counted against and what the run records as the site it ran
+   * (`SiteAtLaunch`).
+   *
+   * Optional in this type and required by `startTest`, so that the one sentence saying a
+   * test names its site is written in one place rather than two. The wizard holds both
+   * halves already (`apps/viewer/src/screens/newtest/wizard/draft.ts` keeps the site as
+   * `{ id, url }`), so the launch step has nothing to look up.
+   */
+  readonly siteId?: string;
   /** The feature, in the user's words, carried on exactly as it was typed. */
   readonly feature: string;
   /** The goal the user read and approved before launch, with whoever last wrote it. */
@@ -336,6 +514,7 @@ const GOAL_SUCCESS_CRITERION = 'goal.successCriterion';
  */
 const SITE_DRAFT_FIELDS: readonly string[] = [
   SITE,
+  SITE_ID,
   FEATURE,
   GOAL,
   'audienceId',
@@ -463,6 +642,9 @@ const draftForSite = (draft: SiteTestDraft, launchedAt: Date): TestDraft => {
     feature: draft.feature,
     goal: draft.goal,
     audienceId: draft.audienceId,
+    // Passed through as it was submitted, absent included: `startTest` is the one place that
+    // says a test names its site, and it refuses an absent one at this field.
+    siteId: draft.siteId,
     // Resolved only where the field is **absent**, which is a screen that does not collect
     // it. A field that was submitted is passed on as it was submitted, `null` included, so
     // the contract refuses it at its own path rather than this standing in for it: a client
@@ -476,8 +658,6 @@ const draftForSite = (draft: SiteTestDraft, launchedAt: Date): TestDraft => {
 export interface StartSiteTestOptions extends Omit<StartTestOptions, 'draft'> {
   /** What the New test wizard collected. */
   draft: SiteTestDraft;
-  /** The clock the default seed is read off, so a test can state the day it launched on. */
-  now?: () => Date;
 }
 
 /**
@@ -490,11 +670,11 @@ export interface StartSiteTestOptions extends Omit<StartTestOptions, 'draft'> {
  * variant named for the site, the feature as it was written, and the goal with its author,
  * which is what makes one URL a test rather than half a comparison.
  *
- * It states **no cap and no concurrency**. The agents-per-run cap, the hundred maximum, the
- * runs per site per hour and the typed refusal that prints them are #239's; the per-site
- * concurrency the pipeline is handed is #241's. A number here would be a second place one
- * could be missed. The site is likewise not resolved against the workspace's sites: it
- * reaches the pipeline as the one variant's URL, and `siteId` arrives with #239.
+ * It states **no cap number and no concurrency**. The agents-per-run cap, the hundred
+ * maximum, the runs per site per hour and the typed refusal that prints them are stated in
+ * `caps.ts` and enforced by `startTest` below, for this form and the two-variant one alike;
+ * the per-site concurrency the pipeline is handed is #241's. A number here would be a second
+ * place one could be missed.
  */
 export const startSiteTest = async ({
   draft,
@@ -508,7 +688,8 @@ export const startSiteTest = async ({
   // says what a one-URL test needs, rather than a crash on the way to one.
   const request = draftForSite({ ...draft }, clock());
   try {
-    return await startTest({ ...test, draft: request });
+    // The same clock, so the day the seed names and the hour the cap measures are one.
+    return await startTest({ ...test, draft: request, now: clock });
   } catch (error) {
     // The contract's own refusals, renamed to the fields the wizard renders them against.
     if (error instanceof DraftNotAcceptedError) {

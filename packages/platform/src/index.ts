@@ -43,6 +43,7 @@ export { workspaceForAccount } from './workspace/membership.js';
 
 export {
   DraftNotAcceptedError,
+  NoSuchSiteError,
   NoSuchWorkspaceError,
   ONE_URL_VARIANT_ID,
   seedForLaunchDay,
@@ -52,6 +53,7 @@ export {
   variantForSite,
 } from './run/start.js';
 export type {
+  SiteAtLaunch,
   SiteTestDraft,
   StartedTest,
   StartSiteTestOptions,
@@ -59,6 +61,23 @@ export type {
   TestDraft,
   TestPipeline,
 } from './run/start.js';
+
+/**
+ * The caps: the three numbers, and the typed refusal that states one in the user's words.
+ *
+ * Exported so that the CLI and the screens print the message this package wrote rather than
+ * composing a sentence of their own, and so that whatever needs a cap's value reads it here
+ * instead of writing a second literal (`packages/platform/test/caps.test.ts` greps for one).
+ */
+export {
+  CAPS,
+  CapRefusedError,
+  LAUNCH_LEDGER_HOURS,
+  refuseTooManyAgents,
+  refuseTooManyRunsThisHour,
+  withLaunchRecorded,
+} from './caps.js';
+export type { CapName } from './caps.js';
 
 export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
 export { withPeople } from './audience/people.js';
@@ -193,6 +212,7 @@ export type {
   PlatformStore,
   SessionRecord,
   SessionStore,
+  SiteLaunch,
   SiteRecord,
   SiteStore,
   SiteVerification,
