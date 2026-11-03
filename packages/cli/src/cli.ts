@@ -13,11 +13,13 @@ import {
   calibrateFitCommand,
   calibrateScoreCommand,
 } from './commands/calibrate.js';
+import { improveCommand } from './commands/improve.js';
 import { openCommand } from './commands/open.js';
 import { MAX_SEED, runCommand } from './commands/run.js';
 import { serveCommand } from './commands/serve.js';
 import { validateCommand } from './commands/validate.js';
 import { DEFAULT_AUDIENCE } from './run/audience.js';
+import { readTaskSteps } from './run/task.js';
 import { DEFAULT_PORT } from './server.js';
 
 /**
@@ -221,6 +223,76 @@ program
       '  personavision run --url http://localhost:4173/checkout-a --url http://localhost:4173/checkout-b --task "Buy the boots" --audience outdoor-gear-shoppers --repeats 3',
       '',
     ].join('\n'),
+  );
+
+program
+  .command('improve')
+  .description(
+    [
+      'Run path 2’s closed loop on a connected repository: decide one change from a finished test’s recommendations, open it as a pull request, find the URL the changed version is served at, run the baseline and the change on the same people and seeds plus a holdout, score the before and after, and post one comment on the pull request.',
+      'It never merges — the owner merges. Run --dry-run first: it reports the change, the file, the diff and the preview it would look for, and makes no write call.',
+    ].join('\n'),
+  )
+  .argument('<runId>', 'the finished test to improve, such as 2026-10-24-1402-northwind-demo')
+  .requiredOption(
+    '--repository <owner/name>',
+    'the repository the PersonaVision GitHub App is installed on',
+  )
+  .option('--base <branch>', 'the branch the pull request is opened against; read only', 'main')
+  .option(
+    '--file <path>',
+    'a file in the repository the change may touch; pass it once per candidate file. It is read from the repository, because the patch has to apply to what the repository holds',
+    collect,
+    [],
+  )
+  .option(
+    '--token-file <file>',
+    'the file holding the installation token for the GitHub App. It is read at call time, goes into one Authorization header, and is never printed, logged or written to the run',
+  )
+  .option(
+    '--dry-run',
+    'report the change, the file, the diff and the preview it would look for, and make no write call at all',
+  )
+  .option('--run-url <url>', 'where this run is on the platform; the comment links to it')
+  .option(
+    '--engine <mode>',
+    'offline (deterministic, no API key) or model; offline by default, and a model run with no key in the environment is refused rather than quietly downgraded',
+  )
+  .option(
+    '--mode <modelMode>',
+    `which model a model run calls: contributor or standard. ${DEFAULT_MODEL_MODE} by default, because this command is the internal tool`,
+    DEFAULT_MODEL_MODE,
+  )
+  .option(
+    '--steps <file>',
+    'a JSON file declaring the task’s steps, for a task that has more than one',
+  )
+  .addHelpText(
+    'after',
+    '\nExit status: 0 when the loop finished, 3 when a step stopped it — the sentence names the step and why.\n\nExample:\n  personavision improve 2026-10-24-1402-northwind-demo --repository clipforge/web --file app/waiting/page.tsx --token-file ./.installation-token --dry-run\n',
+  )
+  .action(
+    async (
+      runId: string,
+      options: {
+        repository: string;
+        base: string;
+        file: string[];
+        tokenFile?: string;
+        dryRun?: boolean;
+        runUrl?: string;
+        engine?: string;
+        mode: string;
+        steps?: string;
+      },
+    ) => {
+      await improveCommand({
+        ...options,
+        runId,
+        runsRoot: runsRoot(),
+        taskSteps: options.steps === undefined ? null : await readTaskSteps(options.steps),
+      });
+    },
   );
 
 program

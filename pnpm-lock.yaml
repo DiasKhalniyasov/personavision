@@ -213,6 +213,9 @@ importers:
       '@personavision/engine':
         specifier: workspace:*
         version: link:../engine
+      '@personavision/improve':
+        specifier: workspace:*
+        version: link:../improve
       '@personavision/personas':
         specifier: workspace:*
         version: link:../personas

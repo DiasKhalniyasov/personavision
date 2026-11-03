@@ -42,5 +42,16 @@ export type { ServeCommandOptions, ServeResult } from './commands/serve.js';
  * executable imports that module directly, and `../run/start.js` is where the swarm itself
  * lives for anything that wants to drive a run from code.
  */
+
+/**
+ * `improve` is **deliberately absent from this barrel** as well, and for both of the reasons
+ * above at once. `./commands/improve.js` reaches `@personavision/swarm` — so Playwright — to
+ * drive the baseline, the change and the holdout, and it reaches `@personavision/improve` to
+ * run the loop over them. Neither belongs in a Vite dev server or a jsdom suite, and
+ * `apps/viewer` imports this file. The executable imports that module directly, and the loop
+ * itself is `@personavision/improve`'s `runImproveLoop` for anything that wants to drive path
+ * 2 from code — which is what `@personavision/platform` will do (#319), with its own
+ * comparison seam rather than this one's.
+ */
 export { validateCommand } from './commands/validate.js';
 export type { ValidateCommandOptions } from './commands/validate.js';

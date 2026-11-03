@@ -43,6 +43,13 @@ export const HOLDOUT_FIGURES: HoldoutFigures = {
   scoredSessionCount: 40,
 };
 
+/**
+ * The person held out, who is a person **beside** the participant the run fixture's
+ * audience generates: `audience.size` is the participants and the holdout is people the run
+ * generated as well as them, which is the count the contract holds a path-2 run to (#306).
+ */
+const HELD_OUT_ID = 'held-out-1';
+
 const IMPROVE: Improve = {
   recommendationId: 'R-01',
   changedFile: 'app/waiting/page.tsx',
@@ -50,7 +57,7 @@ const IMPROVE: Improve = {
   preview: { url: 'https://clipforge-web-git-pv-wait.preview.example/upload' },
   baselineVariant: 'A',
   changeVariant: 'B',
-  holdout: { personaIds: ['rushed-buyer'], confirmed: true },
+  holdout: { personaIds: [HELD_OUT_ID], confirmed: true },
 };
 
 /** The fixture run as a path-2 test, with the holdout's verdict the caller asks for. */
@@ -62,10 +69,18 @@ export const runWithChange = (
   run.improve = structuredClone({
     ...IMPROVE,
     holdout: {
-      personaIds: holdout === 'none' ? [] : ['rushed-buyer'],
+      personaIds: holdout === 'none' ? [] : [HELD_OUT_ID],
       confirmed: holdout === 'none' ? null : holdout === 'confirmed',
     },
   });
+  if (holdout !== 'none') {
+    const [first] = run.personas;
+    if (first === undefined) throw new Error('the run fixture generates nobody');
+    run.personas = [
+      ...run.personas,
+      { ...structuredClone(first), id: HELD_OUT_ID, name: `${first.name} (holdout)` },
+    ];
+  }
   run.verdict.holdout = holdout;
   Object.assign(run.scores[0], structuredClone(BASELINE_FIGURES));
   Object.assign(run.scores[1], structuredClone(CHANGE_FIGURES));
