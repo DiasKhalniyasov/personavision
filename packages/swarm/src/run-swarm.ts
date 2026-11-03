@@ -22,6 +22,12 @@
  *   looked at and what it spent land in one write per session, so a run stopped halfway
  *   leaves a directory that still validates and the Running screen reads a run that is
  *   still open.
+ * - **It is bounded by its caller, not by itself.** How many sessions may be in flight at
+ *   once arrives as `concurrency`, and the pool holds it: a hundred sessions ten at a time,
+ *   proved at that number rather than assumed. `DEFAULT_CONCURRENCY` is only what a caller
+ *   that names none gets. The per-site cap — ten, `docs/FLOW.md` section 13 — is
+ *   `packages/platform`'s, because it is a fact about the site being driven and the platform
+ *   is what starts runs; this package states no per-site number at all.
  * - **It decides nothing about a session.** The outcome, its step, its reason and its
  *   attribution are `decideOutcome`'s (#35), and a session's own fields are `runSession`'s
  *   (#44). What is added here belongs to the run: the numbering, the counts, the areas of
@@ -63,11 +69,27 @@ import type { AutomationFailure, OutcomePolicy, SessionOutcome } from './outcome
 import type { SessionProviders } from './run-session.js';
 
 /**
- * How many sessions run at once when a caller names no bound.
+ * How many sessions run at once when a caller names no bound. **Not a cap on a site.**
  *
  * Four, because the bound is a bound on *browsers*: twenty-four sessions must not take
  * twenty-four times one session, and four Chromium instances with their pages fit on a
  * laptop where twenty-four would swap. A replaying run can afford far more and says so.
+ * Four is the number for the one caller that names none — `packages/cli`, whose runs are
+ * the demo's two dozen sessions on the machine the command was typed on, where that
+ * laptop's memory is the whole of the constraint.
+ *
+ * **How many browsers may be open against one site at once is not this package’s to say.**
+ * That number is a fact about the site being driven and about the machine driving it —
+ * `docs/FLOW.md` section 13 sets it at ten, "a hundred browsers at once on one small site is
+ * a load test nobody asked for" — and section 13 puts every such cap in **one place,
+ * `packages/platform`**, which is what starts a run and is the only layer that knows which
+ * site it is, whether that site is verified and how recently it was driven. It reaches the
+ * swarm as `concurrency`, an input, and the swarm holds whatever it is given: a hundred
+ * sessions ten at a time, proved at that number in `test/run-swarm.test.ts`.
+ *
+ * The swarm does not import the platform to read it. That would invert the dependency —
+ * the platform is what starts runs — and would put a per-site number in the one package
+ * that must work for any caller, the CLI included.
  */
 export const DEFAULT_CONCURRENCY = 4;
 
@@ -203,7 +225,15 @@ export interface RunSwarmInput extends SwarmPlanInput {
   readonly task: TaskDefinition;
   readonly source: CaptureSource;
   readonly providers: SessionProviders;
-  /** How many sessions may be in flight at once. Defaults to `DEFAULT_CONCURRENCY`. */
+  /**
+   * How many sessions may be in flight at once — **the caller’s number**, and the only
+   * bound the pool holds. Never more than this many sessions are between their
+   * `session-started` and `session-finished` events, at a hundred sessions as at eight.
+   *
+   * Defaults to `DEFAULT_CONCURRENCY`, which is a default for a small run and not a cap on
+   * a site: the per-site cap is `packages/platform`’s (`docs/FLOW.md` section 13), and it
+   * is passed in here rather than read from there.
+   */
   readonly concurrency?: number;
   /**
    * How long one session may take, in wall-clock milliseconds. One deadline, held three
