@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { ReactElement } from 'react';
 import { useSearchParams } from 'react-router';
 import { RequireAudience } from '@/shell/AppLayout';
 import { STEP_PARAM } from '@/shell/paths';
@@ -25,7 +26,7 @@ import { WizardFrame } from './WizardFrame';
  * new steps do not, because the second of them is where an audience is described in a
  * sentence and a wizard that asked for one first would be a loop.
  */
-const STEP_CONTENT: Readonly<Record<CrumbStep, () => React.JSX.Element>> = {
+const STEP_CONTENT: Readonly<Record<CrumbStep, () => ReactElement>> = {
   path: PathStep,
   audience: AudienceStep,
   goal: GoalStep,

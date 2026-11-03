@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
 import { Link } from 'react-router';
+import { newTestStep } from '@/shell/paths';
 import type { CrumbStep } from './steps';
-import { CRUMBS, stepHref } from './steps';
+import { CRUMBS } from './steps';
 
 /**
  * The `.breadcrumb` of `#screen-newtest-paths`, `#screen-newtest-feature`,
@@ -24,7 +25,7 @@ export function WizardBreadcrumb({ current }: { current: CrumbStep }) {
           {index === at ? (
             <b>{crumb.label}</b>
           ) : index < at ? (
-            <Link to={stepHref(crumb.step)}>{crumb.label}</Link>
+            <Link to={newTestStep(crumb.step)}>{crumb.label}</Link>
           ) : (
             crumb.label
           )}

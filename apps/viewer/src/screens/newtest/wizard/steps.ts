@@ -1,5 +1,3 @@
-import { newTestStep } from '@/shell/paths';
-
 /**
  * The steps of `/new`, and the one in the query.
  *
@@ -46,16 +44,25 @@ export const resolveStep = (raw: string | null): WizardStep => {
 export const isCanonical = (raw: string | null, step: WizardStep): boolean => raw === step;
 
 /**
- * The breadcrumb's crumbs: the four steps of the prototype's `.breadcrumb`, in its order and
- * its wording — `Path / Audience & feature / Goal / Launch`. The last step is **Launch**
- * because that is what the estimate screen is called where a user reads it.
+ * The four steps of the prototype's `.breadcrumb`, in its order and its wording — `Path /
+ * Audience & feature / Goal / Launch`. The last step is **Launch** because that is what the
+ * estimate screen is called where a user reads it.
+ *
+ * Each step carries the column it is drawn in, so the width is a fact about the step rather
+ * than a condition in the frame: `#screen-newtest-paths` lays its two path cards side by
+ * side in `.wrap`, and the three form screens take `.wrap-narrow`.
  */
-export const CRUMBS: readonly { readonly step: CrumbStep; readonly label: string }[] = [
-  { step: 'path', label: 'Path' },
-  { step: 'audience', label: 'Audience & feature' },
-  { step: 'goal', label: 'Goal' },
-  { step: 'estimate', label: 'Launch' },
+export const CRUMBS: readonly {
+  readonly step: CrumbStep;
+  readonly label: string;
+  readonly wrap: 'wrap' | 'wrap-narrow';
+}[] = [
+  { step: 'path', label: 'Path', wrap: 'wrap' },
+  { step: 'audience', label: 'Audience & feature', wrap: 'wrap-narrow' },
+  { step: 'goal', label: 'Goal', wrap: 'wrap-narrow' },
+  { step: 'estimate', label: 'Launch', wrap: 'wrap-narrow' },
 ];
 
-/** What one crumb links to: the step's own address, built where every other link is. */
-export const stepHref = (step: WizardStep): string => newTestStep(step);
+/** One step's crumb: its label and its column. */
+export const crumbOf = (step: CrumbStep): (typeof CRUMBS)[number] =>
+  CRUMBS.find((crumb) => crumb.step === step) ?? CRUMBS[0];

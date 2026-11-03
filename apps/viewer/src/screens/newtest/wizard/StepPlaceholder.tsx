@@ -1,5 +1,5 @@
+import { crumbOf } from './steps';
 import type { CrumbStep } from './steps';
-import { CRUMBS } from './steps';
 
 /**
  * A step of the wizard that is mounted and not yet built.
@@ -9,7 +9,7 @@ import { CRUMBS } from './steps';
  * the running app is never left guessing whether they are looking at a finished screen.
  */
 export function StepPlaceholder({ step, ticket }: { step: CrumbStep; ticket: string }) {
-  const label = CRUMBS.find((crumb) => crumb.step === step)?.label ?? step;
+  const { label } = crumbOf(step);
 
   return (
     <>
