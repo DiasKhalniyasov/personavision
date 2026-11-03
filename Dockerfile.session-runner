@@ -1,0 +1,50 @@
+# The session runner: one image, one session per container, built from this repository.
+#
+# It carries **Playwright's Chromium and the system libraries it needs**, installed by
+# `playwright install --with-deps chromium` — and the `--with-deps` half is the half that
+# matters in a slim base image, where the browser binary installs cleanly and `libnss3`,
+# `libatk-1.0`, `libasound2` and a dozen others are simply absent, so Chromium exits before it
+# opens a page. `docs/deployment.md` says why this rather than Playwright's own published
+# image, and says how much of this build has actually been run and on what.
+#
+# Node is pinned to a version `package.json`'s `engines` allows: a session runner on another
+# major is a session runner nobody has tested.
+FROM node:22.20.0-bookworm-slim
+
+ENV PNPM_HOME=/usr/local/pnpm
+ENV PATH=/usr/local/pnpm:$PATH
+
+# Outside any package's node_modules, so the browsers survive a later install and sit at a
+# path the runtime user can read.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# A task runs the one session it was started for and never chooses a runner again: a task that
+# read `cloud-run` would launch a job execution of its own, and a hundred sessions would be a
+# hundred thousand. The coordinator sets this per execution too; it is here so that an image
+# run by hand cannot do it either.
+ENV PV_RUNNER=local
+
+RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
+
+WORKDIR /app
+
+# The whole repository — and `.dockerignore` is what keeps a developer's machine state out of
+# it: no node_modules, no dist, no .git, no run directories. The image is the committed tree
+# and the lockfile, or it is not reproducible at all.
+COPY . .
+
+# `--frozen-lockfile`, the way CI installs: an image whose dependency resolution differs from
+# the one the tests passed against is an image testing something else.
+RUN pnpm install --frozen-lockfile
+
+# Chromium, plus the shared libraries a slim Debian does not ship. This is the line the
+# acceptance criterion is about. Run through the package that declares Playwright, so the
+# version installed is the version the code was written against.
+RUN pnpm -F @personavision/browser exec playwright install --with-deps chromium
+
+# The runner and everything it depends on, and nothing else: the viewer is not in this image.
+RUN pnpm -F "...@personavision/swarm" build
+
+# One session, named by the environment the execution carries (`runner/session-task.ts`).
+ENTRYPOINT ["node", "packages/swarm/dist/runner/task-main.js"]
+CMD ["run-session"]

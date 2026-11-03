@@ -22,6 +22,11 @@
  * session, the friction score (#26) reads `excludedFromScores` off the stored session, and
  * the screens read the outcome. Nothing re-derives it.
  *
+ * The **runner seam** is `runner/`: one session, either in this process (the default
+ * everywhere) or as one Cloud Run job execution, chosen from `PV_RUNNER` in `chooseRunner`
+ * and nowhere else (#317). `docs/adr/0004-where-sessions-run.md` records the choice and what
+ * it costs; `runSessionTask` is what the container runs at the far end of it.
+ *
  * `docs/FLOW.md` sections 5 and 8; step #8.
  */
 
@@ -33,6 +38,36 @@ export type { RunSessionInput, SessionProviders, SessionScreen } from './run-ses
 export { holdoutRefusal, sameSeedsOnBothSides } from './holdout.js';
 export type { SwarmHoldout } from './holdout.js';
 export { DEFAULT_CONCURRENCY, planSwarm, runSwarm } from './run-swarm.js';
+export {
+  chooseRunner,
+  DEFAULT_JOB,
+  DEFAULT_START_ALLOWANCE_MS,
+  RUNNER_ENV,
+  RunnerNotConfiguredError,
+} from './runner/choose.js';
+export type { ChosenRunner, RunnerWhere } from './runner/choose.js';
+export { createCloudRunJobsTransport, JobsRefused } from './runner/jobs.js';
+export type {
+  JobExecution,
+  JobExecutionResult,
+  JobRunRequest,
+  JobsTransport,
+} from './runner/jobs.js';
+export { createCloudRunRunner, jobResourceName, jobRunRequestFor } from './runner/cloud-run.js';
+export type { CloudRunRunnerConfig, CloudRunRunnerDeps } from './runner/cloud-run.js';
+export { readBreakage, remoteFailure } from './runner/failures.js';
+export type { Answered, Asked, RemoteBreakage } from './runner/failures.js';
+export {
+  contributionsPath,
+  readContributions,
+  readSessionTaskEnvironment,
+  runSessionTask,
+  sessionTaskEnvironment,
+  TASK_ENV,
+  taskArgs,
+} from './runner/session-task.js';
+export type { SessionContributions } from './runner/session-task.js';
+export type { SessionRunner, SessionRunRequest, WalkedSession } from './runner/types.js';
 export type {
   RunSwarmInput,
   SwarmPlanInput,

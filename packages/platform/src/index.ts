@@ -73,6 +73,8 @@ export {
   CAPS,
   CapRefusedError,
   concurrencyForSite,
+  RUNNER_CONCURRENCY_ENV,
+  sessionsInFlight,
   LAUNCH_LEDGER_HOURS,
   refuseTooManyAgents,
   refuseTooManyRunsThisHour,

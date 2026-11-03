@@ -1,0 +1,16 @@
+# What must never reach the image: a developer's machine state. The image is built from the
+# committed tree and the lockfile, which is what `docs/deployment.md`'s build command checks
+# before it starts.
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+**/.vitest-cache
+apps/viewer/build
+runs
+.claude
+*.log
+.DS_Store

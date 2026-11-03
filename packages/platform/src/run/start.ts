@@ -4,7 +4,7 @@ import type { Audience, Goal, ModelMode, RunRequest } from '@personavision/contr
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
 import type { ModelId } from '@personavision/provider';
 import { audienceForNewTest } from '../audience/freeze.js';
-import { CAPS, refuseTooManyAgents, refuseTooManyRunsThisHour } from '../caps.js';
+import { refuseTooManyAgents, refuseTooManyRunsThisHour, sessionsInFlight } from '../caps.js';
 import { parseSiteUrl, SiteUrlNotAcceptedError } from '../site/site.js';
 import type { AudienceStore, SiteRecord, SiteStore, WorkspaceStore } from '../store/types.js';
 
@@ -424,7 +424,9 @@ export const startTest = async ({
     // `engineMode` is not consulted either: an offline run drives the same browsers at the
     // same site, so it is held to the same ten.
     started = await whileNothingElseRunsOnTheSite(site.id, () =>
-      pipeline(request, audience, siteAtLaunch, CAPS.concurrentSessionsPerSite),
+      // The per-site cap, held down by our own ceiling where one is set
+      // (`sessionsInFlight`), so the run runs at the number the estimate quoted.
+      pipeline(request, audience, siteAtLaunch, sessionsInFlight()),
     );
   } catch (error) {
     // Provider selection refusing to serve the mode is this workspace's test being
