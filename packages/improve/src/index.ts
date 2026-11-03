@@ -57,6 +57,16 @@ export type {
   RecordedTransport,
 } from './github/recorded.js';
 
+export { branchForRun, changeRecordOf, openChange } from './change/open.js';
+export type {
+  ChangeOpened,
+  ChangeRecord,
+  ChangeRefused,
+  ChangeRequest,
+  ChangeResult,
+  PullRequestRecord,
+} from './change/open.js';
+
 export { COMMENT_MARKER, commentBody, SIMULATED_LABEL } from './comment/body.js';
 export type { CommentDraft, CommentInput, CommentRefused, RunComment } from './comment/body.js';
 
