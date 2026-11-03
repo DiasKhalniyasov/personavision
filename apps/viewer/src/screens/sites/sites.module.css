@@ -1,0 +1,107 @@
+/* =============================================================================
+   `#screen-sites` of `docs/design/prototype.html`: the workspace's sites as cards,
+   what each of them is allowed, and the card for adding one.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies. No colour, size, spacing step, radius or duration
+   is restated here, and nothing on this screen animates: the direction gives its
+   animated moments to the Verdict, the landing and the demo.
+
+   The prototype draws this grid with the `.aud-grid` / `.aud-card` / `.aud-facts`
+   rules it also draws the audiences with. They are written again here rather than
+   shared with `screens/audience/audience.module.css`, for the reason that file
+   gives for not using the prototype's global class names in the first place: what
+   is reproduced is the layout the prototype draws, not the selector it draws it
+   with — and a screen reaching into another screen's stylesheet would make a card
+   on this screen change whenever the audience cards did. The shared primitives
+   these cards sit inside (`.strip`, `.wrap`, `.card`, `.section`, `.lede`,
+   `.footnote`, `.microlabel`, `.faint`, `.notice`) are the app's own, in
+   `src/styles/base.css`.
+   ========================================================================== */
+
+/* The prototype fills the row with cards of at least 280px, which at `--layout-max`
+   comes to three; the tokens name no card width, so the count is stated and the two
+   breakpoints below take it down rather than a length being restated here. */
+.siteGrid {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* A workspace with no sites. One card, at the width it would have in the grid, so a
+   first visit is the one card rather than a grid with the gaps still in it. */
+.firstRun {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: var(--layout-max-narrow);
+}
+
+/* The prototype opens the grid a step further down the page than `.section` alone. */
+.sites {
+  margin-top: var(--space-10);
+}
+
+.siteCard {
+  display: grid;
+  align-content: start;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.siteCard:hover {
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+}
+
+/* The prototype sets a card's address at `h3`; on the screen it is the one heading under
+   the page's own, so it is marked up as `h2` and takes the prototype's type role. */
+.siteName {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  /* An address is one unbroken word to a line-breaker, and a long path would otherwise
+     push the card wider than its column at 390px. */
+  overflow-wrap: anywhere;
+}
+
+/* The site the workspace's most recent test ran against is the one the reader came back to. */
+.siteCard[aria-current='true'] {
+  border-color: var(--color-accent);
+}
+
+/* The prototype sets the blurb on the "add a site" card a step down. */
+.addBlurb {
+  font-size: var(--text-sm);
+}
+
+.siteFacts {
+  display: grid;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+  /* The platform's own sentence about a failed check carries a host in it, for the same
+     reason the address above wraps rather than widens. */
+  overflow-wrap: anywhere;
+}
+
+.siteFacts b {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- Narrow windows -----------------------------------------------------
+   The prototype's own two breakpoints: three cards to two, and two to one. */
+
+@media (max-width: 1000px) {
+  .siteGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .siteGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,4 +1,5 @@
 import { clearRunCache } from '@/shell/useRun';
+import { clearSiteCache } from '@/sites/useSites';
 
 /**
  * `POST /auth/signup` — the one request the sign-up screen makes.
@@ -137,7 +138,10 @@ export const createWorkspace = async (fields: NewWorkspaceFields): Promise<SignU
 
   // The workspace exists and the cookie is set. Every run read while signed out — the
   // public demo run of the landing page — belongs to nobody here, so it is forgotten
-  // before the chrome of a workspace with no test of its own renders.
+  // before the chrome of a workspace with no test of its own renders. The sites go with
+  // them: this browser may have been signed in to another workspace a moment ago, and a
+  // new workspace's `/sites` must not open on somebody else's addresses.
   clearRunCache();
+  clearSiteCache();
   return { ok: true };
 };
