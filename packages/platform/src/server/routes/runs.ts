@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AudienceNotOfferedError } from '../../audience/freeze.js';
+import { CapRefusedError } from '../../caps.js';
 import {
   DraftNotAcceptedError,
+  NoSuchSiteError,
   startSiteTest,
   startTest,
   TestRefusedError,
@@ -105,6 +107,9 @@ export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Ro
             const test = {
               workspaces: store.workspaces,
               audiences: store.audiences,
+              // The workspace's sites: the one the body names is resolved against these
+              // alone, and the per-site caps are counted against it.
+              sites: store.sites,
               workspaceId: session.workspaceId,
               pipeline,
             };
@@ -122,6 +127,27 @@ export const runRoutes = ({ store, readSession, pipeline }: RunRouteOptions): Ro
               }
               if (error instanceof AudienceNotOfferedError) {
                 refuse(response, 400, 'That audience is not one this workspace can test for.');
+                return;
+              }
+              if (error instanceof NoSuchSiteError) {
+                // The same sentence `GET /sites/:siteId` gives, and for the same reason: a
+                // site of another workspace is missing rather than forbidden. 400 rather
+                // than 404, because `POST /runs` is a route that exists — a 404 here would
+                // read as the platform not having the route at all.
+                refuse(response, 400, error.message);
+                return;
+              }
+              if (error instanceof CapRefusedError) {
+                // **429**, with the figures beside the sentence: the cap that refused it, its
+                // limit, what was observed and when it next passes. The screen renders the
+                // sentence as it is given and draws its countdown from `retryAt`, so the
+                // screen, this body and the CLI print one sentence rather than three.
+                refuse(response, 429, error.message, {
+                  cap: error.cap,
+                  limit: error.limit,
+                  observed: error.observed,
+                  retryAt: error.retryAt,
+                });
                 return;
               }
               if (error instanceof TestRefusedError) {

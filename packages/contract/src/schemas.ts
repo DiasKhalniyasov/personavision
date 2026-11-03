@@ -1838,6 +1838,18 @@ export const runRequestSchema = z
      */
     audienceId: name,
     /**
+     * The site the test is against, by id — the record in the workspace that holds it, which
+     * is what the per-site caps are counted against (`packages/platform/src/caps.ts`).
+     *
+     * **Optional here, required by the platform.** `personavision run` has no workspace and
+     * no site: it is handed URLs on a command line and is not the product path, so a request
+     * the CLI builds carries none and is still a valid request. The platform's start path
+     * refuses one that names no site, because a test somebody launched through the product is
+     * a test against a site the product knows — and a cap counted against nothing is not a
+     * cap. Every run written before this revision carries none either (#247).
+     */
+    siteId: name.optional(),
+    /**
      * The feature the test is about, in the user's words, and the goal a model wrote from
      * it: between them, what makes **one URL** a test rather than a comparison of two
      * (`docs/FLOW.md` section 11). `variants` above is unchanged and still allows one — a

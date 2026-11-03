@@ -178,6 +178,20 @@ export interface SiteCheckResult {
   readonly checkedAt: string;
 }
 
+/**
+ * One launch against a site: which run it opened, and when the browsers started on it.
+ *
+ * The ledger this belongs to is what the runs-per-site-per-hour cap is counted off (`caps.ts`),
+ * which is why `at` is **when the launch happened** rather than when the row was written: a
+ * run that took twenty minutes still used the hour it started in.
+ */
+export interface SiteLaunch {
+  /** The run directory the launch opened. */
+  readonly runId: string;
+  /** When the launch happened, ISO-8601 — the instant the cap's window is measured from. */
+  readonly at: string;
+}
+
 export interface SiteRecord {
   readonly id: string;
   readonly workspaceId: string;
@@ -206,6 +220,20 @@ export interface SiteRecord {
    * method" are told apart without four stored slots.
    */
   readonly lastCheck: SiteCheckResult | null;
+  /**
+   * Every launch against this site, oldest first, **trimmed to the last 24 hours on write**
+   * (`withLaunchRecorded`).
+   *
+   * The runs-per-site-per-hour cap reads the trailing hour off this list, so it is a ledger
+   * rather than a counter: a count would have to be reset by something, and nothing here
+   * runs on a timer. Twenty-four hours is kept rather than one so that a reader — a support
+   * question, a screen showing a site's day — can see more than the window the cap uses, and
+   * it is bounded so the record cannot grow without end.
+   *
+   * A record written before this field existed reads as an empty ledger, which is the truth
+   * a reader needs: nothing is known to have launched against it.
+   */
+  readonly launches: readonly SiteLaunch[];
   readonly createdAt: string;
   readonly updatedAt: string;
   /** A soft delete, as `AudienceRecord`'s is: the site a finished test ran against stays readable. */
@@ -318,6 +346,15 @@ export interface SiteStore {
    * for a result that passed. The screen's _"Last check: …"_ line is written through here.
    */
   recordCheck(workspaceId: string, siteId: string, result: SiteCheckResult): Promise<SiteRecord>;
+  /**
+   * Appends a launch to the ledger and drops everything older than 24 hours, so the record
+   * stays bounded without anything having to sweep it.
+   *
+   * It writes **only** the ledger: no implementation of this may touch `verification`, which
+   * keeps `verify` the one writer of that block even though a launch reads it. Starting a
+   * test is not a way to prove you own a site.
+   */
+  recordLaunch(workspaceId: string, siteId: string, launch: SiteLaunch): Promise<SiteRecord>;
 }
 
 export interface NewSession {

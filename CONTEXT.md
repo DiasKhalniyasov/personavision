@@ -26,7 +26,19 @@ because section 8 predates them:
   is never another's proof.
 - A site's **verification state** is `unverified` or `verified`, with the method that proved it and the moment it was
   proved. **Only a check the platform ran itself may move it** — never a submitted field, and never a box a user ticks.
-  The state gates scale rather than trying: an unverified site is testable, with fewer agents and fewer runs an hour.
+  It **gates nothing about testing**: the owner's answer of 2026-11-03 settled decision 71 as _no gate on testing_, so an
+  unverified site runs under exactly the same caps as a verified one. A run records what was true of its site at launch
+  (`site.verifiedAtLaunch`) and no cap reads it. What verification unlocks is **Improve my site**.
+- A site's **launch ledger** is every run started against it — the run id and when — trimmed to the last 24 hours on
+  write. The runs-per-site-per-hour cap counts the trailing hour off it, so the cap is a ledger rather than a counter
+  nothing resets. Starting a test is the only thing that writes it, and writing it cannot move the verification state.
+- The **caps** are three numbers in one module, `packages/platform/src/caps.ts`, and nothing else in the repository
+  defines them: **100** agents a run (the audience's `size`, capped), **10** concurrent sessions per site, **4** runs per
+  site per hour. They protect the site being driven rather than the person who asked, so the verification state does not
+  enter them and the offline engine is bound by them exactly as a model run is. A launch a cap refuses is a
+  `CapRefusedError` carrying the cap, its limit, the observed value and when it next passes — answered as **429** with
+  those as fields beside one sentence, so the screen, the API and the CLI say the same thing. A screen states a cap by
+  asking the API for the number; a screen that prints a different one is wrong rather than a cap that moved.
 
 ## Module map
 

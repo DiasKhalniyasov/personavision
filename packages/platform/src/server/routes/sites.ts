@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { CAPS } from '../../caps.js';
 import {
   addSite,
   defaultSiteCheckDeps,
@@ -93,6 +94,21 @@ export interface SiteBody {
   readonly token: string;
   readonly verification: SiteVerification;
   /**
+   * What binds this site, so `#screen-sites` can print _**100** agents per run allowed_ and
+   * _**4** runs an hour · **10** browsers at a time_ rather than the word "limited".
+   *
+   * Served **per site and identical for every site**, verified or not, because that is what
+   * is true: the caps protect the site being driven rather than the person who asked
+   * (decision 71, settled 2026-11-03), and what verification is worth is **Improve my site**
+   * (#227) — which is the line an unverified site's card adds instead of a smaller number.
+   *
+   * It is stated here so that no screen composes it: the numbers come from `caps.ts` through
+   * this response, and a screen printing a different one is a screen that is wrong rather
+   * than a cap that moved. The estimate (#283) reads `agentsPerRun` and
+   * `concurrentSessionsPerSite` from here for the same reason.
+   */
+  readonly caps: typeof CAPS;
+  /**
    * The last check this site was put through, or `null` for one nobody has checked — the
    * empty state `#screen-site` draws, and the _"Last check: …"_ line it prints otherwise.
    */
@@ -113,6 +129,8 @@ const body = (record: SiteRecord): SiteBody => ({
   url: record.url,
   token: record.token,
   verification: record.verification,
+  // Read, never composed: one object from the module that decides them.
+  caps: CAPS,
   // `?? null` for a record written before this field existed: a reader is promised the key,
   // and `JSON.stringify` drops an `undefined` one altogether.
   lastCheck: record.lastCheck ?? null,

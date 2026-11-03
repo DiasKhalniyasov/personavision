@@ -9,7 +9,12 @@ import { seedDemoWorkspace } from '../src/seed.js';
 import { startTest, TestRefusedError } from '../src/run/start.js';
 import type { StartedTest, TestDraft } from '../src/run/start.js';
 import { openFileStore } from '../src/store/file-store.js';
-import type { AudienceStore, PlatformStore, WorkspaceStore } from '../src/store/types.js';
+import type {
+  AudienceStore,
+  PlatformStore,
+  SiteStore,
+  WorkspaceStore,
+} from '../src/store/types.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 
 /**
@@ -38,15 +43,34 @@ const openStore = async (): Promise<{
   };
 };
 
-/** What `startTest` needs of a workspace: its stores, its id and an audience to test for. */
-interface Workspace {
-  workspaces: WorkspaceStore;
-  audiences: AudienceStore;
-  workspaceId: string;
+/**
+ * The audience and the site a draft names. Both are the workspace's own: a test is started
+ * for an audience this workspace can read, against a site this workspace holds (#239).
+ */
+interface TestTarget {
   audienceId: string;
+  siteId: string;
 }
 
-/** A workspace in `modelMode`, with one audience of its own a test can be started for. */
+/** What `startTest` needs of a workspace: its stores, its id, and an audience and a site. */
+interface Workspace extends TestTarget {
+  workspaces: WorkspaceStore;
+  audiences: AudienceStore;
+  sites: SiteStore;
+  workspaceId: string;
+}
+
+/** The site every workspace here is tested against. Its address is beside the point. */
+const SITE_URL = 'https://app.clipforge.example/create';
+
+/**
+ * A workspace in `modelMode`, with one audience and one site of its own a test can be
+ * started for.
+ *
+ * The site is **unverified**, which is the state `create` opens one in, and every test below
+ * passes on it: the caps do not read a verification state, so a suite about the model mode
+ * has nothing to verify (decision 71, settled 2026-11-03).
+ */
 const workspaceIn = async (store: PlatformStore, modelMode: ModelMode): Promise<Workspace> => {
   const workspace = await store.workspaces.create({
     name: `A ${modelMode} workspace`,
@@ -54,19 +78,26 @@ const workspaceIn = async (store: PlatformStore, modelMode: ModelMode): Promise<
     modelMode,
   });
   const audience = await store.audiences.create(workspace.id, validRun().audience);
+  const site = await store.sites.create(workspace.id, { url: SITE_URL, token: 'pv_modelmode' });
   return {
     workspaces: store.workspaces,
     audiences: store.audiences,
+    sites: store.sites,
     workspaceId: workspace.id,
     audienceId: audience.id,
+    siteId: site.id,
   };
 };
 
 /** A draft the contract accepts, naming no mode: naming one is not the submitter's to do. */
-const draft = (audienceId: string, engineMode: RunRequest['engineMode'] = 'model'): TestDraft => ({
+const draft = (
+  { audienceId, siteId }: TestTarget,
+  engineMode: RunRequest['engineMode'] = 'model',
+): TestDraft => ({
   task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
   variants: validRun().variants,
   audienceId,
+  siteId,
   repeats: 3,
   seed: 1,
   engineMode,
@@ -173,12 +204,17 @@ describe('the workspace decides which model its tests run on', () => {
       // And the test it starts is refused for the stated reason rather than failing to
       // assemble a request at all.
       const audience = await store.audiences.create(workspace?.id ?? '', validRun().audience);
+      const site = await store.sites.create(workspace?.id ?? '', {
+        url: SITE_URL,
+        token: 'pv_olderworkspace',
+      });
       await expect(
         startTest({
           workspaces: store.workspaces,
           audiences: store.audiences,
+          sites: store.sites,
           workspaceId: workspace?.id ?? '',
-          draft: draft(audience.id),
+          draft: draft({ audienceId: audience.id, siteId: site.id }),
           pipeline: pipelineReporting(unavailable).pipeline,
         }),
       ).rejects.toThrow(TestRefusedError);
@@ -195,7 +231,7 @@ describe('the workspace decides which model its tests run on', () => {
         const workspace = await workspaceIn(store, modelMode);
         const { pipeline, calls } = pipelineReporting(() => ranOnTheModel(modelMode));
 
-        await startTest({ ...workspace, draft: draft(workspace.audienceId), pipeline });
+        await startTest({ ...workspace, draft: draft(workspace), pipeline });
 
         expect(calls).toHaveLength(1);
         expect(calls[0]?.request.modelMode).toBe(modelMode);
@@ -211,7 +247,7 @@ describe('the workspace decides which model its tests run on', () => {
       const workspace = await workspaceIn(store, 'contributor');
       const { pipeline, calls } = pipelineReporting(() => ranOffline);
 
-      await startTest({ ...workspace, draft: draft(workspace.audienceId), pipeline });
+      await startTest({ ...workspace, draft: draft(workspace), pipeline });
 
       expect(calls[0]?.audience).toEqual(validRun().audience);
     } finally {
@@ -226,9 +262,9 @@ describe('the workspace decides which model its tests run on', () => {
       const theirs = await workspaceIn(store, 'contributor');
       const { pipeline, calls } = pipelineReporting(() => ranOnTheModel('standard'));
 
-      await expect(
-        startTest({ ...mine, draft: draft(theirs.audienceId), pipeline }),
-      ).rejects.toThrow(AudienceNotOfferedError);
+      await expect(startTest({ ...mine, draft: draft(theirs), pipeline })).rejects.toThrow(
+        AudienceNotOfferedError,
+      );
 
       expect(calls).toEqual([]);
       expect((await mine.workspaces.byId(mine.workspaceId))?.runIds).toEqual([]);
@@ -247,7 +283,7 @@ describe('a standard workspace is refused rather than downgraded', () => {
 
       const refused = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       }).catch((error: unknown) => error);
 
@@ -275,9 +311,9 @@ describe('a standard workspace is refused rather than downgraded', () => {
       const workspace = await workspaceIn(store, 'standard');
       const { pipeline } = pipelineReporting(unavailable);
 
-      await expect(
-        startTest({ ...workspace, draft: draft(workspace.audienceId), pipeline }),
-      ).rejects.toThrow(TestRefusedError);
+      await expect(startTest({ ...workspace, draft: draft(workspace), pipeline })).rejects.toThrow(
+        TestRefusedError,
+      );
 
       expect((await workspace.workspaces.byId(workspace.workspaceId))?.runIds).toEqual([]);
     } finally {
@@ -295,7 +331,7 @@ describe('a standard workspace is refused rather than downgraded', () => {
 
       const refused = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       }).catch((error: unknown) => error);
 
@@ -321,7 +357,7 @@ describe('a standard workspace is refused rather than downgraded', () => {
 
       const refused = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       }).catch((error: unknown) => error);
 
@@ -343,7 +379,7 @@ describe('a standard workspace is refused rather than downgraded', () => {
       // offline` is an internal tool, and what it asked for is not a downgrade.
       const started = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId, 'offline'),
+        draft: draft(workspace, 'offline'),
         pipeline,
       });
 
@@ -364,7 +400,7 @@ describe('a contributor workspace keeps today’s behaviour', () => {
 
       const started = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       });
 
@@ -387,7 +423,7 @@ describe('a contributor workspace keeps today’s behaviour', () => {
 
       const started = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       });
 
@@ -408,7 +444,7 @@ describe('a contributor workspace keeps today’s behaviour', () => {
 
       const refused = await startTest({
         ...workspace,
-        draft: draft(workspace.audienceId),
+        draft: draft(workspace),
         pipeline,
       }).catch((error: unknown) => error);
 
@@ -436,7 +472,7 @@ describe('no key value travels with a test', () => {
       const standard = await workspaceIn(store, 'standard');
       const refused = await startTest({
         ...standard,
-        draft: draft(standard.audienceId),
+        draft: draft(standard),
         // A pipeline that leaks: whatever it says, nothing of it reaches the refusal.
         pipeline: pipelineReporting(
           () => new ModelModeUnavailableError(`the key ${SECRET} was rejected`),
@@ -449,7 +485,7 @@ describe('no key value travels with a test', () => {
       const contributor = await workspaceIn(store, 'contributor');
       const started = await startTest({
         ...contributor,
-        draft: draft(contributor.audienceId),
+        draft: draft(contributor),
         pipeline: pipelineReporting(() => ranOffline).pipeline,
       });
 

@@ -310,7 +310,14 @@ describe('POST /sites/:siteId/verify', () => {
       await sites.recordCheck(workspaceId, site.id, passing);
       await sites.create(workspaceId, { url: A_URL, token: site.token });
       await sites.softDelete(workspaceId, site.id);
+      // Starting a test writes the site's launch ledger, and that is all it may write:
+      // launching a run is not a way to prove you own a site (#239).
+      await sites.recordLaunch(workspaceId, site.id, {
+        runId: '2026-11-03-0914-clipforge-create',
+        at: '2026-11-03T09:14:00.000Z',
+      });
       expect((await sites.byId(workspaceId, site.id))?.verification).toEqual(UNVERIFIED);
+      expect((await sites.byId(workspaceId, site.id))?.launches).toHaveLength(1);
       // `recordCheck` stored the result and could not move the state with it.
       expect((await sites.byId(workspaceId, site.id))?.lastCheck?.passed).toBe(true);
 
@@ -319,14 +326,17 @@ describe('POST /sites/:siteId/verify', () => {
       expect((await sites.byId(workspaceId, site.id))?.verification.state).toBe('verified');
     });
 
-    it('publishes no second path: these six methods and no others', () => {
+    it('publishes no second path: these seven methods and no others', () => {
       // A writer added later without reading `docs/FLOW.md` section 13 fails here, which is
       // the point — the invariant is the interface's shape, not a convention to remember.
+      // `recordLaunch` was added deliberately (#239) and the case above proves it cannot
+      // move the state either.
       expect(Object.keys(sites).sort()).toEqual([
         'byId',
         'create',
         'list',
         'recordCheck',
+        'recordLaunch',
         'softDelete',
         'verify',
       ]);

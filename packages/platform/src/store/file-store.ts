@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Audience } from '@personavision/contract';
+import { withLaunchRecorded } from '../caps.js';
 import type {
   AccountRecord,
   AccountStore,
@@ -252,6 +253,8 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         verification: { state: 'unverified', method: null, verifiedAt: null },
         // Never checked, which is the empty state `#screen-site` draws per method.
         lastCheck: null,
+        // Nothing has launched against it yet, which is what the caps read.
+        launches: [],
         createdAt: now(),
         updatedAt: now(),
         deletedAt: null,
@@ -304,6 +307,18 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         lastCheck: result,
         updatedAt: now(),
       }),
+    recordLaunch: async (workspaceId, siteId, launch) => {
+      const record = await owned(workspaceId, siteId);
+      return collection.put({
+        ...record,
+        // Trimmed on write by the same function the cap reads with, so the ledger the cap
+        // counts and the ledger the store keeps can never be two different rules. Like
+        // `recordCheck`, `verification` is not among the overrides: a launch reads that
+        // block and never writes it.
+        launches: withLaunchRecorded(record.launches ?? [], launch, new Date(now())),
+        updatedAt: now(),
+      });
+    },
   };
 };
 
