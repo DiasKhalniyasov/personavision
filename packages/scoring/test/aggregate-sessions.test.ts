@@ -291,8 +291,9 @@ describe('the surface the figures fill', () => {
       throw new Error('the fixture has slices');
     }
 
-    expect(() => funnelOfSlice({ run: smallRun, slice })).toThrow(/#289/);
-    expect(() => pathsOfSlice({ slice })).toThrow(/#289/);
+    // The funnel and the paths are filled: #289 landed, and they answer rather than throw.
+    expect(() => funnelOfSlice({ run: smallRun, slice })).not.toThrow();
+    expect(() => pathsOfSlice({ slice })).not.toThrow();
     expect(() => timingOfSlice({ run: smallRun, slice })).toThrow(/#290/);
     expect(() => screenFiguresOfSlice({ run: smallRun, slice: screenSlice })).toThrow(/#291/);
     expect(() =>
