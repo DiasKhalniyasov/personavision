@@ -16,6 +16,7 @@ export type { OpenSessionOptions, SessionState } from './session.js';
 
 export {
   cutRecording,
+  discardRecording,
   prepareRecording,
   readRecording,
   storeRecording,

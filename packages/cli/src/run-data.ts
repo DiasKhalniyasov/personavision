@@ -9,8 +9,9 @@ import {
   runSchema,
   selectVideoStore,
   videoObjectName,
+  VideoStoreRefused,
 } from '@personavision/contract';
-import type { VideoStore } from '@personavision/contract';
+import type { VideoLocation, VideoStore } from '@personavision/contract';
 
 /**
  * The run-data interface, implemented once: run directories served read-only over HTTP,
@@ -240,22 +241,47 @@ const stateGone = (response: ServerResponse, reason: string, head: boolean): voi
 };
 
 /**
- * One stored recording: where to fetch it, or that it is no longer kept.
+ * One stored recording: where to fetch it, or that it is no longer kept. `false` means the
+ * store does not hold it and the file on disk is the answer after all.
  *
  * The redirect is a **302**, so the method and the headers of the request are carried to the
  * signed URL — a `Range` among them, which is what makes a scrubber seek. Nothing is streamed
  * through this process, and no `Range` is parsed here: the store answers it.
+ *
+ * **A store that will not answer is not a recording that has aged out.** A refusal is this
+ * deployment's problem, so it is a `502` with the store's own status word — which names no
+ * bucket — and never the "no longer kept" sentence, because saying a recording was deleted
+ * when the store merely would not answer is a lie a reader cannot check.
  */
 const sendStoredVideo = async (
   response: ServerResponse,
   store: VideoStore,
   objectName: string,
+  onDisk: string,
   head: boolean,
-): Promise<void> => {
-  const location = await store.locate(objectName);
+): Promise<boolean> => {
+  let location: VideoLocation;
+  try {
+    location = await store.locate(objectName);
+  } catch (error) {
+    if (!(error instanceof VideoStoreRefused)) throw error;
+    plain(
+      response,
+      502,
+      `This recording could not be fetched from where it is kept: ${error.status}.`,
+    );
+    return true;
+  }
   if (location.kind === 'gone') {
+    // A run recorded before a bucket was configured still has its files, and the bytes that
+    // are here beat a sentence claiming they were deleted. The caller's own path takes it
+    // from here, with the checks a file is served through.
+    const here = await stat(onDisk)
+      .then((stats) => stats.isFile())
+      .catch(() => false);
+    if (here) return false;
     stateGone(response, location.reason, head);
-    return;
+    return true;
   }
   response.writeHead(302, {
     location: location.url,
@@ -264,6 +290,7 @@ const sendStoredVideo = async (
     'cache-control': 'no-store',
   });
   response.end();
+  return true;
 };
 
 const sendFile = async (
@@ -383,8 +410,14 @@ export const runDataMount = (options: RunDataMountOptions): RunDataHandler => {
         plain(response, 404, `There is no ${path} in this run.`);
         return;
       }
-      await sendStoredVideo(response, videoStore, videoObjectName(runId, sessionId), head);
-      return;
+      const answered = await sendStoredVideo(
+        response,
+        videoStore,
+        videoObjectName(runId, sessionId),
+        file,
+        head,
+      );
+      if (answered) return;
     }
     // Lexically inside is not enough: a symbolic link in a run directory points wherever it
     // likes and `stat` would follow it. Both sides are resolved, because a runs root is

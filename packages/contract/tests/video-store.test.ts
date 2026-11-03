@@ -52,6 +52,10 @@ const fakeTransport = (options: { refuseTimes?: number } = {}): Fake => {
         return Promise.resolve();
       },
       holds: ({ object }) => Promise.resolve(stored.has(object)),
+      delete: ({ object }) => {
+        stored.delete(object);
+        return Promise.resolve();
+      },
       signer: () => Promise.resolve(SIGNER),
       sign: (payload) => {
         signed.push(payload);
@@ -111,6 +115,20 @@ describe('storing one recording', () => {
 
     expect(fake.stored.has('a-run/videos/S-01.webm')).toBe(true);
     expect(fake.refusals.count).toBe(0);
+  });
+
+  it('takes a recording back out again, for a session that is written up without one', async () => {
+    const fake = fakeTransport();
+    const store = storeFor(fake);
+    await store.put(videoObjectName('a-run', 'S-01'), bytes);
+
+    await store.remove(videoObjectName('a-run', 'S-01'));
+
+    expect(fake.stored.has('a-run/videos/S-01.webm')).toBe(false);
+    expect(await store.locate(videoObjectName('a-run', 'S-01'))).toEqual({
+      kind: 'gone',
+      reason: NO_LONGER_KEPT,
+    });
   });
 
   it('gives up after its retries, with a status and nothing that names a bucket', async () => {

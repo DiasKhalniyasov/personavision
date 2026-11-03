@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { runPaths, VideoStoreRefused } from '@personavision/contract';
 import type { VideoStore } from '@personavision/contract';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { storeRecording } from '../src/index.js';
+import { discardRecording, storeRecording } from '../src/index.js';
 
 /** A bucket name no message of ours may carry, distinctive enough to grep an artifact for. */
 const BUCKET = 'pv-test-session-videos';
@@ -28,6 +28,10 @@ const BYTES = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x86]);
 const fakeStore = (taken: Map<string, Uint8Array>): VideoStore => ({
   put: (objectName, bytes) => {
     taken.set(objectName, bytes);
+    return Promise.resolve();
+  },
+  remove: (objectName) => {
+    taken.delete(objectName);
     return Promise.resolve();
   },
   locate: (objectName) =>
@@ -82,6 +86,7 @@ describe('handing a finished recording over', () => {
     const refusing: VideoStore = {
       put: () => Promise.reject(new VideoStoreRefused('HTTP_403')),
       locate: () => Promise.resolve({ kind: 'gone', reason: 'no' }),
+      remove: () => Promise.resolve(),
     };
 
     const kept = await storeRecording({
@@ -99,6 +104,40 @@ describe('handing a finished recording over', () => {
     expect(kept).not.toContain('storage.googleapis.com');
     // And a session that says it has no recording may not leave one at the path it names.
     expect(existsSync(onDisk)).toBe(false);
+  });
+
+  it('files the recording under the run it is told, not under the directory it was written to', async () => {
+    // What a Cloud Run task does: a scratch directory of its own, and the run it belongs to
+    // said rather than guessed. Filed under the directory's name, the object would be one
+    // nothing could ever read back.
+    const scratch = join(root, 'personavision-task-AbC123');
+    await mkdir(runPaths(scratch).videosDir, { recursive: true });
+    await writeFile(runPaths(scratch).video(SESSION), BYTES);
+    const taken = new Map<string, Uint8Array>();
+
+    await storeRecording({
+      runDir: scratch,
+      runId: '2026-11-04-0930-northwind',
+      sessionId: SESSION,
+      store: fakeStore(taken),
+      bytes: BYTES,
+    });
+
+    expect([...taken.keys()]).toEqual([`2026-11-04-0930-northwind/${runPaths('').video(SESSION)}`]);
+  });
+
+  it('takes an abandoned session’s recording back out of both homes', async () => {
+    const taken = new Map<string, Uint8Array>();
+    const store = fakeStore(taken);
+    await writeFile(onDisk, BYTES);
+    await storeRecording({ runDir, sessionId: SESSION, store, bytes: BYTES });
+    await writeFile(onDisk, BYTES);
+
+    await discardRecording({ runDir, sessionId: SESSION, store });
+
+    // A recording a reader can find that no session names is worse than no recording at all.
+    expect(existsSync(onDisk)).toBe(false);
+    expect([...taken.keys()]).toEqual([]);
   });
 
   it('writes no log line in either mode, so nothing of a bucket is printed', async () => {
@@ -125,6 +164,7 @@ describe('handing a finished recording over', () => {
         store: {
           put: () => Promise.reject(new VideoStoreRefused('HTTP_403')),
           locate: () => Promise.resolve({ kind: 'gone', reason: 'no' }),
+          remove: () => Promise.resolve(),
         },
         bytes: BYTES,
       });

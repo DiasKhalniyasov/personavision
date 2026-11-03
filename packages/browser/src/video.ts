@@ -52,6 +52,16 @@ export interface VideoRequest {
   /** The session's id — `S-01` — which names the file and is re-derived nowhere. */
   readonly sessionId: string;
   /**
+   * The run the recording belongs to, as `run.json`'s `runId` spells it, which is what an
+   * object in a store is filed under.
+   *
+   * Omitted, it is the run directory's own name — right wherever the run directory *is* the
+   * run, which is every local session. A process writing to a scratch directory of its own
+   * **must** say: a Cloud Run task's `runDir` is a `mkdtemp` under `/tmp`, and a recording
+   * filed under that name is an object nothing can ever read back.
+   */
+  readonly runId?: string;
+  /**
    * The caps, in milliseconds, replacing `VIDEO_CAP_MS`'s.
    *
    * The real figures are the contract's and are restated nowhere; this exists so that the
@@ -172,6 +182,28 @@ export const prepareRecording = async (request: VideoRequest): Promise<PreparedR
   return { dir: videosDir, failed: null, start: (page) => startRecording(page, request) };
 };
 
+/** The object one recording is filed under: the run's id, said or taken from the directory. */
+const objectNameFor = (request: VideoRequest): string =>
+  videoObjectName(request.runId ?? basename(request.runDir), request.sessionId);
+
+/**
+ * Throws away a recording that has been made and is not going to be reported.
+ *
+ * A session that is abandoned finishes its recording — which is what makes the file whole and
+ * closes the context — and is then written up as having none, so the recording has to go from
+ * wherever `finish()` put it: the run directory, or the store, or both. A recording a reader
+ * can find that no session names is worse than no recording at all.
+ */
+export const discardRecording = async (request: VideoRequest): Promise<void> => {
+  await rm(runPaths(request.runDir).video(request.sessionId), { force: true }).catch(
+    () => undefined,
+  );
+  const store = request.store === undefined ? selectVideoStore() : request.store;
+  // A store that will not let go is left to the bucket's own lifecycle rule: there is nothing
+  // useful to say about it here, and nothing is reported as recorded either way.
+  await store?.remove(objectNameFor(request)).catch(() => undefined);
+};
+
 /**
  * Hands a finished recording to the object store, when there is one. `null` means it is kept;
  * anything else is the sentence a session states instead of a video.
@@ -191,7 +223,7 @@ export const storeRecording = async (
   if (store === null) return null;
   const onDisk = runPaths(request.runDir).video(request.sessionId);
   try {
-    await store.put(videoObjectName(basename(request.runDir), request.sessionId), request.bytes);
+    await store.put(objectNameFor(request), request.bytes);
   } catch (error) {
     await rm(onDisk, { force: true }).catch(() => undefined);
     // The store's own words, which name a status and never a bucket, an object URL or a

@@ -157,9 +157,8 @@ That is why these are built in this order.
 
 ### `PV_VIDEO_BUCKET` is read on its own, and a local run may set it
 
-It is **not** only a remote-run variable. It is read by
-`@personavision/contract`'s `selectVideoStore`, which is the one function in the repository that
-reads it, and it decides where *any* session's recording goes — a local run with it set writes its
+It is **not** only a remote-run variable. `@personavision/contract`'s `selectVideoStore` is the
+one place where it decides anything, and what it decides is where *any* session's recording goes — a local run with it set writes its
 videos to the bucket and the read-only run mount answers `GET /runs/<runId>/videos/S-NN.webm` with
 a 302 to a short-lived signed URL instead of the bytes. Unset, videos are files in the run
 directory and nothing reaches for a bucket, which is what every test, the acceptance suite and the

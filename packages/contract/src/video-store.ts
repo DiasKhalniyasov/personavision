@@ -8,9 +8,11 @@
  * instead — written by `@personavision/browser`'s recording seam and served by the read-only run
  * mount as a redirect. `docs/adr/0005-where-session-videos-live.md` records the choice.
  *
- * **One seam, one choice, no branching downstream.** {@link selectVideoStore} is the only
- * function in the repository that reads `PV_VIDEO_BUCKET`, and what it answers is a store or
- * `null`. Nothing that holds the answer asks which it got: a session hands its bytes over and
+ * **One seam, one choice, no branching downstream.** {@link selectVideoStore} is the only place
+ * where `PV_VIDEO_BUCKET` decides anything, and what it answers is a store or `null`. (The swarm
+ * reads the same name for two things that are not this decision: to refuse a remote run that
+ * would have nowhere to put its output, and to pass the name into a task's own environment.)
+ * Nothing that holds the answer asks which it got: a session hands its bytes over and
  * gets back the same run-directory-relative path `runPaths` declares either way, and the URL a
  * browser fetches is `GET /runs/<runId>/videos/S-NN.webm` either way.
  *
@@ -76,6 +78,16 @@ export interface VideoStore {
   put(objectName: string, bytes: Uint8Array): Promise<void>;
   /** Where to send a browser for it, or that it is no longer kept. */
   locate(objectName: string): Promise<VideoLocation>;
+  /**
+   * Takes one recording out of the store. An object it does not hold is already removed, so
+   * that is not a failure.
+   *
+   * It exists for the one case the local path already handles: a session that is abandoned
+   * finishes its recording — which is what makes the file whole — and is then written up as
+   * having none, so the recording has to go. A recording a reader can find that no session
+   * names is worse than no recording at all.
+   */
+  remove(objectName: string): Promise<void>;
 }
 
 /**
@@ -109,6 +121,8 @@ export interface VideoObjectTransport {
   }): Promise<void>;
   /** `true` when the bucket still holds that object. Throws {@link VideoStoreRefused}. */
   holds(request: { readonly bucket: string; readonly object: string }): Promise<boolean>;
+  /** Deletes one object. An object that is not there is not an error. */
+  delete(request: { readonly bucket: string; readonly object: string }): Promise<void>;
   /**
    * The identity that signs, which a signed URL has to name **inside** what it signs — so it
    * is asked for before there is anything to sign.
@@ -256,6 +270,7 @@ export const createObjectVideoStore = (options: ObjectVideoStoreOptions): VideoS
         }
       }
     },
+    remove: (objectName) => transport.delete({ bucket: options.bucket, object: objectName }),
     locate: async (objectName) => {
       if (!(await transport.holds({ bucket: options.bucket, object: objectName }))) {
         return { kind: 'gone', reason: NO_LONGER_KEPT };
@@ -328,8 +343,22 @@ const fromBase64 = (text: string): Uint8Array =>
  * whose transport could not be injected, and no credential read by this repository.
  */
 export const createGoogleStorageTransport = (): VideoObjectTransport => {
-  /** The account that signs. It does not change while this process runs, so it is read once. */
+  /**
+   * The account that signs. It does not change while this process runs, so it is read once —
+   * but a **failed** read is not cached: a metadata server that hiccupped on the first replay
+   * would otherwise refuse every video for the life of the process.
+   */
   let signerEmail: Promise<string> | null = null;
+
+  const whoSigns = async (): Promise<string> => {
+    signerEmail ??= askMetadata('email')
+      .then((email) => email.trim())
+      .catch((error: unknown) => {
+        signerEmail = null;
+        throw error;
+      });
+    return await signerEmail;
+  };
 
   const askMetadata = async (path: string): Promise<string> => {
     const response = await fetch(`${METADATA}/default/${path}`, {
@@ -385,13 +414,17 @@ export const createGoogleStorageTransport = (): VideoObjectTransport => {
       if (!response.ok) await refuse(response);
       return true;
     },
-    signer: async () => {
-      signerEmail ??= askMetadata('email').then((email) => email.trim());
-      return await signerEmail;
+    delete: async ({ bucket, object }) => {
+      const response = await authorised(`${STORAGE}/b/${escape(bucket)}/o/${escape(object)}`, {
+        method: 'DELETE',
+      });
+      // Already gone is the state that was asked for.
+      if (response.status === 404) return;
+      if (!response.ok) await refuse(response);
     },
+    signer: whoSigns,
     sign: async (payload) => {
-      signerEmail ??= askMetadata('email').then((email) => email.trim());
-      const email = await signerEmail;
+      const email = await whoSigns();
       const response = await authorised(`${SIGN_BLOB}/${escape(email)}:signBlob`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -399,7 +432,12 @@ export const createGoogleStorageTransport = (): VideoObjectTransport => {
       });
       if (!response.ok) await refuse(response);
       const signed = (await response.json()) as { signedBlob?: string };
-      return hex(fromBase64(signed.signedBlob ?? ''));
+      // An empty signature would send a browser to a URL the store answers 403 to, with
+      // nothing anywhere saying why.
+      if (signed.signedBlob === undefined || signed.signedBlob === '') {
+        throw new VideoStoreRefused('NO_SIGNATURE');
+      }
+      return hex(fromBase64(signed.signedBlob));
     },
   };
 };

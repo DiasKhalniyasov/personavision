@@ -287,6 +287,7 @@ describeWithChromium('a recorded session', () => {
           return Promise.resolve();
         },
         locate: () => Promise.resolve({ kind: 'gone', reason: 'not asked for here' }),
+        remove: () => Promise.resolve(),
       };
 
       const { walked, runDir } = await record({ sessionId: 'S-05', store });

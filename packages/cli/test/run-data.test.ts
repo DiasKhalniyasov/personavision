@@ -11,6 +11,7 @@ import {
   runPaths,
   videoObjectName,
 } from '@personavision/contract';
+import { VideoStoreRefused } from '@personavision/contract';
 import type { VideoObjectTransport } from '@personavision/contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runDataMount } from '../src/run-data.js';
@@ -347,6 +348,7 @@ describe('the run-data mount with session videos in an object store', () => {
   let server: { base: string; close: () => Promise<void> };
   let held: Set<string>;
   let url: URL;
+  let refusing: { with: string | null };
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'personavision-mount-stored-'));
@@ -358,9 +360,15 @@ describe('the run-data mount with session videos in an object store', () => {
     });
     held = new Set([videoObjectName(shown, VIDEO_SESSION)]);
 
+    refusing = { with: null };
+
     const transport: VideoObjectTransport = {
       put: () => Promise.reject(new Error('the mount never writes')),
-      holds: ({ object }) => Promise.resolve(held.has(object)),
+      delete: () => Promise.reject(new Error('the mount never deletes')),
+      holds: ({ object }) =>
+        refusing.with === null
+          ? Promise.resolve(held.has(object))
+          : Promise.reject(new VideoStoreRefused(refusing.with)),
       signer: () => Promise.resolve(SIGNER),
       sign: () => Promise.resolve('deadbeef'),
     };
@@ -418,6 +426,39 @@ describe('the run-data mount with session videos in an object store', () => {
       state: NO_LONGER_KEPT_STATE,
       reason: NO_LONGER_KEPT,
     });
+  });
+
+  it('answers a store that will not answer with a 502, and never with “no longer kept”', async () => {
+    refusing.with = 'PERMISSION_DENIED';
+    try {
+      const response = await fetch(
+        new URL(`runs/${shown}/${runPaths('').video('S-04')}`, server.base),
+      );
+      const said = await response.text();
+
+      // This deployment's problem, not a recording that aged out: saying a recording was
+      // deleted when the store merely would not answer is a lie a reader cannot check.
+      expect(response.status).toBe(502);
+      expect(said).toContain('PERMISSION_DENIED');
+      expect(said).not.toContain(NO_LONGER_KEPT);
+      expect(said).not.toContain(BUCKET);
+    } finally {
+      refusing.with = null;
+    }
+  });
+
+  it('serves a recording the store never held but the run directory still has', async () => {
+    // A run recorded before the bucket was configured: the bytes that are here beat a
+    // sentence claiming they were deleted.
+    const bytes = await writeSessionVideo(join(runsRoot, shown), 'S-03');
+
+    const response = await fetch(
+      new URL(`runs/${shown}/${runPaths('').video('S-03')}`, server.base),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('video/webm');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
   });
 
   it('answers 404 for a .webm that is not a session recording, signing nothing', async () => {
