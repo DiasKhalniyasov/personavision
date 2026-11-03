@@ -539,9 +539,10 @@ a document in and a structured object out, with no session and no screen. It is 
 from a sentence, the goal from a URL and a feature description, the recommendations from a finished run's aggregate,
 and the one change with its patch (#219, `docs/FLOW.md` sections 12, 14 and 16).
 
-It is the **same endpoint, the same credential, the same protocol and the same usage object** as a decision call. What
-is different is the model id, the price, the default reasoning effort, how a reply is asked for, and one thing in the
-response envelope. Those five are what this section is for.
+It is the **same endpoint, the same credential, the same protocol and the same usage object** as a decision call. Four
+things differ, and they are what this section is for: the model id and the tier it has, the price, the default
+reasoning effort, and how a structured reply is asked for. The response envelope is the decision call's with a handful
+of small differences, each listed where it sits.
 
 The live calls were made on **2026-11-03** from the owner's machine (#248). Nothing here was taken from the
 documentation alone; where the two disagree, both are given.
