@@ -15,6 +15,7 @@ export {
   EVIDENCE_LINK_PARAMS,
   findingsSchema,
   goalSchema,
+  HEATMAP_OVERLAYS,
   holdoutVerdictSchema,
   improveSchema,
   modelModeSchema,

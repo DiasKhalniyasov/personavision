@@ -1581,11 +1581,26 @@ export const sessionSchema = z
  * for, and so cannot carry a credential under a name of its own invention.
  *
  * **It is closed, and it grows only here**, and only with a parameter `docs/FLOW.md`
- * section 16 names. That section's four are `segment` — the filter the Sessions, Heatmaps
- * and Funnel screens share — `step`, which was already here, `overlay`, which chooses one
- * of the Heatmaps screen's three, and `t`, the video-millisecond offset a citation opens a
- * replay paused on. A link a screen cannot build is a citation rendered as prose, which is
- * what section 14 forbids.
+ * section 16 names. A link a screen cannot build is a citation rendered as prose, which is
+ * what section 14 forbids, so what each parameter means and the screen that honours it is
+ * written here rather than left to a screen to guess:
+ *
+ * - `variant` — the version a filtered screen is narrowed to. Sessions filters on it;
+ *   Heatmaps takes it as the first path segment of `/runs/:runId/attention/:variant/:step`.
+ * - `step` — the step. Sessions filters on it as the failure step, Heatmaps takes it as the
+ *   second path segment. It was on this list before section 16 and is not re-added.
+ * - `aoi` — one area of interest on that step, on Sessions and on Heatmaps.
+ * - `outcome` — how a session ended, on Sessions and on Heatmaps.
+ * - `segment` — the audience segment a filtered screen is narrowed to (`phone`,
+ *   `first-time`, …), on Sessions, on Heatmaps and on Funnel and timing. Any non-empty
+ *   string: the audience decides what its segments are, so these are not enumerated.
+ * - `overlay` — which of the Heatmaps screen's three overlays a link opens on. One of
+ *   `HEATMAP_OVERLAYS` and nothing else, so that no screen invents a fourth or a synonym.
+ * - `t` — the second of a session's recording the Session replay screen opens paused on. A
+ *   non-negative number of **seconds**, decimals allowed, because it is the number a person
+ *   reads in the citation (*S-07 · 0:48*) and a citation is sometimes written finer than a
+ *   whole second. Seconds and not milliseconds: a video block's `offsetMs` is a different
+ *   field with a different job.
  *
  * `fix` is **not** here. The Session replay route carries it in sections 3 and 14, but
  * section 16's enumeration leaves it out and no `evidence_link` can name the replay today:
@@ -1601,6 +1616,42 @@ export const EVIDENCE_LINK_PARAMS = [
   'overlay',
   't',
 ] as const;
+
+/**
+ * The three overlays of the Heatmaps screen (`docs/FLOW.md` section 14.4), spelled once so
+ * that a citation, the screen that renders it and the validation below cannot drift into a
+ * fourth overlay or a synonym for one of these.
+ */
+export const HEATMAP_OVERLAYS = ['clicks', 'attention', 'scroll'] as const;
+
+/** `t` as a citation writes it: seconds from the start of the recording, decimals allowed. */
+const SECONDS = /^\d+(?:\.\d+)?$/;
+
+/**
+ * What the value of a parameter may be, beside the list the parameter belongs to. Each rule
+ * answers with the complaint to report, or `undefined` when the value is one its screen can
+ * act on.
+ *
+ * A parameter with no rule here carries any string, because its values are the run's own
+ * names — a variant, a step, an area of interest, an outcome — and `io.ts`'s reference
+ * checks are what hold a citation to names the run actually has.
+ */
+const EVIDENCE_LINK_PARAM_RULES: Partial<
+  Record<EvidenceLinkParam, (value: string) => string | undefined>
+> = {
+  segment: (value) =>
+    value === ''
+      ? 'a segment is the name of an audience filter ("phone", "first-time"): an empty one narrows nothing'
+      : undefined,
+  overlay: (value) =>
+    (HEATMAP_OVERLAYS as readonly string[]).includes(value)
+      ? undefined
+      : `"${value}" is not one of the Heatmaps screen's overlays (${HEATMAP_OVERLAYS.join(', ')})`,
+  t: (value) =>
+    SECONDS.test(value)
+      ? undefined
+      : `"${value}" is not a number of seconds: "t" is seconds from the start of the recording, decimals allowed and never negative`,
+};
 
 export const findingsSchema = z
   .strictObject({
@@ -1629,14 +1680,19 @@ export const findingsSchema = z
   })
   .superRefine((findings, ctx) => {
     findings.findings.forEach((finding, index) => {
-      for (const key of Object.keys(finding.evidence_link.params)) {
+      for (const [key, value] of Object.entries(finding.evidence_link.params)) {
+        const path = ['findings', index, 'evidence_link', 'params', key];
         if (!(EVIDENCE_LINK_PARAMS as readonly string[]).includes(key)) {
           ctx.addIssue({
             code: 'custom',
-            path: ['findings', index, 'evidence_link', 'params', key],
+            path,
             message: `"${key}" is not a parameter the evidence screens take (${EVIDENCE_LINK_PARAMS.join(', ')})`,
           });
+          continue;
         }
+        // The key is on the list, so a bad value is the other way a link fails to build.
+        const complaint = EVIDENCE_LINK_PARAM_RULES[key as EvidenceLinkParam]?.(value);
+        if (complaint !== undefined) ctx.addIssue({ code: 'custom', path, message: complaint });
       }
     });
   });

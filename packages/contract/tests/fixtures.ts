@@ -467,6 +467,27 @@ export const validFindings = (): Findings => ({
 });
 
 /**
+ * The same one finding, with the whole deep link a citation of `docs/FLOW.md` section 14
+ * writes: the segment filter the evidence screens share, one of the Heatmaps overlays, and
+ * the second of the recording a replay opens paused on. Every parameter the contract's
+ * closed list carries, in one artifact, so that a reader and writer round-trip proves the
+ * three this step added survive disk.
+ */
+export const deepLinkedFindings = (): Findings => {
+  const findings = validFindings();
+  findings.findings[0].evidence_link.params = {
+    variant: 'B',
+    step: CONFIRM,
+    aoi: COMPLETE_AOI,
+    outcome: 'abandoned',
+    segment: 'phone',
+    overlay: 'attention',
+    t: '48.5',
+  };
+  return findings;
+};
+
+/**
  * What Muse Wonder says to change about this run: one recommendation, citing the finding it
  * rests on and all three kinds of evidence, with the write-up generated from it. The run
  * holds two sessions, so the sample read both of them.
