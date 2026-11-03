@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import type { Audience, RunRequest } from '@personavision/contract';
 import { runRequestSchema } from '@personavision/contract';
 import { validRun } from '../../contract/tests/fixtures.js';
@@ -8,7 +8,7 @@ import { hashPassword } from '../src/store/password.js';
 import { CAPS, CapRefusedError, refuseTooManyAgents } from '../src/caps.js';
 import { foundTheLine, siteCheckResult, siteVerificationPair } from '../src/site/index.js';
 import type { SiteAtLaunch } from '../src/run/start.js';
-import type { SiteCheckResult } from '../src/store/types.js';
+import type { SiteCheckResult, SiteRecord } from '../src/store/types.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 
@@ -121,6 +121,17 @@ describe('the caps, enforced where a test starts', () => {
   let cookie: string;
   let workspaceId: string;
   let siteId: string;
+  /**
+   * What the stand-in swarm does before it answers. The default returns at once; a case
+   * about launches in flight holds each one open until it releases it.
+   */
+  let held: ((release: () => void) => void) | null;
+  /** Whether the stand-in swarm throws instead of answering, as a crashing one would. */
+  let throws: boolean;
+
+  /** The site record as it stands now, for reading the ledger between launches. */
+  const siteNow = (): Promise<SiteRecord | null> =>
+    served.platform.store.sites.byId(workspaceId, siteId);
 
   /** An audience of `size` people in the session's workspace, by id. */
   const audienceOf = async (size: number): Promise<string> =>
@@ -153,6 +164,7 @@ describe('the caps, enforced where a test starts', () => {
   const ledgerOf = async (entries: readonly number[]): Promise<void> => {
     for (const [index, minutesAgo] of entries.entries()) {
       await served.platform.store.sites.recordLaunch(workspaceId, siteId, {
+        id: `launch-${String(index)}`,
         runId: `${RUN_ID}-${String(index)}`,
         at: new Date(Date.now() - minutesAgo * 60 * 1000).toISOString(),
       });
@@ -170,8 +182,29 @@ describe('the caps, enforced where a test starts', () => {
       at: new Date('2026-11-03T09:00:00.000Z'),
     });
 
+  /** A site in a workspace that is not the session's, by id. */
+  const anotherWorkspacesSite = async (): Promise<string> => {
+    const them = await served.platform.store.accounts.create({
+      email: 'owner@another.example',
+      displayName: 'Another owner',
+      password: await hashPassword('another-shops-password'),
+    });
+    const theirWorkspace = await served.platform.store.workspaces.create({
+      name: 'Another shop',
+      memberAccountIds: [them.id],
+    });
+    return (
+      await served.platform.store.sites.create(theirWorkspace.id, {
+        url: 'https://shop.another.example/checkout',
+        token: 'pv_another',
+      })
+    ).id;
+  };
+
   beforeEach(async () => {
     calls = [];
+    held = null;
+    throws = false;
     served = await startTestServer({
       runs: [{ stamp: '2026-10-24T14:02:00.000Z', name: 'northwind-demo' }],
       // It reports back **what it was asked for**, so that nothing here is refused for
@@ -179,6 +212,12 @@ describe('the caps, enforced where a test starts', () => {
       // substitution rule (#144) has its own suite.
       pipeline: async (request, audience, site) => {
         calls.push({ request, audience, site });
+        if (throws) throw new Error('the swarm fell over');
+        if (held !== null) {
+          await new Promise<void>((resolve) => {
+            held?.(resolve);
+          });
+        }
         return {
           runId: RUN_ID,
           engineMode: request.engineMode,
@@ -203,6 +242,7 @@ describe('the caps, enforced where a test starts', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await served.close();
   });
 
@@ -309,12 +349,72 @@ describe('the caps, enforced where a test starts', () => {
       // The refused one is not recorded: it drove nothing.
       const site = await served.platform.store.sites.byId(workspaceId, siteId);
       expect(site?.launches).toHaveLength(4);
-      expect(site?.launches.map((entry) => entry.runId)).toStrictEqual([
+      // One entry per launch, each annotated with the run it opened — the reservation and
+      // the annotation are two writes of one entry, not two launches.
+      expect(site?.launches?.map((entry) => entry.runId)).toStrictEqual([
         RUN_ID,
         RUN_ID,
         RUN_ID,
         RUN_ID,
       ]);
+      expect(new Set(site?.launches?.map((entry) => entry.id)).size).toBe(4);
+    });
+
+    it('counts runs that are still in flight, not only the ones that finished', async () => {
+      // The case the cap exists for: a person pressing Launch four times, or a client
+      // retrying. None of the four pipelines has resolved, so a ledger written after the
+      // pipeline would be empty and all five would start.
+      const inFlight: (() => void)[] = [];
+      held = (release) => inFlight.push(release);
+
+      const started = [launch(10), launch(10), launch(10), launch(10)];
+      // Four reservations are on the record before any of them has run a session.
+      await vi.waitUntil(async () => (await siteNow())?.launches?.length === 4, {
+        timeout: 2000,
+      });
+      expect((await siteNow())?.launches?.every((entry) => entry.runId === null)).toBe(true);
+
+      // The fifth is refused while the other four are still open.
+      const fifth = await launch(10);
+      expect(fifth.status).toBe(429);
+      expect(((await fifth.json()) as Refusal).cap).toBe('runsPerSitePerHour');
+
+      for (const release of inFlight) release();
+      for (const response of started) expect((await response).status).toBe(201);
+      // And the four entries are annotated rather than doubled.
+      expect((await siteNow())?.launches).toHaveLength(4);
+    });
+
+    it('counts a launch whose pipeline threw, so a crash cannot be retried past the cap', async () => {
+      // A ledger written only on success is a cap a retry loop walks straight through.
+      throws = true;
+      for (const attempt of [1, 2, 3, 4]) {
+        expect((await launch(10)).status, `attempt ${String(attempt)}`).toBe(500);
+      }
+
+      expect((await siteNow())?.launches).toHaveLength(4);
+      throws = false;
+      const response = await launch(10);
+
+      expect(response.status).toBe(429);
+      expect(((await response.json()) as Refusal).cap).toBe('runsPerSitePerHour');
+    });
+
+    it('names a retry instant that is itself allowed, with more than four in the window', async () => {
+      // Five in the hour: the oldest falling out still leaves four, so the instant to name
+      // is when the *second* oldest does. Naming the oldest would send the user back to 429.
+      await ledgerOf([59, 58, 30, 20, 5]);
+
+      const response = await launch(10);
+      const body = (await response.json()) as Refusal;
+      expect(response.status).toBe(429);
+
+      // Advance to exactly the instant the body promised, and the launch is allowed.
+      const retryAt = Date.parse(body.retryAt ?? '');
+      vi.setSystemTime(new Date(retryAt));
+      const retried = await launch(10);
+
+      expect(retried.status).toBe(201);
     });
 
     it('counts a site’s runs against that site alone', async () => {
@@ -357,21 +457,7 @@ describe('the caps, enforced where a test starts', () => {
 
   describe('a test names its site', () => {
     it('refuses a site of another workspace as an unknown site', async () => {
-      const them = await served.platform.store.accounts.create({
-        email: 'owner@another.example',
-        displayName: 'Another owner',
-        password: await hashPassword('another-shops-password'),
-      });
-      const theirWorkspace = await served.platform.store.workspaces.create({
-        name: 'Another shop',
-        memberAccountIds: [them.id],
-      });
-      const theirSite = await served.platform.store.sites.create(theirWorkspace.id, {
-        url: 'https://shop.another.example/checkout',
-        token: 'pv_another',
-      });
-
-      siteId = theirSite.id;
+      siteId = await anotherWorkspacesSite();
       const response = await launch(10);
       const body = (await response.json()) as Refusal;
 
@@ -398,6 +484,43 @@ describe('the caps, enforced where a test starts', () => {
       expect(response.status).toBe(400);
       expect((body.issues ?? []).map((issue) => issue.path)).toStrictEqual(['siteId']);
       expect(body.issues?.[0]?.message).toContain('a test names the site it runs against');
+      expect(calls).toStrictEqual([]);
+    });
+
+    it('refuses a two-variant comparison naming no site, at the same field', async () => {
+      // Both forms reach `POST /runs` and both reach the caps, so the comparison form is
+      // held to the same rule: a cap counted against nothing is not a cap. Nothing offers
+      // this form today (decision 78), and #279's launch step is what sends the id.
+      const response = await post({
+        task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
+        variants: validRun().variants,
+        audienceId: await audienceOf(10),
+        repeats: 1,
+        seed: 1,
+        engineMode: 'offline',
+      });
+      const body = (await response.json()) as { issues?: { path: string }[] };
+
+      expect(response.status).toBe(400);
+      expect((body.issues ?? []).map((issue) => issue.path)).toStrictEqual(['siteId']);
+      expect(calls).toStrictEqual([]);
+    });
+
+    it('refuses a two-variant comparison naming a site of another workspace', async () => {
+      const theirs = await anotherWorkspacesSite();
+
+      const response = await post({
+        task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
+        variants: validRun().variants,
+        audienceId: await audienceOf(10),
+        siteId: theirs,
+        repeats: 1,
+        seed: 1,
+        engineMode: 'offline',
+      });
+
+      expect(response.status).toBe(400);
+      expect(((await response.json()) as Refusal).error).toBe('There is no such site.');
       expect(calls).toStrictEqual([]);
     });
 

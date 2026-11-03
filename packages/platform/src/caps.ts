@@ -151,11 +151,16 @@ export const refuseTooManyRunsThisHour = (
 ): CapRefusedError | null => {
   const recent = inTheTrailingHour(launches, now);
   if (recent.length < CAPS.runsPerSitePerHour) return null;
-  const [oldest] = recent;
-  // `recent` is non-empty here — the limit is positive — so this is the type system being
-  // reminded of it rather than a case that happens.
+  // **Not the oldest in the window** — the oldest one that still has to fall out of it for
+  // the count to be back under the limit. With exactly four launches that is the oldest;
+  // with five it is the second oldest, because the first falling out still leaves four. The
+  // difference matters because `retryAt` is what the screen counts down to: naming an
+  // instant that is itself still refused would send the user back to another 429.
+  const blocking = recent[recent.length - CAPS.runsPerSitePerHour];
+  // `recent` is at least `runsPerSitePerHour` long here, and that is positive, so the index
+  // is in range: this is the type system being reminded of it rather than a case that happens.
   const retryAt = new Date(
-    (oldest === undefined ? now.getTime() : Date.parse(oldest.at)) + AN_HOUR_IN_MS,
+    (blocking === undefined ? now.getTime() : Date.parse(blocking.at)) + AN_HOUR_IN_MS,
   );
   return new CapRefusedError({
     cap: 'runsPerSitePerHour',
@@ -166,13 +171,18 @@ export const refuseTooManyRunsThisHour = (
 };
 
 /**
- * The ledger as it is written back: this launch added, and everything older than
+ * The ledger as it is written back: this launch recorded, and everything older than
  * `LAUNCH_LEDGER_HOURS` dropped.
  *
- * Trimmed on write rather than swept on a timer, so the record a single server process owns
- * stays bounded without anything having to run. That one process owning its data directory
- * is the same ceiling the file store already has, and a second writer would need the same
- * answer the store itself does.
+ * An **upsert on `id`**, not an append, because one launch is written twice: once when it is
+ * reserved, before any browser opens, and once when the pipeline reports the run directory
+ * it opened. Appending would count a single launch as two and refuse the third run of the
+ * hour as though it were the fifth.
+ *
+ * Trimmed on write rather than swept on a timer, so the record stays bounded without
+ * anything having to run. The caller serialises these writes per site; a second *process*
+ * writing the same data directory is the ceiling the file store already has, and would need
+ * the same answer the store itself does.
  */
 export const withLaunchRecorded = (
   launches: readonly SiteLaunch[],
@@ -180,5 +190,7 @@ export const withLaunchRecorded = (
   now: Date,
 ): SiteLaunch[] => {
   const from = now.getTime() - LAUNCH_LEDGER_HOURS * AN_HOUR_IN_MS;
-  return [...launches, launch].filter((recorded) => Date.parse(recorded.at) > from);
+  return [...launches.filter((recorded) => recorded.id !== launch.id), launch].filter(
+    (recorded) => Date.parse(recorded.at) > from,
+  );
 };

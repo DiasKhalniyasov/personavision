@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { runRequestSchema } from '@personavision/contract';
 import type { Audience, Goal, ModelMode, RunRequest } from '@personavision/contract';
 import { MODEL_ID_BY_MODE, ModelModeUnavailableError } from '@personavision/provider';
@@ -310,6 +311,23 @@ export const startTest = async ({
   const tooManyRuns = refuseTooManyRunsThisHour(site.launches ?? [], launchedAt);
   if (tooManyRuns !== null) throw tooManyRuns;
 
+  // **Reserved before the pipeline is called**, which is the difference between a cap and a
+  // count of the runs that happened to finish. The sessions start the moment the pipeline is
+  // handed the request, so that is the moment the site has taken a run:
+  //
+  // - four launches in flight at once each read an empty ledger if the entry is written
+  //   afterwards, and all four start — four hundred browsers on a site whose cap is four.
+  //   The person pressing Launch twice is the case the cap exists for.
+  // - a pipeline that **throws** leaves nothing written at all if the entry comes
+  //   afterwards, so a crash-retry loop walks straight through the cap.
+  //
+  // The run directory is not open yet, so `runId` is `null` until the pipeline reports it.
+  // `id` is what makes the second write an annotation of this launch rather than a second
+  // launch against the site.
+  const launchId = randomUUID();
+  const at = launchedAt.toISOString();
+  await sites.recordLaunch(workspaceId, site.id, { id: launchId, runId: null, at });
+
   // What was true of the site at this instant, read **once** and only to be recorded. The
   // pipeline copies it into the artifact (#243); no cap above has read it.
   //
@@ -339,15 +357,21 @@ export const startTest = async ({
     throw error;
   }
 
-  // Recorded **before** the substitution check below, and against the instant the launch
-  // happened rather than now: the sessions ran, the site took them, and a run that is then
-  // refused for having run on the wrong model still used one of the site's four. A ledger
-  // that only counted the runs we were happy with would be a cap a retry loop could walk
-  // straight through.
-  await sites.recordLaunch(workspaceId, site.id, {
-    runId: started.runId,
-    at: launchedAt.toISOString(),
-  });
+  // The run the reserved launch opened, noted on the entry that is already there — before
+  // the substitution check below, because a run refused for having run on the wrong model
+  // still used one of the site's four.
+  //
+  // A failure here is **swallowed deliberately, and it is the only thing here that is**: the
+  // launch is already recorded and already counted against the cap, so what a failed write
+  // loses is the run id a reader would have seen beside it. Letting it throw would mean a
+  // completed run — a hundred finished sessions, an artifact on disk — never reaching
+  // `addRun` below, and so never being offered by the product. Bookkeeping for a cap does
+  // not get to discard a run that ran.
+  try {
+    await sites.recordLaunch(workspaceId, site.id, { id: launchId, runId: started.runId, at });
+  } catch {
+    // Left where it is: the cap is intact, and the deployment's own logs carry the throw.
+  }
 
   if (!servedAsAsked(request, started)) throw new TestRefusedError(workspace.modelMode, started);
 

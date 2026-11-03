@@ -313,6 +313,7 @@ describe('POST /sites/:siteId/verify', () => {
       // Starting a test writes the site's launch ledger, and that is all it may write:
       // launching a run is not a way to prove you own a site (#239).
       await sites.recordLaunch(workspaceId, site.id, {
+        id: 'a-launch',
         runId: '2026-11-03-0914-clipforge-create',
         at: '2026-11-03T09:14:00.000Z',
       });
