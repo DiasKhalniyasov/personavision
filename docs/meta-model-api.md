@@ -648,10 +648,12 @@ to its two messages:
     }
   },
   "reasoning": { "effort": "minimal" },
-  "store": false,
   "max_output_tokens": 4096
 }
 ```
+
+It sent no `store`, which is why the response below reports `"store": true` — the API default. A Wonder use that
+keeps nothing server-side sends `store: false`, as the decision provider does on every call.
 
 | Field                    | Type                               | Required | What it does on Wonder                                                            |
 | ------------------------ | ---------------------------------- | -------- | --------------------------------------------------------------------------------- |
@@ -753,42 +755,53 @@ values — and **recursive schemas are rejected**, so a tree is flattened to a f
 
 ### The response envelope
 
-The same envelope as a decision call, with one field more and one field conditional. The goal call's real response,
-with the reasoning item's blob trimmed:
+The same envelope as a decision call, with one field more and two conditional. This is the goal call's real response
+of 2026-11-03, verbatim but for the schema it echoes:
 
 ```json
 {
-  "id": "resp_6ae9c32af659cc0f55ce488e",
+  "id": "resp_6ae9c3b54161aff4886042a3",
   "object": "response",
   "status": "completed",
-  "created_at": 1793704746,
-  "completed_at": 1793704746,
+  "created_at": 1793704885,
+  "completed_at": 1793704885,
   "error": null,
   "incomplete_details": null,
   "model": "muse-wonder-1.0",
-  "store": false,
+  "store": true,
+  "background": false,
   "temperature": 1,
   "top_p": 1,
   "top_logprobs": 0,
   "max_output_tokens": 4096,
-  "prompt_cache_key": "pv-wonder-audience-probe",
   "reasoning": { "effort": "minimal" },
   "text": { "format": { "type": "json_schema", "name": "Goal", "schema": { … }, "strict": true } },
   "service_tier": "auto",
-  "background": false,
   "tools": [],
   "tool_choice": "auto",
   "parallel_tool_calls": true,
   "truncation": "disabled",
   "instructions": null,
   "output": [
-    { "type": "reasoning", "id": "rs_6ae9c32af659cc0f55ce488e:rs_46b935da-…", "summary": [], "status": "completed" },
+    {
+      "type": "reasoning",
+      "id": "rs_6ae9c3b54161aff4886042a3:rs_5e900659-390c-4193-8fa6-2f9513114cb6",
+      "summary": [],
+      "status": "completed"
+    },
     {
       "type": "message",
-      "id": "msg_3ac258eb-6a79-402d-8eff-7cd88639956d",
+      "id": "msg_91ee93fd-5a59-4b81-9063-0e60a54ee25d",
       "role": "assistant",
       "status": "completed",
-      "content": [{ "type": "output_text", "text": "{\"author\": \"model\", …}", "annotations": [], "logprobs": [] }]
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"author\": \"model\", \"successCriterion\": \"The screen shows an order confirmation message such as 'Order confirmed' …\", \"task\": \"I want to buy the items in my basket by completing the new one-page checkout.\"}",
+          "annotations": [],
+          "logprobs": []
+        }
+      ]
     }
   ],
   "usage": {
@@ -801,10 +814,14 @@ with the reasoning item's blob trimmed:
 }
 ```
 
+That call sent no `store`, so it got the API default of `true` — and its reasoning item therefore carries no
+`encrypted_content`, which is the relationship the last bullet below is about.
+
 The envelope's keys, exactly, on every observed Wonder response: `background`, `completed_at`, `created_at`, `error`,
 `id`, `incomplete_details`, `instructions`, `max_output_tokens`, `model`, `object`, `output`, `parallel_tool_calls`,
-`prompt_cache_key`, `reasoning`, `service_tier`, `status`, `store`, `temperature`, `text`, `tool_choice`, `tools`,
-`top_logprobs`, `top_p`, `truncation`, `usage`.
+`reasoning`, `service_tier`, `status`, `store`, `temperature`, `text`, `tool_choice`, `tools`, `top_logprobs`,
+`top_p`, `truncation`, `usage` — and `prompt_cache_key` **only on a response whose request sent one**. A request that
+sent no cache key got an envelope with no such field at all, rather than a `null`, so read it with that in mind.
 
 What holds, unchanged from a decision response:
 
@@ -818,8 +835,9 @@ What holds, unchanged from a decision response:
 What is different:
 
 - **`top_logprobs` is in the envelope** (`0`), where the decision-call response recorded above has no such field.
-- **`prompt_cache_key` is echoed; `prompt_cache_retention` is not.** A request that sent `"24h"` got back an envelope
-  with no retention field at all. Do not read retention back off a response.
+- **`prompt_cache_key` is echoed when it was sent, and absent otherwise; `prompt_cache_retention` is never echoed.**
+  A request that sent both got back an envelope carrying the key and no retention field at all. Do not read retention
+  back off a response, and do not expect the key on a response whose request omitted it.
 - **`reasoning.effort` is echoed even when the request did not send it**, and what came back was `"max"` — which is
   how Wonder's default was found.
 - **`encrypted_content` on the reasoning item tracks `store`, not the model.** With `store: true` (the API default,
@@ -955,10 +973,11 @@ than a spinner, and nothing in the onboarding flow blocks on a Wonder call it co
 
 Two things those figures say about how to spend it:
 
-- **Reasoning is 64% to 76% of every output.** It is the bill, exactly as on Spark, and it is inside `output_tokens`,
-  so costing a call from `output_tokens` at the output rate is correct and complete.
-- **The harder the shape, the more it costs, by a lot.** The change call produced four times the output of the goal
-  call for a sixth more input. A cheap call is a small answer, not a short question.
+- **Reasoning is 63% to 79% of every output**, on all four shapes. It is the bill, exactly as on Spark, and it is
+  inside `output_tokens`, so costing a call from `output_tokens` at the output rate is correct and complete.
+- **The harder the shape, the more it costs, by a lot.** The change call produced **seven times** the output of the
+  goal call for 6% more input, and cost six and a half times as much. A cheap call is a small answer, not a short
+  question — the length of the question barely enters it.
 
 ### What `docs/FLOW.md` needs from this, and what it does not settle
 
