@@ -34,6 +34,32 @@ const MAX_DISPLACEMENT = MAX_OFFSET + JITTER;
 /** Three decimals: enough to tell two sampled people apart, few enough to read. */
 const TRAIT_PRECISION = 1000;
 
+/**
+ * The holdout's default size: this share of the people the audience generates, never fewer
+ * than `HOLDOUT_FLOOR` of them and never more than the audience itself. At a hundred
+ * participants that is the forty the design contract prints (`docs/FLOW.md` section 15,
+ * `docs/design/prototype.html` `#screen-improve`); at the demo's four it is four.
+ *
+ * It is a share and not a count because the holdout is a second reading of the same audience,
+ * and how much of one that takes scales with the audience. The floor is there because a share
+ * of a small audience stops being a reading at all — four holdout people cannot disagree with
+ * forty, and a holdout that cannot disagree confirms everything. The cap is there because the
+ * holdout is drawn from the audience's own apportionment, and a holdout larger than the set it
+ * checks is the comparison the wrong way round.
+ *
+ * `holdoutSize` in `holdout.ts` is the rule these two make, and a caller who wants another
+ * number passes one: nothing else in this package reads them.
+ */
+export const HOLDOUT_SHARE = 0.4;
+export const HOLDOUT_FLOOR = 10;
+
+/**
+ * The stream a seed names. `createSeededRandom` starts from `seed >>> 0`, so two seeds that
+ * differ only above the 32nd bit are one seed to it, and they sample one person twice.
+ * Everything here that compares seeds compares the stream they name.
+ */
+export const streamOfSeed = (seed: number): number => seed >>> 0;
+
 export interface GeneratePersonasOptions {
   /**
    * The seed to sample with. Defaults to the audience's own `generatedFrom.seed`, so the
@@ -41,7 +67,66 @@ export interface GeneratePersonasOptions {
    * passes each group's seed instead.
    */
   readonly seed?: number;
+  /**
+   * One seed per person, in the people's own order, in place of one seed for the whole set:
+   * person *i* is sampled from `seeds[i]`'s own stream. `seed` and `seeds` together are
+   * refused, because together they leave it unsaid who was sampled from what.
+   *
+   * The holdout is generated this way and nothing else is (`holdout.ts`). A set whose seeds
+   * provably do not intersect the ones a change was chosen on has to be able to name the seed
+   * behind each person, and a shared stream can only name one for all of them.
+   *
+   * The seeds decide who the people **are** and nothing about who exists: how many people, at
+   * which corner of the audience's behaviour, on which device stays the audience's to decide.
+   * So a set generated from `seeds` has the same segments and the same device mix as the same
+   * audience generated from one seed — which is what makes a holdout comparable with the
+   * people the change was chosen on rather than a different kind of person.
+   */
+  readonly seeds?: readonly number[];
 }
+
+/** A seed is an integer, so that it round-trips through the run artifact. */
+const checkSeed = (seed: number): number => {
+  if (!Number.isSafeInteger(seed)) {
+    throw new TypeError(
+      `a seed is an integer, so that it round-trips through the run artifact: received ${String(seed)}`,
+    );
+  }
+  return seed;
+};
+
+/**
+ * The per-person seeds, checked: one for each person, every one an integer, and no two of them
+ * naming one stream.
+ *
+ * The last is the one that matters. Two people sampled from the same seed are the same person
+ * twice — same corner, same draws, same traits — and a swarm reporting one person several
+ * times over is the one thing it exists to avoid. The holdout promises its caller that no seed
+ * was reused; this is where that promise is kept rather than hoped for.
+ */
+const checkSeedsPerPerson = (
+  seeds: readonly number[],
+  size: number,
+  seed: number | undefined,
+): readonly number[] => {
+  if (seed !== undefined) {
+    throw new TypeError(
+      'a call names one seed for the set or one seed per person, and not both: together they leave it unsaid which people were sampled from what',
+    );
+  }
+  if (seeds.length !== size) {
+    throw new TypeError(
+      `one seed per person means ${size} ${size === 1 ? 'seed' : 'seeds'} for this audience, and ${seeds.length} ${seeds.length === 1 ? 'was' : 'were'} named`,
+    );
+  }
+  seeds.forEach(checkSeed);
+  if (new Set(seeds.map(streamOfSeed)).size !== seeds.length) {
+    throw new TypeError(
+      'two people sampled from one seed are one person twice: the seeds named here are not all distinct',
+    );
+  }
+  return seeds;
+};
 
 /**
  * A person's trait: the audience's centre, displaced towards whichever end of the scale the
@@ -109,12 +194,11 @@ export const generatePersonas = (
   options: GeneratePersonasOptions = {},
 ): Persona[] => {
   const parsed = parseAudience(audience);
-  const seed = options.seed ?? parsed.generatedFrom.seed;
-  if (!Number.isSafeInteger(seed)) {
-    throw new TypeError(
-      `a seed is an integer, so that it round-trips through the run artifact: received ${String(seed)}`,
-    );
-  }
+  const perPerson =
+    options.seeds === undefined
+      ? undefined
+      : checkSeedsPerPerson(options.seeds, parsed.size, options.seed);
+  const seed = checkSeed(options.seed ?? parsed.generatedFrom.seed);
 
   const centre = traitCentre(parsed);
   // Round-robin, so a swarm covers the whole spread at every size rather than leaving a
@@ -124,7 +208,10 @@ export const generatePersonas = (
     (_unused, index) => ARCHETYPES[index % ARCHETYPES.length] as Archetype,
   );
   const deviceClasses = assignDeviceClasses(parsed, people);
-  const random = createSeededRandom(seed);
+  // One stream for the whole set — what the audience carries and what every committed run was
+  // written on — or one stream per person when the caller named a seed for each.
+  const shared = createSeededRandom(seed);
+  const streams = perPerson?.map((value) => createSeededRandom(value));
   const seen = new Map<string, number>();
 
   return people.map((archetype, index) => {
@@ -140,6 +227,7 @@ export const generatePersonas = (
     // the archetype's own offsets gives the object every trait the contract declares without
     // a cast that would survive a trait being added to it.
     const traits = { ...archetype.offsets };
+    const random = streams?.[index] ?? shared;
     for (const trait of TRAIT_NAMES) {
       traits[trait] = displace(
         centre[trait],

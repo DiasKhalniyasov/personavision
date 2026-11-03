@@ -9,14 +9,17 @@
  * the spread around the audience's centre is drawn, and how the device mix is honoured.
  *
  * What is exported is what a caller outside this package needs, and no more: generation, the
- * committed preset, the generator's version for anyone building an audience, and the
- * validation an audience form reports field by field. The archetype table, the trait centres
- * and the device apportionment are the derivation, not an interface — `README.md` states each
- * of their choices, and `tests/` reaches them by module.
+ * holdout a path-2 comparison is believed on, the committed preset, the generator's version
+ * for anyone building an audience, and the validation an audience form reports field by field.
+ * The archetype table, the trait centres and the device apportionment are the derivation, not
+ * an interface — `README.md` states each of their choices, and `tests/` reaches them by module.
  */
 
 export { generatePersonas } from './generate.js';
 export type { GeneratePersonasOptions } from './generate.js';
+
+export { generateHoldout, holdoutSize } from './holdout.js';
+export type { GenerateHoldoutRequest, Holdout } from './holdout.js';
 
 export { AudienceValidationError, GENERATOR_VERSION, parseAudience } from './audience.js';
 export type { AudienceIssue } from './audience.js';
