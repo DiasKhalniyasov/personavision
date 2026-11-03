@@ -270,7 +270,7 @@ describe('the goal, through the offline implementation', () => {
 });
 
 describe('the one send-back, through the model implementation', () => {
-  const tokensOf = (calls: number): Record<string, number> => ({
+  const tokensOf = (calls: number) => ({
     inputTokens: FAKE_TOKENS.input_tokens * calls,
     cachedInputTokens: FAKE_TOKENS.input_tokens_details.cached_tokens * calls,
     outputTokens: FAKE_TOKENS.output_tokens * calls,
