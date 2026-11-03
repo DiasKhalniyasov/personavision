@@ -1647,8 +1647,9 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
   <div class="strip strip-sm">
     <div class="wrap">
       <div class="pagehead"><h1>Your sites</h1></div>
-      <p class="lede">A site is a URL in this workspace. Before a hundred simulated people visit it, we ask you to prove
-        you control it &mdash; a hundred browsers against somebody else&rsquo;s site is abuse and load, not a test.</p>
+      <p class="lede">A site is a URL in this workspace, and any site here can be tested at full size. Proving you
+        control it is what lets PersonaVision write the change and open the pull request. Every site runs 10 browsers at
+        a time and 4 tests an hour &mdash; that much is about the site being driven, not about who owns it.</p>
 
       <div class="section" style="margin-top: var(--space-10)">
         <div class="aud-grid">
@@ -1665,9 +1666,9 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
             <span class="microlabel">Unverified</span>
             <h3>beta.clipforge.example</h3>
             <div class="aud-facts">
-              <span><b>3 of 100</b> agents until this site is verified</span>
-              <span><b>1</b> run an hour</span>
-              <span class="faint">Three ways to verify it &mdash; one of them takes a minute</span>
+              <span><b>100</b> agents per run allowed</span>
+              <span><b>4</b> runs an hour &middot; <b>10</b> browsers at a time</span>
+              <span class="faint">Verify it to unlock <b>Improve my site</b> &mdash; one way takes a minute</span>
             </div>
           </button>
           <button class="card aud-card" data-go="site">
@@ -1701,7 +1702,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 
       <div class="sitestate">
         <span class="tag tag-abandoned">Unverified</span>
-        <span class="faint">3 of 100 agents until this site is verified &middot; 1 run an hour</span>
+        <span class="faint">Testing is not held back &middot; verifying unlocks <b>Improve my site</b></span>
       </div>
 
       <div class="verify">
@@ -2456,7 +2457,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
 <span class="add">+ &lt;/section&gt;</span></div>
         <dl class="kv">
           <dt>Preview</dt><dd class="mono">clipforge-web-git-pv-wait.preview.example <span class="faint">&mdash; your repository&rsquo;s own preview deployment for this pull request</span></dd>
-          <dt>Tested with</dt><dd>The same audience, the same 100 people, the same seeds &mdash; plus a <b>holdout</b> of 40 people generated from the same audience on seeds this change was never chosen against.</dd>
+          <dt>Tested with</dt><dd>The same audience, the same 100 people, the same seeds &mdash; plus a <b>holdout</b> of 20 people generated from the same audience on seeds this change was never chosen against.</dd>
           <dt>Comment on the pull request</dt><dd>One comment, updated rather than repeated, with the figures below, the holdout line and a link to this run. Every number in it is labelled simulated.</dd>
         </dl>
       </div>
@@ -2480,7 +2481,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
         <div class="figure">
           <span class="figure-value completion-good num">55%</span>
           <span class="figure-label">Holdout</span>
-          <span class="figure-pop">22 of 40 people, seeds never used to choose the change</span>
+          <span class="figure-pop">11 of 20 people, seeds never used to choose the change</span>
         </div>
       </div>
       <div class="reasons">
