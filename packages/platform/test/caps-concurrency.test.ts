@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validRun } from '../../contract/tests/fixtures.js';
-import { CAPS } from '../src/caps.js';
+import { CAPS, concurrencyForSite } from '../src/caps.js';
 import type { SiteAtLaunch } from '../src/run/start.js';
 import type { Audience, RunRequest } from '@personavision/contract';
 import { cookieOf, startTestServer } from './http.js';
@@ -47,6 +47,47 @@ interface Flight {
   peak: number;
   started: number;
 }
+
+/**
+ * The number a caller is handed, for the callers that bring one of their own —
+ * `personavision run --concurrency`, and whatever else ever drives a run from outside the
+ * product. The platform's own runs are handed the cap and ask for nothing.
+ */
+describe('the concurrency a caller is handed', () => {
+  it('is the cap when nobody asked', () => {
+    expect(concurrencyForSite()).toStrictEqual({
+      concurrency: CAPS.concurrentSessionsPerSite,
+      lowered: null,
+    });
+  });
+
+  it('honours a number under the cap, saying nothing', () => {
+    // Less load than the cap allows is not something to be corrected.
+    expect(concurrencyForSite(2)).toStrictEqual({ concurrency: 2, lowered: null });
+    expect(concurrencyForSite(CAPS.concurrentSessionsPerSite)).toStrictEqual({
+      concurrency: CAPS.concurrentSessionsPerSite,
+      lowered: null,
+    });
+  });
+
+  it('bounds a number above the cap and says which number is being run', () => {
+    const bounded = concurrencyForSite(50);
+
+    expect(bounded.concurrency).toBe(CAPS.concurrentSessionsPerSite);
+    expect(bounded.lowered).toBe(
+      `A site takes ${String(CAPS.concurrentSessionsPerSite)} browsers at a time, so this run is bounded to ${String(CAPS.concurrentSessionsPerSite)} rather than the 50 it asked for.`,
+    );
+  });
+
+  it('raises a run of nobody to one, rather than passing on a pool of no workers', () => {
+    // A pool of none takes no session, and what that writes is a finished run with nothing
+    // in it. A surface that collects the number refuses it at the field; this is the
+    // backstop under it.
+    expect(concurrencyForSite(0).concurrency).toBe(1);
+    expect(concurrencyForSite(-4).concurrency).toBe(1);
+    expect(concurrencyForSite(2.5).concurrency).toBe(2);
+  });
+});
 
 describe('ten concurrent sessions per site', () => {
   let served: TestServer;
