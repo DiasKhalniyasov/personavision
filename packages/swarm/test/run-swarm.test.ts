@@ -10,13 +10,14 @@
 
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { createFixtureSource } from '@personavision/browser';
-import { readRun, runPaths, validate } from '@personavision/contract';
+import { readRun, runPaths, runSchema, sessionSchema, validate } from '@personavision/contract';
 import { createOfflineDeterministicProvider, FREE_USAGE } from '@personavision/provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { planSwarm, runSwarm } from '../src/index.js';
+import { DEFAULT_CONCURRENCY, planSwarm, runSwarm } from '../src/index.js';
 import {
   FOUR_PEOPLE,
   oneDeviceCaptureSet,
+  peopleOnMobile,
   providerThat,
   runVariant,
   sweep,
@@ -26,9 +27,14 @@ import {
   writeOpenRun,
 } from './harness.js';
 import type { CaptureSource } from '@personavision/browser';
-import type { Persona, Run } from '@personavision/contract';
+import type { Persona, Run, Session } from '@personavision/contract';
 import type { Decision, DecisionUsage } from '@personavision/provider';
-import type { RunSwarmInput, SwarmProgress, SwarmSessionFinished } from '../src/index.js';
+import type {
+  RunSwarmInput,
+  SwarmProgress,
+  SwarmSession,
+  SwarmSessionFinished,
+} from '../src/index.js';
 
 const VARIANTS: ReadonlyArray<Run['variants'][number]> = [runVariant('A'), runVariant('B')];
 
@@ -546,6 +552,307 @@ describe('runSwarm', () => {
     const written = JSON.parse(await readFile(runPaths(runDir).run, 'utf8')) as { usage: unknown };
     expect(written.usage).toMatchObject({ calls: 0, estimatedCostUsd: 0 });
   });
+});
+
+/**
+ * The concurrency a hundred-agent run is given, as its caller hands it over.
+ *
+ * Ten, which is `docs/FLOW.md` section 13's cap on browsers open against one site: "a
+ * hundred browsers at once on one small site is a load test nobody asked for". It is written
+ * here, in the caller's position, and not imported from the swarm — the swarm states no
+ * per-site number of its own, section 13 puts every such cap in `packages/platform`, and
+ * #241 owns the wiring that carries the real one over the API. A test is a caller, so the
+ * test states it.
+ */
+const TEN_AT_A_TIME = 10;
+
+/**
+ * A hundred sessions: fifty generated people on one seed, against both variants.
+ *
+ * Fifty rather than a hundred people, because a swarm runs every person against every
+ * variant — the comparison is the point — so a hundred sessions over two variants is fifty
+ * people, and `progress` then has two per-variant totals to agree with rather than one.
+ */
+const FIFTY_PEOPLE: readonly Persona[] = peopleOnMobile(50);
+
+const ONE_SEED = [11];
+
+/** The hundred-session plan, as a caller counts it before anything runs. */
+const hundredSessionSwarm = (over: Partial<RunSwarmInput> = {}): RunSwarmInput =>
+  swarmOver({
+    personas: FIFTY_PEOPLE,
+    seedGroups: ONE_SEED,
+    concurrency: TEN_AT_A_TIME,
+    ...over,
+  });
+
+const openHundred = (): Promise<Run> => open({ personas: FIFTY_PEOPLE, seedGroups: ONE_SEED });
+
+/**
+ * `run.json` as a reader with nothing but the file sees it: read off disk and parsed against
+ * the contract's own schema, rather than through `readRun`, which reads the whole directory.
+ *
+ * The difference matters while a run is open and sessions are landing in parallel.
+ * `runSession` writes a session's own file and `appendFinishedSession` lists it in
+ * `run.json` a moment later, so at any concurrency above one the directory briefly holds a
+ * session `run.json` does not list yet — which `validate` rightly reports, because in a
+ * finished run it would mean a lost session. What is promised during the run is narrower and
+ * is what the Running screen depends on: every session file is complete the moment it
+ * appears, and `run.json` is a valid run at every point. Those are the two things read here.
+ */
+const runJsonOnDisk = async (): Promise<Run> =>
+  runSchema.parse(JSON.parse(await readFile(runPaths(runDir).run, 'utf8')));
+
+const sessionFileOnDisk = async (sessionId: string): Promise<Session> =>
+  sessionSchema.parse(JSON.parse(await readFile(runPaths(runDir).session(sessionId), 'utf8')));
+
+/**
+ * How long a hundred-session test is given before it is called hung.
+ *
+ * Far above what either of them costs, and deliberately: the figures below are what an idle
+ * machine measures, and both tests have been seen to take four times as long on a laptop
+ * running a dozen other things — at which point vitest's own five-second default killed one
+ * of them and reported a failure that was the machine's, not the swarm's. A hundred sessions
+ * that genuinely stall do not need this cap to be caught: each session has a one-minute cap
+ * of its own (`DEFAULT_SESSION_BUDGET.wallClockMs`) and records itself when it fires, so a
+ * stuck run fails on its assertions rather than here. This is only the backstop.
+ */
+const A_HUNDRED_SESSIONS_TIMEOUT_MS = 30_000;
+
+describe('runSwarm at a hundred sessions', () => {
+  /**
+   * **Wall clock: about 0.8 s** on an idle machine — a hundred replayed sessions take
+   * roughly half of it and the two hundred reads and schema parses this test makes while
+   * the run is open take the rest. The whole of what this ticket adds to the suite is that
+   * plus about 0.5 s for the crash below and under 0.1 s for the two eight-session tests
+   * after it: **under 1.5 s**, and the suite's total grows by no more, because nothing that
+   * was already here is slowed down.
+   *
+   * It downloads nothing, opens no browser and makes no model call: `withNothingRunning`
+   * breaks every way of launching a process and of opening a socket for the duration, so
+   * the figure is arithmetic over committed bytes and cannot depend on a network.
+   */
+  it(
+    'walks a hundred sessions ten at a time, each one complete as it lands',
+    async () => {
+      const input = hundredSessionSwarm();
+      const planned = planSwarm(input);
+      expect(planned).toHaveLength(100);
+      // Counted off the plan before anything has run, which is what the acceptance asks
+      // `progress` to agree with: `packages/cli` writes the open run's totals from exactly
+      // this, so the two are one claim rather than two.
+      const plannedPerVariant = VARIANTS.map((variant) => ({
+        variant: variant.id,
+        totalSessions: planned.filter((plan) => plan.variant.id === variant.id).length,
+      }));
+      expect(plannedPerVariant).toEqual([
+        { variant: 'A', totalSessions: 50 },
+        { variant: 'B', totalSessions: 50 },
+      ]);
+
+      await openHundred();
+      const flight = watchFlight();
+      const landedWhileOpen: number[] = [];
+      const validated: string[] = [];
+
+      const { sessions, run } = await withNothingRunning(() =>
+        runSwarm({
+          ...input,
+          onProgress: async (event) => {
+            flight.record(event);
+            if (event.kind !== 'session-finished') return;
+            // Observed from the landing rather than from the start, because the landing is
+            // reported from inside the run's own turn at `run.json`: the one moment a reader
+            // is promised the file as this session left it. `writeFile` is not atomic, so an
+            // observation taken outside that turn could catch a half-written file and would
+            // be testing Node rather than the swarm.
+            const stillOpen = await runJsonOnDisk();
+            expect(stillOpen.status).toBe('open');
+            expect(stillOpen.finishedAt).toBeUndefined();
+            expect(stillOpen.progress?.finishedSessions).toBe(event.finishedSessions);
+            expect(stillOpen.progress?.totalSessions).toBe(100);
+            expect(stillOpen.sessionIds).toContain(event.sessionId);
+            // Complete the moment it appears, not merely present: parsed against the
+            // contract's session schema, and carrying the outcome the run just reported.
+            const file = await sessionFileOnDisk(event.sessionId);
+            expect(file.sessionId).toBe(event.sessionId);
+            expect(file.outcome).toEqual(event.outcome);
+            landedWhileOpen.push(event.finishedSessions);
+            validated.push(file.sessionId);
+          },
+        }),
+      );
+
+      // A hundred sessions, finished, and a hundred session files on disk.
+      expect(sessions).toHaveLength(100);
+      expect(sessions.map((session) => session.sessionId)).toEqual(
+        planned.map((plan) => plan.sessionId),
+      );
+      expect(run.status).toBe('finished');
+      expect(run.sessionIds).toEqual(planned.map((plan) => plan.sessionId));
+      const files = await landed();
+      expect(files).toHaveLength(100);
+      expect(new Set(files)).toEqual(new Set(planned.map((plan) => plan.sessionId)));
+      expect(await validate(runDir)).toEqual([]);
+
+      // Ten at a time: never more in flight than the caller named, and more than one at a
+      // time, so the test cannot pass by having run them one after another. It is in fact
+      // exactly ten, and not by luck of timing: the pool starts its workers together and the
+      // one cursor keeps them fed, so the bound is reached rather than approached.
+      expect(flight.peak).toBeLessThanOrEqual(TEN_AT_A_TIME);
+      expect(flight.peak).toBeGreaterThan(1);
+      expect(flight.peak).toBe(TEN_AT_A_TIME);
+
+      // Written as they land: a hundred observations of an open run, each one session further
+      // on, each with that session's file already complete beside it.
+      expect(landedWhileOpen).toEqual(Array.from({ length: 100 }, (_unused, index) => index + 1));
+      expect(validated).toHaveLength(100);
+      expect(new Set(validated).size).toBe(100);
+
+      // And `progress` ends where the plan said it would, per variant and overall.
+      expect(run.progress?.totalSessions).toBe(100);
+      expect(run.progress?.finishedSessions).toBe(100);
+      expect(run.progress?.sessions).toHaveLength(100);
+      expect(run.progress?.perVariant).toEqual(
+        plannedPerVariant.map((row) => ({ ...row, finishedSessions: row.totalSessions })),
+      );
+    },
+    A_HUNDRED_SESSIONS_TIMEOUT_MS,
+  );
+
+  /** **Wall clock: about 0.5 s** on an idle machine — a hundred sessions, one of them dead. */
+  it(
+    'costs one session, not a run, when one session is killed mid-run',
+    async () => {
+      const input = hundredSessionSwarm();
+      // Exactly one of the hundred. `breaksFor` breaks every session of one person, which over
+      // two variants is two of them; naming the variant as well picks one. Which one is a fact
+      // about the plan and not about the machine: variant then person then seed, so the
+      // twenty-fifth person's variant-B session is the seventy-fifth of the run.
+      const doomed = plannedSession(input, 'B', 'person-25');
+      expect(doomed.sessionId).toBe('S-75');
+
+      await openHundred();
+
+      const { sessions, run } = await runSwarm({
+        ...input,
+        source: breaksOneSession(source, doomed),
+      });
+
+      // One recorded automation failure, and it is the session that was killed.
+      const broken = sessions.filter((session) => session.outcome.status === 'automation_failure');
+      expect(broken.map((session) => session.sessionId)).toEqual([doomed.sessionId]);
+      expect(broken[0]?.outcome).toMatchObject({
+        status: 'automation_failure',
+        attribution: 'automation',
+        excludedFromScores: true,
+      });
+      expect(broken[0]?.outcome.reason).toContain('this browser died mid-run');
+      // Nothing happened in it, so there is nothing of it in any figure to exclude.
+      expect(broken[0]?.screens).toEqual([]);
+      expect(broken[0]?.fixations).toEqual([]);
+      expect(broken[0]?.saccades).toEqual([]);
+      expect(broken[0]?.actions).toEqual([]);
+
+      // Ninety-nine complete sessions, every one of them the product's rather than ours.
+      const walked = sessions.filter((session) => session.sessionId !== doomed.sessionId);
+      expect(walked).toHaveLength(99);
+      for (const session of walked) {
+        expect(session.outcome.attribution).toBe('product');
+        expect(session.screens.length).toBeGreaterThan(0);
+      }
+
+      // The run still reaches finished, still lists the excluded session, and still reads.
+      expect(run.status).toBe('finished');
+      expect(run.sessionIds).toHaveLength(100);
+      expect(run.sessionIds).toContain(doomed.sessionId);
+      expect(await validate(runDir)).toEqual([]);
+
+      // Excluded from every figure the swarm writes, as `docs/FLOW.md` section 8 requires:
+      // every screen the run declares and every area on it was reached by a session that
+      // counts, and an offline run's cost is zero whatever broke.
+      const reached = new Set(
+        walked.flatMap((session) =>
+          session.screens.map((screen) => `${session.variant}/${screen.step}`),
+        ),
+      );
+      for (const shot of run.screenshots) expect(reached).toContain(`${shot.variant}/${shot.step}`);
+      for (const aoi of run.aois) expect(reached).toContain(`${aoi.variant}/${aoi.step}`);
+      expect(run.usage).toMatchObject({ calls: 0, estimatedCostUsd: 0 });
+      // And the progress entry the Running screen reads says whose failure it was.
+      const entry = run.progress?.sessions.find((one) => one.sessionId === doomed.sessionId);
+      expect(entry?.attribution).toBe('automation');
+      expect(entry?.status).toBe('automation_failure');
+    },
+    A_HUNDRED_SESSIONS_TIMEOUT_MS,
+  );
+
+  it('leaves counters a reader can compute the automation-failure share from', async () => {
+    await open();
+
+    // Half of eight, which is well over a fifth. What the threshold is, and what is done
+    // about a run that crosses it, belong to `@personavision/contract` and to its own
+    // ticket; neither number is restated here. What this asserts is that `run.json` alone
+    // carries the two counters the share is computed from.
+    await runSwarm(swarmOver({ source: breaksFor(source, 'careful') }));
+
+    const run = await runJsonOnDisk();
+    const entries = run.progress?.sessions ?? [];
+    const finished = run.progress?.finishedSessions ?? 0;
+    const ours = entries.filter((entry) => entry.attribution === 'automation');
+
+    expect(finished).toBe(8);
+    expect(entries).toHaveLength(8);
+    expect(ours).toHaveLength(4);
+    expect(ours.length / finished).toBe(0.5);
+    // Every entry names an attribution, so the share is over the whole run rather than over
+    // the entries that happen to carry one.
+    expect(entries.filter((entry) => entry.attribution !== undefined)).toHaveLength(8);
+  });
+
+  it('bounds a run whose caller named no bound by DEFAULT_CONCURRENCY', async () => {
+    // Unchanged in value: four is the number for the one caller that names none, which is
+    // `packages/cli` and its small runs on the machine the command was typed on. It is not
+    // the per-site cap — the caller's ten above is — and this package holds no per-site
+    // number at all (`docs/FLOW.md` section 13 puts them in `packages/platform`).
+    expect(DEFAULT_CONCURRENCY).toBe(4);
+
+    await open();
+    const flight = watchFlight();
+
+    await runSwarm(swarmOver({ concurrency: undefined, onProgress: flight.record }));
+
+    expect(flight.peak).toBe(DEFAULT_CONCURRENCY);
+  });
+});
+
+/** One planned session, addressed the way a test means to break it. */
+const plannedSession = (input: RunSwarmInput, variant: string, personaId: string): SwarmSession => {
+  const plan = planSwarm(input).find(
+    (one) => one.variant.id === variant && one.persona.id === personaId,
+  );
+  if (plan === undefined) {
+    throw new Error(`this swarm plans no session for "${personaId}" on variant "${variant}"`);
+  }
+  return plan;
+};
+
+/**
+ * A source that will not open a page for one session: one person, on one variant.
+ *
+ * `breaksFor` below breaks every session of one person, which is what a broken persona looks
+ * like. A crash that is meant to cost one session has to be one session, so the variant is
+ * named too — and a capture source is handed a variant and a device and never a persona, so
+ * the person is named by their device's label.
+ */
+const breaksOneSession = (inner: CaptureSource, plan: SwarmSession): CaptureSource => ({
+  ...inner,
+  openSession: async (variant, device) => {
+    if (variant.id === plan.variant.id && device.name.endsWith(plan.persona.id)) {
+      throw new Error('this browser died mid-run');
+    }
+    return inner.openSession(variant, device);
+  },
 });
 
 /** The session files in the run directory, whatever `run.json` says about them. */

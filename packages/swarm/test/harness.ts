@@ -381,6 +381,33 @@ export const personOnMobile = (
   ...(segment === undefined ? {} : { segment }),
 });
 
+/**
+ * A generated audience of any size, as the generator would hand one over: the two trait
+ * sets alternating, each person with an id, a name and a device label of their own.
+ *
+ * The demo’s four are written out by hand below because they are the demo’s four. A run at
+ * the size `docs/FLOW.md` section 13 allows a verified site — a hundred agents — cannot be,
+ * and a swarm that has only ever been asked for two dozen sessions has not been asked the
+ * question that matters: whether the pool, the per-session writes and the one queue at
+ * `run.json` hold when there are a hundred of them.
+ *
+ * Zero-padded ids and names, so that a failing assertion names one person legibly and the
+ * order a reader sees is the order the plan numbered them in. The device carries the id for
+ * the reason `personOnMobile` gives: a capture source is handed a variant and a device and
+ * never a persona, so the label is the only way a test can break the page for exactly one
+ * person — or, with the variant, for exactly one session.
+ */
+export const peopleOnMobile = (size: number): readonly Persona[] =>
+  Array.from({ length: size }, (_unused, index) => {
+    const number = String(index + 1).padStart(String(size).length, '0');
+    const who = index % 2 === 0 ? 'rushed' : 'careful';
+    return personOnMobile(who, {
+      id: `person-${number}`,
+      name: `Person ${number}`,
+      segment: who === 'rushed' ? 'Rushed' : 'Careful',
+    });
+  });
+
 /** The four people of the demo, as a generator would hand them over. */
 export const FOUR_PEOPLE: readonly Persona[] = [
   personOnMobile('rushed', { id: 'rushed', name: 'Rushed buyer' }),
