@@ -14,11 +14,7 @@ import {
   stepWalk,
   timingOfSlice,
 } from '../src/index.js';
-import {
-  buildHundredSessionRun,
-  smallRun,
-  smallRunSessions,
-} from './fixtures/aggregate.js';
+import { buildHundredSessionRun, smallRun, smallRunSessions } from './fixtures/aggregate.js';
 
 const sessionOf = (sessionId: string): Session => {
   const found = smallRunSessions.find((session) => session.sessionId === sessionId);
@@ -195,9 +191,9 @@ describe('the slices', () => {
     const funnel = funnelSliceSpecs(smallRun, smallRunSessions);
     const screens = screenSliceSpecs(smallRun, smallRunSessions);
 
-    expect(
-      funnel.filter((slice) => slice.variant === null && slice.segment === null),
-    ).toHaveLength(1);
+    expect(funnel.filter((slice) => slice.variant === null && slice.segment === null)).toHaveLength(
+      1,
+    );
     expect(
       screens.filter((slice) => slice.segment === null && slice.outcome === null),
     ).toHaveLength(1);
@@ -208,12 +204,12 @@ describe('the slices', () => {
     // automation failure, which is in no figure, so desktop is no longer a segment.
     const withoutDesktop = smallRunSessions.filter((session) => session.sessionId !== 'S-03');
 
-    expect(
-      [...new Set(funnelSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment))],
-    ).toEqual([null, 'phone']);
-    expect(
-      [...new Set(screenSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment))],
-    ).toEqual([null, 'phone']);
+    expect([
+      ...new Set(funnelSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment)),
+    ]).toEqual([null, 'phone']);
+    expect([
+      ...new Set(screenSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment)),
+    ]).toEqual([null, 'phone']);
   });
 
   it('offers no version to filter by on a run that declares one', () => {
@@ -294,8 +290,10 @@ describe('the surface the figures fill', () => {
     // The funnel and the paths are filled: #289 landed, and they answer rather than throw.
     expect(() => funnelOfSlice({ run: smallRun, slice })).not.toThrow();
     expect(() => pathsOfSlice({ slice })).not.toThrow();
-    expect(() => timingOfSlice({ run: smallRun, slice })).toThrow(/#290/);
     expect(() => screenFiguresOfSlice({ run: smallRun, slice: screenSlice })).toThrow(/#291/);
+    // #290 filled the timing: its own figures are asserted by value in
+    // `aggregate-timing.test.ts`, and what belongs here is only that it answers.
+    expect(timingOfSlice({ run: smallRun, slice }).total.sampleCount).toBe(5);
     expect(() =>
       composeAggregate({
         run: smallRun,
