@@ -14,6 +14,7 @@
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ActOptions } from './act.js';
+import type { SessionRecording } from './video.js';
 
 /** A variant under test: its id in the run artifact, and the URL a session opens. */
 export interface Variant {
@@ -199,6 +200,17 @@ export interface PageHandle {
   readonly browser: Browser;
   readonly context: BrowserContext;
   readonly page: Page;
+  /**
+   * The session's recording, when it was opened with one (`OpenSessionOptions.video`).
+   *
+   * **Optional, and absent on every session nobody asked to record** — a capture source that
+   * replays a run directory from disk opens no browser to record. A recording that could not
+   * be *started* is present and reports why at `finish()`, because a stated absence with its
+   * reason is what the artifact carries; there is nothing here to tell the two apart, and
+   * nothing should: a consumer marks its screens and actions and finishes the recording, and
+   * what comes back is either a file or the words for why there is none.
+   */
+  readonly video?: SessionRecording;
 }
 
 /**
