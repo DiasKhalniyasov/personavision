@@ -114,7 +114,13 @@ function ReplayLoading({ runId, sessionId }: { runId: string; sessionId: string 
               <Skeleton className="size-full rounded-none" />
             </div>
           </div>
-          <div className={styles.timeline} id="rp-timeline" />
+          {/* The panel holds its own height while the session is read, so the words
+              arriving in it do not push the page down under the reader: one card's worth
+              of transcript, and the outcome card under it. */}
+          <div className={styles.timeline} id="rp-timeline">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-28 w-full" />
+          </div>
         </div>
       </div>
     </div>

@@ -94,6 +94,11 @@ describe('the header', () => {
     expect(await screen.findByRole('link', { name: 'People' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('S-15');
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    // Both halves hold their size: the stage reserves a frame's shape, and the panel
+    // beside it reserves a card's worth of height, so neither pushes the page about when
+    // the session lands.
+    expect(container.querySelectorAll('#rp-frame [data-slot="skeleton"]')).toHaveLength(1);
+    expect(container.querySelectorAll('#rp-timeline [data-slot="skeleton"]')).toHaveLength(2);
     // Nothing that needs the session itself is on screen yet.
     expect(container.querySelector('#rp-clock')).toBeNull();
   });
