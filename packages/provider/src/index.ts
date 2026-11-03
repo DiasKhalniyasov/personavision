@@ -10,7 +10,7 @@
  *
  * Each has the same three parts: an offline deterministic implementation that is the
  * project's default, a model implementation behind it — the decision interface's is here,
- * the one-shot interface's arrives with #255 — and a contract suite any implementation
+ * the one-shot interface's beside it — and a contract suite any implementation
  * inherits. Both suites are published from the separate entry point
  * `@personavision/provider/testing`, so that nothing in a run imports a test framework.
  * Selection for both lives in one place and follows one set of rules: offline with no key, a
@@ -87,6 +87,24 @@ export type {
 } from './wonder.js';
 
 export { createOfflineWonderProvider, OFFLINE_WONDER_PROVIDER_NAME } from './wonder-offline.js';
+
+export {
+  createMetaWonderProvider,
+  DEFAULT_WONDER_EFFORT,
+  DEFAULT_WONDER_TIMEOUT_MS,
+  WONDER_FAILURE_KINDS,
+  WONDER_PROVIDER_MODE,
+  WONDER_PROVIDER_NAME,
+  WonderCallError,
+} from './wonder-model.js';
+export type {
+  MetaWonderProviderOptions,
+  WonderFailureKind,
+  WonderHttpRequest,
+  WonderReplyFormat,
+  WonderRequestBody,
+  WonderTransport,
+} from './wonder-model.js';
 
 export {
   createMetaModelApiProvider,
