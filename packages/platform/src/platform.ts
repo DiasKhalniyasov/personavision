@@ -7,7 +7,7 @@ import { audienceRoutes } from './server/routes/audiences.js';
 import { runRoutes } from './server/routes/runs.js';
 import { siteRoutes } from './server/routes/sites.js';
 import type { TestPipeline } from './run/start.js';
-import type { SiteCheckDeps } from './site/index.js';
+import type { SiteCheckDeps, SiteConnections } from './site/index.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
 import { readSessionId, sessionCookieHeader, signSessionId } from './server/session.js';
@@ -45,6 +45,15 @@ export interface PlatformOptions {
    * own, so no suite reaches DNS.
    */
   siteChecks?: SiteCheckDeps;
+  /**
+   * Whether a GitHub repository is connected to a site, which the `connected-repository`
+   * check asks rather than looks for (#238). Absent — as it is today — means **no repository
+   * is connected to any site**, so that check answers the sentence saying so.
+   *
+   * This is the one thing the "Improve my site" step (#227) has to wire in: it passes its
+   * installation lookup here, the way `pipeline` is passed, and nothing else changes.
+   */
+  siteConnections?: SiteConnections;
 }
 
 export interface Platform {
@@ -83,6 +92,7 @@ export const createPlatform = async ({
   runsRoot,
   pipeline,
   siteChecks,
+  siteConnections,
 }: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
   const resolvedRunsRoot = resolve(runsRoot);
@@ -119,7 +129,7 @@ export const createPlatform = async ({
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
-      ...siteRoutes({ store, readSession, siteChecks }),
+      ...siteRoutes({ store, readSession, siteChecks, siteConnections }),
       ...runRoutes({ store, readSession, pipeline }),
     ],
     guard: sessionGuard({ readSession }),

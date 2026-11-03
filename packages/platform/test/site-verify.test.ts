@@ -3,7 +3,7 @@ import { DEMO_ACCOUNT_EMAIL } from '../src/seed.js';
 import { checkDnsTxt } from '../src/site/check-dns.js';
 import { siteVerificationPair } from '../src/site/token.js';
 import { AVAILABLE_SITE_VERIFICATION_METHODS } from '../src/site/verify.js';
-import type { CheckedSite, SiteCheckResult, TxtResolver } from '../src/site/checks.js';
+import type { SiteCheckResult, TxtResolver } from '../src/site/checks.js';
 import { hashPassword } from '../src/store/password.js';
 import type { SiteStore, SiteVerification } from '../src/store/types.js';
 import { cookieOf, startTestServer } from './http.js';
@@ -119,15 +119,20 @@ describe('POST /sites/:siteId/verify', () => {
    * A real check result for this site, run against a zone of this test's choosing — so the
    * results handed to the store below are ones a check actually produced.
    */
-  const checkOf = (site: CheckedSite, against: Record<string, Answer>): Promise<SiteCheckResult> =>
-    checkDnsTxt(site, {
-      resolveTxt: async (hostname) => {
-        const answer = against[hostname] ?? { rejects: 'ENODATA' };
-        if (Array.isArray(answer)) return answer;
-        throw dnsError(answer.rejects);
+  const checkOf = (site: SiteBody, against: Record<string, Answer>): Promise<SiteCheckResult> =>
+    // A stored record satisfies `CheckedSite`; what the route answers carries no workspace
+    // id, so the one in scope is named here (#238 put the site's identity on the type).
+    checkDnsTxt(
+      { ...site, workspaceId },
+      {
+        resolveTxt: async (hostname) => {
+          const answer = against[hostname] ?? { rejects: 'ENODATA' };
+          if (Array.isArray(answer)) return answer;
+          throw dnsError(answer.rejects);
+        },
+        now: () => new Date(CHECKED_AT),
       },
-      now: () => new Date(CHECKED_AT),
-    });
+    );
 
   const passingCheckFor = (site: SiteBody): Promise<SiteCheckResult> =>
     checkOf(site, { [HOST]: [[siteVerificationPair(site.token)]] });
@@ -391,16 +396,18 @@ describe('POST /sites/:siteId/verify', () => {
     it('answers 400 naming the methods that are available', async () => {
       const site = await add();
 
-      for (const method of ['meta-tag', 'well-known-file', 'connected-repository']) {
+      // `connected-repository` left this list when #238 wired its check in: it is a check
+      // that runs and answers "nothing is connected", which is a result and not a refusal.
+      for (const method of ['meta-tag', 'well-known-file']) {
         const response = await verify(site.id, method);
 
         expect(response.status).toBe(400);
         const refused = await bodyOf(response);
         expect(refused.error).toContain(method);
         expect(refused.error).toContain('dns-txt');
-        expect(refused.available).toEqual(['dns-txt']);
+        expect(refused.available).toEqual(['dns-txt', 'connected-repository']);
       }
-      expect(AVAILABLE_SITE_VERIFICATION_METHODS).toEqual(['dns-txt']);
+      expect(AVAILABLE_SITE_VERIFICATION_METHODS).toEqual(['dns-txt', 'connected-repository']);
     });
 
     it('answers 400 naming them for a method that is no method at all', async () => {

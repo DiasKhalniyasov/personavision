@@ -1,3 +1,4 @@
+import type { SiteConnections } from './connections.js';
 import type {
   SiteCheckFinding,
   SiteCheckResult,
@@ -42,6 +43,17 @@ export type {
  * states the two things the check actually uses rather than building a whole stored record.
  */
 export interface CheckedSite {
+  /**
+   * Which site this is, and in which workspace.
+   *
+   * The two HTTP checks and the DNS check never read them — they look at an address. The
+   * connected-repository check is the one that does: what it asks the connection seam is
+   * this workspace's connections, and what it compares them against is this site's id
+   * (#238). They are on the site rather than in `SiteCheckDeps` because the deps are built
+   * once for a server and these are per site.
+   */
+  readonly id: string;
+  readonly workspaceId: string;
   /** The URL as the user typed it. Its host is what a DNS check looks up. */
   readonly url: string;
   /** This site's token, from which the line to look for is composed. */
@@ -56,6 +68,15 @@ export interface SiteCheckDeps {
   readonly resolveTxt: TxtResolver;
   /** The clock, so `checkedAt` is the caller's and a test can fix it. */
   readonly now: () => Date;
+  /**
+   * Whether a GitHub repository is connected to a site (#238), asked rather than looked for.
+   *
+   * Optional, and absent means `noSiteConnections` — **no repository is connected to any
+   * site**, which is both the default `personavision serve` runs and the honest answer until
+   * #227 installs an app. A check that needs it reads it through `?? noSiteConnections`, so
+   * the method answers its empty sentence rather than throwing where the seam is unwired.
+   */
+  readonly connections?: SiteConnections;
 }
 
 /** A check: a site in, a result out. It does not throw for a site that fails it. */
@@ -77,7 +98,7 @@ export interface SiteCheckSubject {
  * Both joiners, because the outcomes need different ones: nothing was found on `a` **or**
  * `b`, while `a` **and** `b` are what published something else or did not answer.
  */
-const places = (at: readonly string[], joiner: 'and' | 'or'): string => {
+export const places = (at: readonly string[], joiner: 'and' | 'or'): string => {
   if (at.length === 0) return 'this site';
   if (at.length === 1) return at[0] ?? 'this site';
   return `${at.slice(0, -1).join(', ')} ${joiner} ${at[at.length - 1] ?? ''}`;
@@ -169,6 +190,7 @@ export const siteCheckResult = ({
   lookedIn,
   found,
   at,
+  sentence,
 }: {
   method: SiteVerificationMethod;
   subject: SiteCheckSubject;
@@ -177,12 +199,19 @@ export const siteCheckResult = ({
   found: SiteCheckFinding;
   /** The moment the check ran, from the injected clock. */
   at: Date;
+  /**
+   * The sentence, for the one method whose findings are not a line published at an address:
+   * the connected-repository check names the site a repository is connected to rather than
+   * the place a value was found, and the composer below has no shape for that (#238). Every
+   * other method leaves it out and gets the shared wording.
+   */
+  sentence?: string;
 }): SiteCheckResult => ({
   method,
   passed: found.outcome === 'found',
   lookedFor,
   lookedIn,
   found,
-  sentence: sentenceFor(subject, lookedFor, found),
+  sentence: sentence ?? sentenceFor(subject, lookedFor, found),
   checkedAt: at.toISOString(),
 });

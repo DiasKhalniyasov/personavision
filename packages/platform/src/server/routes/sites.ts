@@ -6,7 +6,7 @@ import {
   SiteUrlNotAcceptedError,
   verifySite,
 } from '../../site/index.js';
-import type { SiteCheckDeps, SiteIssue } from '../../site/index.js';
+import type { SiteCheckDeps, SiteConnections, SiteIssue } from '../../site/index.js';
 import type {
   PlatformStore,
   SessionRecord,
@@ -55,6 +55,12 @@ export interface SiteRouteOptions {
    * reaches the network.
    */
   siteChecks?: SiteCheckDeps;
+  /**
+   * Whether a GitHub repository is connected to a site (#238), which the fourth check asks
+   * instead of looking for. Absent means the default lookup: no repository is connected to
+   * any site, which is the state every site is in until #227 installs an app.
+   */
+  siteConnections?: SiteConnections;
 }
 
 /**
@@ -161,7 +167,14 @@ export const siteRoutes = (options: SiteRouteOptions): Route[] => {
   const { sites } = options.store;
   // Built once rather than per request: the real resolver holds one `Resolver` with this
   // check's own timeout, and a test's own deps are passed straight through.
-  const siteChecks = options.siteChecks ?? defaultSiteCheckDeps();
+  //
+  // `siteConnections` is folded in here rather than being a fifth thing a caller composes:
+  // it arrives on its own option because it is the one seam #227 fills, and when it is given
+  // it wins over any lookup inside `siteChecks`.
+  const siteChecks: SiteCheckDeps = {
+    ...(options.siteChecks ?? defaultSiteCheckDeps()),
+    ...(options.siteConnections === undefined ? {} : { connections: options.siteConnections }),
+  };
 
   return [
     {
