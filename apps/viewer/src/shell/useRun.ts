@@ -80,6 +80,29 @@ export type LatestRunState =
   | { readonly status: 'ready'; readonly runId: string }
   | { readonly status: 'unreadable'; readonly url: string; readonly problem: string };
 
+/**
+ * One test in the workspace's listing: the id that addresses it, what was tested in the
+ * words it was asked for, and when it ran.
+ *
+ * It is `RunSummary` as this app can use it. The listing is read defensively: the id is
+ * required of every entry, because it is what addresses the test and nothing is fetched
+ * from a path built out of `undefined`, and the other two are `null` where the listing did
+ * not state them rather than being invented.
+ */
+export interface ListedRun {
+  readonly runId: string;
+  /** `run.json`'s `task.prompt`, or `null` for an entry the listing gave no name. */
+  readonly name: string | null;
+  /** When it ran, as the listing states it, or `null` for an entry that gave no instant. */
+  readonly createdAt: string | null;
+}
+
+export type RunIndexState =
+  | { readonly status: 'loading' }
+  /** The workspace's tests, newest first as `readRunIndex` sorts them. Empty is a workspace with none. */
+  | { readonly status: 'ready'; readonly runs: readonly ListedRun[] }
+  | { readonly status: 'unreadable'; readonly url: string; readonly problem: string };
+
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 const readJson = async (
@@ -216,7 +239,7 @@ const readExcluded = async (
   };
 };
 
-const readLatestRunId = async (): Promise<LatestRunState> => {
+const readRunIndexFile = async (): Promise<RunIndexState> => {
   const answer = await readJson(indexUrl);
   if (!answer.ok) return { status: 'unreadable', url: indexUrl, problem: answer.problem };
   // The listing is newest first, as `readRunIndex` sorts it, so the most recent test is
@@ -225,13 +248,40 @@ const readLatestRunId = async (): Promise<LatestRunState> => {
   if (!Array.isArray(listed)) {
     return { status: 'unreadable', url: indexUrl, problem: 'it is not a list of tests' };
   }
-  const latest = (listed as Partial<RunSummary>[])[0];
-  if (latest === undefined) return { status: 'none' };
-  // The id addresses every other read, so a listing that carries none is unreadable rather
-  // than a workspace with no test: nothing is fetched from a path built out of `undefined`.
-  return typeof latest.runId === 'string' && latest.runId !== ''
-    ? { status: 'ready', runId: latest.runId }
-    : { status: 'unreadable', url: indexUrl, problem: 'a test in the listing has no id' };
+  const entries = listed as Partial<RunSummary>[];
+  // The id addresses every other read — a run file, a screen's URL, the site card's join —
+  // so an entry that carries none is **dropped**: there is nothing it could be used for,
+  // and nothing is ever fetched from a path built out of `undefined`. One bad entry does
+  // not cost the reader the tests either side of it, which matters because the chrome and
+  // `/` read this same listing on every signed-in screen.
+  const runs: ListedRun[] = entries.flatMap((entry) =>
+    typeof entry.runId === 'string' && entry.runId !== ''
+      ? [
+          {
+            runId: entry.runId,
+            name: typeof entry.name === 'string' && entry.name !== '' ? entry.name : null,
+            createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : null,
+          },
+        ]
+      : [],
+  );
+  // Unless **nothing** survived: a listing with entries in it must never read as a
+  // workspace with no test, which is the one reading that would send somebody to "start
+  // your first test" over the top of the tests they have.
+  return runs.length === 0 && entries.length > 0
+    ? { status: 'unreadable', url: indexUrl, problem: 'no test in the listing has an id' }
+    : { status: 'ready', runs };
+};
+
+/**
+ * The most recent test, off the one listing above rather than off a read of its own: the
+ * chrome asks for it on every signed-in screen, so a second read of the same file would be
+ * the same bytes fetched twice.
+ */
+const latestOf = (state: RunIndexState): LatestRunState => {
+  if (state.status !== 'ready') return state;
+  const latest = state.runs[0];
+  return latest === undefined ? { status: 'none' } : { status: 'ready', runId: latest.runId };
 };
 
 /**
@@ -247,7 +297,7 @@ const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
 const excludedCache = new Map<string, Promise<ExcludedState>>();
 const recommendationsCache = new Map<string, Promise<RecommendationsState>>();
-let latestRun: Promise<LatestRunState> | null = null;
+let runIndex: Promise<RunIndexState> | null = null;
 
 const keep = <State extends { status: string }>(
   key: string,
@@ -274,12 +324,12 @@ const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<Exc
 const loadRecommendations = (runId: string): Promise<RecommendationsState> =>
   recommendationsCache.get(runId) ?? keep(runId, recommendationsCache, readRecommendations(runId));
 
-const loadLatestRunId = (): Promise<LatestRunState> => {
-  latestRun ??= readLatestRunId().then((state) => {
-    if (state.status === 'unreadable') latestRun = null;
+const loadRunIndex = (): Promise<RunIndexState> => {
+  runIndex ??= readRunIndexFile().then((state) => {
+    if (state.status === 'unreadable') runIndex = null;
     return state;
   });
-  return latestRun;
+  return runIndex;
 };
 
 /** Read this run again on the next render that asks for it. */
@@ -288,7 +338,7 @@ export const refreshRun = (runId: string): void => {
   findingsCache.delete(runId);
   excludedCache.delete(runId);
   recommendationsCache.delete(runId);
-  latestRun = null;
+  runIndex = null;
 };
 
 /** Forget every run that has been read. For tests, and for signing out. */
@@ -297,7 +347,7 @@ export const clearRunCache = (): void => {
   findingsCache.clear();
   excludedCache.clear();
   recommendationsCache.clear();
-  latestRun = null;
+  runIndex = null;
 };
 
 export type FindingsState =
@@ -396,13 +446,21 @@ export function useFindings(runId: string): FindingsState {
   return state;
 }
 
-/** The most recent test in the workspace, which is what `/` opens. */
-export function useLatestRun(): LatestRunState {
-  const [state, setState] = useState<LatestRunState>({ status: 'loading' });
+/**
+ * The workspace's tests, newest first: one read of `/runs/index.json` while the app is open.
+ *
+ * What it is for is naming a test somewhere other than on that test's own screens — the
+ * Sites screen's _"Last test: …"_ line, which has a run id from the platform and needs the
+ * words that test was asked for. Reading `run.json` for each of them would be one request
+ * per test to render a list of sites; the listing already carries the name, and carries it
+ * for every test at once.
+ */
+export function useRunIndex(): RunIndexState {
+  const [state, setState] = useState<RunIndexState>({ status: 'loading' });
 
   useEffect(() => {
     let live = true;
-    void loadLatestRunId().then((next) => {
+    void loadRunIndex().then((next) => {
       if (live) setState(next);
     });
     return () => {
@@ -411,6 +469,11 @@ export function useLatestRun(): LatestRunState {
   }, []);
 
   return state;
+}
+
+/** The most recent test in the workspace, which is what `/` opens. */
+export function useLatestRun(): LatestRunState {
+  return latestOf(useRunIndex());
 }
 
 /** The run the current route is about, or `null` on a route that is about no test. */

@@ -1,4 +1,5 @@
 import { createContext, use, useEffect, useSyncExternalStore } from 'react';
+import { clearSiteCache } from '@/sites/useSites';
 import { clearRunCache } from './useRun';
 
 /**
@@ -221,6 +222,7 @@ export const signIn = async (credentials: {
   }
 
   clearRunCache();
+  clearSiteCache();
   // The session is the server's answer, not the request's: a reload reads the same thing.
   reading = Promise.resolve();
   publish({ status: 'signed-in', session });
@@ -228,9 +230,10 @@ export const signIn = async (credentials: {
 };
 
 /**
- * Sign out: the server deletes the record and empties the cookie, and this app forgets both
- * the session and every run it read under it — so a reload does not get back in, and the
- * next sign-in reads its own workspace's tests rather than the last one's.
+ * Sign out: the server deletes the record and empties the cookie, and this app forgets the
+ * session, every run it read under it and the workspace's sites — so a reload does not get
+ * back in, and the next sign-in reads its own workspace's tests and its own sites rather
+ * than the last one's.
  *
  * The visitor is signed out here whatever the server answered, because a chrome still
  * naming a workspace somebody asked to leave is the one unacceptable outcome. What this
@@ -250,6 +253,7 @@ export const signOut = async (): Promise<boolean> => {
     // Nothing to tell the user here: they are leaving either way.
   }
   clearRunCache();
+  clearSiteCache();
   // This app's own answer, either way: nothing is read again until the page is loaded
   // afresh, which is when a cookie the server still honours would sign them back in.
   reading = Promise.resolve();

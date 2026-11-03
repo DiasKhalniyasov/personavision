@@ -113,11 +113,59 @@ export interface SiteBody {
    * empty state `#screen-site` draws, and the _"Last check: …"_ line it prints otherwise.
    */
   readonly lastCheck: SiteCheckResult | null;
+  /**
+   * The most recent launch **still on this site's ledger** that opened a run, or `null`
+   * where the ledger has none to offer — which is the _"Last test: …"_ line
+   * `#screen-sites` prints on a card, and its absence where there is nothing to print.
+   *
+   * Read off the site's own launch ledger, which is already kept for the runs-per-hour cap
+   * (`caps.ts`), so nothing new is stored and nothing new is written: this is the newest
+   * entry of that ledger, said in the two fields a reader of it needs.
+   *
+   * **`null` is "nothing on record", never "this site has never been tested."** The ledger
+   * is trimmed to `LAUNCH_LEDGER_HOURS` on every write, so a site tested last week whose
+   * next launch was reserved this morning has had last week's entry dropped — and a reader
+   * that took `null` for "never tested" would then contradict a run the workspace's own
+   * listing still names. A screen that cannot say which test was the last one should say
+   * nothing about tests rather than assert there were none.
+   *
+   * **A launch with no run is not one of these.** The ledger records a launch before any
+   * browser opens (`SiteLaunch.runId` of `null`), so the newest entry can be a launch whose
+   * pipeline has not yet reported its directory, or one whose pipeline crashed — and a card
+   * that named a run a reader cannot open would be a card that lies. The newest entry that
+   * *does* name a run is the last test there is anything to say about.
+   *
+   * **Which run, and when — never what it was called.** The run's own words are in its
+   * artifact (`run.json`'s `task.prompt`, which `GET /runs/index.json` lists it by) and this
+   * package does not read run directories. A screen that wants the sentence joins `runId`
+   * against that listing, which it already reads; one that does not has the instant.
+   */
+  readonly lastTest: { readonly runId: string; readonly at: string } | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** Soft-deleted: still readable, no longer offered for a new test. */
   readonly deletedAt: string | null;
 }
+
+/**
+ * The ledger's newest entry that opened a run, as `SiteBody.lastTest` answers it.
+ *
+ * The ledger is written oldest-first but is **not re-sorted on write** beyond the trim
+ * (`withLaunchRecorded`), and an upsert moves an entry to the end whatever its instant, so
+ * the newest is chosen by comparing `at` rather than by taking the last element. An entry
+ * whose `at` cannot be parsed is nothing a reader can be told about, so it is passed over
+ * rather than ordered as `NaN`.
+ */
+const lastTestOf = (record: SiteRecord): SiteBody['lastTest'] =>
+  (record.launches ?? [])
+    .filter((launch) => launch.runId !== null && !Number.isNaN(Date.parse(launch.at)))
+    .reduce<SiteBody['lastTest']>(
+      (newest, launch) =>
+        newest !== null && Date.parse(newest.at) >= Date.parse(launch.at)
+          ? newest
+          : { runId: launch.runId as string, at: launch.at },
+      null,
+    );
 
 /**
  * `workspaceId` is not in the answer: a request reads its own session's workspace and no
@@ -134,6 +182,7 @@ const body = (record: SiteRecord): SiteBody => ({
   // `?? null` for a record written before this field existed: a reader is promised the key,
   // and `JSON.stringify` drops an `undefined` one altogether.
   lastCheck: record.lastCheck ?? null,
+  lastTest: lastTestOf(record),
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
   deletedAt: record.deletedAt,

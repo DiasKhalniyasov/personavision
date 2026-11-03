@@ -36,6 +36,7 @@ interface SiteBody {
   url: string;
   token: string;
   verification: SiteVerification;
+  lastTest: { runId: string; at: string } | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -164,6 +165,69 @@ describe('the site routes', () => {
 
     it('accepts http://localhost, so the product can be tried on a dev server', async () => {
       expect((await add('http://localhost:5173/create')).url).toBe('http://localhost:5173/create');
+    });
+  });
+
+  describe('the last test against a site', () => {
+    // `null` here is **nothing on record**, not a claim that the site was never tested: the
+    // ledger is trimmed to `LAUNCH_LEDGER_HOURS` on every write, so an older launch can
+    // have fallen out of it. What reads it says nothing about tests rather than saying
+    // there were none (`apps/viewer/src/screens/sites/words.ts`).
+
+    /** A launch in the site's ledger, as `startSiteTest` records one. */
+    const launch = (siteId: string, id: string, runId: string | null, at: string) =>
+      served.platform.store.sites.recordLaunch(workspaceId, siteId, { id, runId, at });
+
+    it('is null where the ledger has no launch that opened a run', async () => {
+      expect((await add()).lastTest).toBeNull();
+      expect((await listed())[0]?.lastTest).toBeNull();
+    });
+
+    it('is the newest launch that opened a run, by its own instant', async () => {
+      const site = await add();
+      await launch(site.id, 'l-1', 'run-older', '2026-11-03T09:12:00.000Z');
+      await launch(site.id, 'l-2', 'run-newer', '2026-11-03T11:40:00.000Z');
+
+      expect((await listed())[0]?.lastTest).toEqual({
+        runId: 'run-newer',
+        at: '2026-11-03T11:40:00.000Z',
+      });
+    });
+
+    it('passes over a launch that opened no run, so no card names a run nobody can open', async () => {
+      const site = await add();
+      await launch(site.id, 'l-1', 'run-that-opened', '2026-11-03T09:12:00.000Z');
+      // Reserved and never annotated: the pipeline has not reported a directory, or crashed.
+      await launch(site.id, 'l-2', null, '2026-11-03T11:40:00.000Z');
+
+      expect((await listed())[0]?.lastTest).toEqual({
+        runId: 'run-that-opened',
+        at: '2026-11-03T09:12:00.000Z',
+      });
+    });
+
+    it('is the same on GET /sites/:siteId as in the list', async () => {
+      const site = await add();
+      await launch(site.id, 'l-1', 'run-one', '2026-11-03T09:12:00.000Z');
+
+      const read = await bodyOf(await send(`/sites/${site.id}`, 'GET'));
+      expect(read.lastTest).toEqual((await listed())[0]?.lastTest);
+    });
+
+    it('counts only this site’s launches, and no other workspace’s', async () => {
+      const mine = await add();
+      const theirs = await served.platform.store.sites.create(theirWorkspaceId, {
+        url: ANOTHER_URL,
+        token: mintSiteToken(),
+      });
+      await launch(mine.id, 'l-1', 'my-run', '2026-11-03T09:12:00.000Z');
+      await served.platform.store.sites.recordLaunch(theirWorkspaceId, theirs.id, {
+        id: 'l-2',
+        runId: 'their-run',
+        at: '2026-11-03T23:00:00.000Z',
+      });
+
+      expect((await listed())[0]?.lastTest?.runId).toBe('my-run');
     });
   });
 
