@@ -98,6 +98,14 @@ export const ageGroup = (group: AudienceAgeGroup['group'], share: number): Audie
 });
 
 /**
+ * The feature the user asked about, **in the user's own words** (`docs/FLOW.md` section 11)
+ * — and deliberately not tidy: leading and trailing spaces, two sentences, a doubled space
+ * and a shouted word. A test that reads this back off disk is testing that nothing trimmed
+ * it, split it, collapsed it or folded its case.
+ */
+export const USERS_FEATURE = '  Generating a video from a prompt.  Then SHARING it  ';
+
+/**
  * The goal the run ran: what the agents attempt, what counts as having done it, and whose
  * words those are now. It is the user's, because the fixture is a goal somebody read on the
  * screen before launch and corrected.
@@ -496,6 +504,66 @@ export const validRecommendations = (): Recommendations => ({
     },
   ],
 });
+
+/**
+ * A **path-1 test**: the same run with one variant, which is all a test of one URL is
+ * (`docs/FLOW.md` section 11). Nothing forks — this is a `Run` like any other — so
+ * everything that was about a second version is simply absent: its screenshot, its areas of
+ * interest, its score, its session and the finding that cited it. The verdict leads with the
+ * one variant there is and reports no gap, because a version is not harder than itself.
+ *
+ * It carries the feature and the goal, because those are what a one-URL test is made of.
+ */
+export const oneVariantArtifact = (): RunArtifact => {
+  const whole = validRun();
+  const [only] = whole.variants;
+  const headline = validFindings().findings[0];
+  const run: Run = {
+    ...whole,
+    feature: USERS_FEATURE,
+    goal: validGoal(),
+    variants: [only],
+    progress: {
+      totalSessions: 1,
+      finishedSessions: 1,
+      perVariant: [{ variant: only.id, totalSessions: 1, finishedSessions: 1 }],
+      sessions: [finishedEntry('S-01', only.id)],
+    },
+    sessionIds: ['S-01'],
+    screenshots: whole.screenshots.filter((shot) => shot.variant === only.id),
+    aois: whole.aois.filter((aoi) => aoi.variant === only.id),
+    aoiMetrics: whole.aoiMetrics.filter((metric) => metric.aoiId === CHECKOUT_AOI),
+    scores: [score(only.id, 22)],
+    verdict: {
+      ...whole.verdict,
+      harderVariant: only.id,
+      preferredVariant: only.id,
+      gapPoints: 0,
+      bandsDisjoint: false,
+      seedGroupsAgreeing: 1,
+      sentence: 'The one simulated person completed the task.',
+      audienceSentence: 'Your audience buys the boots, and reads the total twice first.',
+      reasons: ['The total was read twice before anybody paid.'],
+      heroEvidence: { variant: only.id, step: CART, aoiId: CHECKOUT_AOI },
+    },
+  };
+  const findings: Findings = {
+    ...validFindings(),
+    findings: [
+      {
+        ...headline,
+        claim: 'Checkout was read twice before anybody clicked it.',
+        evidence: 'The one session that reached the cart fixated it twice.',
+        variant: only.id,
+        step: CART,
+        aoiId: CHECKOUT_AOI,
+        sessionIds: ['S-01'],
+        evidence_link: { screen: 'attention', params: { variant: only.id, step: CART } },
+      },
+    ],
+  };
+  return { run, sessions: [validSession('S-01', only.id)], findings };
+};
 
 export const validArtifact = (): RunArtifact => ({
   run: validRun(),

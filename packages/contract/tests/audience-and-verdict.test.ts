@@ -1,9 +1,19 @@
 import { writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Audience, Persona, Score, Verdict, Violation } from '../src/index.js';
+import type {
+  Audience,
+  Gender,
+  Goal,
+  Persona,
+  RunRequest,
+  Score,
+  Verdict,
+  Violation,
+} from '../src/index.js';
 import {
   audienceSchema,
   EVIDENCE_LINK_PARAMS,
+  personaSchema,
   readRun,
   runPaths,
   runRequestSchema,
@@ -19,9 +29,12 @@ import {
   COMPLETE_AOI,
   extendedAudience,
   FINDING_ID,
+  oneVariantArtifact,
   temporaryRunDir,
+  USERS_FEATURE,
   validArtifact,
   validFindings,
+  validGoal,
   validRun,
   validSession,
 } from './fixtures.js';
@@ -529,6 +542,208 @@ describe("a finding's evidence link", () => {
     await writeFile(runPaths(runDir.dir()).findings, asJson(findings));
 
     expect(await validate(runDir.dir())).toEqual([]);
+  });
+});
+
+describe('the feature a test was asked about', () => {
+  const runDir = describeRunDir();
+
+  it('parses a run that was started without one', async () => {
+    expect((await readRun(runDir.dir())).run.feature).toBeUndefined();
+  });
+
+  it("keeps the user's sentence exactly as written, through disk and back", async () => {
+    await writeRun(runDir.dir(), {
+      ...validArtifact(),
+      run: { ...validRun(), feature: USERS_FEATURE },
+    });
+
+    const { run } = await readRun(runDir.dir());
+
+    expect(run.feature).toBe(USERS_FEATURE);
+    // The spaces, the second sentence and the shouted word are the user's. A normalised
+    // version of them would be a different sentence from the one the results heading
+    // promises to read back.
+    expect(run.feature).not.toBe(USERS_FEATURE.trim());
+    expect(run.feature).not.toBe(USERS_FEATURE.toLowerCase());
+  });
+
+  it('refuses an empty sentence, because a run with none leaves the field out', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.feature = '';
+      }),
+    ).toEqual([`${label.run}/feature`]);
+  });
+});
+
+describe('a test of one URL is a run with one variant', () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await temporaryRunDir());
+    await writeRun(dir, oneVariantArtifact());
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  it('validates carrying its feature and its goal, and reads both back', async () => {
+    expect(await validate(dir)).toEqual([]);
+
+    const { run } = await readRun(dir);
+
+    expect(run.variants).toHaveLength(1);
+    expect(run.feature).toBe(USERS_FEATURE);
+    expect(run.goal).toEqual(validGoal());
+  });
+
+  it('parses into the types the package exports', async () => {
+    const { run } = await readRun(dir);
+
+    const feature: string | undefined = run.feature;
+    const goal: Goal | undefined = run.goal;
+    const author: 'model' | 'user' | undefined = run.goal?.lastWrittenBy;
+
+    expect(feature).toBe(USERS_FEATURE);
+    expect(goal?.successCriterion).toBe(validGoal().successCriterion);
+    expect(author).toBe('user');
+  });
+});
+
+describe('the request one URL is tested from', () => {
+  /** Today's request: two variants, and neither of this revision's two additions. */
+  const twoVariants = (): Record<string, unknown> => ({
+    task: { prompt: 'Buy the Ridgeline hiking boots in size 43.' },
+    variants: validRun().variants,
+    audienceId: AUDIENCE_ID,
+    repeats: 3,
+    seed: 1,
+    engineMode: 'offline',
+  });
+
+  it('carries the feature and the goal, so one URL can say what the test is about', () => {
+    const parsed = runRequestSchema.safeParse({
+      ...twoVariants(),
+      variants: [validRun().variants[0]],
+      feature: USERS_FEATURE,
+      goal: validGoal(),
+    });
+
+    expect(parsed.success).toBe(true);
+    const request = parsed.data as RunRequest;
+    expect(request.variants).toHaveLength(1);
+    expect(request.feature).toBe(USERS_FEATURE);
+    expect(request.goal).toEqual(validGoal());
+  });
+
+  it("accepts today's two-variant request, which carries neither, unchanged", () => {
+    const parsed = runRequestSchema.safeParse(twoVariants());
+
+    expect(parsed.success).toBe(true);
+    const request = parsed.data as RunRequest;
+    expect(request.variants).toHaveLength(2);
+    expect(request.feature).toBeUndefined();
+    expect(request.goal).toBeUndefined();
+  });
+
+  it('rejects a goal written by neither the model nor the user, at that field', () => {
+    const parsed = runRequestSchema.safeParse({
+      ...twoVariants(),
+      goal: { ...validGoal(), lastWrittenBy: 'wonder' },
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join('/'))).toEqual([
+      'goal/lastWrittenBy',
+    ]);
+  });
+
+  it('rejects a goal that is two sentences, at the sentence it is', () => {
+    const parsed = runRequestSchema.safeParse({
+      ...twoVariants(),
+      goal: { ...validGoal(), task: 'Buy the boots. Then rate them.' },
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join('/'))).toEqual(['goal/task']);
+  });
+
+  it('still asks for a variant, because a request names the URL it is about', () => {
+    expect(runRequestSchema.safeParse({ ...twoVariants(), variants: [] }).success).toBe(false);
+  });
+
+  it('stays closed, so a feature cannot be smuggled in under another name', () => {
+    const parsed = runRequestSchema.safeParse({
+      ...twoVariants(),
+      featureDescription: 'Checkout.',
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.code)).toEqual(['unrecognized_keys']);
+  });
+});
+
+describe('what a persona was drawn as', () => {
+  const runDir = describeRunDir();
+
+  /** A persona with one field replaced or added, as raw JSON a writer could produce. */
+  const withPersona = async (fields: Record<string, unknown>): Promise<string[]> => {
+    const run: Record<string, unknown> = {
+      ...validRun(),
+      audience: extendedAudience(),
+      personas: [{ ...validRun().personas[0], ...fields }],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+    return offenders(await validate(runDir.dir()));
+  };
+
+  it('parses a persona written before an audience had a split or a language', async () => {
+    const { run } = await readRun(runDir.dir());
+
+    expect(run.personas[0].gender).toBeUndefined();
+    expect(run.personas[0].language).toBeUndefined();
+  });
+
+  it('carries the gender it was drawn as and the language it reads in', async () => {
+    expect(await withPersona({ gender: 'female', language: 'Irish' })).toEqual([]);
+
+    const { run } = await readRun(runDir.dir());
+    const gender: Gender | undefined = run.personas[0].gender;
+
+    expect(gender).toBe('female');
+    expect(run.personas[0].language).toBe('Irish');
+  });
+
+  it("rejects a gender the audience's split carries no share for, at that persona", async () => {
+    expect(await withPersona({ gender: 'other' })).toEqual([`${label.run}/personas/0/gender`]);
+  });
+
+  it('rejects an empty language, because a persona reads in one or declares none', async () => {
+    expect(await withPersona({ language: '' })).toEqual([`${label.run}/personas/0/language`]);
+  });
+
+  it('rejects a list of languages, because an agent reads the page in one', async () => {
+    expect(await withPersona({ language: ['English', 'Irish'] })).toEqual([
+      `${label.run}/personas/0/language`,
+    ]);
+  });
+
+  it('stays closed: an undeclared field on a persona is rejected at that field', async () => {
+    expect(await withPersona({ genders: ['female'] })).toEqual([`${label.run}/personas/0/genders`]);
+  });
+
+  it('is parsed on its own by the generator that draws the people', () => {
+    const drawn: Persona = {
+      ...validRun().personas[0],
+      gender: 'male',
+      language: 'Russian',
+    };
+
+    expect(personaSchema.safeParse(drawn).success).toBe(true);
+    expect(personaSchema.safeParse({ ...drawn, gender: 'unstated' }).success).toBe(false);
   });
 });
 

@@ -1,10 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Run, RunUsage, Violation } from '../src/index.js';
+import type { Run, RunUsage, Score, SessionProgress, Violation } from '../src/index.js';
 import {
   appendFinishedSession,
+  AUTOMATION_FAILURE_NOTICE_SHARE,
+  automationFailureNoticeIsDue,
   readRun,
   runPaths,
+  runSchema,
   validate,
   writeRun,
   writeSession,
@@ -365,6 +368,142 @@ describe('a run that failed to start', () => {
     await writeFile(runPaths(dir).run, asJson(run));
 
     expect(offenders(await validate(dir))).toContain(`${label.run}/status`);
+  });
+});
+
+/**
+ * The fifth: a run whose automation failures are more than a fifth of its sessions is a
+ * measurement of our harness and says so above its own summary (`docs/FLOW.md` section 11).
+ *
+ * The threshold is one exported constant and the answer is one exported predicate over the
+ * counters a run already carries. Nothing here restates the fraction: the counts either
+ * side of it are computed from the constant, so a later change to the constant moves this
+ * suite with it rather than leaving it asserting the old figure.
+ */
+describe('the automation failures that make a run about our own harness', () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await temporaryRunDir());
+    await writeRun(dir, validArtifact());
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  /** Ten sessions: one person, two variants, five seeds each. */
+  const FINISHED = 10;
+  /** Exactly the share, in sessions — two of ten — and the first count above it. */
+  const AT_THE_SHARE = Math.round(FINISHED * AUTOMATION_FAILURE_NOTICE_SHARE);
+
+  const ourFailure = (sessionId: string, variant: string): SessionProgress => ({
+    ...finishedEntry(sessionId, variant),
+    status: 'automation_failure',
+    attribution: 'automation',
+    reason: 'The page never loaded.',
+  });
+
+  /** The site's own failure, which is not ours however many of them there are. */
+  const theirFailure = (sessionId: string, variant: string): SessionProgress => ({
+    ...finishedEntry(sessionId, variant),
+    status: 'failed',
+    attribution: 'product',
+    reason: 'The promo code was refused.',
+  });
+
+  /**
+   * A run of ten finished sessions, the first `ours` of them our own automation failures and
+   * the rest as `make` writes them. The score rows are rebuilt from those entries, so the
+   * counts the notice is derived from are the counts a reader sees printed beside it.
+   */
+  const runOf = (
+    ours: number,
+    make: (sessionId: string, variant: string) => SessionProgress = finishedEntry,
+  ): Run => {
+    const sessions = Array.from({ length: FINISHED }, (_, index) => {
+      const sessionId = `S-${String(index + 1).padStart(2, '0')}`;
+      const variant = index % 2 === 0 ? 'A' : 'B';
+      return index < ours ? ourFailure(sessionId, variant) : make(sessionId, variant);
+    });
+    const scoreOf = (variant: string): Score => {
+      const ofVariant = sessions.filter((entry) => entry.variant === variant);
+      const excluded = ofVariant.filter((entry) => entry.status === 'automation_failure');
+      const scored = ofVariant.length - excluded.length;
+      const failed = ofVariant.filter((entry) => entry.status === 'failed').length;
+      return {
+        ...validRun().scores[0],
+        variant,
+        completionRate: (scored - failed) / scored,
+        outcomeCounts: {
+          success: scored - failed,
+          abandoned: 0,
+          failed,
+          automationFailure: excluded.length,
+        },
+        scoredSessionCount: scored,
+      };
+    };
+    return {
+      ...validRun(),
+      sessionIds: sessions.map((entry) => entry.sessionId),
+      progress: {
+        totalSessions: FINISHED,
+        finishedSessions: FINISHED,
+        perVariant: ['A', 'B'].map((variant) => ({
+          variant,
+          totalSessions: FINISHED / 2,
+          finishedSessions: FINISHED / 2,
+        })),
+        sessions,
+      },
+      scores: [scoreOf('A'), scoreOf('B')],
+    };
+  };
+
+  it('is not due at the share, and is due one session above it', () => {
+    expect(automationFailureNoticeIsDue(runOf(AT_THE_SHARE).progress)).toBe(false);
+    expect(automationFailureNoticeIsDue(runOf(AT_THE_SHARE + 1).progress)).toBe(true);
+  });
+
+  it('is read off counters a run really carries, on both sides of the share', async () => {
+    for (const ours of [AT_THE_SHARE, AT_THE_SHARE + 1]) {
+      const run = runOf(ours);
+
+      expect(runSchema.safeParse(run).success).toBe(true);
+      // The counts and the answer are one claim: the entries beneath the counter are the
+      // failures the share was computed from.
+      const logged = (run.progress?.sessions ?? []).filter(
+        (entry) => entry.status === 'automation_failure',
+      );
+      expect(logged).toHaveLength(ours);
+      expect(automationFailureNoticeIsDue(run.progress)).toBe(ours > AT_THE_SHARE);
+    }
+  });
+
+  it("counts what the outcome was, not whose the session's failure was", () => {
+    // Every session the site failed, and not one of ours: the aggregate is still about the
+    // site, which is the whole point of the line.
+    const theirs = runOf(0, theirFailure);
+
+    expect(theirs.progress?.sessions.every((entry) => entry.status === 'failed')).toBe(true);
+    expect(automationFailureNoticeIsDue(theirs.progress)).toBe(false);
+  });
+
+  it('has nothing to disclaim before a session has finished, or with no progress at all', () => {
+    expect(automationFailureNoticeIsDue(openRunArtifact().run.progress)).toBe(false);
+    expect(automationFailureNoticeIsDue(undefined)).toBe(false);
+  });
+
+  it('is derived and never stored, so no boolean can disagree with the counts', async () => {
+    const run: Record<string, unknown> = {
+      ...runOf(AT_THE_SHARE + 1),
+      aboutOurHarness: true,
+    };
+    await writeFile(runPaths(dir).run, asJson(run));
+
+    expect(offenders(await validate(dir))).toEqual([`${label.run}/aboutOurHarness`]);
   });
 });
 

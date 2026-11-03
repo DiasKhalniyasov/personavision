@@ -153,6 +153,14 @@ const audienceAgeGroupSchema = z.strictObject({ group: ageGroupSchema, share: un
  */
 const genderSplitSchema = z.strictObject({ male: unitInterval, female: unitInterval });
 
+/**
+ * What a simulated person was drawn as. The two words are `genderSplitSchema`'s own two
+ * shares, read off it rather than written out a second time: a persona is drawn from the
+ * split, so there is nothing to be drawn as that the split carries no share for, and a
+ * third word here would be a draw nobody could have made (`docs/FLOW.md` section 12).
+ */
+const genderSchema = genderSplitSchema.keyof();
+
 /** `devices[].share` is a distribution, so the mix has to add up to one whole audience. */
 const SHARE_TOLERANCE = 1e-6;
 
@@ -322,6 +330,20 @@ export const personaSchema = z.strictObject({
   segment: name,
   traits: personaTraitsSchema,
   device: deviceSchema,
+  /**
+   * What this person was drawn as, from the audience's `genderSplit`. Optional with no
+   * default: a persona generated from an audience that declared no split — which is every
+   * persona written before this revision — was drawn as nothing in particular, and `male`
+   * is not a value to assume on its behalf.
+   */
+  gender: genderSchema.optional(),
+  /**
+   * The one language this person reads the page and types in, drawn from the audience's
+   * `languages`. One and not a list: an audience may read in several, and each agent reads
+   * in one of them (`docs/FLOW.md` section 12), which is what makes it groupable. Optional
+   * with no default, for the same reason as `gender`.
+   */
+  language: name.optional(),
   /** Who the person is, in words: optional, because a generated persona has only its traits. */
   profile: z.strictObject({ age: z.int().min(0), about: name, habits: z.array(name) }).optional(),
 });
@@ -768,6 +790,21 @@ export const runSchema = z
     failure: runFailureSchema.optional(),
     usage: runUsageSchema.optional(),
     task: taskSchema,
+    /**
+     * The feature whose experience was tested, **in the user's own words** — _"generating a
+     * video from a prompt"_, _"checking out with a promo code"_ (`docs/FLOW.md` section 11).
+     * One of the things a path-1 test is made of, and what the results heading reads back.
+     *
+     * It is stored exactly as it was typed: nothing trims it, normalises it, folds its case
+     * or holds it to one sentence. A user who wrote two sentences about their own checkout
+     * wrote the sentence this field is for, and the `goal` below — which *is* held to one
+     * sentence each, because a model wrote it — is what was made of it. The two sit side by
+     * side so that a reader can see both the question and what was tested.
+     *
+     * Optional with no default: a run carrying none was started without one, which is every
+     * run that exists today.
+     */
+    feature: name.optional(),
     /**
      * The goal this run ran, and who last wrote it (`docs/FLOW.md` section 12). Optional
      * with no default: a run carrying none recorded none, and a completion rate with no
@@ -1723,6 +1760,20 @@ export const runRequestSchema = z
      * of them.
      */
     audienceId: name,
+    /**
+     * The feature the test is about, in the user's words, and the goal a model wrote from
+     * it: between them, what makes **one URL** a test rather than a comparison of two
+     * (`docs/FLOW.md` section 11). `variants` above is unchanged and still allows one — a
+     * one-URL request is a request with one variant, not a second kind of request, and
+     * nothing here forks on a "path".
+     *
+     * Both optional with no default: today's two-variant request carries neither and is
+     * accepted exactly as it was, and a caller that resolves a goal after the request was
+     * made has nothing to put here yet.
+     */
+    feature: name.optional(),
+    /** The goal, in the words the user approved on the screen before launch. */
+    goal: goalSchema.optional(),
     /** Sessions per persona per variant. */
     repeats: z.int().positive(),
     seed: z.int(),
@@ -1752,6 +1803,7 @@ export type Audience = z.infer<typeof audienceSchema>;
 export type AudienceDevice = z.infer<typeof audienceDeviceSchema>;
 export type AgeGroup = z.infer<typeof ageGroupSchema>;
 export type AudienceAgeGroup = z.infer<typeof audienceAgeGroupSchema>;
+export type Gender = z.infer<typeof genderSchema>;
 export type GenderSplit = z.infer<typeof genderSplitSchema>;
 export type Goal = z.infer<typeof goalSchema>;
 export type GoalAuthor = z.infer<typeof goalAuthorSchema>;
@@ -1786,6 +1838,42 @@ export const ZERO_USAGE: RunUsage = {
   reasoningTokens: 0,
   estimatedCostUsd: 0,
 };
+
+/**
+ * The share of a run's sessions that may be **our own** automation failures before the run
+ * stops being a measurement of the site. Above it — more than a fifth — a run says so above
+ * its own summary, because at that point the aggregate is about our harness and not about
+ * the site (`docs/FLOW.md` section 11); the line itself is the results screen's to render.
+ *
+ * The fraction is declared here and restated nowhere: a reader comparing that line with the
+ * counts printed beside it is comparing them against one number.
+ */
+export const AUTOMATION_FAILURE_NOTICE_SHARE = 1 / 5;
+
+/**
+ * Whether that notice is due on a run, **derived** from the progress counters the run
+ * already carries. It is deliberately not a stored field: a stored boolean can disagree
+ * with the counts printed next to it, and a reader who sees "4 of 24" above a notice that
+ * says otherwise has been told two different things about one run.
+ *
+ * The numerator is the finished sessions whose outcome *was* an automation failure:
+ * `attribution` says whose a failure was and the status says what it was, so the status is
+ * what is counted — a session the **site** failed is the result the run was run for, and
+ * excluding it would be the harness claiming the site's own failures. The denominator is
+ * `finishedSessions`, which `runSchema` holds equal to the number of entries beneath it, so
+ * this is a share of the sessions that produced an outcome and not of a plan that may still
+ * be running.
+ *
+ * A run with no progress block, or one that has finished nothing, is `false`: there is no
+ * share of nothing to report. The comparison is strict, because the rule is *more than* a
+ * fifth — a run sitting exactly on the share has not crossed it.
+ */
+export const automationFailureNoticeIsDue = (progress: RunProgress | undefined): boolean => {
+  if (progress === undefined || progress.finishedSessions === 0) return false;
+  const ours = progress.sessions.filter((entry) => entry.status === 'automation_failure').length;
+  return ours / progress.finishedSessions > AUTOMATION_FAILURE_NOTICE_SHARE;
+};
+
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionVideo = z.infer<typeof sessionVideoSchema>;
 export type VideoCap = z.infer<typeof videoCapSchema>;
