@@ -40,7 +40,10 @@ export type RecommendationsBuilder = (input: RecommendationsInput) => Promise<Re
  * file — each replaces one body in its own file and neither edits
  * `recommendations/index.ts` or `../index.ts`.
  */
-export const buildRecommendations: RecommendationsBuilder = () => {
+export const buildRecommendations: RecommendationsBuilder = async () => {
+  // `async`, so that a caller written against the signature — `builder(input).catch(…)`,
+  // or one of several in a `Promise.all` — gets the rejection the type promises rather
+  // than a synchronous throw past its own error handling.
   throw new Error(
     'buildRecommendations() is not implemented yet: the builder through the Muse Wonder seam is ticket #258',
   );

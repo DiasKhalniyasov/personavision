@@ -174,6 +174,24 @@ describe('sampleSessions', () => {
     expect(sessions.some((session) => session.outcome.excludedFromScores)).toBe(false);
   });
 
+  it('skips an automation failure whose exclusion flag was never set', () => {
+    // `score.ts` throws on this pair rather than re-deriving the flag, so a session can
+    // reach a sampler carrying one spelling of the exclusion and not the other. Either
+    // spelling is enough: our own breakage is never what Wonder reads, and never in `of`.
+    const unflagged = RUN_SESSIONS.slice(93).map((session) => ({
+      ...session,
+      outcome: { ...session.outcome, excludedFromScores: false },
+    }));
+    const { sessions, sample } = sampleSessions(
+      [...RUN_SESSIONS.slice(0, 93), ...unflagged],
+      RUN_PERSONAS,
+      SEED,
+    );
+
+    expect(sample.of).toBe(93);
+    expect(idsOf(sessions)).toEqual(GOLDEN_IDS);
+  });
+
   it('carries every outcome the run produced, and only those', () => {
     const { sessions } = sampleSessions(RUN_SESSIONS, RUN_PERSONAS, SEED);
 

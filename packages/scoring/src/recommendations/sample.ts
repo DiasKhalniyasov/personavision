@@ -24,9 +24,10 @@ import {
  * **An automation failure is never sampled, and never counted.** It is our own failure,
  * not the product's, so it is out of the sample and out of `of`: the provenance line reads
  * *"Read 20 of 93 sessions"* about the ninety-three the run is about, not about the
- * hundred that landed on the disk. The exclusion is read off the session's
- * `excludedFromScores`, exactly as `score.ts` and the aggregate read it, and never
- * re-derived here.
+ * hundred that landed on the disk. The flag is read off the session's
+ * `excludedFromScores`, exactly as `score.ts` and the aggregate read it and never
+ * re-derived — and a session whose `status` says `automation_failure` is skipped whatever
+ * the flag says, so the two spellings cannot disagree their way into the sample.
  *
  * Pure: sessions and personas in, a sample and its provenance out. No disk, no clock and
  * no `Math.random`.
@@ -90,6 +91,17 @@ export type SessionSampler = (
   seed: number,
   size?: number,
 ) => SessionSample;
+
+/**
+ * Whether a session is out of the run the recommendations are about.
+ *
+ * `excludedFromScores` is the stored answer and is read, never re-derived. The status is
+ * checked beside it rather than instead of it: `score.ts` throws on a session that says
+ * `automation_failure` with the flag unset, and a sampler that merely trusted the flag
+ * would put our own breakage in front of Wonder as product evidence and count it in `of`.
+ */
+const isExcluded = (session: Session): boolean =>
+  session.outcome.excludedFromScores || session.outcome.status === 'automation_failure';
 
 /** A total order on strings that is the same in every engine: code units, never a locale. */
 const byCodeUnit = (left: string, right: string): number =>
@@ -222,14 +234,14 @@ const byOutcome = (left: string, right: string): number =>
  * of sessions and the seed and **not** on the order the caller passed them in.
  */
 export const sampleSessions: SessionSampler = (sessions, personas, seed, size = SAMPLE_SIZE) => {
-  const segments = new Map(personas.map((persona) => [persona.id, persona.segment]));
+  const segmentByPersona = new Map(personas.map((persona) => [persona.id, persona.segment]));
   const segmentOf = (session: Session): string => {
     const personaId = session.persona?.id;
-    return (personaId === undefined ? undefined : segments.get(personaId)) ?? NO_SEGMENT;
+    return (personaId === undefined ? undefined : segmentByPersona.get(personaId)) ?? NO_SEGMENT;
   };
 
   const run = [...sessions]
-    .filter((session) => !session.outcome.excludedFromScores)
+    .filter((session) => !isExcluded(session))
     .sort((left, right) => byCodeUnit(left.sessionId, right.sessionId));
 
   const of = run.length;
