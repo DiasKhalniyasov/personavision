@@ -72,12 +72,13 @@ export type {
 export {
   CAPS,
   CapRefusedError,
+  concurrencyForSite,
   LAUNCH_LEDGER_HOURS,
   refuseTooManyAgents,
   refuseTooManyRunsThisHour,
   withLaunchRecorded,
 } from './caps.js';
-export type { CapName } from './caps.js';
+export type { CapName, ConcurrencyForSite } from './caps.js';
 
 export { AudienceNotOfferedError, audienceForNewTest } from './audience/freeze.js';
 export { withPeople } from './audience/people.js';

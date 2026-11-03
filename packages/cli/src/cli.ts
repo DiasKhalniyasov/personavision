@@ -151,6 +151,10 @@ program
   )
   .option('--repeats <count>', 'sessions per person per version', '3')
   .option(
+    '--concurrency <count>',
+    'how many sessions run at a time; above the per-site cap on browsers at once it is bounded to it, and the run says so',
+  )
+  .option(
     '--seed <integer>',
     'base seed; the same seed and the same person reproduce a session exactly',
     '1',
@@ -187,6 +191,7 @@ program
       personas?: string;
       repeats: string;
       seed: string;
+      concurrency?: string;
       engine?: string;
       mode: string;
       steps?: string;

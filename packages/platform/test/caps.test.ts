@@ -379,8 +379,15 @@ describe('the caps, enforced where a test starts', () => {
       expect(fifth.status).toBe(429);
       expect(((await fifth.json()) as Refusal).cap).toBe('runsPerSitePerHour');
 
-      for (const release of inFlight) release();
+      // Released as each one arrives rather than all at once, because the site takes **one
+      // run at a time** (#241): the four reservations above are on the ledger together, but
+      // they reach the swarm one after another, so a release for a pipeline that has not
+      // been called yet would be a release nobody takes.
+      const releasing = setInterval(() => {
+        for (const release of inFlight.splice(0)) release();
+      }, 5);
       for (const response of started) expect((await response).status).toBe(201);
+      clearInterval(releasing);
       // And the four entries are annotated rather than doubled.
       expect((await siteNow())?.launches).toHaveLength(4);
     });

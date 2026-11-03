@@ -123,6 +123,54 @@ export const refuseTooManyAgents = (size: number): CapRefusedError | null =>
       });
 
 /**
+ * How many sessions a run on a site may have in flight, and what a caller that asked for
+ * more is told.
+ *
+ * The number itself is `CAPS.concurrentSessionsPerSite` and is enforced where a session is
+ * handed a browser: the swarm's pool holds whatever bound it is given (#275), so the cap is
+ * a cap because of **who computes the number** rather than because of a check at the pool.
+ * The platform hands it over for every run it starts; `personavision run` has a
+ * `--concurrency` of its own and is bounded by it here, so a developer driving a run locally
+ * cannot exceed what the product allows either.
+ *
+ * Three cases and they are not the same:
+ *
+ * - **Nobody asked.** The cap, which is what a platform-started run gets.
+ * - **Less than the cap.** Honoured. A developer who asks for two browsers on a laptop is
+ *   asking for less load, not more, and a cap that raised a number would be a strange cap.
+ * - **More than the cap.** The cap, and a sentence saying so — written **here**, like every
+ *   other sentence in this module, so that whatever prints it prints the same words. A
+ *   number silently obeyed where it was not is the thing this sentence exists to prevent.
+ *
+ * It is not a `CapRefusedError`: nothing is refused. A run asking for fifty still runs, and
+ * runs every session it planned, ten at a time.
+ *
+ * **A number below one is a run of nobody**, so it is raised to one rather than passed on: a
+ * pool of no workers takes no session, and what that writes is a finished run with nothing
+ * in it. An **unreadable** number — a `NaN` from a mistyped flag, an `Infinity` — is nobody
+ * asking, so it gets the cap rather than a sentence about the `NaN` it asked for; the swarm's
+ * own `capOf` reads a given number the same way, and for the same reason. A surface that
+ * collects the number refuses it at the field instead, which is what `personavision run`
+ * does and what a screen would do; this is the backstop under them.
+ */
+export interface ConcurrencyForSite {
+  /** The bound to hand the swarm. */
+  readonly concurrency: number;
+  /** What to tell a caller whose own number was lowered, or `null` when it was not. */
+  readonly lowered: string | null;
+}
+
+export const concurrencyForSite = (asked?: number): ConcurrencyForSite =>
+  asked === undefined || !Number.isFinite(asked)
+    ? { concurrency: CAPS.concurrentSessionsPerSite, lowered: null }
+    : asked <= CAPS.concurrentSessionsPerSite
+      ? { concurrency: Math.max(1, Math.floor(asked)), lowered: null }
+      : {
+          concurrency: CAPS.concurrentSessionsPerSite,
+          lowered: `A site takes ${String(CAPS.concurrentSessionsPerSite)} browsers at a time, so this run is bounded to ${String(CAPS.concurrentSessionsPerSite)} rather than the ${String(asked)} it asked for.`,
+        };
+
+/**
  * The launches of the trailing hour, oldest first.
  *
  * The window is **strictly** the last hour: a launch exactly an hour old has fallen out of

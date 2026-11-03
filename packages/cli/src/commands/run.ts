@@ -7,7 +7,11 @@ import {
 } from '@personavision/contract';
 import { z } from 'zod';
 import { AudienceValidationError } from '@personavision/personas';
-import { SiteUrlNotAcceptedError, variantForSite } from '@personavision/platform';
+import {
+  concurrencyForSite,
+  SiteUrlNotAcceptedError,
+  variantForSite,
+} from '@personavision/platform';
 import { CliError } from '../cli-error.js';
 import { resolveAudience } from '../run/audience.js';
 import { engineFailureNotice } from '../run/progress.js';
@@ -17,6 +21,7 @@ import { readTaskSteps } from '../run/task.js';
 import type { CaptureSource } from '@personavision/browser';
 import type { RunRequest } from '@personavision/contract';
 import type { CreateModelProvider } from '../run/engine.js';
+import type { ConcurrencyForSite } from '@personavision/platform';
 
 /**
  * `personavision run` — the command that actually runs a swarm.
@@ -168,6 +173,15 @@ export interface RunCommandArguments {
   repeats: string;
   seed: string;
   /**
+   * `--concurrency`: how many sessions run at a time. Absent leaves the swarm's own default
+   * for a small run, which is what this command has always driven; a number above the
+   * per-site cap is **bounded to it and said so**, because how many browsers may be on a
+   * site at once is a fact about the site being driven and not about who is driving it
+   * (`CAPS`, `docs/FLOW.md` section 13). The platform's own runs are handed the cap by
+   * `startTest`.
+   */
+  concurrency?: string;
+  /**
    * `--engine`: `offline` or `model`. Absent, a run on the standard model is a model run —
    * naming that model is naming a paying customer's test — and anything else is offline, so
    * that a key in the environment of the machine that re-ran a test cannot upgrade it.
@@ -260,7 +274,7 @@ const urlProblem = (value: string): string | null => {
  */
 export const parseRunRequest = (
   argv: RunCommandArguments,
-): { request: RunRequest } | { problems: Problem[] } => {
+): { request: RunRequest; concurrency?: ConcurrencyForSite } | { problems: Problem[] } => {
   const problems: Problem[] = [];
   /** Which form this is: the one that names a site, or the one that names versions. */
   const site = argv.site?.trim() ?? '';
@@ -396,6 +410,18 @@ export const parseRunRequest = (
   );
   if (isProblem(seed)) problems.push(seed);
 
+  // Bounded rather than refused: a developer who asks for fifty is asking for a faster run,
+  // not for a cap to move, and the run they get is the one the product allows. The sentence
+  // that says so is the platform's, so the terminal and a screen say the same thing.
+  let concurrency: ConcurrencyForSite | undefined;
+  if (argv.concurrency !== undefined) {
+    const asked = integer('--concurrency', argv.concurrency, (parsed) =>
+      parsed > 0 ? null : 'Needs to be at least 1: it is how many sessions run at a time.',
+    );
+    if (isProblem(asked)) problems.push(asked);
+    else concurrency = concurrencyForSite(asked.parsed);
+  }
+
   const engineMode = runRequestSchema.shape.engineMode;
   if (argv.engine !== undefined && !engineMode.safeParse(argv.engine).success) {
     problems.push({
@@ -444,7 +470,9 @@ export const parseRunRequest = (
     engineMode: argv.engine ?? 'model',
     modelMode: argv.mode,
   });
-  if (request.success) return { request: request.data };
+  if (request.success) {
+    return { request: request.data, ...(concurrency === undefined ? {} : { concurrency }) };
+  }
   // The checks above cover the form's fields; anything left is reported at its own path
   // rather than thrown as a stack trace.
   return {
@@ -557,7 +585,7 @@ export const runCommand = async ({
 }: RunCommandOptions): Promise<void> => {
   const parsed = parseRunRequest(argv);
   if ('problems' in parsed) throw notStarted(parsed.problems);
-  const { request } = parsed;
+  const { request, concurrency } = parsed;
 
   // Both read before anything is written, so a test that was never going to run leaves no
   // half-made run directory behind.
@@ -590,6 +618,12 @@ export const runCommand = async ({
             timeoutMs: 120_000,
           }));
 
+  // Said as the run opens, and **after** everything that can refuse it: a command whose
+  // audience does not resolve has no run to be bounded, and saying what it was bounded to
+  // before saying it never started is two lines in the wrong order.
+  const lowered = concurrency?.lowered ?? null;
+  if (lowered !== null) log(lowered);
+
   let stopping = false;
   const release = onStop(() => {
     stopping = true;
@@ -601,6 +635,7 @@ export const runCommand = async ({
       request,
       audience,
       steps,
+      ...(concurrency === undefined ? {} : { concurrency: concurrency.concurrency }),
       ...(people === undefined ? {} : { people }),
       report: log,
       stopping: () => stopping,

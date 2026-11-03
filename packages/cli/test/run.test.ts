@@ -1,13 +1,14 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runPaths, validate } from '@personavision/contract';
-import { ONE_URL_VARIANT_ID } from '@personavision/platform';
+import { CAPS, ONE_URL_VARIANT_ID } from '@personavision/platform';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
 import { engineOnTheRecord } from '@personavision/swarm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CliError } from '../src/cli-error.js';
 import { runCommand } from '../src/commands/run.js';
 import { fakeModelProvider, runFixture, STAND_IN_CREDENTIAL } from './run-swarm.js';
+import type { CaptureSource } from '@personavision/browser';
 import type { Run } from '@personavision/contract';
 import type { RunCommandOptions } from '../src/commands/run.js';
 import type { RunFixture } from './run-swarm.js';
@@ -562,6 +563,91 @@ describe('a run of one site', () => {
     expect(error.message).toContain('https://fixture.test/cart.html');
     expect(error.message).toContain('--url');
     expect(error.message).toContain('https://fixture.test/b/cart.html');
+    expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
+  });
+});
+
+/**
+ * The capture source, with the sessions open at once counted.
+ *
+ * A session is in flight from the moment it is handed a page to the moment the page is
+ * closed, which is where a real run holds a browser — so the peak here is the number of
+ * browsers this command had open on the site at once.
+ */
+const counting = (inner: CaptureSource): { source: CaptureSource; peak: () => number } => {
+  let inFlight = 0;
+  let peak = 0;
+  return {
+    peak: () => peak,
+    source: {
+      openSession: async (variant, device) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        return await inner.openSession(variant, device);
+      },
+      capture: (page, ctx) => inner.capture(page, ctx),
+      act: (page, action, ctx, options) => inner.act(page, action, ctx, options),
+      close: async (page) => {
+        inFlight -= 1;
+        await inner.close(page);
+      },
+    },
+  };
+};
+
+/**
+ * `--concurrency`: this command's own, and bounded by the same per-site cap the platform
+ * holds its runs to (#241).
+ *
+ * A developer driving a run from the command line is driving somebody's site, so the number
+ * that binds a run started through the product binds this one too — and a number that was
+ * lowered is **said** rather than silently obeyed, because a run going past ten at a time
+ * when fifty were asked for is otherwise something to be counted and guessed at.
+ */
+describe('a run bounded by the per-site cap', () => {
+  /** Twelve sessions: six people, one seed, two versions — more than the cap, so it shows. */
+  const MORE_SESSIONS_THAN_THE_CAP = { size: 6 };
+
+  it('bounds --concurrency above the cap, and says so before the run starts', async () => {
+    fixture = await runFixture(MORE_SESSIONS_THAN_THE_CAP);
+    const counted = counting(fixture.options().source as CaptureSource);
+
+    await runCommand(fixture.options({ concurrency: '50', source: counted.source }));
+
+    // Said in the platform's own words, so the terminal and a screen state one sentence.
+    expect(fixture.printed()).toContain(
+      `A site takes ${String(CAPS.concurrentSessionsPerSite)} browsers at a time, so this run is bounded to ${String(CAPS.concurrentSessionsPerSite)} rather than the 50 it asked for.`,
+    );
+    // And bounded, not merely announced: never more than the cap had a page open at once.
+    expect(counted.peak()).toBeLessThanOrEqual(CAPS.concurrentSessionsPerSite);
+    expect(counted.peak()).toBeGreaterThan(1);
+    // Every session it planned still ran: the ones over the bound waited.
+    const { run } = await theRun(fixture.runsRoot);
+    expect(run.progress?.finishedSessions).toBe(12);
+    expect(run.status).toBe('finished');
+  }, 60_000);
+
+  it('honours a concurrency under the cap, and says nothing', async () => {
+    // A developer asking for two browsers on a laptop is asking for less load, not more.
+    fixture = await runFixture({ size: 2 });
+    const counted = counting(fixture.options().source as CaptureSource);
+
+    await runCommand(fixture.options({ concurrency: '2', source: counted.source }));
+
+    expect(fixture.printed().some((line) => line.includes('browsers at a time'))).toBe(false);
+    expect(counted.peak()).toBeLessThanOrEqual(2);
+  }, 60_000);
+
+  it('refuses a concurrency of nobody at the flag that carries it', async () => {
+    fixture = await runFixture({ size: 2 });
+    const options = fixture.options({ concurrency: '0' });
+
+    const error = await failing(async () => {
+      await runCommand(options);
+    });
+
+    expect(error.message).toContain('--concurrency');
+    expect(error.message).toContain('at least 1');
     expect(await readdir(fixture.runsRoot).catch(() => [])).toEqual([]);
   });
 });
