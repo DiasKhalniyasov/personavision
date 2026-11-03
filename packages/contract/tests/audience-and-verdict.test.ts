@@ -500,9 +500,10 @@ describe("a finding's evidence link", () => {
     expect(await validate(runDir.dir())).toEqual([]);
   });
 
-  it('takes the four parameters this revision added, so a citation can be deep-linked', () => {
-    // `docs/FLOW.md` sections 14 and 16: the segment and overlay filters of the Heatmaps
-    // screen, the funnel step, and the video-millisecond offset a replay opens paused on.
+  it('takes the three parameters this revision added, so a citation can be deep-linked', () => {
+    // `docs/FLOW.md` section 16 names four; `step` was already here. The three added are the
+    // Heatmaps screen's segment filter and overlay, and the video-millisecond offset a
+    // replay opens paused on.
     expect([...EVIDENCE_LINK_PARAMS]).toEqual([
       'variant',
       'step',

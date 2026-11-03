@@ -265,16 +265,14 @@ const checkReferences = (
   }
   // Across two files: the Verdict screen shows the findings the run names, so a name that
   // findings.json does not carry would leave the screen with a place and nothing in it.
+  const declaredFindings = new Set(findings?.findings.map((finding) => finding.id) ?? []);
+  const danglingFinding = (findingId: string): string =>
+    `"${findingId}" names no finding in ${relative.findings}`;
   if (findings !== undefined) {
-    const declaredFindings = new Set(findings.findings.map((finding) => finding.id));
     run.verdict.headlineFindingIds.forEach((findingId, index) => {
       if (!declaredFindings.has(findingId)) {
         violations.push(
-          at(
-            relative.run,
-            ['verdict', 'headlineFindingIds', index],
-            `"${findingId}" names no finding in ${relative.findings}`,
-          ),
+          at(relative.run, ['verdict', 'headlineFindingIds', index], danglingFinding(findingId)),
         );
       }
     });
@@ -363,30 +361,65 @@ const checkReferences = (
     });
   });
 
-  // Across two files, for the same reason: the Analysis screen renders a citation as a deep
-  // link into the session's recording at the millisecond it names, so a citation into a
-  // session this run does not hold is a link to nothing — and the one thing section 14 asks
-  // of that screen is that it render citations rather than invent them. The write-up's claims
-  // cite the same way and are held to the same rule.
+  // Across two files, for the same reason: the Analysis screen builds every citation into a
+  // deep link — a replay at the millisecond named, a heatmap route, a funnel anchor — so a
+  // citation naming anything this run does not hold is a link to nothing, and the one thing
+  // section 14 asks of that screen is that it render citations rather than invent them. Each
+  // kind is checked against the same declarations a finding is. The write-up's claims cite
+  // the same way and are held to the same rule.
   const checkCitations = (
     list: 'recommendations' | 'writeUp',
     index: number,
     citations: ReadonlyArray<Citation>,
   ): void => {
     citations.forEach((citation, position) => {
-      if (citation.kind === 'session' && !seen.has(citation.sessionId)) {
+      const cited = (field: string, message: string): void => {
         violations.push(
-          at(
-            relative.recommendations,
-            [list, index, 'citations', position, 'sessionId'],
-            `"${citation.sessionId}" names no session listed in run.json sessionIds`,
-          ),
+          at(relative.recommendations, [list, index, 'citations', position, field], message),
         );
+      };
+      switch (citation.kind) {
+        case 'session':
+          if (!seen.has(citation.sessionId)) {
+            cited(
+              'sessionId',
+              `"${citation.sessionId}" names no session listed in run.json sessionIds`,
+            );
+          }
+          break;
+        case 'heatmap':
+          if (!declaredVariants.has(citation.variant)) {
+            cited('variant', danglingVariant(citation.variant));
+          }
+          if (!declaredSteps.has(citation.step)) cited('step', danglingStep(citation.step));
+          if (citation.aoiId !== null && !declaredAois.has(citation.aoiId)) {
+            cited('aoiId', danglingAoi(citation.aoiId));
+          }
+          break;
+        case 'funnel':
+          if (!declaredSteps.has(citation.stepId)) cited('stepId', danglingStep(citation.stepId));
+          break;
       }
     });
   };
   recommendations?.recommendations.forEach((recommendation, index) => {
     checkCitations('recommendations', index, recommendation.citations);
+    // The schema holds a recommendation to naming the findings it rests on; which file those
+    // names are in is only knowable here. A recommendation resting on a finding that
+    // findings.json does not carry is the drift that rule exists to prevent.
+    if (findings !== undefined) {
+      recommendation.findingIds.forEach((findingId, position) => {
+        if (!declaredFindings.has(findingId)) {
+          violations.push(
+            at(
+              relative.recommendations,
+              ['recommendations', index, 'findingIds', position],
+              danglingFinding(findingId),
+            ),
+          );
+        }
+      });
+    }
   });
   recommendations?.writeUp?.forEach((claim, index) => {
     checkCitations('writeUp', index, claim.citations);

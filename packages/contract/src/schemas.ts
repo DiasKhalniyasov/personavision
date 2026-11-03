@@ -64,8 +64,22 @@ const sessionId = z.string().regex(/^S-\d{2,}$/, 'a session id is S-01, S-02 …
  */
 const SENTENCE_BOUNDARY = /[.!?]["')\]]*\s+["'([]*[A-Z0-9]/u;
 
+/**
+ * What is inside quotation marks is quoted, not written. A success criterion's whole job is
+ * to name something observable in the page, **including a piece of text**
+ * (`docs/FLOW.md` section 12), and real page copy ends in a full stop: a criterion reading
+ * `The page shows "Order complete. Thank you."` is one criterion quoting two sentences, and
+ * refusing it would make a correct run unwritable. So a quoted span is blanked before the
+ * boundary is looked for.
+ *
+ * The cost is one case this no longer catches — `He said "Go." Then he left.` reads as one
+ * sentence, because the only terminator was inside the quotes. A false refusal of real page
+ * copy stops a run; a false acceptance of that is a sentence nobody writes.
+ */
+const QUOTED_SPAN = /"[^"]*"|“[^”]*”/gu;
+
 const oneSentence = (what: string, section = 14) =>
-  name.refine((value) => !SENTENCE_BOUNDARY.test(value), {
+  name.refine((value) => !SENTENCE_BOUNDARY.test(value.replace(QUOTED_SPAN, '""')), {
     error: `${what} is one plain sentence (docs/FLOW.md section ${section}): this is two or more`,
   });
 
@@ -665,8 +679,14 @@ const holdoutVerdictOf = (confirmed: boolean | null): z.infer<typeof holdoutVerd
 /**
  * Which recommendation a change answers and the one file it touches: the two fields the
  * change Muse Wonder decides and the change a run tested spell the same way. Declared once
- * here so that `changeSchema` and `improveSchema` cannot drift into two spellings of one
- * fact.
+ * here so that `changeSchema` and `improveSchema` cannot drift into two spellings of them.
+ *
+ * They are the only two. The pull-request **title** appears on both shapes on purpose — the
+ * title the change asked for is the title it was opened with — and the **body** is on the
+ * decision alone, so once the pull request exists the artifact no longer holds the body that
+ * `docs/FLOW.md` section 15 asks to state the recommendation, the evidence and the
+ * simulated label. Whether `improveSchema` should record it is the question of the step that
+ * owns that block, not this one.
  */
 const changeTargetShape = {
   /** The recommendation this change answers, by its id in `recommendations.json`. */
@@ -1348,16 +1368,21 @@ export const sessionSchema = z
   });
 
 /**
- * The query parameters the evidence screens take, from the routes in `docs/FLOW.md`
- * sections 3 and 14. The key space is closed like every other object in the artifact: a
- * link cannot carry a parameter those screens have no use for, and so cannot carry a
- * credential under a name of its own invention.
+ * The query parameters an `evidence_link` may carry. The key space is closed like every
+ * other object in the artifact: a link cannot carry a parameter the screens have no use
+ * for, and so cannot carry a credential under a name of its own invention.
  *
- * **It is closed, and it grows only here**, and only with a parameter a route in
- * `docs/FLOW.md` names: `segment` is the filter the Sessions, Heatmaps and Funnel screens
- * share, `overlay` chooses one of the Heatmaps screen's three, and `t` is the
- * video-millisecond offset a citation opens a replay paused on. A link a screen cannot
- * build is a citation rendered as prose, which is what section 14 forbids.
+ * **It is closed, and it grows only here**, and only with a parameter `docs/FLOW.md`
+ * section 16 names. That section's four are `segment` — the filter the Sessions, Heatmaps
+ * and Funnel screens share — `step`, which was already here, `overlay`, which chooses one
+ * of the Heatmaps screen's three, and `t`, the video-millisecond offset a citation opens a
+ * replay paused on. A link a screen cannot build is a citation rendered as prose, which is
+ * what section 14 forbids.
+ *
+ * `fix` is **not** here. The Session replay route carries it in sections 3 and 14, but
+ * section 16's enumeration leaves it out and no `evidence_link` can name the replay today:
+ * `findingsSchema`'s `screen` is `attention` or `sessions`. Whoever adds the replay as a
+ * link target decides then whether `fix` joins this list.
  */
 export const EVIDENCE_LINK_PARAMS = [
   'variant',

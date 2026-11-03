@@ -90,6 +90,26 @@ describe('the goal a run ran', () => {
     ).toContain('2.5 kg');
   });
 
+  it('accepts a criterion that quotes page copy ending in a full stop', () => {
+    // The criterion's job is to name something observable in the page, a piece of text
+    // included (`docs/FLOW.md` section 12), and real page copy ends in a terminator.
+    for (const successCriterion of [
+      'The confirmation page shows "Thanks! Your order is on its way."',
+      'The page shows the text "Order complete. Thank you."',
+      'The page shows "2.5 kg" under the boots.',
+    ]) {
+      expect(goalSchema.parse(goalWith({ successCriterion })).successCriterion).toBe(
+        successCriterion,
+      );
+    }
+  });
+
+  it('still refuses two sentences when neither is quoted', () => {
+    expect(
+      rejections(goalSchema, goalWith({ successCriterion: 'It is better. Much better.' })).paths,
+    ).toEqual(['successCriterion']);
+  });
+
   it('refuses a field the shape does not declare, naming it', () => {
     expect(rejections(goalSchema, goalWith({ confidence: 0.8 })).messages.join(' ')).toContain(
       'confidence',
