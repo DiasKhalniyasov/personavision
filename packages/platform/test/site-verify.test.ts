@@ -392,22 +392,35 @@ describe('POST /sites/:siteId/verify', () => {
     });
   });
 
-  describe('a method this platform cannot check yet', () => {
+  describe('a method this platform cannot check', () => {
+    it('runs all four of section 13’s methods, so none of them is refused as unavailable', () => {
+      // `connected-repository` joined this list with #238 and the two HTTP checks with #237,
+      // so the refusal below is now only ever about a word that is no method at all. The
+      // order is the order `#screen-site` lists the methods in.
+      expect(AVAILABLE_SITE_VERIFICATION_METHODS).toEqual([
+        'dns-txt',
+        'meta-tag',
+        'well-known-file',
+        'connected-repository',
+      ]);
+    });
+
     it('answers 400 naming the methods that are available', async () => {
       const site = await add();
 
-      // `connected-repository` left this list when #238 wired its check in: it is a check
-      // that runs and answers "nothing is connected", which is a result and not a refusal.
-      for (const method of ['meta-tag', 'well-known-file']) {
+      for (const method of ['dns', 'meta', 'file', 'github']) {
         const response = await verify(site.id, method);
 
         expect(response.status).toBe(400);
         const refused = await bodyOf(response);
         expect(refused.error).toContain(method);
-        expect(refused.error).toContain('dns-txt');
-        expect(refused.available).toEqual(['dns-txt', 'connected-repository']);
+        expect(refused.available).toEqual([
+          'dns-txt',
+          'meta-tag',
+          'well-known-file',
+          'connected-repository',
+        ]);
       }
-      expect(AVAILABLE_SITE_VERIFICATION_METHODS).toEqual(['dns-txt', 'connected-repository']);
     });
 
     it('answers 400 naming them for a method that is no method at all', async () => {
@@ -455,7 +468,7 @@ describe('POST /sites/:siteId/verify', () => {
       const site = await add();
       publish(HOST, site);
 
-      await verify(site.id, 'meta-tag');
+      await verify(site.id, 'meta');
 
       expect(asked).toEqual([]);
       const stored = await read(site.id);
@@ -510,8 +523,8 @@ describe('POST /sites/:siteId/verify', () => {
     it('answers 404 before it answers 400, so a bad method does not disclose the site', async () => {
       const mine = await add();
 
-      const theirs = await verify(mine.id, 'meta-tag', theirCookie);
-      const nobodys = await verify('a-site-nobody-has', 'meta-tag', theirCookie);
+      const theirs = await verify(mine.id, 'meta', theirCookie);
+      const nobodys = await verify('a-site-nobody-has', 'meta', theirCookie);
 
       expect([theirs.status, nobodys.status]).toEqual([404, 404]);
       expect(await bodyOf(theirs)).toEqual(await bodyOf(nobodys));
