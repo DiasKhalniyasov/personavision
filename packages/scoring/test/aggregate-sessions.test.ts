@@ -14,11 +14,7 @@ import {
   stepWalk,
   timingOfSlice,
 } from '../src/index.js';
-import {
-  buildHundredSessionRun,
-  smallRun,
-  smallRunSessions,
-} from './fixtures/aggregate.js';
+import { buildHundredSessionRun, smallRun, smallRunSessions } from './fixtures/aggregate.js';
 
 const sessionOf = (sessionId: string): Session => {
   const found = smallRunSessions.find((session) => session.sessionId === sessionId);
@@ -195,9 +191,9 @@ describe('the slices', () => {
     const funnel = funnelSliceSpecs(smallRun, smallRunSessions);
     const screens = screenSliceSpecs(smallRun, smallRunSessions);
 
-    expect(
-      funnel.filter((slice) => slice.variant === null && slice.segment === null),
-    ).toHaveLength(1);
+    expect(funnel.filter((slice) => slice.variant === null && slice.segment === null)).toHaveLength(
+      1,
+    );
     expect(
       screens.filter((slice) => slice.segment === null && slice.outcome === null),
     ).toHaveLength(1);
@@ -208,12 +204,12 @@ describe('the slices', () => {
     // automation failure, which is in no figure, so desktop is no longer a segment.
     const withoutDesktop = smallRunSessions.filter((session) => session.sessionId !== 'S-03');
 
-    expect(
-      [...new Set(funnelSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment))],
-    ).toEqual([null, 'phone']);
-    expect(
-      [...new Set(screenSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment))],
-    ).toEqual([null, 'phone']);
+    expect([
+      ...new Set(funnelSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment)),
+    ]).toEqual([null, 'phone']);
+    expect([
+      ...new Set(screenSliceSpecs(smallRun, withoutDesktop).map((slice) => slice.segment)),
+    ]).toEqual([null, 'phone']);
   });
 
   it('offers no version to filter by on a run that declares one', () => {
