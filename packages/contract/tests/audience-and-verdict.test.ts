@@ -568,12 +568,17 @@ describe('the feature a test was asked about', () => {
     expect(run.feature).not.toBe(USERS_FEATURE.toLowerCase());
   });
 
-  it('refuses an empty sentence, because a run with none leaves the field out', async () => {
-    expect(
-      await runDir.afterRunChange((run) => {
-        run.feature = '';
-      }),
-    ).toEqual([`${label.run}/feature`]);
+  it('refuses an empty sentence, in words the New test screen can read out', async () => {
+    const run = validRun();
+    run.feature = '';
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toEqual([`${label.run}/feature`]);
+    expect(violations[0].message).toBe(
+      'a test with no feature sentence leaves the field out rather than empty',
+    );
   });
 });
 
@@ -717,12 +722,38 @@ describe('what a persona was drawn as', () => {
     expect(run.personas[0].language).toBe('Irish');
   });
 
-  it("rejects a gender the audience's split carries no share for, at that persona", async () => {
+  it('rejects a gender the split has no word for, at that persona', async () => {
     expect(await withPersona({ gender: 'other' })).toEqual([`${label.run}/personas/0/gender`]);
   });
 
+  it('leaves it to the generator which of the two a person was drawn as', async () => {
+    // The two words are the split's, but which of them a person got is not checked against
+    // the audience's own shares — no more than a persona's device is checked against the
+    // device mix. A share is how a hundred people are drawn, not a rule about which of them
+    // may exist, and the generator that draws them is where that lives (step #219).
+    const run: Record<string, unknown> = {
+      ...validRun(),
+      audience: { ...extendedAudience(), genderSplit: { male: 1, female: 0 } },
+      personas: [{ ...validRun().personas[0], gender: 'female' }],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    expect(offenders(await validate(runDir.dir()))).toEqual([]);
+  });
+
   it('rejects an empty language, because a persona reads in one or declares none', async () => {
-    expect(await withPersona({ language: '' })).toEqual([`${label.run}/personas/0/language`]);
+    const run: Record<string, unknown> = {
+      ...validRun(),
+      personas: [{ ...validRun().personas[0], language: '' }],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toEqual([`${label.run}/personas/0/language`]);
+    expect(violations[0].message).toBe(
+      'a persona drawn in no particular language leaves the field out rather than empty',
+    );
   });
 
   it('rejects a list of languages, because an agent reads the page in one', async () => {

@@ -155,9 +155,14 @@ const genderSplitSchema = z.strictObject({ male: unitInterval, female: unitInter
 
 /**
  * What a simulated person was drawn as. The two words are `genderSplitSchema`'s own two
- * shares, read off it rather than written out a second time: a persona is drawn from the
- * split, so there is nothing to be drawn as that the split carries no share for, and a
- * third word here would be a draw nobody could have made (`docs/FLOW.md` section 12).
+ * shares, read off it rather than written out a second time, so the vocabulary here cannot
+ * drift from the split the people are drawn from (`docs/FLOW.md` section 12).
+ *
+ * Which of the two a given person was drawn as is the generator's, and is **not** checked
+ * against the audience's split here — exactly as a persona's `device` is not checked against
+ * the device mix. A share is how a hundred people are drawn, not a rule about which of them
+ * may exist, and a person drawn before an audience declared any split was still drawn as
+ * something.
  */
 const genderSchema = genderSplitSchema.keyof();
 
@@ -319,6 +324,25 @@ export const goalSchema = z.strictObject({
 });
 
 /**
+ * The feature whose experience a test was about, **in the user's own words** — _"generating
+ * a video from a prompt"_, _"checking out with a promo code"_ (`docs/FLOW.md` section 11).
+ * One of the things a path-1 test is made of, and what the results heading reads back.
+ *
+ * It is stored exactly as it was typed: nothing trims it, normalises it, folds its case or
+ * holds it to one sentence. A user who wrote two sentences about their own checkout wrote
+ * the sentence this field is for, and the goal above — which *is* held to one sentence each,
+ * because a model wrote it — is what was made of it. So this is an ordinary `name`, carrying
+ * a message of its own because the only thing that can be wrong with a user's own sentence
+ * is that there is not one, and that refusal is read on the New test screen.
+ *
+ * Declared once and used twice, like the goal beside it: the run records it and the request
+ * that starts a run carries it, so the two cannot be spelt differently.
+ */
+const featureSchema = z
+  .string()
+  .min(1, 'a test with no feature sentence leaves the field out rather than empty');
+
+/**
  * One simulated person, generated from the audience. It carries where it came from —
  * `audienceId` and a `segment` label such as `mobile · price-sensitive` — so that results
  * are grouped by segment without re-deriving who was who.
@@ -343,7 +367,10 @@ export const personaSchema = z.strictObject({
    * in one of them (`docs/FLOW.md` section 12), which is what makes it groupable. Optional
    * with no default, for the same reason as `gender`.
    */
-  language: name.optional(),
+  language: z
+    .string()
+    .min(1, 'a persona drawn in no particular language leaves the field out rather than empty')
+    .optional(),
   /** Who the person is, in words: optional, because a generated persona has only its traits. */
   profile: z.strictObject({ age: z.int().min(0), about: name, habits: z.array(name) }).optional(),
 });
@@ -791,20 +818,14 @@ export const runSchema = z
     usage: runUsageSchema.optional(),
     task: taskSchema,
     /**
-     * The feature whose experience was tested, **in the user's own words** — _"generating a
-     * video from a prompt"_, _"checking out with a promo code"_ (`docs/FLOW.md` section 11).
-     * One of the things a path-1 test is made of, and what the results heading reads back.
-     *
-     * It is stored exactly as it was typed: nothing trims it, normalises it, folds its case
-     * or holds it to one sentence. A user who wrote two sentences about their own checkout
-     * wrote the sentence this field is for, and the `goal` below — which *is* held to one
-     * sentence each, because a model wrote it — is what was made of it. The two sit side by
-     * side so that a reader can see both the question and what was tested.
+     * The feature this run was asked about, in the user's own words, beside the goal a model
+     * wrote from it: the two sit side by side so a reader sees both the question and what
+     * was tested (`docs/FLOW.md` section 11, and `featureSchema` for the rule).
      *
      * Optional with no default: a run carrying none was started without one, which is every
      * run that exists today.
      */
-    feature: name.optional(),
+    feature: featureSchema.optional(),
     /**
      * The goal this run ran, and who last wrote it (`docs/FLOW.md` section 12). Optional
      * with no default: a run carrying none recorded none, and a completion rate with no
@@ -1771,7 +1792,7 @@ export const runRequestSchema = z
      * accepted exactly as it was, and a caller that resolves a goal after the request was
      * made has nothing to put here yet.
      */
-    feature: name.optional(),
+    feature: featureSchema.optional(),
     /** The goal, in the words the user approved on the screen before launch. */
     goal: goalSchema.optional(),
     /** Sessions per persona per variant. */
@@ -1845,8 +1866,8 @@ export const ZERO_USAGE: RunUsage = {
  * its own summary, because at that point the aggregate is about our harness and not about
  * the site (`docs/FLOW.md` section 11); the line itself is the results screen's to render.
  *
- * The fraction is declared here and restated nowhere: a reader comparing that line with the
- * counts printed beside it is comparing them against one number.
+ * The fraction is declared here and restated nowhere, so the line on the screen and anything
+ * else that asks the question are asking it of one number.
  */
 export const AUTOMATION_FAILURE_NOTICE_SHARE = 1 / 5;
 
@@ -1859,10 +1880,18 @@ export const AUTOMATION_FAILURE_NOTICE_SHARE = 1 / 5;
  * The numerator is the finished sessions whose outcome *was* an automation failure:
  * `attribution` says whose a failure was and the status says what it was, so the status is
  * what is counted — a session the **site** failed is the result the run was run for, and
- * excluding it would be the harness claiming the site's own failures. The denominator is
- * `finishedSessions`, which `runSchema` holds equal to the number of entries beneath it, so
- * this is a share of the sessions that produced an outcome and not of a plan that may still
- * be running.
+ * excluding it would be the harness claiming the site's own failures. It is counted off the
+ * progress log rather than summed from `scores[].outcomeCounts`, because the log is the one
+ * per-session record a run carries at every stage — an open run has no scores yet — and a
+ * score row's denominator deliberately excludes the failures, so those are the wrong two
+ * numbers to divide.
+ *
+ * The denominator is `finishedSessions`, which `runSchema` holds equal to the number of
+ * entries beneath it: a share of the sessions that produced an outcome, and not of a plan
+ * that may still be running. On an open run that makes this the share *so far*, which moves
+ * as sessions land — one failure out of one finished session really is a run that is so far
+ * about our harness — and the notice it licenses sits above a summary, which is a finished
+ * run's.
  *
  * A run with no progress block, or one that has finished nothing, is `false`: there is no
  * share of nothing to report. The comparison is strict, because the rule is *more than* a

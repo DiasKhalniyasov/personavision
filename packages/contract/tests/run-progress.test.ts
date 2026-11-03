@@ -491,6 +491,31 @@ describe('the automation failures that make a run about our own harness', () => 
     expect(automationFailureNoticeIsDue(theirs.progress)).toBe(false);
   });
 
+  it('is the share so far on a run that is still landing sessions', () => {
+    // Two of ten planned have landed and one of them was ours. Half of what has finished is
+    // our own failure, so what the run has so far *is* about our harness; the counter the
+    // share is over is the sessions that produced an outcome, not the plan.
+    const landing = runOf(1);
+    const sessions = (landing.progress?.sessions ?? []).slice(0, 2);
+    const run: Run = {
+      ...landing,
+      status: 'open',
+      progress: {
+        totalSessions: FINISHED,
+        finishedSessions: sessions.length,
+        perVariant: ['A', 'B'].map((variant) => ({
+          variant,
+          totalSessions: FINISHED / 2,
+          finishedSessions: sessions.filter((entry) => entry.variant === variant).length,
+        })),
+        sessions,
+      },
+    };
+    delete run.finishedAt;
+
+    expect(automationFailureNoticeIsDue(run.progress)).toBe(true);
+  });
+
   it('has nothing to disclaim before a session has finished, or with no progress at all', () => {
     expect(automationFailureNoticeIsDue(openRunArtifact().run.progress)).toBe(false);
     expect(automationFailureNoticeIsDue(undefined)).toBe(false);
