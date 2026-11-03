@@ -1,5 +1,6 @@
 /**
- * `@personavision/scoring` — the friction score, the verdict and the findings.
+ * `@personavision/scoring` — the friction score, the verdict, the findings and the
+ * recommendations.
  *
  * Owns the component weights and turns sessions into a friction score, its components, the
  * per-seed-group spread and the verdict. The score band thresholds themselves are read from
@@ -12,9 +13,16 @@
  * and #29 could be worked at the same time rather than queueing behind one barrel file:
  * each replaced one body and none of them had to edit this file. All three are built now —
  * `findings` by #28, `evaluateAgainstPlantedDefects` by #29 and `verdict` by #27 — and
- * nothing here throws any more. `findingRuleIdOf` is #28's one addition to this surface:
- * `findings.json` carries no field for the rule behind a finding, and the planted-defect
- * evaluation matches by rule, so the rule is read back off the finding's id through it.
+ * nothing in that group throws any more. `findingRuleIdOf` is #28's one addition to this
+ * surface: `findings.json` carries no field for the rule behind a finding, and the
+ * planted-defect evaluation matches by rule, so the rule is read back off the finding's id
+ * through it.
+ *
+ * The **recommendations** surface below is declared the same way, by #252: `sampleSessions`
+ * is built, and `buildRecommendations` and `writeUp` throw and name the ticket that fills
+ * them (#258 and #260). Each lives in its own file under `recommendations/`, so neither of
+ * those tickets edits this file or `recommendations/index.ts` and the two can run at the
+ * same time. `recommendations/index.ts` is where that surface is written down.
  */
 
 export { FINDING_RULE_IDS, scoringConfig } from './config.js';
@@ -38,3 +46,20 @@ export type { Finding, FindingsGenerator } from './findings/index.js';
 
 export { evaluateAgainstPlantedDefects } from './evaluate.js';
 export type { PlantedDefect, PlantedDefectEvaluation, PlantedDefectEvaluator } from './evaluate.js';
+
+export {
+  buildRecommendations,
+  SAMPLE_SIZE,
+  SAMPLE_STRATEGY,
+  sampleSessions,
+  WHOLE_RUN_STRATEGY,
+  writeUp,
+} from './recommendations/index.js';
+export type {
+  RecommendationsBuilder,
+  RecommendationsInput,
+  SessionSample,
+  SessionSampler,
+  WriteUpGenerator,
+  WriteUpInput,
+} from './recommendations/index.js';
