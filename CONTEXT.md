@@ -81,13 +81,13 @@ The run directory is served read-only, mirroring the on-disk layout exactly:
 - `GET /runs/<runId>/recommendations.json` (when the run has one)
 - `GET /runs/<runId>/sessions/S-NN.json`
 - `GET /runs/<runId>/screenshots/<variant>/<step>.png`
-- `GET /runs/<runId>/videos/S-NN.webm` (when the session recorded one)
+- `GET /runs/<runId>/videos/S-NN.webm` (when the session recorded one; the mount serves it from #245)
 
 plus **one generated listing**:
 
 - `GET /runs/index.json` → `[{ runId, name, createdAt }]`, sorted newest first.
 
-There is no other endpoint and no server-side computation. **The mount computes nothing for a video either**: a `.webm` is the bytes that are on disk, served as a screenshot is — no transcoding, no thumbnail, no duration read on the server. What a player needs to seek it, the viewer gets from the session JSON's offsets; a run that recorded no video for a session has no file to serve and the request is a 404. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally scopes the mount to the workspace that owns the run — a signed-out request reaches only the seeded demo run, which the public landing page and `/demo` read, and a run of another workspace is 404 rather than 403; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
+There is no other endpoint and no server-side computation. **The mount computes nothing for a video either**: a `.webm` is the bytes that are on disk, served as a screenshot is — no transcoding, no thumbnail, no duration read on the server. What a player needs to seek it, the viewer gets from the session JSON's offsets, and a session that recorded none has no file to serve. The bytes themselves, with the byte ranges that let a `?t=` deep link seek instead of downloading the whole recording, are #245's: until it lands, `videos/` is a path the contract declares and the mount does not yet serve. The mount is implemented once in `packages/cli`, used by `personavision serve` and `personavision open` and wired into the viewer's Vite dev server, so a developer running `pnpm dev` reads the identical URLs the shipped app does. `serve` additionally scopes the mount to the workspace that owns the run — a signed-out request reaches only the seeded demo run, which the public landing page and `/demo` read, and a run of another workspace is 404 rather than 403; the paths themselves do not change. Recorded in [`docs/adr/0001-run-data-over-http-as-static-files.md`](docs/adr/0001-run-data-over-http-as-static-files.md).
 
 ### 2. `docs/design/tokens.css` is imported by the app, never copied and never restated
 

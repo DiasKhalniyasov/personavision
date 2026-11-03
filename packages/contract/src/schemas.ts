@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runPaths } from './paths.js';
 
 /**
  * The run artifact, as zod schemas.
@@ -1287,6 +1288,12 @@ export const VIDEO_CAP_MS: Readonly<Record<z.infer<typeof videoCapSchema>, numbe
  * lets a recommendation citing `S-62 · 0:48` open on the frame it means without replaying
  * anything. `sessionSchema` holds the two lists to the length of the arrays they index.
  *
+ * **An entry past the cap has no offset.** A session that hit a cap kept going after the
+ * recording stopped, so its later screens and actions are in the session and not in the
+ * video: their offset is `null`. Clamping them to the last frame would cite a frame showing
+ * something else, and leaving them out would misalign every entry after them. Only a
+ * truncated recording may carry one.
+ *
  * **The duration is recorded once.** A truncated recording names the cap it hit and nothing
  * else; `durationMs` is the duration it reached. The contract does not compare the two,
  * because a recorder stops the browser at the cap and reports the duration the file on disk
@@ -1305,10 +1312,16 @@ export const sessionVideoSchema = z.discriminatedUnion('state', [
      * truncated video is a stated fact, never a silently short one.
      */
     truncated: videoCapSchema.nullable(),
-    /** One offset per entry of the session's own `screens`, in that order. */
-    screenOffsetsMs: z.array(milliseconds),
-    /** One offset per entry of the session's own `actions`, in that order. */
-    actionOffsetsMs: z.array(milliseconds),
+    /**
+     * One offset per entry of the session's own `screens`, in that order. `null` is a
+     * screen the recording does not reach, which only a truncated recording has.
+     */
+    screenOffsetsMs: z.array(milliseconds.nullable()),
+    /**
+     * One offset per entry of the session's own `actions`, in that order. `null` is an
+     * action the recording does not reach, which only a truncated recording has.
+     */
+    actionOffsetsMs: z.array(milliseconds.nullable()),
   }),
   z.strictObject({
     state: z.literal('absent'),
@@ -1442,6 +1455,18 @@ export const sessionSchema = z
     // parse error here rather than a replay that opens on the wrong frame.
     const { video } = session;
     if (video !== undefined && video.state === 'recorded') {
+      // The path is produced by the paths module and re-derived nowhere, so the only
+      // recording a session can name is its own. A session JSON carrying another session's
+      // path would play another participant under this one's label, and nothing else in the
+      // artifact would contradict it.
+      const own = runPaths('').video(session.sessionId);
+      if (video.path !== own) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['video', 'path'],
+          message: `"${video.path}" is not this session's recording: ${session.sessionId}'s video is "${own}", as the paths module spells it`,
+        });
+      }
       const aligned = [
         {
           field: 'screenOffsetsMs',
@@ -1468,20 +1493,23 @@ export const sessionSchema = z
           continue;
         }
         offsets.forEach((offsetMs, position) => {
+          if (offsetMs === null) {
+            // A recording that ended on its own reaches everything the session did, so
+            // there is nothing it could fail to have a frame of.
+            if (video.truncated === null) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['video', field, position],
+                message: `this recording was not truncated, so it reaches every entry of \`${indexes}\`: an offset of null is one the recording stopped before`,
+              });
+            }
+            return;
+          }
           if (offsetMs > video.durationMs) {
             ctx.addIssue({
               code: 'custom',
               path: ['video', field, position],
-              message: `offset ${offsetMs} ms is past the end of a ${video.durationMs} ms recording: a cited timestamp has to land inside the video it cites`,
-            });
-          }
-          // A recording runs forward, so the offsets of a list that happened in order do
-          // too. Equal is allowed: two things can happen in one millisecond.
-          if (position > 0 && offsetMs < offsets[position - 1]) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['video', field, position],
-              message: `offset ${offsetMs} ms is earlier than the ${offsets[position - 1]} ms of the entry before it: \`${indexes}\` happened in order, and so does the recording of it`,
+              message: `offset ${offsetMs} ms is past the end of a ${video.durationMs} ms recording: a cited timestamp has to land inside the video it cites, and an entry the recording stopped before has no offset at all`,
             });
           }
         });

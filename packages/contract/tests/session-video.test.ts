@@ -140,19 +140,6 @@ describe('a session that names its recording', () => {
     expect(messages[0]).toMatch(/past the end of a 38000 ms recording/);
   });
 
-  it('refuses offsets that run backwards: a recording runs forward', () => {
-    const session = validSession('S-01', 'A');
-    const actions = [
-      session.actions[0],
-      { ...session.actions[0], tMs: 9000 },
-    ] as Session['actions'];
-    const video = { ...recordedVideo('S-01'), actionOffsetsMs: [9000, 2400] };
-
-    const { paths } = rejections(sessionSchema, { ...session, actions, video });
-
-    expect(paths).toEqual(['video/actionOffsetsMs/1']);
-  });
-
   it('accepts two entries at one offset: two things can happen in one millisecond', () => {
     const session = validSession('S-01', 'A');
     const actions = [session.actions[0], { ...session.actions[0] }] as Session['actions'];
@@ -162,15 +149,74 @@ describe('a session that names its recording', () => {
       actionOffsetsMs: [2400, 2400],
     });
   });
+
+  it('names a recording that is not this session\u2019s: a replay plays its own participant', () => {
+    const { paths, messages } = rejections(
+      sessionSchema,
+      withVideo({ ...recordedVideo('S-01'), path: runPaths('').video('S-02') }),
+    );
+
+    expect(paths).toEqual(['video/path']);
+    expect(messages[0]).toMatch(
+      /is not this session's recording: S-01's video is "videos\/S-01\.webm"/,
+    );
+  });
+
+  it('refuses an offset of null when the recording was not truncated', () => {
+    const { paths, messages } = rejections(
+      sessionSchema,
+      withVideo({ ...recordedVideo('S-01'), actionOffsetsMs: [null] }),
+    );
+
+    expect(paths).toEqual(['video/actionOffsetsMs/0']);
+    expect(messages[0]).toMatch(/was not truncated, so it reaches every entry/);
+  });
 });
 
 describe('a recording that hit a cap', () => {
+  /**
+   * A session that ran twelve minutes against a recording the session cap stopped at ten:
+   * the first action is in the video and the second happened after it stopped.
+   */
+  const pastTheCap = (): Session => {
+    const session = validSession('S-01', 'A');
+    return {
+      ...session,
+      durationMs: 720_000,
+      actions: [session.actions[0], { ...session.actions[0], tMs: 700_000 }] as Session['actions'],
+      video: {
+        ...recordedVideo('S-01'),
+        truncated: 'session',
+        durationMs: VIDEO_CAP_MS.session,
+        actionOffsetsMs: [2400, null],
+      },
+    };
+  };
+
   it('states which cap stopped it and the duration it reached', () => {
-    const session = accepted(
-      withVideo({ ...recordedVideo('S-01'), truncated: 'session', durationMs: 600_000 }),
-    );
+    const session = accepted(pastTheCap());
 
     expect(session.video).toMatchObject({ truncated: 'session', durationMs: 600_000 });
+    // The duration it reached is the recording's own, and is recorded once: the truncation
+    // names the cap and nothing else.
+    expect(session.durationMs).toBe(720_000);
+  });
+
+  it('gives the entries it stopped before no offset, rather than a frame they are not on', () => {
+    const session = accepted(pastTheCap());
+
+    expect(session.video).toMatchObject({ actionOffsetsMs: [2400, null] });
+    // Still one offset per action: the alignment is what makes the first one resolvable.
+    expect(session.actions).toHaveLength(2);
+  });
+
+  it('still refuses an offset past the end of a truncated recording', () => {
+    const past = pastTheCap();
+    const video = { ...past.video, actionOffsetsMs: [2400, 700_000] } as Session['video'];
+
+    expect(rejections(sessionSchema, { ...past, video }).paths).toEqual([
+      'video/actionOffsetsMs/1',
+    ]);
   });
 
   it('names the caps the owner chose, and what each one is, in one place', () => {
