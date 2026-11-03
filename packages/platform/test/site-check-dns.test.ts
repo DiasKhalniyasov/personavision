@@ -20,7 +20,12 @@ const TOKEN = 'pv_7f3c91a2d84e';
 const PAIR = `personavision-site-verification=${TOKEN}`;
 
 /** The prototype's site: the record is written on the host, the screen names the domain. */
-const SITE: CheckedSite = { url: 'https://beta.clipforge.example/create', token: TOKEN };
+const SITE: CheckedSite = {
+  id: 'the-clipforge-site',
+  workspaceId: 'the-clipforge-workspace',
+  url: 'https://beta.clipforge.example/create',
+  token: TOKEN,
+};
 const HOST = 'beta.clipforge.example';
 const DOMAIN = 'clipforge.example';
 
@@ -55,10 +60,18 @@ const resolverOf = (zone: Record<string, Answer>): { resolveTxt: TxtResolver; as
 
 const check = async (
   zone: Record<string, Answer>,
-  site: CheckedSite = SITE,
+  // Whatever this test cares about, over the prototype's site: `CheckedSite` also names
+  // which site and workspace it is (#238), and no DNS check reads either.
+  site: Partial<CheckedSite> = {},
 ): Promise<{ result: SiteCheckResult; asked: string[] }> => {
   const { resolveTxt, asked } = resolverOf(zone);
-  const result = await checkDnsTxt(site, { resolveTxt, now: () => new Date(CHECKED_AT) });
+  const result = await checkDnsTxt(
+    { ...SITE, ...site },
+    {
+      resolveTxt,
+      now: () => new Date(CHECKED_AT),
+    },
+  );
   return { result, asked };
 };
 

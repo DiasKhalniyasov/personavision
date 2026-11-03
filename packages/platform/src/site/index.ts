@@ -22,6 +22,7 @@ export {
   noAnswer,
   nothingPublished,
   otherValues,
+  places,
   siteCheckResult,
 } from './checks.js';
 export type {
@@ -37,6 +38,11 @@ export type {
 } from './checks.js';
 
 export { checkDnsTxt, nodeTxtResolver, verificationDomains } from './check-dns.js';
+
+export { checkConnectedRepository } from './check-repository.js';
+
+export { noSiteConnections } from './connections.js';
+export type { SiteConnections, SiteRepositoryConnection } from './connections.js';
 
 export {
   AVAILABLE_SITE_VERIFICATION_METHODS,

@@ -5,7 +5,7 @@ import type { Platform } from '../src/platform.js';
 import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
 import type { Middleware } from '../src/server/routes/types.js';
-import type { SiteCheckDeps } from '../src/site/index.js';
+import type { SiteCheckDeps, SiteConnections } from '../src/site/index.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 import type { TestDirectories } from './workspace.js';
 
@@ -38,6 +38,12 @@ export interface TestServerOptions {
    * which nothing then calls: no route runs a check until one is asked for.
    */
   siteChecks?: SiteCheckDeps;
+  /**
+   * The connection lookup the `connected-repository` check asks (#238). Omitted — as every
+   * suite but the one about that check omits it — leaves the default in place, which answers
+   * that no repository is connected to any site.
+   */
+  siteConnections?: SiteConnections;
 }
 
 export interface TestServer {
@@ -65,11 +71,17 @@ export const startTestServer = async ({
   runs = [],
   pipeline,
   siteChecks,
+  siteConnections,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
   const runIds: string[] = [];
   for (const run of runs) runIds.push(await writeRunAt(directories.runsRoot, run));
-  const platform = await createPlatform({ ...directories, pipeline, siteChecks });
+  const platform = await createPlatform({
+    ...directories,
+    pipeline,
+    siteChecks,
+    siteConnections,
+  });
   const server = await startPlatformServer({
     guard: platform.guard,
     routes: platform.routes,

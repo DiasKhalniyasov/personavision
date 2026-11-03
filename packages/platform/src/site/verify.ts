@@ -1,4 +1,6 @@
 import { checkDnsTxt, nodeTxtResolver } from './check-dns.js';
+import { checkConnectedRepository } from './check-repository.js';
+import { noSiteConnections } from './connections.js';
 import type { CheckedSite, SiteCheck, SiteCheckDeps, SiteCheckResult } from './checks.js';
 import type { SiteRecord, SiteStore, SiteVerificationMethod } from '../store/types.js';
 
@@ -27,12 +29,18 @@ export const SITE_VERIFICATION_METHODS: readonly SiteVerificationMethod[] = [
 /**
  * The methods this platform can run today.
  *
- * Only `dns-txt` is wired here (#236). The two HTTP checks and the connected repository are
- * the tickets that follow, and **each wires itself in** by adding its check to `CHECKS`
- * below — which is the only edit needed, because this list is derived from it.
+ * `dns-txt` (#236) and `connected-repository` (#238). The two HTTP checks are the ticket that
+ * follows, and **each wires itself in** by adding its check to `CHECKS` below — which is the
+ * only edit needed, because the list of available methods is derived from it.
+ *
+ * `connected-repository` is available although nothing is connected yet: it is a check that
+ * runs and answers, and _"no GitHub repository is connected to this site"_ is a result rather
+ * than a refusal. Calling the method unavailable would tell a user we cannot look, when what
+ * we can say is that we looked and found nothing (#238).
  */
 const CHECKS: Partial<Record<SiteVerificationMethod, SiteCheck>> = {
   'dns-txt': checkDnsTxt,
+  'connected-repository': checkConnectedRepository,
 };
 
 export const AVAILABLE_SITE_VERIFICATION_METHODS: readonly SiteVerificationMethod[] =
@@ -92,10 +100,17 @@ export const siteCheckFor = (method: unknown): SiteCheck => {
   return check;
 };
 
-/** The real resolver and the real clock — what `personavision serve` runs the checks with. */
+/**
+ * The real resolver and the real clock — what `personavision serve` runs the checks with.
+ *
+ * The connection lookup is the default one, which answers that no repository is connected
+ * anywhere: the GitHub App belongs to #227, and `createPlatform` takes the real lookup
+ * through `siteConnections` once that step has one to pass.
+ */
 export const defaultSiteCheckDeps = (): SiteCheckDeps => ({
   resolveTxt: nodeTxtResolver(),
   now: () => new Date(),
+  connections: noSiteConnections,
 });
 
 export interface VerifiedSite {
