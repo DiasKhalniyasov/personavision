@@ -169,7 +169,95 @@ declare any device without this package being edited. A known class whose declar
 disagrees with the model's keeps its own too: a touch device implies the mobile viewport and
 the fold that goes with it, and a lookup table does not get to overrule the audience on that.
 
-## 4. The committed preset
+## 4. The three fields the audience draws
+
+`docs/FLOW.md` section 12 extends the audience with a **gender split**, **age groups** and a
+**language** list, and leaves the generator's mapping table three new rows (#278). The table
+itself is in `src/audience.ts`, beside the arithmetic it describes:
+
+| Audience field | What it moves                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `genderSplit`  | the `gender` each person is drawn as, by share                                                                            |
+| `ageGroups`    | the bracket each person is drawn from and the age they are drawn at — and so their own `patience` and `scanningVsReading` |
+| `languages`    | the one `language` each person reads and types in, **apportioned evenly**                                                 |
+
+**One rule for every share.** The largest-remainder apportionment the device mix is built on
+is `largestRemainder` in `src/devices.ts`, and all three of these go through it, so a declared
+share is the same promise whichever field declared it: a hundred people with a 54/46 split are
+54 and 46, not 54 and 45, at every size and for every seed. The counts sum to `size` exactly —
+nobody left over, nobody counted twice — including when the shares only nearly sum to one,
+which the contract's tolerance allows.
+
+**The representation floor is the device mix's alone.** A device is declared by being in the
+list, whatever its share, and a test that puts nobody on it reports nothing about that device;
+so the floor gives every declared device somebody. A share of **zero** on a gender or an age
+bracket is the opposite kind of statement — it is the audience saying nobody here is that —
+and flooring it would put a person somewhere the audience said nobody was. For an age bracket
+it would be worse than wrong: the contract holds `ageRange` consistent only with the brackets
+that carry somebody, so a person floored into an empty bracket could be an age the audience's
+own range excludes. Languages need no floor; apportioned evenly, every language in the list
+gets somebody as soon as there are as many people as languages.
+
+**Even, for languages, because nobody gave shares.** A language list is a list. Reading shares
+into it would be this package inventing a claim about the audience, so the same rule runs over
+an equal share each — three languages over a hundred people are 34, 33 and 33 — and the list's
+own order breaks the tie. The gender split's two words are read off the split itself rather
+than written out here, sorted so that an audience written `{ female, male }` and the same
+audience written `{ male, female }` draw one set of people; sorted, `female` leads, so a 50/50
+split over an odd number of people gives the odd person to `female`. Arbitrary, and the same
+arbitrary answer every time, which is the property that matters.
+
+**The audience decides how many; the seed decides who.** The apportionment is the audience's
+and is the same at every seed, exactly as the device mix is, so two seed groups of one run
+report one gender split and one language mix and compare like with like. Which _person_ gets
+which value is the seed's, and it is **shuffled** rather than dealt in order: people are placed
+at the four archetypes round-robin, so handing a two-value field out in order — or alternately
+— would make the field a proxy for the behaviour beside it, and every result grouped by
+language would be reporting the archetype instead. Each field is dealt on a stream of its own,
+salted off the set's seed, so adding a language list to an audience does not move the genders
+of the people it already generated.
+
+**An age group moves a trait; it is not a field of the person's.** The bracket is the
+audience's claim and the year inside it is this person's, drawn uniformly over the bracket
+**narrowed to `ageRange`**: an audience of 28 to 44 that declares 25–34 and 35–44 said nobody
+here is 27, so a person drawn from 25–34 is 28 to 34. `65+` takes `ageRange.max` as its top,
+because that is the only upper bound anybody stated. What the age then does is what the
+mapping table has always said age does — `patience` up with age, `scanningVsReading` up as the
+person is younger — applied to the age **this person** was drawn at rather than to the midpoint
+of the whole range. Same two coefficients, same two directions, one centre per person. So an
+audience that is mostly in its thirties with a tail at fifty generates people whose patience is
+their own age's rather than the tail's.
+
+The age is not stored on the persona. Decision 104 put what a person was _drawn as_ in two
+fields of the persona's own — `gender` and `language` — and explicitly rejected the optional
+`profile` block as the home for it, because `profile` is prose nobody wrote and an age nobody
+drew. Writing a `profile` for all hundred generated people in order to carry the year would be
+that rejected option, and it would put an invented _"who you are"_ sentence into the agent's
+model prompt, which reads `profile.about`. So the year lives where the two coefficients put it:
+in the traits the person carries. What a bracket means in years is read off its own label —
+`25–34` is 25 to 34 wherever it is printed — so a bracket added to the contract needs no edit
+here and there is no second table of years to drift from the first.
+
+### Why this is not a new generator version
+
+`GENERATOR_VERSION` is still `persona-gen-1`, and adding these three rows did not move it.
+
+All three fire **only on an audience that carries the field**. An audience declaring none of
+them draws byte-identical people — same ids, same names, same segments, same devices, same
+traits to the last digit — because the three draws run on streams of their own and the trait
+stream is untouched. `tests/drawn-fields.test.ts` asserts that, and the eight test files that
+were here before this change pass unedited.
+
+Bumping the version would therefore describe a change those audiences cannot see, and it would
+do real damage: `parseAudience` refuses an audience whose `generatedFrom.generatorVersion` is
+not this build's, so every audience stored in the seeded demo workspace — all of them written
+by `persona-gen-1` — would stop generating people, and `packages/platform`'s people preview
+would answer each one with an issue instead of a swarm. The version is a promise about
+reproducibility: _these people are reproducible against that version_. It moves when an
+audience that generated one set of people would now generate another. That is what #78 will do
+when it regenerates the committed artifact's personas, and it is not what this did.
+
+## 5. The committed preset
 
 `OUTDOOR_GEAR_SHOPPERS` — the demo shop's customers, stated field for field as the prototype's
 `AUDIENCE` constant states them, with `size: 4`.
@@ -180,7 +268,7 @@ means the sessions a test runs: 4 people × 2 versions × 3 seeds. `tests/preset
 this object equals the committed example run's own audience block field for field, so the
 preset and the demo cannot drift into two different audiences.
 
-## 5. The holdout
+## 6. The holdout
 
 `generateHoldout({ audience, spentSeeds, size? })` — people from the same audience, on seeds a
 change was never chosen against (`docs/FLOW.md` section 15, point 4).
@@ -215,8 +303,8 @@ const holdout = generateHoldout({ audience, spentSeeds: run.seedGroups });
   `seeds[i]`'s own stream, and refuses two seeds that name one stream: two people sampled from
   one seed are one person twice. It is the only caller of that option.
 - **The same kind of person.** The holdout is generated from the same audience object at the
-  holdout's size, so the segments, the device mix and the trait centre are the main set's rules
-  rather than a second apportionment. Only the ids and names differ — `holdout-rushed-buyer`,
+  holdout's size, so the segments, the device mix, the gender split, the age groups, the
+  languages and the trait centre are the main set's rules rather than a second apportionment. Only the ids and names differ — `holdout-rushed-buyer`,
   `Rushed buyer (holdout)` — because a run carries the holdout people in its own `personas[]`,
   where a persona id names one simulated person.
 - **The size.** `holdoutSize(participants)` is `HOLDOUT_DEFAULT_SIZE`, capped at the audience: a
@@ -240,6 +328,14 @@ here knows what a pull request is, and nothing here reads a run.
 `generatedFrom.generatorVersion`, or the name of a field the contract does not declare —
 rather than a set of people who look plausible and are not. The platform stores audiences a
 user typed, so this is the error an audience form reports field by field.
+
+The three fields of section 4 report the same way, at their own paths, so a form can mark the
+field the user typed rather than the audience: `genderSplit` for a split that is not a
+distribution and `genderSplit.male` for a share that is not a share; `ageGroups` for group
+shares that do not sum to one or that disagree with `ageRange`, and `ageGroups[1].group` for
+the same bracket declared twice; `languages` for a list that is there but empty and
+`languages[0]` for an empty language in it. `tests/drawn-fields.test.ts` pins every one of
+those paths.
 
 An audience whose `generatedFrom.generatorVersion` is not this build's `GENERATOR_VERSION` is
 rejected, the same promise the artifact's `schemaVersion` makes: its people were reproducible

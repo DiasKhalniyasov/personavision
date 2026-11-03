@@ -69,41 +69,42 @@ export const concreteDeviceFor = (device: AudienceDevice): ConcreteDevice => {
 };
 
 /**
- * How many of `size` people are on each declared device, in the mix's own order.
+ * How many of `size` fall to each share, by largest remainder.
  *
- * Largest remainder, so the counts are the shares rather than a sample of them: a declared
- * 60% is 60% of the people the audience generates, to within one person, at every size and
- * for every seed. Drawing each person's device independently would leave the mix a test
- * reports some way from the mix the user authored, and at the demo's size of four it could
- * leave a declared device with nobody on it at all.
+ * The rule the device mix is apportioned by, and **the rule every other share an audience
+ * declares is apportioned by too** — the gender split, the age-group shares and the even
+ * share each language takes (`docs/FLOW.md` section 12). A declared share is therefore the
+ * same promise whichever field declared it: the counts are the shares rather than a sample
+ * of them, so a hundred people with a 54/46 split are 54 and 46 and not 54 and 45. Drawing
+ * each person's category independently would leave the mix a test reports some way from the
+ * mix the user authored, and at the demo's size of four it could leave a declared share with
+ * nobody on it at all.
  *
- * **The representation floor.** Once an audience has at least as many people as devices,
- * every declared device gets at least one of them, taken from the largest count. A device
- * declared at 1% is part of the audience; a swarm that puts nobody on it reports nothing
- * about it, and the user who added it would not know. Below that size the people go to the
- * largest shares — nobody is left out while a smaller share is covered — because there is no
- * honest way to cover every device with fewer people than devices.
+ * Every person is accounted for, at every size: the returned counts sum to `size` exactly.
+ * The shares are a distribution only to within the contract's tolerance, so `size * share`
+ * summed over a legal mix does not have to come to `size` — an audience whose shares sum to
+ * 1 - 1e-6 over millions of people is short by whole people, and one summing to 1 + 1e-6 is
+ * over. Both are repaired here, by cycling rather than by one pass, which is the invariant
+ * every caller relies on to always have a category left to hand out.
  */
-export const deviceQuota = (audience: Audience): number[] => {
-  const exact = audience.devices.map((device) => audience.size * device.share);
+export const largestRemainder = (size: number, shares: readonly number[]): number[] => {
+  // No shares, no counts. Said here because the repair below hands the spare people out by
+  // cycling the shares, and a cycle over none of them is the one input that has no answer:
+  // a caller with people to place and nothing to place them on has to be told, not cycled.
+  if (shares.length === 0) return [];
+  const exact = shares.map((share) => size * share);
   const quota = exact.map(Math.floor);
   const assigned = quota.reduce((total, count) => total + count, 0);
 
   // The spare people go to the largest remainders, with the mix's own order breaking a tie.
-  //
-  // The shares are a distribution only to within the contract's tolerance, so `exact` does
-  // not have to add up to `size`: an audience whose shares sum to 1 - 1e-6 over millions of
-  // people is short by whole people, and one summing to 1 + 1e-6 is over. Both are repaired
-  // here, by cycling rather than by one pass, so the quota accounts for every person at every
-  // size — which is the invariant the assignment below relies on to always have a device left.
   const byRemainder = exact
     .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
     .sort((left, right) => right.remainder - left.remainder || left.index - right.index);
-  for (let spare = audience.size - assigned, step = 0; spare > 0; spare -= 1, step += 1) {
+  for (let spare = size - assigned, step = 0; spare > 0; spare -= 1, step += 1) {
     const { index } = byRemainder[step % byRemainder.length] as { index: number };
     quota[index] = (quota[index] ?? 0) + 1;
   }
-  for (let over = assigned - audience.size, step = 0; over > 0; step += 1) {
+  for (let over = assigned - size, step = 0; over > 0; step += 1) {
     const { index } = byRemainder[byRemainder.length - 1 - (step % byRemainder.length)] as {
       index: number;
     };
@@ -112,6 +113,32 @@ export const deviceQuota = (audience: Audience): number[] => {
       over -= 1;
     }
   }
+  return quota;
+};
+
+/**
+ * How many of `size` people are on each declared device, in the mix's own order.
+ *
+ * `largestRemainder` above, plus the one thing a device share is allowed to be overruled by:
+ *
+ * **The representation floor.** Once an audience has at least as many people as devices,
+ * every declared device gets at least one of them, taken from the largest count. A device
+ * declared at 1% is part of the audience; a swarm that puts nobody on it reports nothing
+ * about it, and the user who added it would not know. Below that size the people go to the
+ * largest shares — nobody is left out while a smaller share is covered — because there is no
+ * honest way to cover every device with fewer people than devices.
+ *
+ * The floor is the device mix's alone. The gender split and the age groups are **not**
+ * floored, and `README.md` section 4 states why: a device is declared by being in the list,
+ * whatever its share, and a test that puts nobody on it reports nothing about that device —
+ * whereas a share of zero on a gender or an age bracket is a measurement the audience made,
+ * and overruling it would put a person somewhere the audience said nobody was.
+ */
+export const deviceQuota = (audience: Audience): number[] => {
+  const quota = largestRemainder(
+    audience.size,
+    audience.devices.map((device) => device.share),
+  );
 
   if (audience.size < audience.devices.length) return quota;
 
