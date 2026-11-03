@@ -1,7 +1,9 @@
-import { MODEL_ID_BY_MODE } from './meta-pricing.js';
-import type { ModelId, ModelMode } from './meta-pricing.js';
+import { MODEL_ID_BY_MODE, WONDER_MODEL_ID } from './meta-pricing.js';
+import type { ModelId, ModelMode, WonderModelId } from './meta-pricing.js';
 import { createOfflineDeterministicProvider } from './offline.js';
 import type { DecisionProvider, ProviderMode } from './types.js';
+import { createOfflineWonderProvider } from './wonder-offline.js';
+import type { WonderProvider } from './wonder.js';
 
 /**
  * Which decision layer a run gets, and on which model, decided once and recorded.
@@ -125,14 +127,23 @@ const offline = (seed: number, reason: string): SelectedDecisionProvider => ({
 /**
  * The request as an object, or `undefined` for "no preference" — which a `null` from an
  * untyped caller means too, rather than a `TypeError` three lines further down.
+ *
+ * Generic over the request's shape, because the two selections in this file take two: a
+ * decision request names a tier, a one-shot request names a model. The bare mode string is
+ * widened to an object in one place for both, so neither has to spell that branch again.
  */
-const asRequest = (
-  requested: RequestedProviderMode | undefined,
-): ProviderModeRequest | undefined => {
+const asRequest = <Request extends { readonly mode: ProviderMode }>(
+  requested: ProviderMode | Request | undefined,
+): (Partial<Request> & { readonly mode: ProviderMode }) | undefined => {
   if (requested === undefined || requested === null) {
     return undefined;
   }
-  return typeof requested === 'string' ? { mode: requested } : requested;
+  // A bare mode string carries nothing but the mode, and every field a request shape may
+  // also name is optional in both of them — so widening the string to an object cannot drop
+  // anything. The compiler cannot see that through the type parameter, hence the assertion.
+  return typeof requested === 'string'
+    ? ({ mode: requested } as Partial<Request> & { readonly mode: ProviderMode })
+    : requested;
 };
 
 export const selectDecisionProvider = (
@@ -140,7 +151,7 @@ export const selectDecisionProvider = (
 ): SelectedDecisionProvider => {
   const env = options.env ?? process.env;
   const apiKey = env[MODEL_API_KEY_ENV]?.trim() ?? '';
-  const request = asRequest(options.requestedMode);
+  const request = asRequest<ProviderModeRequest>(options.requestedMode);
 
   if (request?.mode === 'offline') {
     return offline(options.seed, 'offline was asked for, and a mode is never upgraded implicitly');
@@ -225,5 +236,150 @@ export const selectDecisionProvider = (
     reason: `${modelMode} model mode was asked for, ${MODEL_API_KEY_ENV} is present, and ${modelId} was built`,
     modelMode,
     modelId,
+  };
+};
+
+/**
+ * Which **one-shot** implementation a caller gets, and on which model, by the same four
+ * rules as above and with one difference that the model itself forces.
+ *
+ * Offline whenever no key is present; a mode never upgraded implicitly; a model request that
+ * names no model refused rather than resolved; a named model never substituted. The
+ * difference is the **default**: asked for nothing at all, this returns the offline
+ * implementation even on a machine that holds a key, where `selectDecisionProvider` would
+ * have returned a model in contributor mode.
+ *
+ * That is not an inconsistency, it is the absence of a cheap tier. A decision's "model if
+ * this machine can" default is affordable because the tier it lands on is
+ * `muse-spark-1.3-contributor`, about twelve times cheaper and ours to give. Muse Wonder has
+ * **no** contributor tier — `muse-wonder-1.0-contributor` answers `404 model_not_found` — so
+ * every Wonder call is billed at the standard rate, 40× Spark contributor on input and 100×
+ * on output (`docs/meta-model-api.md`). A caller that expressed no preference would otherwise
+ * be spending standard-rate money on every developer machine with a key in its environment,
+ * which is the opposite of what the default is for. A caller that *wants* a model says so and
+ * names it.
+ *
+ * For the same reason there is no fall-back for a Wonder request that names its model: every
+ * named model is model-or-nothing. There is no cheaper tier to fall back *to*, so a
+ * fall-back could only ever be the offline implementation standing in for a model run, and a
+ * simulated result standing in for a model run is worse than a refusal (owner decision,
+ * 2026-10-28).
+ *
+ * It refuses with the **same** `ModelModeUnavailableError` the decision selection refuses
+ * with, although Wonder has no modes and the class's name says one: the condition is the
+ * same — this process cannot honour a model request — and a second class would make a
+ * caller catch two things to handle one.
+ */
+
+/** A one-shot mode request: the mode, and the model for a request that is to call one. */
+export interface WonderModeRequest {
+  readonly mode: ProviderMode;
+  /** The model to call. There is one, and naming it is what makes the request a model one. */
+  readonly modelId?: WonderModelId;
+}
+
+/**
+ * What a caller may ask for: `'offline'`, a request object, or the bare `'model'` string —
+ * which names no model, and is therefore a refusal.
+ */
+export type RequestedWonderMode = ProviderMode | WonderModeRequest;
+
+export interface SelectWonderProviderOptions {
+  /** Defaults to `process.env`; a test passes its own and touches nothing global. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The mode the caller asked for. Omitted — the default — is the offline implementation,
+   * whatever this machine's environment holds.
+   */
+  readonly requestedMode?: RequestedWonderMode;
+  /**
+   * How to build the model implementation once a key is in hand (#255). Absent — as it is
+   * wherever that implementation is not wired up — means this process cannot call Wonder at
+   * all.
+   *
+   * It is told which model to build rather than closing over one, and what it returns is
+   * checked against that model: an implementation naming another is a substitution and is
+   * refused.
+   */
+  readonly createModelProvider?: (options: {
+    readonly apiKey: string;
+    readonly modelId: WonderModelId;
+  }) => WonderProvider;
+}
+
+export interface SelectedWonderProvider {
+  readonly mode: ProviderMode;
+  readonly provider: WonderProvider;
+  /** Why this mode, in words a run log can print. Never contains the key. */
+  readonly reason: string;
+  /** The model that ran, never one substituted for it. Absent offline. */
+  readonly modelId?: WonderModelId;
+}
+
+const offlineWonder = (reason: string): SelectedWonderProvider => ({
+  mode: 'offline',
+  provider: createOfflineWonderProvider(),
+  reason,
+});
+
+export const selectWonderProvider = (
+  options: SelectWonderProviderOptions = {},
+): SelectedWonderProvider => {
+  const env = options.env ?? process.env;
+  const apiKey = env[MODEL_API_KEY_ENV]?.trim() ?? '';
+  const request = asRequest<WonderModeRequest>(options.requestedMode);
+
+  if (request === undefined) {
+    return offlineWonder(
+      'nothing was asked for, and a one-shot model call has no cheap tier to default into, so offline it is',
+    );
+  }
+
+  if (request.mode === 'offline') {
+    return offlineWonder('offline was asked for, and a mode is never upgraded implicitly');
+  }
+
+  const namedModel = request.modelId;
+  if (namedModel === undefined || namedModel !== WONDER_MODEL_ID) {
+    throw new ModelModeUnavailableError(
+      `a one-shot model call was asked for, but ${
+        namedModel === undefined
+          ? 'it named no model'
+          : `"${String(namedModel)}" is not a model this package runs one-shot`
+      }: name ${WONDER_MODEL_ID} — a request that names none is refused rather than resolved, because there is no cheap tier here and every call is billed at the standard rate`,
+    );
+  }
+
+  const unavailable = (missing: string): ModelModeUnavailableError =>
+    new ModelModeUnavailableError(
+      `${namedModel} was asked for, but ${missing}: a one-shot call on a model is refused rather than answered by the offline implementation, because a simulated answer standing in for a model run is worse than a refusal`,
+    );
+
+  if (apiKey === '') {
+    throw unavailable(`${MODEL_API_KEY_ENV} is not in the environment`);
+  }
+
+  if (options.createModelProvider === undefined) {
+    throw unavailable('no implementation was supplied to build it with');
+  }
+
+  const provider = options.createModelProvider({ apiKey, modelId: namedModel });
+
+  // An implementation that names another model is the substitution this function exists to
+  // prevent: a reply costed at one model's rates and produced by another is a figure no
+  // invoice will agree with. One that names none is taken at its word.
+  if (provider.modelId !== undefined && provider.modelId !== namedModel) {
+    throw unavailable(`what was built for it runs ${provider.modelId}`);
+  }
+
+  if (provider.mode !== 'model') {
+    throw unavailable(`what was built for it runs in "${provider.mode}" mode`);
+  }
+
+  return {
+    mode: 'model',
+    provider,
+    reason: `${namedModel} was asked for, ${MODEL_API_KEY_ENV} is present, and it was built`,
+    modelId: namedModel,
   };
 };

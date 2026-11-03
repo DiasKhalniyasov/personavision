@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { validateDecision } from './decision.js';
+import { FREE_USAGE, validateDecision } from './decision.js';
+import { estimateCostUsd, MODEL_SPEC_BY_ID } from './meta-pricing.js';
+import type { PricedModelId } from './meta-pricing.js';
 import { DecisionSessionClosedError } from './session.js';
+import { WONDER_USES, WonderReplyError } from './wonder.js';
+import type { WonderAsk, WonderModel, WonderProvider, WonderReply, WonderUse } from './wonder.js';
 import type {
   Decision,
   DecisionContext,
+  DecisionUsage,
   DecisionProvider,
   DecisionSession,
   DecisionStep,
@@ -395,6 +400,287 @@ export const describeDecisionProviderContract = (
         );
 
         expect(withImage).toEqual(blind);
+      });
+    }
+  });
+};
+
+/**
+ * The **one-shot** contract suite: the tests a Wonder implementation inherits instead of
+ * writing.
+ *
+ * Call `describeWonderProviderContract` from one test file and the implementation is held to
+ * everything the seam promises — that the reply is the ask's own parsed shape or an error
+ * naming the path, never a half-filled object; that all five usage figures are there and are
+ * priced from the one table in `meta-pricing.ts`; that the model which answered travels with
+ * the answer, or `null` where none did; and that an implementation claiming determinism is
+ * held to it. #255's model implementation adds a file of about five lines and inherits the
+ * lot.
+ *
+ * Every assertion runs over **all four uses** with one shape, because an implementation with
+ * a case per use is the thing the seam exists to prevent: the ask carries its own validator
+ * and its own generator, so no implementation has anything to branch on.
+ *
+ * **Nothing here asserts a prompt string, and nothing reads the ask's document.** A Wonder
+ * implementation's wording is its own business and changes whenever its model does. What is
+ * asserted is what a caller can see: the parsed object, the model, the cost, and the refusal.
+ */
+
+/**
+ * The shape the suite asks for: small, and deliberately none of the four real ones. The four
+ * uses declare their shapes in `@personavision/contract`, and a suite that asked for one of
+ * them would be asserting that package's schemas rather than this seam's behaviour.
+ */
+export interface WonderProbe {
+  readonly headline: string;
+  readonly confidence: number;
+}
+
+/** One refused field, in the shape a schema library's thrown error carries them. */
+interface ProbeIssue {
+  readonly path: readonly (string | number)[];
+  readonly message: string;
+}
+
+class ProbeRefusal extends Error {
+  readonly issues: readonly ProbeIssue[];
+
+  constructor(issues: readonly ProbeIssue[]) {
+    super(issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '));
+    this.name = 'ProbeRefusal';
+    this.issues = issues;
+  }
+}
+
+/**
+ * A refusal in the shape the seam reads paths out of — the same `issues` array a `zod` error
+ * carries. Exported so that an implementation's own fake can refuse a reply the way a real
+ * schema does, rather than throwing a bare `Error` and leaving the path unnamed.
+ */
+export const wonderRefusal = (path: readonly (string | number)[], message: string): Error =>
+  new ProbeRefusal([{ path, message }]);
+
+/** The JSON Schema the probe's reply is asked for with, in the strict subset. */
+export const WONDER_PROBE_SCHEMA = {
+  name: 'WonderProbe',
+  schema: {
+    type: 'object',
+    properties: { headline: { type: 'string' }, confidence: { type: 'number' } },
+    required: ['headline', 'confidence'],
+    additionalProperties: false,
+  },
+} as const;
+
+/**
+ * The probe's validator: the shape, and that the confidence is on `[0, 1]`. It refuses by
+ * throwing with the path named, which is what the four uses' contract schemas do.
+ */
+export const parseWonderProbe = (reply: unknown): WonderProbe => {
+  if (typeof reply !== 'object' || reply === null) {
+    throw wonderRefusal([], 'a probe is an object carrying a headline and a confidence');
+  }
+  const { headline, confidence } = reply as Partial<WonderProbe>;
+  const issues: ProbeIssue[] = [];
+  if (typeof headline !== 'string' || headline.trim() === '') {
+    issues.push({ path: ['headline'], message: 'a probe states its headline in words' });
+  }
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) {
+    issues.push({ path: ['confidence'], message: 'a confidence is a number' });
+  } else if (confidence < 0 || confidence > 1) {
+    issues.push({ path: ['confidence'], message: 'a confidence is on [0, 1]' });
+  }
+  if (issues.length > 0) throw new ProbeRefusal(issues);
+  return { headline: headline as string, confidence: confidence as number };
+};
+
+/** The probe's offline generator: it reads the seed, so a different seed is a different answer. */
+export const wonderProbeOffline = (seed: number): WonderProbe => ({
+  headline: `probe ${(seed >>> 0).toString(36)}`,
+  confidence: ((seed >>> 0) % 1001) / 1000,
+});
+
+/** A probe ask, for the suite and for an implementation's own tests to build on. */
+export const wonderProbeAsk = (
+  overrides: Partial<WonderAsk<WonderProbe>> = {},
+): WonderAsk<WonderProbe> => ({
+  use: 'audience',
+  document: 'busy parents in Almaty who shop on their phones',
+  seed: 1,
+  replySchema: WONDER_PROBE_SCHEMA,
+  effort: 'minimal',
+  parse: parseWonderProbe,
+  offline: wonderProbeOffline,
+  ...overrides,
+});
+
+/**
+ * The five figures a reply reports, read off `FREE_USAGE` rather than spelled again here:
+ * `packages/contract` is the only place an artifact field name is declared (`CONTEXT.md`),
+ * and this package already holds one value of the five. A sixth figure added to the contract
+ * is therefore a figure this suite starts asserting, rather than one it silently ignores.
+ */
+const USAGE_FIGURES = Object.keys(FREE_USAGE) as readonly (keyof DecisionUsage)[];
+
+export interface WonderProviderContractOptions {
+  /** What to call the implementation in the test names. */
+  readonly name: string;
+  /**
+   * A fresh implementation. It takes no seed: a one-shot call's seed is on the ask, because
+   * the ask is the only thing a one-shot implementation is given.
+   */
+  readonly createProvider: () => WonderProvider;
+  /**
+   * Whether the same ask and seed must give an identical object. True for a seeded
+   * implementation; one with a live sampler behind it says false and keeps the rest.
+   */
+  readonly deterministic: boolean;
+  /** Whether a call costs nothing, so all five usage figures must be zero. */
+  readonly free: boolean;
+}
+
+export const describeWonderProviderContract = (options: WonderProviderContractOptions): void => {
+  const askAll = async (
+    build: (use: WonderUse) => WonderAsk<WonderProbe>,
+  ): Promise<readonly WonderReply<WonderProbe>[]> => {
+    const provider = options.createProvider();
+    return Promise.all(WONDER_USES.map(async (use) => provider.ask(build(use))));
+  };
+
+  describe(`the one-shot provider contract, against ${options.name}`, () => {
+    it('declares the facts a run records about it', () => {
+      const provider = options.createProvider();
+
+      expect(provider.name).not.toBe('');
+      expect(['offline', 'model']).toContain(provider.mode);
+      if (provider.mode === 'offline') {
+        // Offline means no model ran, so there is no model id to record. One here would be
+        // a run attributing an answer to a model that was never called.
+        expect(provider.modelId).toBeUndefined();
+      }
+      if (provider.modelId !== undefined) expect(provider.modelId).not.toBe('');
+    });
+
+    it('answers every one of the four uses with the shape the ask asked for', async () => {
+      const replies = await askAll((use) => wonderProbeAsk({ use, seed: 4 }));
+
+      expect(replies).toHaveLength(WONDER_USES.length);
+      for (const reply of replies) {
+        expect(typeof reply.value.headline).toBe('string');
+        expect(reply.value.headline.trim()).not.toBe('');
+        expect(typeof reply.value.confidence).toBe('number');
+        // The value a caller gets is the validator's own: running it again changes nothing.
+        expect(parseWonderProbe(reply.value)).toEqual(reply.value);
+      }
+    });
+
+    it('reports all five usage figures on every reply', async () => {
+      for (const reply of await askAll((use) => wonderProbeAsk({ use, seed: 5 }))) {
+        expect(Object.keys(reply.usage).sort()).toEqual([...USAGE_FIGURES].sort());
+        for (const figure of USAGE_FIGURES) {
+          const value = reply.usage[figure];
+          expect(Number.isFinite(value)).toBe(true);
+          expect(value).toBeGreaterThanOrEqual(0);
+        }
+        // Both breakdowns are "of which", not extras, exactly as the API reports them.
+        expect(reply.usage.cachedInputTokens).toBeLessThanOrEqual(reply.usage.inputTokens);
+        expect(reply.usage.reasoningTokens).toBeLessThanOrEqual(reply.usage.outputTokens);
+        // A free call is the one free-usage value this package publishes, not a second
+        // five-zero literal that would have to be kept in step with it.
+        if (options.free) expect(reply.usage).toEqual(FREE_USAGE);
+      }
+    });
+
+    it('names the model that answered, or nothing where none did, and prices it from the one table', async () => {
+      const provider = options.createProvider();
+
+      for (const use of WONDER_USES) {
+        const reply = await provider.ask(wonderProbeAsk({ use, seed: 6 }));
+
+        if (provider.mode === 'offline') {
+          expect(reply.model).toBeNull();
+          expect(reply.usage.estimatedCostUsd).toBe(0);
+          continue;
+        }
+
+        // A reply a model produced says which, because a run's cost can only be checked
+        // against an invoice if each call says what it was priced at.
+        expect(reply.model).not.toBeNull();
+        const model = reply.model as WonderModel;
+        expect(model.mode).not.toBe('');
+        if (provider.modelId !== undefined) expect(model.modelId).toBe(provider.modelId);
+
+        // Priced from the one table and by the one estimator: a second arithmetic for a
+        // one-shot call is how a run's bill and its invoice drift apart.
+        expect(Object.keys(MODEL_SPEC_BY_ID)).toContain(model.modelId);
+        expect(reply.usage.estimatedCostUsd).toBe(
+          estimateCostUsd(model.modelId as PricedModelId, {
+            inputTokens: reply.usage.inputTokens,
+            cachedInputTokens: reply.usage.cachedInputTokens,
+            outputTokens: reply.usage.outputTokens,
+          }),
+        );
+      }
+    });
+
+    it('refuses a reply its validator refuses, naming the path, and hands back no object at all', async () => {
+      const provider = options.createProvider();
+
+      for (const use of WONDER_USES) {
+        // An ask whose validator refuses whatever it is given. Every implementation runs the
+        // ask's validator over what it produced — the offline generator's object, a model's
+        // reply — so this is one behaviour asserted once rather than two that agree today.
+        const ask = wonderProbeAsk({
+          use,
+          seed: 7,
+          parse: () => {
+            throw wonderRefusal(['confidence'], 'a confidence is on [0, 1]');
+          },
+        });
+
+        // Through `.then`'s second argument rather than `rejects`, so that an
+        // implementation which threw **synchronously** instead of rejecting fails here: a
+        // refusal a caller holding the promise never sees is not a refusal.
+        const outcome = await provider.ask(ask).then(
+          (reply) => reply,
+          (error: unknown) => error,
+        );
+
+        expect(outcome).toBeInstanceOf(WonderReplyError);
+        const refusal = outcome as WonderReplyError;
+        expect(refusal.message).toContain('confidence');
+        expect(refusal.paths).toContain('confidence');
+        expect(refusal.use).toBe(use);
+        // Ours, never the person's: a goal that could not be written is our breakage.
+        expect(refusal.attribution).toBe('automation');
+      }
+    });
+
+    if (options.deterministic) {
+      it('answers the same ask and seed with the same object, twice and from two providers', async () => {
+        for (const use of WONDER_USES) {
+          const build = (): WonderAsk<WonderProbe> => wonderProbeAsk({ use, seed: 99 });
+
+          const first = await options.createProvider().ask(build());
+          const again = await options.createProvider().ask(build());
+          const onceMore = await options.createProvider().ask(build());
+
+          expect(again.value).toEqual(first.value);
+          expect(onceMore.value).toEqual(first.value);
+        }
+      });
+
+      it('answers an ask that differs only in its seed, and keeps that answer stable too', async () => {
+        const provider = options.createProvider();
+        const seeds = seedBand(8);
+
+        const answers = await Promise.all(
+          seeds.map(async (seed) => (await provider.ask(wonderProbeAsk({ seed }))).value),
+        );
+        const again = await Promise.all(
+          seeds.map(async (seed) => (await provider.ask(wonderProbeAsk({ seed }))).value),
+        );
+
+        expect(again).toEqual(answers);
       });
     }
   });

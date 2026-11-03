@@ -1,17 +1,28 @@
 /**
- * `@personavision/provider` — the decision layer.
+ * `@personavision/provider` — the model layer.
  *
- * One interface (`DecisionProvider`), the session-scoped decider every agent session
- * decides through, the offline deterministic policy that is the project's default, the
- * selection that decides which provider a run gets and records it, and the contract suite a
- * new provider inherits. The suite is a separate entry point,
+ * **Two interfaces, side by side.** `DecisionProvider` is the session-scoped decider every
+ * agent session decides through: an agent, a screen, a decision. `WonderProvider` is the
+ * one-shot seam beside it — a document in, a typed object out, no session and no screen —
+ * which is how the structured audience, the goal, the analysis and the one change are
+ * written (#219). Neither extends the other, and
+ * `docs/adr/0003-the-one-shot-wonder-seam.md` records why.
+ *
+ * Each has the same three parts: an offline deterministic implementation that is the
+ * project's default, a model implementation behind it — the decision interface's is here,
+ * the one-shot interface's arrives with #255 — and a contract suite any implementation
+ * inherits. Both suites are published from the separate entry point
  * `@personavision/provider/testing`, so that nothing in a run imports a test framework.
+ * Selection for both lives in one place and follows one set of rules: offline with no key, a
+ * mode never upgraded implicitly, a model request that names no model refused, and a named
+ * model never substituted.
  *
  * The trajectory file is here too: the append-only `trajectories/S-NN.jsonl` one session
  * writes, the replay that re-runs that session from it with no key and no network, and the
  * audit that reads its tokens and its cost back out (#139).
  *
- * `docs/FLOW.md` sections 1 and 8; step #8; tickets #33, #138 and #139.
+ * `docs/FLOW.md` sections 1, 8, 12 and 16; steps #8 and #219; tickets #33, #138, #139 and
+ * #251.
  */
 
 export { DECISION_ACTION_KINDS } from './types.js';
@@ -52,13 +63,30 @@ export {
   MODEL_API_KEY_ENV,
   ModelModeUnavailableError,
   selectDecisionProvider,
+  selectWonderProvider,
 } from './select.js';
 export type {
   ProviderModeRequest,
   RequestedProviderMode,
+  RequestedWonderMode,
   SelectDecisionProviderOptions,
   SelectedDecisionProvider,
+  SelectedWonderProvider,
+  SelectWonderProviderOptions,
+  WonderModeRequest,
 } from './select.js';
+
+export { parseWonderReply, WONDER_EFFORTS, WONDER_USES, WonderReplyError } from './wonder.js';
+export type {
+  WonderAsk,
+  WonderEffort,
+  WonderModel,
+  WonderProvider,
+  WonderReply,
+  WonderUse,
+} from './wonder.js';
+
+export { createOfflineWonderProvider, OFFLINE_WONDER_PROVIDER_NAME } from './wonder-offline.js';
 
 export {
   createMetaModelApiProvider,
