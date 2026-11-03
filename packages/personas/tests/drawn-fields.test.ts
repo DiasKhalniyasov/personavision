@@ -45,6 +45,17 @@ const tally = <Value>(values: readonly Value[]): Map<Value, number> => {
   return seen;
 };
 
+/** The audience paths a refusal names, or a throw if the audience was not refused. */
+const issuePathsOf = (audience: unknown): readonly string[] => {
+  try {
+    parseAudience(audience);
+  } catch (error) {
+    if (error instanceof AudienceValidationError) return error.issues.map((issue) => issue.path);
+    throw error;
+  }
+  throw new Error('this audience was expected to be refused');
+};
+
 const countsOf = <Value>(
   apportioned: readonly { readonly value: Value; readonly count: number }[] | null,
 ): Map<Value, number> => {
@@ -262,6 +273,57 @@ describe('the age groups', () => {
 
     it.each(Object.keys(everyGroup) as AgeGroup[])('reads %s off its own label', (group) => {
       expect(ageGroupYears(group)).toStrictEqual(everyGroup[group]);
+    });
+
+    /**
+     * The contract keeps its own table of what each bracket means in years — it is what
+     * holds `ageRange` against the brackets — and does not export it, so `ageGroupYears`
+     * reads the label instead. Two readings of one fact can drift, and nothing above would
+     * notice: this does. For each bracket it hands the contract an `ageRange` that is
+     * exactly the years the label means and one that is a year outside, and the contract's
+     * own answer has to agree with the label both times.
+     */
+    describe('agrees with the contract own table, bracket by bracket', () => {
+      const groups = Object.keys(everyGroup) as AgeGroup[];
+
+      it.each(groups)('accepts an ageRange that is exactly %s', (group) => {
+        const { min, max } = ageGroupYears(group);
+
+        expect(() =>
+          parseAudience(
+            audienceWith({
+              ageRange: { min, max: max ?? min + 20 },
+              ageGroups: [{ group, share: 1 }],
+            }),
+          ),
+        ).not.toThrow();
+      });
+
+      it.each(groups)('refuses an ageRange starting a year below %s', (group) => {
+        const { min, max } = ageGroupYears(group);
+        const below = audienceWith({
+          ageRange: { min: min - 1, max: max ?? min + 20 },
+          ageGroups: [{ group, share: 1 }],
+        });
+
+        expect(() => parseAudience(below)).toThrow(AudienceValidationError);
+        expect([...issuePathsOf(below)]).toContain('ageGroups');
+      });
+
+      it.each(groups.filter((group) => ageGroupYears(group).max !== null))(
+        'refuses an ageRange ending a year above %s',
+        (group) => {
+          const { min, max } = ageGroupYears(group);
+          if (max === null) throw new Error('this case is the closed brackets');
+          const above = audienceWith({
+            ageRange: { min, max: max + 1 },
+            ageGroups: [{ group, share: 1 }],
+          });
+
+          expect(() => parseAudience(above)).toThrow(AudienceValidationError);
+          expect([...issuePathsOf(above)]).toContain('ageGroups');
+        },
+      );
     });
 
     it('takes the audience own range as the top of the open bracket', () => {

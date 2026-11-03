@@ -295,8 +295,18 @@ export const languageApportionment = (
  *
  * Read off the label, which is the bracket's own words — the contract's enumeration is "the
  * brackets a user actually thinks in", and 25–34 means 25 to 34 wherever it is printed. So a
- * bracket added to the contract needs no edit here, and there is no second table of years to
- * drift from the first.
+ * bracket added to the contract needs no edit here.
+ *
+ * The contract keeps a table of the same years, which is what it holds `ageRange` against,
+ * and it does not export it. This is therefore a **second reading of one fact** rather than
+ * an import, and two readings can drift: a table that disagreed with its own label — say
+ * `18–24` recorded as 18 to 25 — would have the contract accept an `ageRange` ending at 25
+ * while this clamps the bracket at 24, and a share of the audience would silently be unable
+ * to be the age the audience declared. So the two are pinned together by behaviour rather
+ * than by hope. `tests/drawn-fields.test.ts` builds, for each of the six brackets, an
+ * audience whose `ageRange` is exactly the years this function says the label means, and
+ * asserts the contract accepts it and refuses a range one year outside it. A table that
+ * disagreed with its own label fails that test, at the bracket it disagreed about.
  */
 export const ageGroupYears = (
   group: AgeGroup,

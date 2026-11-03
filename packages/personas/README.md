@@ -249,6 +249,17 @@ traits to the last digit — because the three draws run on streams of their own
 stream is untouched. `tests/drawn-fields.test.ts` asserts that, and the eight test files that
 were here before this change pass unedited.
 
+That is the promise, and it is no wider than that. An audience that **does** carry `ageGroups`
+draws the same ids, names, segments and devices as before but different **traits**, because its
+people's centres now come from the age each of them was drawn at rather than from the midpoint
+of `ageRange` — which is exactly the trigger stated below. `audienceSchema` has accepted the
+field since #250 landed it, so an audience stored in the window between that and this would
+have had its groups ignored and now would not. There is no such audience in the tree: no
+committed run, no fixture and not the preset carries `ageGroups`, and the seeded demo workspace
+is built from the preset. The version is left where it is on that ground — nothing that exists
+generates a different set of people — rather than on the stronger claim that nothing anywhere
+could.
+
 Bumping the version would therefore describe a change those audiences cannot see, and it would
 do real damage: `parseAudience` refuses an audience whose `generatedFrom.generatorVersion` is
 not this build's, so every audience stored in the seeded demo workspace — all of them written
@@ -305,7 +316,14 @@ const holdout = generateHoldout({ audience, spentSeeds: run.seedGroups });
   one seed are one person twice. It is the only caller of that option.
 - **The same kind of person.** The holdout is generated from the same audience object at the
   holdout's size, so the segments, the device mix, the gender split, the age groups, the
-  languages and the trait centre are the main set's rules rather than a second apportionment. Only the ids and names differ — `holdout-rushed-buyer`,
+  languages and the trait centre are the main set's rules rather than a second apportionment.
+  At a size at or below `HOLDOUT_DEFAULT_SIZE` that means the holdout is the audience's whole
+  apportionment over again, so holdout person _i_ matches main person _i_ on every one of them
+  — the gender, the language and the age they were drawn at included — and the seeds are the
+  only thing that differs. That is the design rather than an oversight, and it is what the
+  bullet above means by "the same apportionment": the holdout's claim is about the **seeds** a
+  change was chosen on, and a holdout that re-drew the audience's own facts would be a
+  different audience rather than a second reading of this one. Only the ids and names differ — `holdout-rushed-buyer`,
   `Rushed buyer (holdout)` — because a run carries the holdout people in its own `personas[]`,
   where a persona id names one simulated person.
 - **The size.** `holdoutSize(participants)` is `HOLDOUT_DEFAULT_SIZE`, capped at the audience: a
