@@ -27,6 +27,16 @@ It is not restated here. Read it there, and use those words in code, tests, issu
 | `@personavision/platform`    | Accounts, sign-in sessions, workspaces, audience storage and `personavision serve`.                                                              |
 | `@personavision/provider`    | The decision layer: the `DecisionProvider` interface, the offline deterministic policy and the provider-contract suite. Added by step #8 (#33).  |
 
+The owner's direction of **2026-11-03** (`docs/FLOW.md` sections 11 to 17) adds two product paths, a real onboarding
+and a results page for 100-agent runs. It adds **one** package, `@personavision/improve` — path 2's closed loop: the
+GitHub App client, the change Muse Wonder decides, the pull request it opens, the preview URL it is tested on and the
+comment it posts back. It depends on `@personavision/contract`, `@personavision/provider` and `@personavision/scoring`,
+and nothing depends on it. The step that owns path 2 is the only one permitted to add it to `pnpm-workspace.yaml`.
+Everything else that direction needs is filled into packages that already exist: the sites, their ownership
+verification and the per-site caps in `@personavision/platform`; CloakBrowser and session video in
+`@personavision/browser`, behind the interface it already publishes; Muse Wonder in `@personavision/provider`; the
+aggregate and the recommendations in `@personavision/scoring`; the new screens in `apps/viewer`.
+
 The binary is `personavision`. The library packages above exist as buildable placeholders from the first commit, so a step fills one rather than creating it, and no step edits `pnpm-workspace.yaml` — `packages/*` already covers a new one. Three packages are the exceptions, each created by the one step that needs it: `@personavision/calibration` (step #11, because nothing before it needed a home for the human-likeness figure; it depends on `@personavision/contract` and may depend on `@personavision/engine`, and nothing depends on it), `@personavision/platform` (the hosted-platform step, which arrived with the owner's direction change) and `@personavision/provider` (#33, which is where step #8 decided the decision layer lives rather than inside `personas`; it depends on `@personavision/contract` only).
 
 ## `packages/contract` is the only place the artifact is declared

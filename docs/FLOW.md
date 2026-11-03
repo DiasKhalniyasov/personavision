@@ -6,7 +6,10 @@ Every ticket that touches a screen, a route, a number or a word the user reads b
 
 **Section numbers in this file are stable.** Tickets cite them (`section 3` for the routes, `section 5` for the
 friction score and its acceptance table, `section 6` for findings, `section 7` for the demo beats, `section 8` for the
-vocabulary, `section 9` for what is deferred). A revision adds sections at the end rather than renumbering.
+vocabulary, `section 9` for what is deferred, `section 11` for the two product paths, `section 12` for the audience and
+the generated goal, `section 13` for onboarding, the ownership verification and the caps, `section 14` for the results
+page, `section 15` for the closed loop on a connected repository, `section 16` for what this revision fixes and
+`section 17` for what needs the owner). A revision adds sections at the end rather than renumbering.
 
 ## Where the answers come from
 
@@ -14,6 +17,10 @@ The flow questions were asked on issue #1 (comment marked `stroika:flow-question
 owner had not yet replied. On 2026-10-26 the owner replied on #1 and **overrode answers 1, 2, 3, 5 and 7, and set the
 visual direction**. Those five are now tagged **(owner)** and are not a worker's to reconsider. Answers 4 and 6 stand as
 taken and remain **(auto)**, overridable the same way: change this file first, then the prototype, then the tickets.
+
+On **2026-11-03** the owner set a second direction: **two product paths, a real onboarding, and a results page for
+100-agent runs**. It is **sections 11 to 17**, it is **(owner)** throughout, and where it conflicts with anything in
+sections 1 to 10 **it overrides it**. The answers in the table below are unchanged except as those sections say.
 
 | #   | Question                                  | Answer                                                                                                                                                          |             |
 | --- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
@@ -461,3 +468,278 @@ area-of-interest table is the accessible representation of the heatmap. Radix su
 management, and a bespoke control copies that behaviour rather than inventing it. Text contrast is checked against the
 tokens, not by eye: lime is never a text colour on white, and the pink and teal semantic colours are the darkest of
 their family for exactly that reason.
+
+## 11. Two product paths (owner)
+
+On **2026-11-03** the owner set the direction in sections 11 to 17. **Where it conflicts with sections 1 to 10 it
+overrides them**; everything it does not mention stands unchanged, and nothing above is renumbered or rewritten. What
+sections 1 to 10 fix about the audience, the vocabulary, the one-heatmap rule on the lead screen, the attribution split
+and the visual direction still governs every screen below.
+
+What changes: the product is no longer only an A/B comparison of two URLs a user pastes in. It has **two paths**, and the
+A/B comparison of sections 2 to 5 is what the second path ends in.
+
+| Path  | Name               | What the user brings                                                               | What they get                                                                                                          |
+| ----- | ------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **1** | **Test my site**   | one URL, and in plain words the feature whose experience they want tested          | up to 100 simulated people attempt that feature; the aggregate, the session videos, the heatmaps and ranked recommendations |
+| **2** | **Improve my site**| the same, plus a **connected GitHub repository**                                   | all of path 1, then one targeted change written as a pull request, and the before/after Verdict of sections 2 to 5      |
+
+**Path 2 is shown and locked** without a connected repository, with the reason beside the lock in the user's words —
+_Connect a GitHub repository and PersonaVision can write the change and open the pull request for you._ It is never
+hidden: a user has to be able to see what they do not have yet, and why.
+
+**A test is still a run, and a run is still a directory.** A path-1 test is a run with **one variant**; a path-2 test is
+a run with **two** — the baseline and the pull request's preview — which is exactly what sections 2 to 5 already
+describe. Nothing about the artifact, the routes or the vocabulary forks per path, and no screen exists twice.
+
+### What a path-1 test is made of
+
+1. **A site.** A URL added to the workspace, with **ownership verified** before it can be tested at scale (section 13).
+2. **The feature, in the user's words.** _"generating a video on this site"_, _"checking out with a promo code"_. One
+   free-text field, and it is the user's sentence that is stored, not a normalised version of it.
+3. **The audience.** Section 12: structured, or free text turned into the same structured object. **100 participants by
+   default.**
+4. **The goal, written by Muse Wonder.** From the URL and the feature description: the task the agents attempt and what
+   counts as success — _"generate a video on this site; success = a video preview is visible"_. The user reads it and
+   edits it **before** launch (section 12).
+5. **The run.** Up to 100 agents in parallel, each a person generated from the audience, each in its own browser, each
+   **recording a video** of the interaction alongside the clicks, scrolls, typing, gaze, timing and outcome.
+6. **The aggregate, and Muse Wonder's recommendations** (section 14).
+
+**Attribution does not move.** _Abandoned_, _failed_ and _automation failure_ stay the three things section 8 says they
+are; an automation failure is excluded from every figure, and **no recommendation may rest on an excluded session**. A
+run whose automation failures are more than a fifth of its sessions says so above its own summary, because at that point
+the aggregate is about our harness and not about the site.
+
+## 12. The audience two ways, and the goal a model writes (owner)
+
+### The audience object is extended, never forked
+
+`audienceSchema` (section 1) is the one audience. Two fields are added to it and nothing is taken away:
+
+- **a gender split** — the share of the audience that is male and the share that is female, a distribution like
+  `devices[].share`, summing to one;
+- **age groups** — the brackets a user actually thinks in (`18–24`, `25–34`, `35–44`, `45–54`, `55–64`, `65+`), each with
+  a share, with `ageRange` derived from the groups that carry one and held consistent with them.
+
+`size` defaults to **100** for a test started on the platform. `regions`, `languages`, `devices`, `roles`, `goals`,
+`techSavviness`, `priceSensitivity` and `generatedFrom` are unchanged; a **language** list joins `regions`, because
+"Almaty" and "in Russian" are two different facts about the same audience and the agents read the page in one of them.
+
+The persona generator's mapping table in section 1 gains three rows and loses none: the gender split and the age-group
+shares are drawn the way the device mix already is, and `languages` picks the language a persona reads and types in.
+
+### Two ways to describe it, one object
+
+- **Structured.** The fields above, on the Audience form of section 3, extended: gender split, age groups, participants
+  (default 100), region and language, device mix.
+- **Free text.** One box: _"busy parents in Almaty who shop on their phones"_. **Muse Wonder turns it into the same
+  structured audience**, and **the user is shown the result and can edit every field before anything launches.**
+
+The free-text box is **an input to the form, not an alternative to it**: it fills the form, the form is what is saved,
+and what is saved is one `Audience`. A free-text audience that launches without having been shown to the user is a bug
+and not a shortcut — the user has to be able to see that _"busy parents"_ became 100 people, 72% on phones, 28 to 44,
+Almaty, Russian and Kazakh, and to disagree with any of it.
+
+### The goal Muse Wonder writes
+
+From the site's URL and the feature description, Wonder writes two sentences:
+
+- **the task** — what the agents attempt, in the words a person would use;
+- **the success criterion** — what has to be **observable in the page** for an attempt to count as a success: a visible
+  element, a URL, a piece of text. Not a judgement, and not a feeling. A criterion Wonder cannot state that way is sent
+  back for one it can.
+
+Both are shown on one screen before launch, both are editable, and **the edited text is what the run records**. A run
+always records the goal it ran and **who last wrote it** — the model or the user — because a completion rate is only as
+meaningful as the criterion behind it, and a reader a month later has to be able to see which of the two wrote it.
+
+Every Wonder use — the audience from free text, the goal, the analysis, the change decision — goes through
+`@personavision/provider` with an offline deterministic implementation behind the same interface. **Tests make no network
+call and need no key**, exactly as today.
+
+## 13. Onboarding, screen by screen (owner)
+
+Sign up → workspace → **add a site** → describe the audience → describe the feature → **review the generated goal** →
+see a **cost and time estimate** for N agents → launch → a live **Running** screen with sessions finishing → **Results**.
+
+| Screen             | The one question it answers                        | Route                                     |
+| ------------------ | -------------------------------------------------- | ----------------------------------------- |
+| Sign up            | —                                                  | `/signup`                                 |
+| Sites              | Which of my sites can I test, and which are proved mine? | `/sites`                            |
+| Add a site         | What is the URL, and how do I prove it is mine?    | `/sites/new`, `/sites/:siteId`            |
+| New test           | What do I want tested, for whom, and on which path?| `/new` (steps: `?step=audience\|feature\|goal\|estimate`) |
+| GitHub connection  | Where would the pull request go?                   | `/settings/github`                        |
+
+The route family of section 3 is otherwise untouched: `/new` is the same screen with more steps, and `/runs/:runId` is
+still where a test lands. The steps of `/new` are **one screen with a step in the query**, not five routes: a user who
+reloads, or who is sent a link, lands where they were.
+
+### Ownership verification
+
+A site is **unverified** until one of these passes, and **the platform checks it itself** — a user ticking a box is not
+verification:
+
+| Method                    | What the user does                                                                          | What the platform checks                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **DNS TXT record**        | adds `personavision-site-verification=<token>` as a TXT record on the site's domain          | resolves TXT for the domain and finds the token               |
+| **Meta tag**              | adds `<meta name="personavision-site-verification" content="<token>">` to the page's `<head>` | fetches the URL once and parses the tag                      |
+| **File**                  | serves `/.well-known/personavision-site-verification.txt` containing the token               | fetches that path and compares the contents                   |
+| **Connected repository**  | installs the GitHub App on the repository that deploys the site                               | the installation exists and the connection names this site    |
+
+The token is per site, generated by the platform, and shown with the exact line to copy. A check that fails says **which
+check ran, what it found and what it expected**, and offers to run again; it never says "something went wrong".
+
+**Verification gates scale, not trying.** An unverified site may be tested with **at most 3 agents, once an hour** —
+enough to watch the product work on your own page. **100 stealth browsers against a URL nobody has proved they control
+is abuse and load**, so the full run needs a verified site. The screen states the number rather than the word:
+_3 of 100 agents until this site is verified._
+
+### The caps, enforced by the platform
+
+| Cap                                   | Value                            | Why                                                                     |
+| ------------------------------------- | -------------------------------- | ----------------------------------------------------------------------- |
+| agents per run, unverified site       | **3**                            | a demonstration, not a load test on somebody else's site                 |
+| agents per run, verified site         | the audience's `size`, **max 100** | the owner's figure; above it nothing is promised                        |
+| concurrent sessions per site          | **10**                           | a hundred browsers at once on one small site is a load test nobody asked for |
+| runs per site per hour                | **4** verified, **1** unverified | a person exploring cannot accidentally hammer a site                     |
+| requests and actions per session       | the existing session budget      | unchanged (`SessionBudget`)                                              |
+
+These numbers live in **one place** in `packages/platform` and are stated on the screen that is bound by them. A refused
+launch names the cap that refused it, in words, and when it can be tried again. The caps apply to the offline engine too:
+they are about the site being driven, not about what it costs us.
+
+### The estimate
+
+On the launch screen, above the button: **how many agents, how long it will take and what it will cost**, computed from
+the run's own inputs — sessions × the median session wall clock ÷ the concurrency, and the model tokens a session has
+historically used × the prices in `docs/meta-model-api.md`, plus the disk the videos will take. It is **a range, labelled
+as a range**, with the one line of arithmetic under it. An offline run costs nothing and says so rather than showing
+`$0.00` as if it had been priced.
+
+## 14. The results page for a hundred-agent run (owner)
+
+Five sections, in this order. **The first is the lead and is the whole answer**; the other four are the evidence, each
+reachable from the tab bar of section 3.
+
+**The one-heatmap rule of section 8 still binds the lead.** It does not bind the Heatmaps section — that is where
+heatmaps belong.
+
+**These are the same tabs, not a second set.** A path-1 run leads with Summary on the tab an A/B run leads with its
+Verdict on, and Heatmaps is the Attention tab with its three overlays and its two filters; **Funnel and timing**,
+**Analysis** and **Improve** are the three tabs this revision adds. _Score breakdown_ is shown only for a run with two
+variants, because a run with one has nothing to compare.
+
+| Section               | The one question it answers                            | Route                                                                   |
+| --------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| **Summary** (lead)    | What should I change, and how did my audience do?      | `/runs/:runId`                                                          |
+| **Sessions**          | What happened to each person, and can I watch them?    | `/runs/:runId/sessions?variant=&outcome=&aoi=&segment=&step=`            |
+| **Session replay**    | What did this one person see, think and do?            | `/runs/:runId/sessions/:sessionId?fix=&t=`                              |
+| **Heatmaps**          | Where did they look, click and scroll on this screen?  | `/runs/:runId/attention/:variant/:step?aoi=&overlay=&segment=&outcome=` |
+| **Funnel and timing** | Where did they drop out, and what took them so long?   | `/runs/:runId/funnel?segment=`                                          |
+| **Analysis**          | What does the model make of all of it?                 | `/runs/:runId/analysis`                                                 |
+
+1. **Summary — the lead.** Wonder's **top recommendations** and the headline numbers: completion rate, median time to
+   complete, and the top failure point. For a **path-2** test the lead is instead the **before/after Verdict** of
+   sections 2 to 5, unchanged — the sentence, the two completion figures, the reasons, the one heatmap — with the
+   recommendations under it. Nothing else on this screen; the quietness rule of section 8 holds.
+2. **Sessions.** A **grid of video thumbnails**, one per session, filterable by **outcome, segment and failure step**.
+   Each tile carries the person, their segment and device, the outcome tag, the duration, and the step it ended on. The
+   list of section 3 stays available as a view of the same data for whoever wants the numbers in rows; the grid is the
+   default. Automation failures appear, marked excluded, and are never silently dropped.
+3. **Session replay.** Clicking a tile opens the replay of section 3, with the video as its stage: **the video with a
+   synced action timeline**, the gaze and click overlay on top of it, and the agent's **stated intent per step** beside
+   it. The scrubber moves the video, the gaze, the timeline and the event log together. A recommendation deep-links to
+   **the exact timestamp** (`?t=`), and a link with a timestamp opens paused on that frame.
+4. **Heatmaps.** Per screen and step, **three overlays**: **clicks**, **attention** and **scroll depth**, each
+   toggleable, over the page screenshot with the fold drawn. Filterable by **segment and outcome** — _"where the agents
+   who failed clicked"_ is one choice on this screen, not a different screen. The area-of-interest table of section 3
+   stays beneath, obeying the same filters, and an area nobody looked at still reads `never` and `0%` in words.
+5. **Funnel and timing.** Where agents dropped out, **by screen and step**, as a funnel: reached, completed, abandoned,
+   failed, each as a count and a share, with the reason beside the biggest drop. Then the **time-per-step
+   distribution** — a distribution, not a mean: median, the 25th and 75th, the 90th, and the slowest sessions listed by
+   name with a link to each replay. Filterable by segment.
+6. **Analysis.** Wonder's **full write-up**, with **every claim linked to its evidence**: the session ids with the video
+   timestamp, the heatmap region, and the funnel step. A claim with no evidence link is not published — the write-up is
+   generated from the recommendation objects, which carry their citations, and the screen renders citations rather than
+   inventing them.
+
+**The recommendations.** Ranked, each **one plain sentence** a site owner could act on, each citing its evidence:
+session ids with the video timestamp, the heatmap region, and the funnel step. They are the same subsystem as the
+findings of section 6 — a finding states what happened, a recommendation states what to do about it, and a
+recommendation names the findings it rests on. **Every number on every one of these screens is labelled simulated**, and
+no screen implies a conversion lift (section 8).
+
+## 15. Path 2: the closed loop on a connected repository (owner)
+
+Everything in path 1, and then:
+
+1. **Connect GitHub.** Onboarding offers it; `/settings/github` is where it lives afterwards. A **GitHub App installed on
+   one repository**. Without it, path 2 is shown and locked with the reason (section 11). A connected repository also
+   counts as ownership verification for the site it deploys (section 13).
+2. **Wonder decides one change.** After a path-1 run, Wonder picks **one targeted change** from its own recommendations —
+   not a list, one — writes the code change, and **opens a pull request** on the connected repository. The pull request
+   body states the recommendation it comes from, the evidence it cites, and that the numbers behind it are simulated.
+   **It never merges. The owner merges.**
+3. **The changed version gets a URL.** The repository's own preview deployment for that pull request where it has one;
+   otherwise a build we run. **How this works is an open decision and needs the owner** (section 17).
+4. **The same audience, the same seeds, plus a holdout.** The baseline and the pull request's version are run with the
+   **same audience and the same seeds**, so the comparison is like for like, **plus a holdout set of personas generated
+   from the same audience with seeds the change was never chosen against**. The holdout is what keeps the swarm from
+   overfitting to itself: a change that wins on the original seeds and not on the holdout is reported as **not
+   confirmed**, and says so in the sentence.
+5. **The result is the existing A/B Verdict** of sections 2 to 5: did it get better, by how much, and why — with the
+   holdout line beside it.
+6. **It shows on the platform and is posted as a comment on the pull request.** One comment, updated rather than
+   repeated, carrying the before/after figures, the holdout line, the link to the run on the platform, and the
+   _simulated_ label on every number.
+
+## 16. What this revision fixes for the workers
+
+- **The artifact is extended, in `packages/contract` and nowhere else.** The additions this direction needs, named here
+  so that no two steps invent two spellings: a run's **site** and **goal** (the task sentence, the observable success
+  criterion, and who last wrote it), a session's **video** (its run-directory-relative path, duration, and the
+  millisecond offset of each screen and action into it), the **aggregate** (funnel by step, the time-per-step
+  distribution, click and scroll-depth bins per step, the common paths) and the **recommendations** (ranked, one
+  sentence each, with citations into sessions, timestamps, heatmap regions and funnel steps). A run with none of them
+  still parses: every addition is optional with no default, and an absent block is a run that recorded none rather than
+  a zero somebody measured.
+- **One run directory, more files.** `videos/S-NN.webm` and the aggregate and recommendation files sit beside
+  `run.json`, `findings.json`, `sessions/` and `screenshots/`, declared by `packages/contract`'s paths module like every
+  other path in the directory. The read-only HTTP mount of `CONTEXT.md` gains them by the same rule: the on-disk layout,
+  mirrored, with no server-side computation.
+- **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
+  and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
+- **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded
+  like Playwright's own browsers — **never from a `postinstall`** — and a test that needs it **skips visibly, with the
+  reason in its name**, when it is absent. How it installs and runs is written down in `packages/browser/README.md` by
+  the first ticket that touches it. Video recording survives the swap; that is the one behaviour that is not optional.
+- **Muse Wonder goes through `@personavision/provider`**, like every other model call, with an offline deterministic
+  implementation behind the same interface. The first Wonder ticket **calls it live on the owner's key
+  (`MODEL_API_KEY`)** and documents the model id, the request and response shape and the cost in
+  `docs/meta-model-api.md`, exactly as Muse Spark was. The credential rule of `CONTEXT.md` is unchanged: only
+  `packages/provider` reads a key, at call time, and never writes it anywhere.
+- **Everything keeps working locally first.** File-backed storage, local concurrency, the seeded demo workspace: a fresh
+  clone installs, type-checks, lints, tests, builds and demos **with no cloud account, no credential and no network**.
+  Anything that needs an account, a credential, a paid resource or a third-party app registration is a
+  `stroika:needs-human` ticket (section 17) and blocks nothing else.
+- **The words.** Section 8's vocabulary is unchanged and gains these, which are the user's: a **site** (a URL in a
+  workspace, verified or not), **verification**, the **goal** (task plus success criterion), **participants** (how many
+  simulated people), a **video**, a **recommendation**, the **funnel**, a **segment filter**, the **holdout**, the
+  **preview** (the pull request's URL), and **baseline** and **change** for the two versions of a path-2 test.
+  _Variant_ stays the internal word the artifact uses for both.
+
+## 17. What this revision needs the owner for
+
+These need an account, a credential, a paid resource or a third-party registration. Each is one ticket labelled
+`stroika:needs-human` saying exactly what to create and why. **None of them blocks anything else**, because the local
+path is the default everywhere:
+
+1. **Where a hundred concurrent browsers run** — the owner's machine, or managed jobs. Local concurrency is the default
+   and is what the caps in section 13 are tuned for.
+2. **Storage for session videos** — local disk inside the run directory is the default; an object store is the
+   alternative when the platform is hosted.
+3. **Hosting the platform** — still deferred by the owner's decision of 2026-10-27. `personavision serve` is the product.
+4. **Registering the GitHub App** — path 2 cannot connect a repository without it, and path 1 is unaffected.
+5. **A preview build for repositories with no preview deployment of their own** — where the changed version's URL comes
+   from when the repository has no Vercel- or Netlify-style preview.
