@@ -24,7 +24,8 @@
  * - **It writes as it goes.** A session's file, its id, its progress entry, the areas it
  *   looked at and what it spent land in one write per session, so a run stopped halfway
  *   leaves a directory that still validates and the Running screen reads a run that is
- *   still open.
+ *   still open. `aggregate.json` goes with them (`aggregateRun`, #293), so the results page
+ *   has figures to read while the test is still running.
  * - **It is bounded by its caller, not by itself.** How many sessions may be in flight at
  *   once arrives as `concurrency`, and the pool holds it: a hundred sessions ten at a time,
  *   proved at that number rather than assumed. `DEFAULT_CONCURRENCY` is only what a caller
@@ -50,10 +51,12 @@ import {
   appendFinishedSession,
   readRun,
   runPaths,
+  writeAggregate,
   writeRun,
   writeSession,
 } from '@personavision/contract';
 import { totalUsage } from '@personavision/provider';
+import { aggregateComputedAt, composeAggregate } from '@personavision/scoring';
 import { engineOnTheRecord, sameCalibration } from './calibration.js';
 import {
   holdoutDrives,
@@ -460,6 +463,17 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
         const ours = walked.session;
         void walked.landsLate.then(() => writeSession(input.runDir, ours)).catch(() => undefined);
       }
+      // The figures, over the sessions that now exist (#293). Inside the turn, because the
+      // file is composed from the `run.json` and the sessions this write just left behind,
+      // and because two of these at once would interleave in one file. Before the progress
+      // event, so that a reader woken by the landing finds the figures of it.
+      //
+      // Best-effort, and the one `catch` here that drops what it caught: a session that
+      // walked is worth more than a figure that can be computed again, and the next landing
+      // re-composes the whole file from the directory, so a transient failure heals itself.
+      // A failure that is not transient is not lost either — the closing write below is the
+      // same call with no landing after it to heal it, and that one throws.
+      await aggregateRun(input.runDir).catch(() => undefined);
       await input.onProgress?.({
         kind: 'session-finished',
         sessionId: plan.sessionId,
@@ -505,11 +519,56 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   await Promise.allSettled(workers);
   if (stoppedBy.length > 0) throw stoppedBy[0];
 
-  return {
-    sessions,
-    run: await closeRun(input.runDir, planned, startedAt, clock),
-    holdoutPersonaIds: holdoutPersonaIds(holdout),
-  };
+  const run = await closeRun(input.runDir, planned, startedAt, clock);
+  // Once more, now that the run is closed: over the final set of sessions, and carrying a
+  // finished `runStatus` rather than the `open` every mid-run write left. It is the same
+  // whole re-composition as every write before it, which is what makes the file the run is
+  // left with the file a re-aggregation of this directory produces.
+  //
+  // This one throws. There is no landing after it to re-compose the file, so a failure here
+  // is the only chance a caller has to learn that the run's figures are missing or stale —
+  // and the run is safe on disk either way: `run.json` is already `finished`, every session
+  // is written, and the figures can be landed by calling this again over the directory.
+  await aggregateRun(input.runDir);
+
+  return { sessions, run, holdoutPersonaIds: holdoutPersonaIds(holdout) };
+};
+
+/**
+ * The run's own aggregate, composed over the sessions on disk and landed through the
+ * contract's writer (#293). The swarm calls it as each session lands and once more when the
+ * run closes; anything holding a run directory can call it to re-aggregate one.
+ *
+ * **Every call is a whole re-composition, never an increment.** That looks wasteful and is
+ * not. The composition is a pure fold over sessions already parsed, which beside a browser
+ * session costs nothing, and it buys the one property the file is worth having: the
+ * `aggregate.json` a run is left with is identical to the one a re-aggregation of the same
+ * directory produces, because they are the same call. Updating the file in place would mean
+ * two code paths over the same figures — the incremental one and the re-aggregating one —
+ * and two code paths can disagree, which for a file whose whole job is that two screens
+ * cannot disagree about a number would be the wrong way round.
+ *
+ * It reads the directory rather than taking the sessions it is handed, for the same reason:
+ * what the file claims to be of is what is on disk. `runStatus` is the status of the
+ * `run.json` it just read, so a file written mid-run says `open` and the one written after
+ * the run closes says `finished`, and a reader is never told a partial figure is final.
+ *
+ * **It takes no clock either**, which is the other half of the same property: `computedAt`
+ * is read off the run by `aggregateComputedAt`, the rule `personavision aggregate` composes
+ * by (#294), so re-aggregating a directory this left behind gives those bytes back instead
+ * of a fresh timestamp.
+ *
+ * A run that never started has no aggregate at all, which is this being unreachable rather
+ * than anything written here: a refusal happens before the run is opened, and a run recorded
+ * as `failed` is written by its creator with no sessions and no figures. A file of zeroes
+ * nobody measured is worse than no file.
+ */
+export const aggregateRun = async (runDir: string): Promise<void> => {
+  const { run, sessions } = await readRun(runDir);
+  await writeAggregate(
+    runDir,
+    composeAggregate({ run, sessions, computedAt: aggregateComputedAt(run) }),
+  );
 };
 
 /**

@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import { readRun, runPaths, writeAggregate, type RunArtifact } from '@personavision/contract';
-import { composeAggregate } from '@personavision/scoring';
+import { aggregateComputedAt, composeAggregate } from '@personavision/scoring';
 import { CliError } from '../cli-error.js';
 
 /**
@@ -50,12 +50,10 @@ export const aggregateCommand = async ({
   const aggregate = composeAggregate({
     run,
     sessions,
-    // **The run's own clock, never this invocation's.** The file has to be recomputable —
-    // delete it, run this command, get the same bytes back — and a wall clock would put a
-    // fresh timestamp in every re-aggregation, so the diff after a fix to a figure would
-    // never be only the fix. A run that has finished is stamped with when it finished; one
-    // still open with when it started, which is the earliest thing it can honestly claim.
-    computedAt: run.finishedAt ?? run.startedAt ?? run.createdAt,
+    // **The run's own clock, never this invocation's**, and the same rule the run loop
+    // aggregates by, so that re-aggregating a run it wrote gives the bytes back rather than
+    // a fresh timestamp. `aggregateComputedAt` is where that rule lives and why.
+    computedAt: aggregateComputedAt(run),
   });
   await writeAggregate(runDir, aggregate);
 

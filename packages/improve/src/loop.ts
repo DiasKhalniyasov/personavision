@@ -712,10 +712,25 @@ export const runImproveLoop = async (request: ImproveRequest): Promise<ImproveRe
     },
   };
   const run: Run = { ...driven.run, aoiMetrics: driven.aoiMetrics, scores, verdict, improve };
+  // The figures the run wrote for itself as the sessions landed (#293), carried through this
+  // write. `writeRun` owns the directory it writes and removes an `aggregate.json` it is not
+  // given — which is right for a run written over an older one, and wrong here, where the
+  // file is this run's own and nothing between the drive and here has changed what it is of.
+  // Passing on the artifact that was read is what the writer's own doc holds a caller that
+  // means to keep the aggregate to.
+  //
+  // A directory that cannot be read has no figures to carry, and that is all the failure
+  // means here: this write is the loop's first on any path whose driver wrote nothing, and
+  // what it falls back to is exactly what it did before there were figures to keep.
+  const figures = await readRun(runDir).then(
+    (artifact) => artifact.aggregate,
+    () => undefined,
+  );
   await writeRun(runDir, {
     run,
     sessions: [...driven.sessions],
     findings: { schemaVersion: SCHEMA_VERSION, runId: run.runId, findings: found },
+    ...(figures === undefined ? {} : { aggregate: figures }),
   });
   report(`  ${verdict.audienceSentence}`);
 

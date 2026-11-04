@@ -21,7 +21,8 @@
     "@personavision/browser": "workspace:*",
     "@personavision/contract": "workspace:*",
     "@personavision/engine": "workspace:*",
-    "@personavision/provider": "workspace:*"
+    "@personavision/provider": "workspace:*",
+    "@personavision/scoring": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^5.0.5"
