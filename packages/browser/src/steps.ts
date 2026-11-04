@@ -17,11 +17,22 @@
  * tree, and two candidates for one control may spell it two ways. Exactly one element is
  * marked, and any mark the candidates arrived with is cleared.
  *
- * **A control that cannot be resolved is our failure, not the product's.** Time to first
- * fixation on the primary action is a headline component, so a step whose declared control is
- * absent from the page, is not rendered, or matches none of the candidates raises an
- * `AutomationFailure` with reason `selector_not_found` — which excludes the session — rather
- * than returning a silent `false` on every element, which would score it as zero.
+ * **A step may name no control, and then nothing is marked.** A step that declares no
+ * primary action is a step that is a whole page — the one step a test of a single URL
+ * derives, where nobody designed a control to advance anything. Nothing is probed, so there
+ * is no selector to be absent, nothing to match the candidates against and no failure to
+ * raise: every element comes back `isPrimaryAction: false`, which is what a page on no step
+ * already gets. Standing a selector in for the missing declaration is what this replaced:
+ * the page's first control is a visually hidden skip link as often as it is anything, and
+ * marking one as "the control that advances the task" was wrong where it resolved and
+ * refused the screen where it did not (#418).
+ *
+ * **A *declared* control that cannot be resolved is our failure, not the product's.** Time
+ * to first fixation on the primary action is a headline component, so a step whose declared
+ * control is absent from the page, is not rendered, or matches none of the candidates raises
+ * an `AutomationFailure` with reason `selector_not_found` — which excludes the session —
+ * rather than returning a silent `false` on every element, which would score it as zero. A
+ * step that declared none is the case above and not this one.
  *
  * **A declaration this module cannot parse is neither.** An unparseable URL pattern or
  * selector is a broken `TaskDefinition`: every session of every variant would fail it
@@ -200,19 +211,26 @@ export const detectStep: DetectStep = async (page, task) => {
 
 /**
  * The same elements, with `isPrimaryAction` set on the one the step declares and cleared on
- * every other — so exactly one element per step carries it, and a page on no step carries it
+ * every other — so at most one element per step carries it, and a page on no step carries it
  * nowhere. The candidates handed in are never touched: a resolution that fails leaves the
  * caller's list exactly as it was.
  *
- * A declared control that cannot be resolved on the page is an automation failure whether or
- * not anything was extracted, unless the step declares it `optional`: then the page carries
- * none. A candidate list that is **empty** is the one other case that resolves to nothing
- * without failing: there is no element to mark, none left silently false, and no screen
- * attention could have been attributed on either way.
+ * Three ways a screen resolves to no primary action at all, and none of them is a failure:
+ * the page is on **no step**, the step **declares no control** (a step that is a whole
+ * page), or the candidate list is **empty** — there is no element to mark, none left
+ * silently false, and no screen attention could have been attributed on either way.
+ *
+ * A control the step *did* declare and that cannot be resolved on the page is an automation
+ * failure whether or not anything was extracted, unless the step declares it `optional`:
+ * then the page carries none.
  */
 export const resolvePrimaryAction: ResolvePrimaryAction = async (page, elements, step) => {
   const resolved = elements.map((element) => ({ ...element, isPrimaryAction: false }));
   if (step === null) return resolved;
+  // A step that is a whole page: nothing was declared, so nothing is probed and nothing is
+  // marked. Checked before the probe rather than inside it, because an absent declaration
+  // has no selector to pass it.
+  if (step.primaryAction === undefined) return resolved;
 
   const { selector, optional = false } = step.primaryAction;
   const probe = await probeSelector(page, selector);

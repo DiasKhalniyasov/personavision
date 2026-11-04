@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runPaths, runSchema } from '@personavision/contract';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -86,6 +87,25 @@ const TASK: TaskDefinition = {
       label: 'Confirmation',
       match: { urlPattern: '/confirmation\\.html', requiredSelector: '#confirmation-receipt' },
       primaryAction: { selector: '#confirmation-continue-shopping' },
+    },
+  ],
+};
+
+/** This ticket's own pages, for the derived step: see `../fixtures/one-site/README.md`. */
+const ONE_SITE_DIR = fileURLToPath(new URL('../fixtures/one-site', import.meta.url));
+
+/**
+ * A one-site task, as `packages/cli`'s `derivedStep` builds one: the page as the whole task,
+ * and **no primary action** — nobody designed a control on the site under test (#418).
+ */
+const ONE_SITE_TASK: TaskDefinition = {
+  id: 'see-what-people-make-of-the-page',
+  prompt: 'See what people make of the page',
+  steps: [
+    {
+      id: 'page',
+      label: 'The page',
+      match: { urlPattern: '/skip-link\\.html', requiredSelector: 'body' },
     },
   ],
 };
@@ -477,4 +497,73 @@ describeWithChromium('a live walk of the fixture task', () => {
     },
     WALK_TIMEOUT_MS,
   );
+});
+
+/**
+ * A walk of a **one-site** task: the shape four of the owner's five real runs failed in.
+ *
+ * The task derives one step that stands for the whole site and declares no primary action,
+ * and the page's only link is a visually hidden skip link — so the stand-in selector this
+ * replaced resolved a 1x1 box no candidate occupied and raised `selector_not_found` on the
+ * screen, which spent a session's retries and excluded it (#418). The walk below raised
+ * that failure on its first capture; it now returns the screen.
+ *
+ * It is **one** screen, and that is `walkTask`'s own rule rather than anything of this
+ * ticket's: the loop takes no action on a capture of the task's last step, and the one step
+ * a derived task declares is also its last. A real one-site session is not walked here at
+ * all — `runSession` drives its own loop to the forty screens `DERIVED_STEP_SCREENS` allows,
+ * and every one of them goes through the resolution `steps.test.ts` covers per screen.
+ */
+describeWithChromium('a live walk of a one-site task', () => {
+  let site: FixtureSite;
+  let runDir: string;
+  let walked: Awaited<ReturnType<typeof walkTask>>;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite({ root: ONE_SITE_DIR });
+    runDir = await mkdtemp(join(tmpdir(), 'personavision-one-site-walk-'));
+    walked = await walkTask(createLiveSource(), {
+      variant: { id: 'v-desktop', url: `${site.url}/skip-link.html` },
+      device: DESKTOP,
+      task: ONE_SITE_TASK,
+      runDir,
+    });
+  }, WALK_TIMEOUT_MS);
+
+  afterAll(async () => {
+    await site.close();
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('raises nothing, with the integrity counters at zero', () => {
+    expect(walked.failure).toBeNull();
+    expect(walked.outcome).toBeNull();
+    expect(walked.integrity).toEqual({ selectorFailures: 0, retries: 0 });
+  });
+
+  it('captures the one step it declares, and takes no action on it', () => {
+    expect(walked.screens).toHaveLength(1);
+    expect(walked.screens[0]?.capture.step).toBe('page');
+    expect(walked.screens[0]?.action).toBeNull();
+    expect(walked.step).toBe('page');
+  });
+
+  it('marks no element of it as the primary action, and still extracts elements', () => {
+    const captured = walked.screens[0]?.capture;
+
+    expect(captured?.elements.length).toBeGreaterThan(0);
+    expect(captured?.elements.filter((element) => element.isPrimaryAction)).toEqual([]);
+  });
+
+  it('projects into areas of interest the contract parses, none of them primary', () => {
+    const captures = walked.screens.map((screen) => screen.capture);
+    const run = runSchema.parse({
+      ...exampleRun(),
+      screenshots: toScreenshotEntries(captures),
+      aois: toAoiEntries(captures),
+    });
+
+    expect(run.aois.length).toBeGreaterThan(0);
+    expect(run.aois.filter((row) => row.isPrimaryAction)).toEqual([]);
+  });
 });

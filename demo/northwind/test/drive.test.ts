@@ -37,6 +37,7 @@ import type {
   CaptureElement,
   Device,
   PageHandle,
+  TaskStep,
 } from '@personavision/browser';
 import { chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -59,6 +60,22 @@ const DESKTOP = NORTHWIND_DEVICE_MIX.careful;
 /** The step nothing advances from: the task's last. */
 const TERMINAL_STEP = NORTHWIND_TASK.steps.at(-1);
 if (TERMINAL_STEP === undefined) throw new Error('the demo task declares no steps');
+
+/**
+ * The selector of the control a step declares.
+ *
+ * `TaskStep.primaryAction` is optional — a step that declares none is a step that is a whole
+ * page, which is what a test of one URL derives (#418) — and the demo shop is the opposite
+ * of that: every step of it names a real control, which is what makes it the worked example
+ * of a declared task. So a step here with none is a broken demo config, said so once.
+ */
+const declaredSelector = (step: TaskStep): string => {
+  const { primaryAction } = step;
+  if (primaryAction === undefined) {
+    throw new Error(`the ${step.id} step of the demo task declares no primary action`);
+  }
+  return primaryAction.selector;
+};
 
 /** One screen of a drive: what the session saw, and whether it had to scroll to go on. */
 interface Screen {
@@ -129,7 +146,7 @@ describeWithChromium('driving the northwind task', () => {
       for (const step of NORTHWIND_TASK.steps) {
         const screen = await capture(handle, ctx);
         const primaryAction = theOnlyPrimaryAction(screen);
-        const target = { selector: step.primaryAction.selector };
+        const target = { selector: declaredSelector(step) };
         const declaredBox = await declaredBoxOf(handle, target.selector);
 
         // The confirmation step is terminal: nothing advances from it.
@@ -155,9 +172,7 @@ describeWithChromium('driving the northwind task', () => {
         screens.push({ capture: screen, primaryAction, declaredBox, scrolled });
       }
 
-      const orderNumber = await handle.page
-        .locator(TERMINAL_STEP.primaryAction.selector)
-        .innerText();
+      const orderNumber = await handle.page.locator(declaredSelector(TERMINAL_STEP)).innerText();
       return { screens, finalUrl: handle.page.url(), orderNumber };
     } finally {
       await closeSession(handle);

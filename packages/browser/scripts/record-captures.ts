@@ -327,14 +327,20 @@ const recordWalk = async (
       const last = index === task.steps.length - 1;
       if (last) break;
 
-      const advanced = await act(
-        handle,
-        { type: 'click', selector: step.primaryAction.selector },
-        ctx,
-      );
+      // Every task recorded here declares its controls: a committed set is a walk from one
+      // step to the next, and a step that declares none is a step that is a whole page,
+      // which there is nothing to advance from (#418).
+      const { primaryAction } = step;
+      if (primaryAction === undefined) {
+        throw new Error(
+          `the ${walk.variant} walk cannot advance from ${step.id}: the step declares no primary action, and a recorded set is a walk between steps`,
+        );
+      }
+
+      const advanced = await act(handle, { type: 'click', selector: primaryAction.selector }, ctx);
       if (!advanced.ok) {
         throw new Error(
-          `the ${walk.variant} walk could not advance from ${step.id}: clicking ${step.primaryAction.selector} reported ${advanced.failure}`,
+          `the ${walk.variant} walk could not advance from ${step.id}: clicking ${primaryAction.selector} reported ${advanced.failure}`,
         );
       }
     }

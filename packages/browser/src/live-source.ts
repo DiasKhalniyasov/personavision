@@ -249,9 +249,18 @@ const onAStep = (capture: Capture): capture is OnAStep => capture.step !== null;
 /** How many screens a walk may capture per step the task declares. */
 const SCREENS_PER_STEP = 8;
 
-/** The walk's own judgement, and the whole of it: take the control the step declares. */
+/**
+ * The walk's own judgement, and the whole of it: take the control the step declares.
+ *
+ * A step that declares none — a step that is a whole page — has no control for this to
+ * take, so the walk stops on that screen rather than inventing one. It is the honest end of
+ * a default decision layer whose entire policy is "press what the task named": a one-URL
+ * run is walked by the swarm's agent, which chooses from the screen's own elements.
+ */
 const advance: DecideAction = (_screen, step) =>
-  step === null ? null : { type: 'click', selector: step.primaryAction.selector };
+  step?.primaryAction === undefined
+    ? null
+    : { type: 'click', selector: step.primaryAction.selector };
 
 /** The step the walk expects next: the one the task declares after the last it recognised. */
 const nextStep = (task: TaskDefinition, reached: string | null): TaskStep | null => {

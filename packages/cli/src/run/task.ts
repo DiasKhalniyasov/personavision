@@ -57,18 +57,6 @@ export const DERIVED_STEP_SCREENS = 40;
  */
 const DERIVED_REQUIRED_SELECTOR = 'body';
 
-/**
- * What a derived step calls its primary action: the page's first control, whichever of these
- * comes first in the document.
- *
- * A step's primary action is the control that advances it, and time to first fixation on it
- * is a headline component — so a declared task names the real one. A derived task cannot
- * know it: the request carries a sentence, and reading a control out of the page's words is
- * exactly what `packages/browser` refuses to do. The page's first control is therefore
- * marked and said to be marked, and a run that needs the real control declares its steps.
- */
-const DERIVED_PRIMARY_ACTION = 'button, input[type="submit"], a[href], [role="button"]';
-
 /** How many words of the task's sentence name a run directory and its task id. */
 const ID_WORDS = 6;
 
@@ -108,7 +96,27 @@ const derivedPattern = (variants: readonly { url: string }[]): string => {
     : `(?:${paths.map((path) => escaped(path)).join('|')})`;
 };
 
-/** The one step a derived task declares: the page the request names. */
+/**
+ * The one step a derived task declares: the page the request names, and **no primary
+ * action**.
+ *
+ * A step's primary action is the control that advances it, and a derived step has none to
+ * name: the request carries a sentence and a URL, nobody designed a control on the site
+ * under test, and reading one out of the page's words is exactly what `packages/browser`
+ * refuses to do. So the declaration is absent, and `resolvePrimaryAction` marks nothing.
+ *
+ * It used to stand a selector in — the page's first control, whichever came first in the
+ * document of a button, a submit input, a link, or anything carrying a button role — and
+ * that was wrong twice (#418). Where it resolved, the first such element is a visually
+ * hidden skip link or an off-screen menu item as often as it is anything, and marking one as
+ * "the control that advances the task" put a 35% score component on it and quoted it in the
+ * session's outcome sentence. Where it did not resolve — a box of zeros, or a box no
+ * extracted candidate occupied — the screen was refused as `selector_not_found`, on **every**
+ * screen, so a session's two retries were spent at once and the whole session excluded. Four
+ * of the owner's five real one-site runs failed every session that way.
+ *
+ * A task that declares its own steps is untouched: it names its real controls.
+ */
 const derivedStep = (request: RunRequest): TaskStep => ({
   id: DERIVED_STEP_ID,
   label: DERIVED_STEP_LABEL,
@@ -116,7 +124,6 @@ const derivedStep = (request: RunRequest): TaskStep => ({
     urlPattern: derivedPattern(request.variants),
     requiredSelector: DERIVED_REQUIRED_SELECTOR,
   },
-  primaryAction: { selector: DERIVED_PRIMARY_ACTION },
 });
 
 /**
@@ -155,7 +162,14 @@ const stepSchema = z.strictObject({
   id: nonEmpty,
   label: nonEmpty,
   match: z.strictObject({ urlPattern: nonEmpty, requiredSelector: nonEmpty }),
-  primaryAction: z.strictObject({ selector: nonEmpty, optional: z.boolean().optional() }),
+  /**
+   * The control that advances the step. Optional, as it is on `TaskStep` itself: a step a
+   * file declares without one is a step that is a whole page, and nothing is marked on it
+   * (#418). A file that names a control keeps every rule it had.
+   */
+  primaryAction: z
+    .strictObject({ selector: nonEmpty, optional: z.boolean().optional() })
+    .optional(),
   /**
    * What the person wants on that screen, where the file says. Optional, and the step
    * inherits the task's own sentence without it (#78): the sentence is the errand, and a
@@ -185,7 +199,7 @@ const notSteps = (file: string, issues: readonly { path: string; message: string
     [
       `The test was not started: ${file} does not declare the task’s steps.`,
       ...issues.map((issue) => `  ${issue.path} — ${issue.message}`),
-      'A step declares its id, its label, the URL pattern and required element that recognise it, and the selector of the control that advances it. It may also declare the goal the person has on that screen.',
+      'A step declares its id, its label, and the URL pattern and required element that recognise it. It may also declare the selector of the control that advances it — a step that declares none is a step that is a whole page — and the goal the person has on that screen.',
       'Nothing was written: no run directory was created.',
     ].join('\n'),
   );

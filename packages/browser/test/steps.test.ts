@@ -23,6 +23,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -109,6 +110,19 @@ const stepNamed = (id: string): TaskStep => {
   return step;
 };
 
+/**
+ * The control a step of `TASK` declares, read off the task rather than restated here.
+ *
+ * `TaskStep.primaryAction` is optional — a step that declares none is a step that is a whole
+ * page (#418) — and every step of `TASK` names a real control, so a step of it with none is
+ * this file disagreeing with itself.
+ */
+const declaredAction = (id: string): { selector: string; optional?: boolean } => {
+  const declared = stepNamed(id).primaryAction;
+  if (declared === undefined) throw new Error(`the ${id} step declares no primary action`);
+  return declared;
+};
+
 /** A landmark of the fixture site: its id, and the page-space box `LANDMARKS.md` records. */
 interface Landmark {
   readonly id: string;
@@ -156,6 +170,53 @@ const STEP_PAGES: readonly StepPage[] = [
     decoy: { id: 'confirmation-order-number', bbox: { x: 28, y: 300, width: 334, height: 24 } },
   },
 ];
+
+/** This ticket's own pages, for the derived step: see `fixtures/one-site/README.md`. */
+const ONE_SITE_DIR = fileURLToPath(new URL('./fixtures/one-site', import.meta.url));
+
+/**
+ * The link selector a derived step's stand-in primary action came down to on both pages.
+ *
+ * The stand-in was the page's first control of four kinds, and on a page with no button, no
+ * submit input and nothing carrying a button role, the link is the only one of the four that
+ * can match — so this is what it resolved on these pages, and asking for it here is asking
+ * what the stand-in asked. The four-selector string itself is spelled nowhere any more, and
+ * `run-task.test.ts` scans the repository for it.
+ */
+const ONLY_LINK = 'a[href]';
+
+/** One page of `fixtures/one-site/`, and what the stand-in's selector made of it. */
+interface OneSitePage {
+  readonly path: string;
+  /** What `probeSelector` reports for `ONLY_LINK` here, as the old failure quoted it. */
+  readonly standInProbe: string;
+}
+
+const ONE_SITE_PAGES: readonly OneSitePage[] = [
+  // The skip link: a real box, 1x1, that no extracted candidate occupies.
+  { path: '/skip-link.html', standInProbe: 'none of the' },
+  { path: '/no-controls.html', standInProbe: 'absent' },
+];
+
+/**
+ * A derived step, as `packages/cli`'s `derivedStep` builds one: the page as the whole task,
+ * matched by its path, requiring only a `body`, and declaring no primary action.
+ *
+ * It is written out here rather than imported because `packages/browser` does not depend on
+ * `packages/cli` — the declaration is the CLI's, the shape is this package's, and
+ * `run-task.test.ts` over there asserts that what it builds is this.
+ */
+const DERIVED_STEP: TaskStep = {
+  id: 'page',
+  label: 'The page',
+  match: { urlPattern: '\\.html', requiredSelector: 'body' },
+};
+
+const DERIVED_TASK: TaskDefinition = {
+  id: 'see-what-people-make-of-the-page',
+  prompt: 'See what people make of the page',
+  steps: [DERIVED_STEP],
+};
 
 /** A candidate element: what an extractor hands resolution, with the box under test. */
 const candidate = (
@@ -665,10 +726,9 @@ describeWithChromium('primary-action resolution', () => {
             .querySelector<HTMLElement>('#cart-checkout')
             ?.style.setProperty('display', 'none');
         });
-        const cart = stepNamed('cart');
         const optional: TaskStep = {
-          ...cart,
-          primaryAction: { ...cart.primaryAction, optional: true },
+          ...stepNamed('cart'),
+          primaryAction: { ...declaredAction('cart'), optional: true },
         };
 
         const resolved = await resolvePrimaryAction(handle, candidatesFor(CART), optional);
@@ -889,4 +949,121 @@ describe('the step a detected id names', () => {
     // and mark nothing on it — the silent zero this module exists to avoid.
     expect(() => taskStep(TASK, 'checkout-v2')).toThrow('checkout-v2');
   });
+});
+
+/**
+ * A step that declares no primary action: the shape a **derived** step has (#418).
+ *
+ * A test of one URL has no designed primary action — the step stands for the whole site and
+ * nobody named a control on it — so the declaration is absent rather than stood in for. The
+ * pages are this ticket's own, under `fixtures/one-site/`, because the shared site has no
+ * page of this shape and its record says not to add one there.
+ *
+ * Each case is asserted twice: once with the declaration absent, which is what a derived
+ * step now is, and once with a declared control, which is what refused these screens before.
+ * The second half is not a regression test for its own sake — it is what makes the first
+ * half mean something, because a page that would not have failed either way proves nothing
+ * about having stopped failing.
+ */
+describeWithChromium('a step that declares no primary action', () => {
+  let site: FixtureSite;
+  let runDir: string;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite({ root: ONE_SITE_DIR });
+  });
+
+  afterAll(async () => {
+    await site.close();
+  });
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'personavision-one-site-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const open = (path: string): Promise<PageHandle> =>
+    openSession({ id: 'v-desktop', url: `${site.url}${path}` }, DESKTOP);
+
+  for (const page of ONE_SITE_PAGES) {
+    it(
+      `marks nothing and raises nothing on ${page.path}, where no control is declared`,
+      async () => {
+        const handle = await open(page.path);
+        try {
+          // Seeded with a mark, so that "marks nothing" is this call's doing rather than a
+          // list that happened to arrive unmarked.
+          const candidates = [
+            candidate('text-block', { x: 16, y: 24, width: 358, height: 40 }),
+            candidate(
+              'image',
+              { x: 16, y: 160, width: 240, height: 160 },
+              {
+                isPrimaryAction: true,
+              },
+            ),
+          ];
+
+          const resolved = await resolvePrimaryAction(handle, candidates, DERIVED_STEP);
+
+          expect(markedIds(resolved)).toEqual([]);
+          expect(resolved).toHaveLength(2);
+        } finally {
+          await closeSession(handle);
+        }
+      },
+      BROWSER_TIMEOUT_MS,
+    );
+
+    it(
+      `is the page the stand-in selector refused: ${page.path} is ${page.standInProbe}`,
+      async () => {
+        const handle = await open(page.path);
+        try {
+          const standIn: TaskStep = { ...DERIVED_STEP, primaryAction: { selector: ONLY_LINK } };
+
+          const failure = await failureFrom(
+            resolvePrimaryAction(
+              handle,
+              [candidate('text-block', { x: 16, y: 24, width: 358, height: 40 })],
+              standIn,
+            ),
+          );
+
+          expect(failure).toBeInstanceOf(AutomationFailure);
+          expect((failure as AutomationFailure).reason).toBe('selector_not_found');
+          expect((failure as AutomationFailure).message).toContain(page.standInProbe);
+        } finally {
+          await closeSession(handle);
+        }
+      },
+      BROWSER_TIMEOUT_MS,
+    );
+
+    it(
+      `captures ${page.path} with its elements, none of them marked`,
+      async () => {
+        const handle = await open(page.path);
+        try {
+          const captured = await capture(handle, {
+            variant: 'v-desktop',
+            device: DESKTOP,
+            task: DERIVED_TASK,
+            runDir,
+          });
+
+          expect(captured.step).toBe(DERIVED_STEP.id);
+          expect(captured.screenshot).not.toBeNull();
+          expect(captured.elements.length).toBeGreaterThan(0);
+          expect(markedIds(captured.elements)).toEqual([]);
+        } finally {
+          await closeSession(handle);
+        }
+      },
+      BROWSER_TIMEOUT_MS,
+    );
+  }
 });

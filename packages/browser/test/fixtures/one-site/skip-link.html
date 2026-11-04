@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ship faster - fixture landing page</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        position: relative;
+        height: 1000px;
+        width: 100%;
+        background: #ffffff;
+        color: #111111;
+        font:
+          16px/1.4 system-ui,
+          sans-serif;
+      }
+      [id] {
+        position: absolute;
+        box-sizing: border-box;
+        margin: 0;
+        border: 0;
+      }
+      /*
+       * The classic accessible skip link: announced by a screen reader, painted nowhere.
+       * It keeps a 1x1 box rather than reporting zeros, which is why the stand-in selector
+       * resolved it and then matched it against no candidate the extractor produced.
+       */
+      #skip-to-content {
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <a id="skip-to-content" href="#landing-heading">Skip to content</a>
+    <h1 id="landing-heading" style="left: 16px; top: 24px; width: 358px; height: 40px">
+      Ship faster
+    </h1>
+    <p id="landing-pitch" style="left: 16px; top: 80px; width: 358px; height: 56px">
+      This page stands in for a marketing site a one-URL test is pointed at. It declares no control:
+      the only link on it is the skip link above, which is announced and never painted.
+    </p>
+    <img
+      id="landing-screenshot"
+      src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22240%22%20height%3D%22160%22%3E%3Crect%20width%3D%22240%22%20height%3D%22160%22%20fill%3D%22%235a4bd6%22%2F%3E%3C%2Fsvg%3E"
+      alt="The product, on a laptop"
+      style="left: 16px; top: 160px; width: 240px; height: 160px"
+    />
+    <p id="landing-detail" style="left: 16px; top: 352px; width: 358px; height: 56px">
+      Everything below the pitch is text and an image, so the page has candidate elements for an
+      extractor to produce and no candidate for a primary action to be.
+    </p>
+  </body>
+</html>
