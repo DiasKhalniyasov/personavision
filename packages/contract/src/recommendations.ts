@@ -19,13 +19,12 @@
  * whose every cited session is our own automation failing is a claim about our harness, and
  * the product does not publish it as advice about somebody's site.
  *
- * **One thing it does not resolve**: a session citation's `offsetMs` against the length of
- * that session's recording. The session video block carries the duration and this module
- * has the sessions in hand, so the check belongs here — it is #256, deliberately left out
- * of #254 so that neither waited on the other. Until it lands, a citation resolving here
- * means its session, region, step and finding exist, not that its timestamp is inside the
- * recording. `@personavision/provider`'s own gate on a model reply does check the offset,
- * so the two are not the same check and neither subsumes the other.
+ * The last of those rules is the one that needed the session video block (#220): a session
+ * citation's `offsetMs` against the length of the recording it names. *"S-62 · 0:48"* is the
+ * strongest citation in the product and the easiest one to get wrong — an offset past the
+ * end opens a paused black frame, and a reader who clicks that once stops trusting the rest
+ * of the write-up. `@personavision/provider`'s own gate on a model reply checks the offset
+ * too, so the two are not the same check and neither subsumes the other.
  *
  * Pure, and reaching no file system: the reader in `io.ts` calls it with what it parsed,
  * and a caller holding a run artifact in memory calls it with that.
@@ -146,6 +145,49 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
   };
 
   /**
+   * A cited timestamp against the recording it names — the one citation rule that needs the
+   * session's video block, which is why it is this module's and not the per-file schema's.
+   *
+   * Three answers, and the third is not the second: a **recorded** session is held to its
+   * own duration, a session that **states** it recorded nothing cannot be cited at a
+   * timestamp at all, and a session that **names no video block** is one written before
+   * recordings existed — there is no duration in hand to hold the offset to, so the rule
+   * skips it the way the findingIds rule skips a directory whose `findings.json` is not
+   * there. Rejecting that one instead would make every run recorded before #220 unreadable,
+   * the committed demo run among them.
+   *
+   * A session not in hand is skipped for the reason `citedPeople` gives: a citation naming a
+   * session the run does not list, or one whose file could not be read, is already a
+   * violation of its own, and a second complaint derived from the same gap would be one
+   * mistake reported twice.
+   *
+   * The boundary is `sessionSchema`'s own, spelt the same way: past the end is rejected and
+   * the end itself is a frame that exists. Two rules disagreeing about the last millisecond
+   * of one recording would be worse than either answer.
+   */
+  const checkTimestamp = (
+    path: ReadonlyArray<PropertyKey>,
+    sessionId: string,
+    offsetMs: number,
+  ): void => {
+    const video = inHand.get(sessionId)?.video;
+    if (video === undefined) return;
+    if (video.state === 'absent') {
+      inFile(
+        path,
+        `${sessionId} was not recorded — ${video.reason} — so a timestamp in it names no frame: a claim about a session with no recording cites its evidence another way`,
+      );
+      return;
+    }
+    if (offsetMs > video.durationMs) {
+      inFile(
+        path,
+        `offsetMs ${offsetMs} is past the end of ${sessionId}’s ${video.durationMs} ms recording: a cited timestamp has to land inside the recording it names, or one click opens a paused black frame instead of the moment the claim is about`,
+      );
+    }
+  };
+
+  /**
    * Each kind of citation against the declarations it addresses — the same ones a finding
    * is held to. The Analysis screen builds every citation into a deep link, a replay at the
    * millisecond named, a heatmap route, a funnel anchor, so a citation naming anything this
@@ -166,6 +208,7 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
               `"${citation.sessionId}" names no session listed in run.json sessionIds`,
             );
           }
+          checkTimestamp(where('offsetMs'), citation.sessionId, citation.offsetMs);
           break;
         case 'heatmap':
           if (!declaredVariants.has(citation.variant)) {
