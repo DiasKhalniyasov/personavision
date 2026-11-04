@@ -405,18 +405,15 @@ describe('the site a run ran against', () => {
     await cleanup();
   });
 
-  it('is read back exactly as it was written, verified or not', async () => {
-    for (const verifiedAtLaunch of [true, false]) {
-      const artifact = validArtifact();
-      artifact.run.site = { url: 'https://northwind.example/checkout', verifiedAtLaunch };
-      await writeRun(dir, artifact);
+  it('is read back exactly as it was written: the URL, and nothing else', async () => {
+    const artifact = validArtifact();
+    artifact.run.site = { url: 'https://northwind.example/checkout' };
+    await writeRun(dir, artifact);
 
-      expect(await validate(dir)).toEqual([]);
-      expect((await readRun(dir)).run.site).toEqual({
-        url: 'https://northwind.example/checkout',
-        verifiedAtLaunch,
-      });
-    }
+    expect(await validate(dir)).toEqual([]);
+    expect((await readRun(dir)).run.site).toEqual({
+      url: 'https://northwind.example/checkout',
+    });
   });
 
   it('is absent on a run that did not say, and the directory still validates', async () => {
@@ -426,22 +423,14 @@ describe('the site a run ran against', () => {
 
     expect(await validate(dir)).toEqual([]);
     expect((await readRun(dir)).run.site).toBeUndefined();
-    // Absent, and not resolved to a verification state nobody recorded: a reader asking
-    // whether this run's site was verified gets "it did not say" rather than "no".
+    // Absent, and not filled in with an address nobody recorded: a reader asking what this
+    // run ran against gets "it did not say" rather than a URL.
     expect('site' in (await readRun(dir)).run).toBe(false);
-  });
-
-  it('refuses a block that states an address without saying whether it was verified', async () => {
-    const run = validRun() as Record<string, unknown>;
-    run.site = { url: 'https://northwind.example/checkout' };
-    await writeFile(runPaths(dir).run, asJson(run));
-
-    expect(offenders(await validate(dir))).toEqual([`${label.run}/site/verifiedAtLaunch`]);
   });
 
   it('refuses an address that is not one a browser could be pointed at', async () => {
     const run = validRun() as Record<string, unknown>;
-    run.site = { url: 'northwind.example', verifiedAtLaunch: true };
+    run.site = { url: 'northwind.example' };
     await writeFile(runPaths(dir).run, asJson(run));
 
     expect(offenders(await validate(dir))).toEqual([`${label.run}/site/url`]);
@@ -449,11 +438,7 @@ describe('the site a run ran against', () => {
 
   it('leaves a customer nowhere to hide, because the block is closed like every other', async () => {
     const run = validRun() as Record<string, unknown>;
-    run.site = {
-      url: 'https://northwind.example/checkout',
-      verifiedAtLaunch: true,
-      workspaceId: 'ws_01',
-    };
+    run.site = { url: 'https://northwind.example/checkout', workspaceId: 'ws_01' };
     await writeFile(runPaths(dir).run, asJson(run));
 
     expect(offenders(await validate(dir))).toEqual([`${label.run}/site/workspaceId`]);

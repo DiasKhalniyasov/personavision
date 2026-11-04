@@ -214,12 +214,7 @@ const swarmPipeline =
       // The artifact's shape rather than the platform's: `SiteAtLaunch` carries the stored
       // record's id too, and a run directory names no row of the platform's store
       // (`docs/FLOW.md` section 8), so the id is dropped here.
-      //
-      // `verifiedAtLaunch` is written as `false` because `@personavision/contract` still
-      // declares it required inside the block and an artifact without it would not parse.
-      // Site verification was deleted from the platform (#392), so there is nothing left to
-      // fill it with: the field itself goes with #393.
-      ...(site === undefined ? {} : { site: { url: site.url, verifiedAtLaunch: false } }),
+      ...(site === undefined ? {} : { site: { url: site.url } }),
       ...(concurrency === undefined ? {} : { concurrency }),
       ...(captureSource === undefined ? {} : { source: captureSource }),
       ...(runEnv === undefined ? {} : { env: runEnv }),

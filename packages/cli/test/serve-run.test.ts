@@ -254,7 +254,7 @@ describe('personavision serve starts a real run', () => {
 
   it('records the site it was launched against and the engine that actually ran', async () => {
     const run = await runNow();
-    expect(run.site).toEqual({ url: SITE_URL, verifiedAtLaunch: false });
+    expect(run.site).toEqual({ url: SITE_URL });
     expect(run.engine.mode).toBe('offline');
     // The audience by value, not by reference: a later edit to the stored audience cannot
     // restate this run.

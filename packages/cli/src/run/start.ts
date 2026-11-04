@@ -127,14 +127,13 @@ export interface StartRunOptions {
   readonly people?: readonly Persona[];
   readonly concurrency?: number;
   /**
-   * The site this run is against, and whether it was verified when it was launched, for the
-   * artifact's `site` block (#243).
+   * The site this run is against, for the artifact's `site` block (#243).
    *
    * It is **the artifact's shape, not the platform's**: `SiteAtLaunch` carries the stored
    * record's `id` as well, and the id is dropped here on purpose — it addresses a row in the
    * platform's own store and a run directory names no such thing (`docs/FLOW.md` section 8).
-   * So a `TestPipeline` built over this function passes `{ url, verifiedAtLaunch }` from the
-   * site it was handed and leaves the id behind.
+   * So a `TestPipeline` built over this function passes `{ url }` from the site it was handed
+   * and leaves the id behind.
    *
    * Absent for `personavision run`, which has no workspace and no site: the command names
    * none, so the run it writes carries no block, which is exactly why the field is optional

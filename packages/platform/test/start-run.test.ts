@@ -738,11 +738,6 @@ describe('the site a platform-started run records', () => {
        * artifact's `site` block is the URL it was handed, and the `SiteAtLaunch.id` beside it
        * is deliberately left behind — it addresses a row in the platform's store, and nothing
        * inside a run directory names one.
-       *
-       * `verifiedAtLaunch` is written as `false` because `@personavision/contract` still
-       * declares it required inside the block, and an artifact without it would not parse.
-       * The platform hands over nothing to fill it with any more: the field goes with #393,
-       * which this ticket unblocks.
        */
       pipeline: async (_request, _audience, site) => {
         const runId = `2026-11-03-1000-clipforge-${String(handed.length + 1)}`;
@@ -751,7 +746,7 @@ describe('the site a platform-started run records', () => {
           ...artifact.run,
           runId,
           createdAt: '2026-11-03T10:00:00.000Z',
-          ...(site === undefined ? {} : { site: { url: site.url, verifiedAtLaunch: false } }),
+          ...(site === undefined ? {} : { site: { url: site.url } }),
         };
         artifact.findings = { ...artifact.findings, runId };
         await writeRun(join(served.directories.runsRoot, runId), artifact);
