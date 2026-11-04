@@ -13,12 +13,18 @@ import { axeViolations, describeViolations } from '../../../tests/axe';
 import { ruleIn, rulesOf } from '../../../tests/cssom';
 import { loadDesignTokens } from '../../../tests/setup';
 import { StepFilmstrip } from './StepFilmstrip';
+import { NO_AGGREGATE } from './useScreenFigures';
 import type { AttentionSelection } from './useAttentionSelection';
 import type { AttentionStepSessions } from './useAttentionStepSessions';
 
 /**
- * The step filmstrip of `#screen-attention`, over the repository's own committed example
+ * The step filmstrip of `#screen-heatmaps`, over the repository's own committed example
  * run: 24 sessions, two versions, one of each lost to our own automation.
+ *
+ * **The counts are the aggregate's**, and they obey this screen's two filters, so the
+ * denominator is the people the filters leave rather than the version's own scored count
+ * (decision 145): the numerator is still per version, which is what makes the funnel's
+ * thinning readable, and the population is the one the line above the stage names.
  *
  * Two kinds of test are here, and deliberately. The strip on the screen is mounted through
  * the app, so what is asserted is the counts a designer really reads above the heatmaps and
@@ -30,7 +36,7 @@ import type { AttentionStepSessions } from './useAttentionStepSessions';
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
 const runFile = `/runs/${RUN_ID}/run.json`;
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 
 const layout = runPaths('');
 const runsRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../../runs');
@@ -94,17 +100,19 @@ describe('the frames', () => {
     expect(linesOf()[3]).toContain('Confirmation');
   });
 
-  it('reads how many of this version’s audience reached each step', async () => {
+  it('reads how many of this version’s audience reached each step, from the aggregate', async () => {
     await serveRunData();
     attention('B', 'review');
     await counted();
 
-    // The redesign's own funnel: everybody at the cart, two people confirming.
+    // The redesign's own funnel: everybody at the cart, two people confirming. Eleven of
+    // the test's twenty-two scored people were on this version, and the other eleven were
+    // on the other one — which is why the first frame is 11 of 22 and not 11 of 11.
     expect(linesOf()).toEqual([
-      'Cart11 of 11 reached it',
-      'Payment10 of 11 reached it',
-      'Review9 of 11 reached it',
-      'Confirmation2 of 11 reached it',
+      'Cart11 of 22 reached it',
+      'Payment10 of 22 reached it',
+      'Review9 of 22 reached it',
+      'Confirmation2 of 22 reached it',
     ]);
   });
 
@@ -126,11 +134,11 @@ describe('the frames', () => {
     const { router } = attention('A', 'review');
     await counted();
 
-    expect(linesOf()[3]).toBe('Confirmation9 of 11 reached it');
+    expect(linesOf()[3]).toBe('Confirmation9 of 22 reached it');
 
     await userEvent.click(screen.getByRole('button', { name: /^B/ }));
     await waitFor(() => {
-      expect(linesOf()[3]).toBe('Confirmation2 of 11 reached it');
+      expect(linesOf()[3]).toBe('Confirmation2 of 22 reached it');
     });
     // One navigation, in the same document: the strip re-projected sessions already read.
     expect(router.state.location.pathname).toBe(paths.attention(RUN_ID, 'B', 'review'));
@@ -244,7 +252,9 @@ describe('a step nobody reached', () => {
     const frame = frameFor('thanks');
     const reach = frame.querySelector('[data-reach]') as HTMLElement;
     expect(reach.dataset.reach).toBe('zero');
-    expect(reach.textContent).toBe('0 of 11 reached it');
+    // The aggregate holds a row per version and step for every screen its people reached,
+    // so no row is nobody reaching it — read out of the slice's own twenty-two people.
+    expect(reach.textContent).toBe('0 of 22 reached it');
     // Still a frame a reader can press: the step's own words are the honest answer there.
     expect(frame.getAttribute('disabled')).toBeNull();
     expect(frame.getAttribute('aria-pressed')).toBe('false');
@@ -280,6 +290,7 @@ describe('while the sessions are being read', () => {
       <StepFilmstrip
         run={run}
         selection={selectionFor('review')}
+        screen={NO_AGGREGATE}
         sessions={read({ status: 'loading', sessions: seedSessions(run) })}
       />,
     );
@@ -301,6 +312,7 @@ describe('while the sessions are being read', () => {
       <StepFilmstrip
         run={run}
         selection={selectionFor('review', setStep)}
+        screen={NO_AGGREGATE}
         sessions={read({ status: 'loading' })}
       />,
     );
@@ -318,6 +330,7 @@ describe('when the sessions could not be read', () => {
       <StepFilmstrip
         run={run}
         selection={selectionFor('review')}
+        screen={NO_AGGREGATE}
         sessions={read({ status: 'error', error: 'sessions/S-15.json: 404' })}
       />,
     );

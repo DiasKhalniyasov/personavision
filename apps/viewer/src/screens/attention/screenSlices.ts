@@ -207,3 +207,10 @@ export const scrollBands = (figures: ScreenFigures | null): readonly ScrollBand[
 /** Whether this screen's figures record any scroll depth at all. */
 export const hasScrollDepth = (figures: ScreenFigures | null): boolean =>
   scrollBands(figures).some((band) => band.sawIt > 0);
+
+/** How many of a slice's people reached one step of one version, or `null` for no row. */
+export const reachedOf = (
+  slice: ScreenSlice | null,
+  variant: string,
+  step: string,
+): number | null => screenFiguresOf(slice, variant, step)?.reached ?? null;

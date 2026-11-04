@@ -1,48 +1,46 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { runPaths, runSchema, sessionSchema } from '@personavision/contract';
-import type { Run, Session } from '@personavision/contract';
+import { aggregateSchema, runPaths, runSchema } from '@personavision/contract';
+import type { Aggregate, Run, ScreenSlice } from '@personavision/contract';
 import { readRunFile } from '../../../tests/app';
 import { attentionAreas } from './useAttentionAreas';
-import type { AttentionArea } from './useAttentionAreas';
-import { fixationsOnStep, reachedStep, saccadesOnStep } from './useAttentionStepSessions';
-import type { AttentionStepSessions } from './useAttentionStepSessions';
+import { screenFiguresFrom } from './useScreenFigures';
+import type { ScreenFiguresView } from './useScreenFigures';
 import { ThisStepPanel } from './ThisStepPanel';
 import '../../../tests/setup';
 
 /**
- * The "This step" readings, over the repository's own committed example run.
+ * The *This screen* readings of `#screen-heatmaps`, over the repository's own committed
+ * example run and the aggregate committed beside it.
  *
- * Every figure asserted here was worked out from the session files on disk, so the test
- * says what a designer reads — "15 median per session", "9 of 11" — rather than restating
- * the arithmetic the component does.
+ * **What this suite is really asserting is that nothing here is computed.** Every figure the
+ * panel prints is looked up in `aggregate.json` and printed, so each test below names a
+ * stored field and the words it turns into — and the last of them changes a stored field and
+ * watches the panel follow it, which is the only way to tell a reading from a re-derivation.
+ *
+ * The five states that are not a figure get their own tests, because each is a different
+ * fact about the audience and the panel must not print a zero for any of them: a run with no
+ * aggregate, a file that will not parse, a composition nobody satisfies, a screen none of
+ * these people reached, and a read still in flight.
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
 const layout = runPaths('');
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
+const seedAggregate = (): Aggregate =>
+  aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
 
-/** The hook's answer for one version and one step, read straight off the run directory. */
-function stepSessions(run: Run, variant: string, step: string): AttentionStepSessions {
-  const sessions = run.sessionIds
-    .map((sessionId) => sessionSchema.parse(readRunFile(RUN_ID, layout.session(sessionId))))
-    .filter(
-      (session: Session) => session.variant === variant && !session.outcome.excludedFromScores,
-    );
-  return {
-    status: 'ready',
-    error: null,
-    sessions,
-    fixations: sessions.flatMap((session) => fixationsOnStep(session, step)),
-    saccades: sessions.flatMap((session) => saccadesOnStep(session, step)),
-    reachedCount: sessions.filter((session) => reachedStep(session, step)).length,
-    scoredSessionCount:
-      run.scores.find((score) => score.variant === variant && score.taskId === run.task.id)
-        ?.scoredSessionCount ?? 0,
-  };
-}
+/** The hook's answer, built from a state rather than from a server. */
+const figuresFor = (
+  aggregate: Aggregate,
+  variant: string,
+  step: string,
+  segment: string | null = null,
+  outcome: string | null = null,
+): ScreenFiguresView =>
+  screenFiguresFrom({ status: 'ready', aggregate }, variant, step, segment, outcome);
 
 const stepOf = (run: Run, step: string) =>
   run.steps.find((candidate) => candidate.id === step) as Run['steps'][number];
@@ -51,127 +49,177 @@ const stepOf = (run: Run, step: string) =>
 const reading = (term: string): string =>
   screen.getByText(term, { selector: 'dt' }).nextElementSibling?.textContent ?? '';
 
+/** The heading whose words name an area, matched on its stem. */
+const clicksTerm = (): string =>
+  screen.getByText(/^Clicks on /, { selector: 'dt' }).textContent ?? '';
+
 const panel = (options: {
   run: Run;
   step: string;
   variant: string;
-  isolated?: AttentionArea | null;
-  sessions?: AttentionStepSessions;
+  screen: ScreenFiguresView;
 }) => {
   const { run, step, variant } = options;
   const { areas } = attentionAreas(run, variant, step);
   return render(
-    <ThisStepPanel
-      step={stepOf(run, step)}
-      sessions={options.sessions ?? stepSessions(run, variant, step)}
-      areas={areas}
-      isolated={options.isolated ?? null}
-    />,
+    <ThisStepPanel step={stepOf(run, step)} screen={options.screen} areas={areas} />,
   );
 };
 
-describe('the readings of one step', () => {
-  it('states the medians, the earliest area, the reach and that nothing is isolated', () => {
-    panel({ run: seedRun(), variant: 'B', step: 'review' });
+describe('the five readings of one screen', () => {
+  it('reads all five out of the aggregate’s slice, and computes none of them', () => {
+    const run = seedRun();
+    const aggregate = seedAggregate();
+    panel({ run, variant: 'B', step: 'review', screen: figuresFor(aggregate, 'B', 'review') });
 
-    expect(reading('Fixations')).toBe('15 median per session');
-    expect(reading('Total dwell')).toBe('6.9 s');
-    expect(reading('Earliest area')).toBe('Order summary');
-    expect(reading('Reached this step')).toBe('9 of 11');
-    expect(reading('Isolated')).toBe('all areas');
+    // Each of these is one stored field, printed. The redesign's review screen: nine of the
+    // test's twenty-two scored people got there, seven of those nine left on it.
+    expect(reading('Reached it')).toBe('9 of 22');
+    expect(reading('Left here')).toBe('7 of the 9 who reached it');
+    expect(reading('Median time on it')).toBe('10.8 s');
+    expect(reading('Scrolled past the fold')).toBe('9 of 9');
+    expect(reading(clicksTerm())).toBe('2 of 22 people');
   });
 
-  it('takes the median over the people who reached the step, not over everybody scored', () => {
-    // Eleven people were scored on the redesign and nine reached the review step. Counting
-    // the other two as zeros would halve every reading on this panel and read as an
-    // audience that barely looked, rather than one that never arrived.
-    panel({ run: seedRun(), variant: 'B', step: 'review' });
+  it('names the control the clicks row is about, from the step’s primary action', () => {
+    const run = seedRun();
+    panel({
+      run,
+      variant: 'B',
+      step: 'review',
+      screen: figuresFor(seedAggregate(), 'B', 'review'),
+    });
 
-    expect(reading('Reached this step')).toBe('9 of 11');
-    expect(reading('Fixations')).toBe('15 median per session');
+    // Not "second click on …": what is stored is clicks on the area, and whether one is a
+    // repeat depends on the screen (decision 137).
+    expect(clicksTerm()).toBe('Clicks on Completing action — A: "Place order", B: "Confirm purchase"');
   });
 
-  it('never calls a never-fixated area the earliest one', () => {
-    // Half the areas of this step carry a null time to first fixation: nobody ever looked
-    // at them. A null is not a zero, and the earliest area is one somebody did look at.
-    panel({ run: seedRun(), variant: 'B', step: 'review' });
+  it('follows the stored figure rather than its own arithmetic', () => {
+    const run = seedRun();
+    const aggregate = seedAggregate();
+    // One field changed in the file, and nothing else: a panel that re-derived this from the
+    // sessions on disk would print the old number and this test would fail.
+    const changed: Aggregate = {
+      ...aggregate,
+      screenSlices: aggregate.screenSlices.map((slice) =>
+        slice.segment === null && slice.outcome === null
+          ? ({
+              ...slice,
+              screens: slice.screens.map((one) =>
+                one.variant === 'B' && one.step === 'review' ? { ...one, leftHere: 3 } : one,
+              ),
+            } as ScreenSlice)
+          : slice,
+      ),
+    };
 
-    expect(reading('Earliest area')).toBe('Order summary');
+    panel({ run, variant: 'B', step: 'review', screen: figuresFor(changed, 'B', 'review') });
+    expect(reading('Left here')).toBe('3 of the 9 who reached it');
+  });
+
+  it('reads the slice the filters compose to, not the whole run’s', () => {
+    const run = seedRun();
+    const aggregate = seedAggregate();
+    const everybody = figuresFor(aggregate, 'B', 'review');
+    const gaveUp = figuresFor(aggregate, 'B', 'review', null, 'abandoned');
+
+    panel({ run, variant: 'B', step: 'review', screen: everybody }).unmount();
+    panel({ run, variant: 'B', step: 'review', screen: gaveUp });
+
+    const slice = aggregate.screenSlices.find(
+      (one) => one.segment === null && one.outcome === 'abandoned',
+    ) as ScreenSlice;
+    const stored = slice.screens.find(
+      (one) => one.variant === 'B' && one.step === 'review',
+    ) as ScreenSlice['screens'][number];
+    expect(reading('Reached it')).toBe(`${stored.reached} of ${slice.sessionCount}`);
+  });
+
+  it('says nobody was timed on a screen whose median the aggregate stores as null', () => {
+    const run = seedRun();
+    const aggregate = seedAggregate();
+    // The people who gave up never reached the payment screen on A, so nothing timed them
+    // on it: `medianMsOnIt` is null, which is not nought seconds.
+    panel({
+      run,
+      variant: 'A',
+      step: 'payment',
+      screen: figuresFor(aggregate, 'A', 'payment', null, 'abandoned'),
+    });
+    expect(reading('Median time on it')).toBe('nobody was timed on it');
   });
 });
 
-describe('with one area isolated', () => {
-  it('narrows the two medians to that area and names it', () => {
-    const run = seedRun();
-    const { areas } = attentionAreas(run, 'B', 'review');
-    const fee = areas.find((area) => area.aoi.id === 'B-review-fee-row') as AttentionArea;
+describe('the five readings that are not a figure', () => {
+  const states: ReadonlyArray<[string, ScreenFiguresView, string]> = [
+    [
+      'still reading',
+      screenFiguresFrom({ status: 'loading' }, 'B', 'review', null, null),
+      'reading this test’s figures…',
+    ],
+    [
+      'a run that computed no aggregate',
+      screenFiguresFrom({ status: 'none' }, 'B', 'review', null, null),
+      'this test computed none',
+    ],
+    [
+      'an aggregate that will not parse',
+      screenFiguresFrom(
+        { status: 'unreadable', runId: RUN_ID, url: '/x', problem: 'it is not valid JSON' },
+        'B',
+        'review',
+        null,
+        null,
+      ),
+      'could not be read',
+    ],
+  ];
 
-    panel({ run, variant: 'B', step: 'review', isolated: fee });
+  for (const [what, state, words] of states) {
+    it(`prints no figure for ${what}, and says so in words`, () => {
+      panel({ run: seedRun(), variant: 'B', step: 'review', screen: state });
+      expect(reading('Reached it')).toBe(words);
+      expect(reading('Left here')).toBe(words);
+      expect(reading('Median time on it')).toBe(words);
+      expect(reading('Scrolled past the fold')).toBe(words);
+    });
+  }
 
-    expect(reading('Fixations')).toBe('4 median per session');
-    expect(reading('Total dwell')).toBe('2.3 s');
-    expect(reading('Isolated')).toBe('Service fee row — planted defect');
-  });
-});
-
-describe('with one area isolated', () => {
-  const area = (run: Run, aoiId: string): AttentionArea =>
-    attentionAreas(run, 'B', 'review').areas.find(
-      (candidate) => candidate.aoi.id === aoiId,
-    ) as AttentionArea;
-
-  it('reads none, never a zero, for the area nobody ever looked at', () => {
-    // Beat 5 of the demo: the completing action on the redesign, which no fixation ever
-    // landed in. `0 median per session` and `0.0 s` would read as a glance too brief to
-    // matter; the honest reading of an absence is that there is nothing to average.
-    const run = seedRun();
-
-    panel({ run, variant: 'B', step: 'review', isolated: area(run, 'B-review-complete') });
-
-    expect(reading('Fixations')).toBe('none');
-    expect(reading('Total dwell')).toBe('none');
-    expect(reading('Isolated')).toBe('Completing action — A: "Place order", B: "Confirm purchase"');
-  });
-
-  it('averages the people who looked inside the area, not everyone who reached the step', () => {
-    // Eight of the nine who reached this step looked at the payment method row. The ninth
-    // looked elsewhere on the step — not briefly at this area — so they are not a zero.
-    const run = seedRun();
-
-    panel({ run, variant: 'B', step: 'review', isolated: area(run, 'B-review-pay-with') });
-
-    expect(reading('Fixations')).toBe('2 median per session');
-    expect(reading('Total dwell')).toBe('0.5 s');
-  });
-});
-
-describe('before the sessions are there', () => {
-  const nothing: AttentionStepSessions = {
-    status: 'loading',
-    error: null,
-    sessions: [],
-    fixations: [],
-    saccades: [],
-    reachedCount: 0,
-    scoredSessionCount: 11,
-  };
-
-  it('says it is reading rather than printing a zero that will change', () => {
-    panel({ run: seedRun(), variant: 'B', step: 'review', sessions: nothing });
-
-    expect(reading('Fixations')).toBe('reading the sessions…');
-    expect(reading('Reached this step')).toBe('reading the sessions…');
-  });
-
-  it('reads none once they are there and nobody reached the step', () => {
+  it('prints no figure for a composition no session satisfies', () => {
+    const aggregate = seedAggregate();
+    // The aggregate stores no slice for the people who are both, which means there are none.
     panel({
       run: seedRun(),
       variant: 'B',
       step: 'review',
-      sessions: { ...nothing, status: 'ready' },
+      screen: figuresFor(aggregate, 'B', 'review', 'mobile · price-sensitive', 'failed'),
     });
+    expect(reading('Reached it')).toBe('nobody matches both filters');
+  });
 
-    expect(reading('Fixations')).toBe('none');
-    expect(reading('Reached this step')).toBe('0 of 11');
+  it('prints no figure for a screen none of these people reached', () => {
+    const aggregate = seedAggregate();
+    const slice = aggregate.screenSlices.find(
+      (one) => one.segment === null && one.outcome === null,
+    ) as ScreenSlice;
+    // A slice with this version's step taken out of it: these people exist, and the
+    // aggregate holds no row for them on this screen.
+    const thinned: Aggregate = {
+      ...aggregate,
+      screenSlices: aggregate.screenSlices.map((one) =>
+        one === slice
+          ? ({
+              ...one,
+              screens: one.screens.filter(
+                (row) => !(row.variant === 'B' && row.step === 'review'),
+              ),
+            } as ScreenSlice)
+          : one,
+      ),
+    };
+
+    panel({ run: seedRun(), variant: 'B', step: 'review', screen: figuresFor(thinned, 'B', 'review') });
+    expect(reading('Reached it')).toBe('none of them reached it');
   });
 });

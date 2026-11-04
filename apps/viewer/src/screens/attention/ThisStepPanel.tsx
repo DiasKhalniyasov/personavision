@@ -1,143 +1,150 @@
-import type { Run, Session } from '@personavision/contract';
+import type { Run } from '@personavision/contract';
+import { clicksOnArea } from './screenSlices';
 import type { AttentionArea } from './useAttentionAreas';
-import { fixationsOnStep, reachedStep } from './useAttentionStepSessions';
-import type { AttentionStepSessions, Fixation } from './useAttentionStepSessions';
+import type { ScreenFiguresView } from './useScreenFigures';
 import styles from './attentionPage.module.css';
 
 /**
- * The "This step" panel of `#screen-attention`: what this step's aggregate amounts to, in
- * five readings.
+ * The *This screen* panel of `#screen-heatmaps`: what this screen amounts to for the people
+ * the filters leave, in five readings.
  *
- * Every one of them is a **median across the people whose session was scored**, never one
- * person's numbers — which is what the screen's footnote says and what makes the panel
- * readable beside a heatmap drawn from all of them at once. A median is taken over the
- * sessions that actually reached this step: somebody who never got here contributes no
- * zero, because they did not look at this step briefly, they did not look at it at all.
+ * **Every one of them is read, and none is computed** — which is the whole reason this file
+ * is shorter than the *This step* panel it replaces. That one took medians across the
+ * sessions it had in memory; `aggregate.json` stores these five pre-sliced, so composing two
+ * filters is picking a row rather than re-aggregating a hundred people in a browser. A
+ * screen that re-derived them could disagree with the Summary about the same audience, which
+ * `docs/adr/0001` forbids and `docs/FLOW.md` section 14 is written against.
  *
- * With an area isolated the first two readings narrow to that area, as the prototype's do,
- * and the last names it. The same rule holds one level down: the median is then over the
- * people who looked **inside that area**, because somebody who never looked there did not
- * give it a brief glance either. Counting them as zeros would print `0 median per session`
- * and `0.0 s` for an area four of nine people studied, and the same for one nobody ever saw
- * — the mistakable zero `docs/FLOW.md` section 3 forbids, where the honest reading is
- * `never` and `0%`. An area nobody looked at therefore reads *none* here, and the words for
- * it belong to the isolate caption.
+ * Two of the prototype's readings say less here than the mock does, and both deliberately:
  *
- * The earliest-fixated area is the artifact's own `timeToFirstFixationMs`, not a time this
- * screen works out from fixations.
+ * - *Left here* prints the stored count alone. The prototype writes *"33 · 22 of them inside
+ *   20 s"*, and the aggregate carries no twenty-second figure: counting it in the browser is
+ *   exactly the re-derivation this screen exists not to do (decision 135).
+ * - The fifth row is *Clicks on <the primary action>*, not the prototype's *Second click on
+ *   Generate*. What is stored is clicks on an area, and whether a click is a repeat depends
+ *   on whether that control was already pressed to get here — true of a waiting screen, false
+ *   of a cart. Printing "second click" over a count of first clicks is the mistakable number
+ *   `docs/FLOW.md` section 8 forbids (decision 137).
+ *
+ * A figure the file does not carry reads in words. `medianMsOnIt` is `null` for a screen
+ * nobody was timed on, which is not nought seconds, and the row says so.
  */
 
 const seconds = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
-const count = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
-/** The middle value, or the midpoint of the two middle ones. `null` for nothing to take. */
-export function median(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? (sorted[middle] as number)
-    : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2;
-}
-
-/** This session's fixations on this step, narrowed to one area when one is isolated. */
-const lookedAt = (session: Session, step: string, isolated: string | null): Fixation[] => {
-  const here = fixationsOnStep(session, step);
-  return isolated === null ? here : here.filter((fixation) => fixation.aoiId === isolated);
-};
+/** A duration as this panel reads it: `41.0 s`. The pipeline's precision is not the reader's. */
+export const onItFor = (ms: number): string => `${seconds.format(ms / 1000)} s`;
 
 /**
- * One list of looks per person the median is taken over: everybody who reached the step, or
- * — with an area isolated — everybody who looked inside it. Somebody who looked nowhere near
- * the isolated area is not a person who looked at it briefly.
+ * The control this step was for, as `run.json` marks it.
+ *
+ * One area per step carries `isPrimaryAction`, and it is the one the clicks row is about:
+ * *did they press the thing this screen is for, and how often*. A step that marks none — a
+ * receipt has no control that advances it (decision 43) — has no such row, and the panel
+ * says which area it is reading instead of implying every step has one.
  */
-const perPerson = (
-  sessions: readonly Session[],
-  step: string,
-  isolated: string | null,
-): Fixation[][] => {
-  const looks = sessions
-    .filter((session) => reachedStep(session, step))
-    .map((session) => lookedAt(session, step, isolated));
-  return isolated === null ? looks : looks.filter((one) => one.length > 0);
-};
-
-/** The area of this step the audience fixated first, as the run's own metrics record it. */
-export function earliestArea(areas: readonly AttentionArea[]): AttentionArea | null {
-  let earliest: AttentionArea | null = null;
-  for (const area of areas) {
-    const at = area.metric?.timeToFirstFixationMs;
-    // `null` is a never-fixated area, which is a result and not a very large time: it can
-    // never be the earliest one.
-    if (at === null || at === undefined) continue;
-    const best = earliest?.metric?.timeToFirstFixationMs;
-    if (best === undefined || best === null || at < best) earliest = area;
-  }
-  return earliest;
-}
+export const primaryArea = (areas: readonly AttentionArea[]): AttentionArea | null =>
+  areas.find((area) => area.aoi.isPrimaryAction) ?? null;
 
 export interface ThisStepPanelProps {
   readonly step: Run['steps'][number];
-  readonly sessions: AttentionStepSessions;
+  /** The aggregate's figures for this screen and these filters. Every row is read here. */
+  readonly screen: ScreenFiguresView;
   readonly areas: readonly AttentionArea[];
-  /** The area the screen isolates, or `null` for all of them. */
-  readonly isolated: AttentionArea | null;
 }
 
-export function ThisStepPanel({ step, sessions, areas, isolated }: ThisStepPanelProps) {
-  const isolatedId = isolated?.aoi.id ?? null;
-  const perSession = perPerson(sessions.sessions, step.id, isolatedId);
-
-  const fixations = median(perSession.map((looks) => looks.length));
-  const dwellMs = median(
-    perSession.map((looks) => looks.reduce((total, look) => total + look.durationMs, 0)),
-  );
-  const earliest = earliestArea(areas);
-  const reading = sessions.status === 'loading';
+export function ThisStepPanel({ step, screen, areas }: ThisStepPanelProps) {
+  const { figures, sessionCount } = screen;
+  const primary = primaryArea(areas);
+  const clicks = primary === null ? null : clicksOnArea(figures, primary.aoi.id);
 
   return (
-    <dl className={styles.kv}>
-      <dt>Fixations</dt>
-      <dd className="num">
-        {reading ? (
-          <span className="faint">reading the sessions…</span>
-        ) : fixations === null ? (
-          'none'
-        ) : (
-          `${count.format(fixations)} median per session`
-        )}
+    <dl className={styles.kv} data-section="this-screen">
+      <dt>Reached it</dt>
+      <dd className="num" data-reading="reached">
+        <Figure screen={screen}>
+          {figures === null || sessionCount === null
+            ? null
+            : `${figures.reached} of ${sessionCount}`}
+        </Figure>
       </dd>
 
-      <dt>Total dwell</dt>
-      <dd className="num">
-        {reading ? (
-          <span className="faint">reading the sessions…</span>
-        ) : dwellMs === null ? (
-          'none'
-        ) : (
-          `${seconds.format(dwellMs / 1000)} s`
-        )}
+      <dt>Left here</dt>
+      <dd className="num" data-reading="left-here">
+        <Figure screen={screen}>
+          {figures === null
+            ? null
+            : `${figures.leftHere} of the ${figures.reached} who reached it`}
+        </Figure>
       </dd>
 
-      <dt>Earliest area</dt>
-      <dd>
-        {earliest === null ? <span className="faint">nobody looked yet</span> : earliest.aoi.label}
+      <dt>Median time on it</dt>
+      <dd className="num" data-reading="median-time">
+        <Figure screen={screen}>
+          {figures === null ? null : figures.medianMsOnIt === null ? (
+            // Not nought seconds: nobody on this screen was timed on it.
+            <span className="faint">nobody was timed on it</span>
+          ) : (
+            onItFor(figures.medianMsOnIt)
+          )}
+        </Figure>
       </dd>
 
-      <dt>Reached this step</dt>
-      <dd className="num">
-        {reading ? (
-          <span className="faint">reading the sessions…</span>
-        ) : (
-          `${sessions.reachedCount} of ${sessions.scoredSessionCount}`
-        )}
+      <dt>Scrolled past the fold</dt>
+      <dd className="num" data-reading="past-fold">
+        <Figure screen={screen}>
+          {figures === null
+            ? null
+            : `${figures.scrollDepth.pastFoldSessions} of ${figures.reached}`}
+        </Figure>
       </dd>
 
-      <dt>Isolated</dt>
-      <dd>{isolated === null ? <span className="faint">all areas</span> : isolated.aoi.label}</dd>
+      <dt>
+        {primary === null
+          ? `Clicks on this screen`
+          : `Clicks on ${primary.aoi.label}`}
+      </dt>
+      <dd className="num" data-reading="primary-clicks">
+        <Figure screen={screen}>
+          {figures === null ? null : primary === null ? (
+            <span className="faint">
+              the {step.label} screen marks no control as its primary action
+            </span>
+          ) : clicks === null ? (
+            <span className="faint">no clicks recorded for it</span>
+          ) : (
+            `${clicks} of ${sessionCount ?? figures.reached} people`
+          )}
+        </Figure>
+      </dd>
     </dl>
   );
+}
+
+/**
+ * One reading, or the reason there is none.
+ *
+ * The five states that are not a figure are said in words, once, here: a panel of five rows
+ * each inventing its own sentence for *the aggregate is still coming back* is five chances
+ * to word it differently. A number is never printed that a later read would change, and
+ * never a zero where the answer is that nothing was measured.
+ */
+function Figure({ screen, children }: { screen: ScreenFiguresView; children: React.ReactNode }) {
+  switch (screen.status) {
+    case 'loading':
+      return <span className="faint">reading this test’s figures…</span>;
+    case 'none':
+      return <span className="faint">this test computed none</span>;
+    case 'unreadable':
+      return <span className="faint">could not be read</span>;
+    case 'no-people':
+      return <span className="faint">nobody matches both filters</span>;
+    case 'no-screen':
+      return <span className="faint">none of them reached it</span>;
+    case 'ready':
+      return <>{children}</>;
+  }
 }

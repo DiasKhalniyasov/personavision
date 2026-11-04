@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import type { Run } from '@personavision/contract';
 import { Toggle } from '@/components/ui/toggle';
 import { reachCounts } from './reachCounts';
+import { reachedOf } from './screenSlices';
 import type { AttentionSelection } from './useAttentionSelection';
 import type { AttentionStepSessions } from './useAttentionStepSessions';
+import type { ScreenFiguresView } from './useScreenFigures';
 import styles from './stepFilmstrip.module.css';
 
 /**
@@ -22,11 +24,16 @@ import styles from './stepFilmstrip.module.css';
  * pressing a frame goes through `useAttentionSelection().setStep`, which drops `?aoi=`,
  * since an area of interest belongs to the step it was marked on.
  *
- * Nothing is counted here. `reachCounts` is the one derivation, over the scored sessions
- * `useAttentionStepSessions` has read, and the denominator is the run's own
- * `scores[].scoredSessionCount` — the population the version's figures were worked out
- * from, which this screen states beside the version switch and must not restate differently
- * here.
+ * **The counts are the aggregate's, and they obey the filters.** Narrowing to the people who
+ * gave up re-reads the strip from that slice, so the thinning a reader sees is the thinning
+ * of the people they asked about — which is the whole point of putting the filters on this
+ * screen. `reachedOf` picks the row; nothing is counted here.
+ *
+ * A run that computed **no aggregate** keeps the count the Attention screen always showed:
+ * `reachCounts` over the scored sessions, with the run's own `scores[].scoredSessionCount`
+ * as the denominator. The two can never disagree, because a run with no aggregate has no
+ * filters either — the strips are not rendered — so both are the same population counted
+ * once. Without the fallback an older run would lose a figure it used to show.
  *
  * What a frame will not print is a zero it does not mean. A count of nobody reads `0` in the
  * prototype's zero marker and the frame stays pressable, because a step nobody reached is
@@ -40,17 +47,19 @@ export interface StepFilmstripProps {
   readonly run: Run;
   readonly selection: AttentionSelection;
   readonly sessions: AttentionStepSessions;
+  /** The aggregate's figures for these filters, which every count here is read from. */
+  readonly screen: ScreenFiguresView;
 }
 
-export function StepFilmstrip({ run, selection, sessions }: StepFilmstripProps) {
-  const rows = useMemo(
+export function StepFilmstrip({ run, selection, sessions, screen }: StepFilmstripProps) {
+  const fromSessions = useMemo(
     () => reachCounts(run.steps, sessions.sessions, selection.variant),
     [run.steps, sessions.sessions, selection.variant],
   );
 
   return (
     <div className={styles.filmstrip} role="group" aria-label="Step" data-section="step-filmstrip">
-      {rows.map(({ step, reached }) => (
+      {run.steps.map((step) => (
         <Toggle
           key={step.id}
           data-step={step.id}
@@ -60,7 +69,15 @@ export function StepFilmstrip({ run, selection, sessions }: StepFilmstripProps) 
           }}
         >
           <span className="microlabel">{step.label}</span>
-          <ReachCount reached={reached} sessions={sessions} />
+          <ReachCount
+            step={step.id}
+            screen={screen}
+            selection={selection}
+            sessions={sessions}
+            fromSessions={
+              fromSessions.find((row) => row.step.id === step.id)?.reached ?? 0
+            }
+          />
         </Toggle>
       ))}
     </div>
@@ -68,35 +85,69 @@ export function StepFilmstrip({ run, selection, sessions }: StepFilmstripProps) 
 }
 
 /**
- * How many people reached this step, out of the people this version's figures cover.
+ * How many people reached this step, out of the people the filters leave.
  *
- * Three readings, and the two that are not a count are said in words. A count the screen
- * does not have yet is not zero, and a count it could not read is not zero either; the
- * stage states what went wrong with the file, and the frame's job is only to not print a
- * figure the run does not support.
+ * Several readings, and every one that is not a count is said in words. A count the screen
+ * does not have yet is not zero, a count it could not read is not zero, and a composition
+ * nobody satisfies is not zero either; the stage states what went wrong, and the frame's job
+ * is only to never print a figure the run does not support.
  */
-function ReachCount({ reached, sessions }: { reached: number; sessions: AttentionStepSessions }) {
-  if (sessions.status === 'error') {
-    return (
-      <span className={`${styles.reach} ${styles.unsettled}`} data-reach="unreadable">
-        no count: the sessions are unreadable
-      </span>
-    );
-  }
-  if (sessions.status === 'loading') {
-    return (
-      <span className={`${styles.reach} ${styles.unsettled}`} data-reach="reading">
-        reading the sessions&hellip;
-      </span>
-    );
+function ReachCount({
+  step,
+  screen,
+  selection,
+  sessions,
+  fromSessions,
+}: {
+  step: string;
+  screen: ScreenFiguresView;
+  selection: AttentionSelection;
+  sessions: AttentionStepSessions;
+  fromSessions: number;
+}) {
+  const unsettled = (state: string, words: string) => (
+    <span className={`${styles.reach} ${styles.unsettled}`} data-reach={state}>
+      {words}
+    </span>
+  );
+
+  switch (screen.status) {
+    case 'loading':
+      return unsettled('reading', 'reading this test’s figures…');
+    case 'unreadable':
+      return unsettled('unreadable', 'no count: the figures are unreadable');
+    case 'no-people':
+      return unsettled('no-people', 'nobody matches both filters');
+    case 'none':
+      // No aggregate at all: the count the Attention screen always showed, over the scored
+      // sessions, with the three readings that are not a count still said in words.
+      if (sessions.status === 'error') {
+        return unsettled('unreadable', 'no count: the sessions are unreadable');
+      }
+      if (sessions.status === 'loading') {
+        return unsettled('reading', 'reading the sessions…');
+      }
+      return <Counted reached={fromSessions} of={sessions.scoredSessionCount} />;
+    case 'no-screen':
+    case 'ready':
+      break;
   }
 
+  // The slice's own row for this step of this version. `null` is nobody of these people
+  // standing on it, which is a count of nought and a finding rather than a gap: the slice
+  // exists, so there is a denominator to say it out of.
+  const reached = reachedOf(screen.slice, selection.variant, step) ?? 0;
+  return <Counted reached={reached} of={screen.sessionCount ?? 0} />;
+}
+
+/** The count itself. A nought is the prototype's zero marker, and the frame stays pressable. */
+function Counted({ reached, of }: { reached: number; of: number }) {
   return (
     <span
       className={reached === 0 ? `${styles.reach} ${styles.zero}` : styles.reach}
       data-reach={reached === 0 ? 'zero' : 'counted'}
     >
-      {reached} of {sessions.scoredSessionCount} reached it
+      {reached} of {of} reached it
     </span>
   );
 }

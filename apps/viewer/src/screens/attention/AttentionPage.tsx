@@ -12,36 +12,53 @@ import { AttentionStage, stageIsShown, useAttentionStage } from './stage/Attenti
 import type { AttentionStageView } from './stage/AttentionStage';
 import { OverlayTogglesPanel } from './stage/OverlayTogglesPanel';
 import { AoiMetricsTable } from './AoiMetricsTable';
+import { HeatmapFilters } from './HeatmapFilters';
 import { IsolatedAreaCaption } from './IsolatedAreaCaption';
+import {
+  clicksFootnote,
+  noAggregate,
+  noPeopleMatch,
+  noneOfThemReached,
+  unreadableAggregate,
+} from './attentionWording';
+import { clicksNowhere, clicksOnArea, totalClicks } from './screenSlices';
 import { useAttentionAreas } from './useAttentionAreas';
 import { useAttentionSelection } from './useAttentionSelection';
 import type { AttentionSelection } from './useAttentionSelection';
 import { useAttentionStepSessions } from './useAttentionStepSessions';
 import type { AttentionStepSessions } from './useAttentionStepSessions';
+import { useScreenFigures } from './useScreenFigures';
+import type { ScreenFiguresView } from './useScreenFigures';
 import styles from './attentionPage.module.css';
 
 /**
- * `/runs/:runId/attention/:variant/:step?aoi=` — where the audience looked on this version
- * of this step. `#screen-attention` of `docs/design/prototype.html`.
+ * `/runs/:runId/attention/:variant/:step?aoi=&overlay=&segment=&outcome=` — the **Heatmaps**
+ * section of the results page: where the audience looked, clicked and stopped scrolling on
+ * one screen. `#screen-heatmaps` of `docs/design/prototype.html`, `docs/FLOW.md` section
+ * 14.4.
  *
- * The reader arrives here having already been given the answer: from a finding, or from the
- * caption under the Verdict screen's one heatmap. So this screen's job is **proof**, not
- * discovery — it shows all of the evidence the verdict showed one frame of, for the exact
- * version, step and area that was named (`docs/FLOW.md` section 3).
+ * It is the Attention screen **extended, not replaced**. The stage, the filmstrip, the side
+ * column and the areas table are the same components over the same route; what is new is
+ * that an attention overlay cannot show clicks, so clicks and scroll depth are drawn beside
+ * it, and that the question worth asking — *where did the people who failed click?* — is two
+ * filters on this screen rather than a screen of its own.
  *
- * The whole selection is the URL (`useAttentionSelection`): the screen keeps nothing a
- * reload would lose, every view is a link, and switching version keeps the step and the
- * isolated area so that the same moment can be read on A and on B.
+ * **Every figure on it is the aggregate's own slice for the composition chosen.** The
+ * browser does not re-aggregate a hundred sessions (`docs/adr/0001`): `aggregate.json` is
+ * stored pre-sliced, so composing an outcome and a segment is picking a row out of it, and
+ * `useScreenFigures` is the one place this screen does that. The attention overlay is the
+ * exception and stays what it was — dwell drawn from the sessions' own fixations, because
+ * there are no per-pixel attention bins to slice — and it is mounted, not reimplemented.
  *
- * What is on this file is the screen's own frame — the heading and lede, the version
- * switch, the line stating what the aggregate covers, the side column, the "This step"
- * readings and the disclaimer. The filmstrip (#60), the stage and its overlays (#58), the
- * areas table (#59) and the isolate caption (#73) mount into it, each from its own file,
- * and read this screen's selection and its two data hooks rather than publishing their own.
+ * The whole selection is the URL: version, step, isolated area, **which overlays are drawn**
+ * (decision 134) and the two filters. So the screen keeps nothing a reload would lose, every
+ * view is a link, and a recommendation can cite *"heatmap · waiting · progress area"* and
+ * land on exactly that overlay, step, area and filter.
  *
- * The stage is two mounts rather than one, because its frame and its Overlays panel are in
- * two cells of the grid below: `useAttentionStage` holds the one piece of state they share
- * — which layers are on — so that neither of them holds the other's.
+ * What is on this file is the screen's own frame — the heading and lede, the control row,
+ * the side column, the footnote under the stage and the disclaimer. The filmstrip, the stage
+ * and its overlays, the areas table and the isolate caption mount into it, each from its own
+ * file, and read this screen's selection and its data hooks rather than publishing their own.
  */
 export function AttentionPage() {
   const { runId = '' } = useParams();
@@ -67,6 +84,12 @@ export function AttentionScreen({ run }: { run: Run }) {
   const sessions = useAttentionStepSessions(selection.variant, selection.step);
   const areaRows = useAttentionAreas(selection.variant, selection.step);
   const { areas } = areaRows;
+  const screen = useScreenFigures(
+    selection.variant,
+    selection.step,
+    selection.segment,
+    selection.outcome,
+  );
 
   const step = run.steps.find((candidate) => candidate.id === selection.step);
   const isolated = areas.find((area) => area.aoi.id === selection.aoi) ?? null;
@@ -77,21 +100,22 @@ export function AttentionScreen({ run }: { run: Run }) {
     aoi: selection.aoi,
     sessions,
     areas,
+    screen,
+    overlays: selection,
   });
 
   return (
-    <div className="strip" data-section="attention">
+    <div className="strip" data-section="heatmaps">
       <div className="wrap">
         <p className="breadcrumb">
-          <Link to={paths.run(run.runId)}>Verdict</Link> / Attention
+          <Link to={paths.run(run.runId)}>Results</Link> / Heatmaps
         </p>
         <div className="pagehead">
-          <h1>Where your audience looked</h1>
+          <h1>Where they looked, clicked and stopped scrolling</h1>
         </div>
         <p className="lede">
-          Every look your audience took on this version, over the page as they saw it. Fixation,
-          dwell and scanpath are the technical words for it; the table under the page is the same
-          thing in numbers.
+          One screen at a time, three overlays, and the filter that answers the question worth
+          asking: <b>where did the people who failed click?</b>
         </p>
 
         {selection.fallback === null ? null : (
@@ -100,17 +124,23 @@ export function AttentionScreen({ run }: { run: Run }) {
           </p>
         )}
 
-        <div className={styles.controls}>
-          <VariantSwitch run={run} selection={selection} />
-          <span className="grow" />
-          <AggregateLine run={run} variant={selection.variant} />
-        </div>
+        <AggregateNotice screen={screen} />
 
-        <StepFilmstrip run={run} selection={selection} sessions={sessions} />
+        <VariantSwitch run={run} selection={selection} />
+        <HeatmapFilters selection={selection} screen={screen} />
+
+        <StepFilmstrip run={run} selection={selection} sessions={sessions} screen={screen} />
 
         <div className={styles.stage}>
           <div>
-            <StagePlace run={run} selection={selection} sessions={sessions} stage={stage} />
+            <StagePlace
+              run={run}
+              selection={selection}
+              sessions={sessions}
+              stage={stage}
+              screen={screen}
+            />
+            <ClicksCaption areas={areas} screen={screen} />
             <IsolatedAreaCaption
               runId={run.runId}
               variant={selection.variant}
@@ -128,20 +158,25 @@ export function AttentionScreen({ run }: { run: Run }) {
               </SidePanel>
             ) : null}
             {step === undefined ? null : (
-              <SidePanel title="This step">
-                <ThisStepPanel step={step} sessions={sessions} areas={areas} isolated={isolated} />
+              <SidePanel title="This screen">
+                <ThisStepPanel step={step} screen={screen} areas={areas} />
               </SidePanel>
             )}
             <SidePanel title="Reading this">
               <p className="lede">
-                Numbers are fixation order, median across sessions. Fixation size is dwell time.
-                Click a row in the table to isolate one area of interest.
+                Filters compose: an overlay, an outcome and a segment. Every count is the
+                people left after the filters, and automation failures are never among them.
               </p>
             </SidePanel>
           </SideColumn>
         </div>
 
-        <AoiMetricsTable runId={run.runId} variant={selection.variant} areas={areaRows} />
+        <AoiMetricsTable
+          runId={run.runId}
+          variant={selection.variant}
+          areas={areaRows}
+          screen={screen}
+        />
 
         <SimulatedDisclaimer />
       </div>
@@ -156,62 +191,118 @@ export function AttentionScreen({ run }: { run: Run }) {
  * the two versions are two states of one view rather than two places, so pressed is what
  * the control is saying. Pressing the version already shown changes nothing, and in
  * particular does not push a second entry a reader would have to go back through.
+ *
+ * It is above the three filter strips rather than among them, because it chooses **which
+ * page** is on the stage while they choose **whose figures** are drawn over it. A run with
+ * one version has nothing to switch and shows no strip: `#screen-heatmaps` draws none, and
+ * the hundred-agent test section 14 is about runs one version at a time.
  */
 function VariantSwitch({ run, selection }: { run: Run; selection: AttentionSelection }) {
+  if (run.variants.length <= 1) return null;
+
   return (
-    <div className={styles.seg} role="group" aria-label="Version">
-      {run.variants.map((variant) => (
-        <Toggle
-          key={variant.id}
-          pressed={variant.id === selection.variant}
-          onPressedChange={() => {
-            selection.setVariant(variant.id);
-          }}
-        >
-          {variant.id} &middot; {variant.name}
-        </Toggle>
-      ))}
+    <div className={styles.controls}>
+      <div className={styles.seg} role="group" aria-label="Version">
+        {run.variants.map((variant) => (
+          <Toggle
+            key={variant.id}
+            pressed={variant.id === selection.variant}
+            onPressedChange={() => {
+              selection.setVariant(variant.id);
+            }}
+          >
+            {variant.id} &middot; {variant.name}
+          </Toggle>
+        ))}
+      </div>
     </div>
   );
 }
 
 /**
- * What the aggregate covers, and what it leaves out.
+ * What is wrong with this run's figures, where there is something wrong with the file
+ * itself rather than with what a reader asked of it.
  *
- * Both figures are the run's own, from this version's score: how many people were scored,
- * and how many our own automation broke. Neither is counted here from the sessions — the
- * pipeline decided who was excluded and stored it, and a heatmap that silently averaged a
- * different population from the one named would be the one dishonest thing this screen
- * could do.
+ * A run that computed no aggregate and a file that will not parse are both stated once, at
+ * the top, because they are about the whole screen: the two bin overlays, the filters, the
+ * *This screen* panel and the clicks column are all reading the same absent file, and five
+ * places each saying so is five chances to say it differently. A composition nobody
+ * satisfies is **not** here — that is a reading about the audience, and it belongs where the
+ * figures would have been.
  */
-function AggregateLine({ run, variant }: { run: Run; variant: string }) {
-  const score = run.scores.find(
-    (candidate) => candidate.variant === variant && candidate.taskId === run.task.id,
-  );
-  if (score === undefined) {
+function AggregateNotice({ screen }: { screen: ScreenFiguresView }) {
+  if (screen.status === 'none') {
     return (
-      <span className="microlabel">
-        This test scored nobody on this version &middot; there is no aggregate to show
-      </span>
+      <p className="notice info" role="status" data-section="no-aggregate">
+        {noAggregate()}
+      </p>
     );
   }
+  if (screen.status === 'unreadable') {
+    return (
+      <p className="notice" role="status" data-section="unreadable-aggregate">
+        {unreadableAggregate(screen.problem ?? 'the aggregate could not be read')}
+      </p>
+    );
+  }
+  return null;
+}
 
-  const broken = score.outcomeCounts.automationFailure;
+/**
+ * The footnote under the stage: what the clicks on this screen amount to, in words.
+ *
+ * `#screen-heatmaps` writes it as *"26 of the 41 clicks on this screen landed on Generate a
+ * second time, and 9 landed on empty space where a progress indicator would be"*. It is read
+ * from the slice's own `clicksByAoi` — the busiest area and the clicks that landed on
+ * nothing — and it is the clicks overlay's text alternative as much as the key beside it is:
+ * a filled rectangle says nothing to a reader who cannot see it.
+ */
+function ClicksCaption({
+  areas,
+  screen,
+}: {
+  areas: readonly { readonly aoi: { readonly id: string; readonly label: string } }[];
+  screen: ScreenFiguresView;
+}) {
+  if (screen.status !== 'ready') return null;
+
+  const counted = areas.flatMap(({ aoi }) => {
+    const clicks = clicksOnArea(screen.figures, aoi.id);
+    return clicks === null || clicks === 0 ? [] : [{ label: aoi.label, clicks }];
+  });
+  const busiest = counted.reduce<{ label: string; clicks: number } | null>(
+    (most, one) => (most === null || one.clicks > most.clicks ? one : most),
+    null,
+  );
+  const sentence = clicksFootnote({
+    busiest,
+    nowhere: clicksNowhere(screen.figures),
+    total: totalClicks(screen.figures),
+  });
+  if (sentence === null) return null;
+
   return (
-    <span className="microlabel">
-      Aggregate of {score.scoredSessionCount} people &middot;{' '}
-      {broken === 0
-        ? 'our automation broke on nobody'
-        : `the ${broken} our automation broke ${broken === 1 ? 'is' : 'are'} excluded`}
-    </span>
+    <p className="footnote" data-section="clicks-footnote">
+      {sentence}
+    </p>
   );
 }
 
 /**
- * The page and its overlays (#58) — unless something truer than a page is the answer.
+ * The page and its overlays — unless something truer than a page is the answer.
  *
- * Two things are stated *instead of* the stage, because both are results rather than gaps:
- * a session file that could not be read, and a step nobody in the audience ever reached.
+ * Four things are stated *instead of* the stage, because all four are results rather than
+ * gaps: a session file that could not be read, a step nobody in the audience ever reached, a
+ * composition of filters no session satisfies, and a screen none of the *filtered* people
+ * stood on. The last two are the ones this screen adds, and they are the reason a filter
+ * strip never renders an empty frame: *nobody in mobile · price-sensitive failed* is a
+ * reading about the audience and the screen says it.
+ *
+ * The order matters once. A step **nobody** reached is stated before a screen none of the
+ * filtered people reached, because the first is true whatever the filters are and has the
+ * plainer words for it; the second is only reached when somebody did get there and these
+ * particular people did not, which is what makes widening the filters the way on.
+ *
  * While the people are still being read the stage is shown anyway: the screenshot, the fold
  * and the area outlines all come from the run, which has already arrived, so there is
  * nothing to wait for and no reason to make the reader wait for it.
@@ -221,11 +312,13 @@ function StagePlace({
   selection,
   sessions,
   stage,
+  screen,
 }: {
   run: Run;
   selection: AttentionSelection;
   sessions: AttentionStepSessions;
   stage: AttentionStageView;
+  screen: ScreenFiguresView;
 }) {
   if (sessions.status === 'error') {
     return (
@@ -234,10 +327,43 @@ function StagePlace({
       </p>
     );
   }
+  if (screen.status === 'no-people') {
+    return (
+      <div className="empty" data-section="no-people-match">
+        <h2>No session matches both filters</h2>
+        <p>{noPeopleMatch(selection.outcome, selection.segment)}</p>
+        <div className="actions">
+          <button
+            type="button"
+            onClick={() => {
+              selection.setOutcome(null);
+              selection.setSegment(null);
+            }}
+          >
+            Show every outcome and segment
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // Before the filtered reading: a step **nobody** reached, filters or no filters, is the
+  // finding this screen has always had words for, and they are the better words for it.
   if (!stageIsShown(sessions)) {
     return <NobodyReached runId={run.runId} variant={selection.variant} />;
   }
-
+  if (screen.status === 'no-screen') {
+    return (
+      <div className="empty" data-section="none-of-them-reached">
+        <h2>None of these people reached this screen</h2>
+        <p>{noneOfThemReached(stage.stepLabel)}</p>
+        <div className="actions">
+          <Link to={sessionsWithVariant(run.runId, selection.variant)}>
+            See where they ended
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return <AttentionStage stage={stage} />;
 }
 

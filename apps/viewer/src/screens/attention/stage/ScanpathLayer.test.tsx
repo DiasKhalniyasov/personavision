@@ -2,15 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runSchema } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
-import { paths } from '@/shell/paths';
-import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../../tests/app';
+import { forgetRuns, readRunFile } from '../../../../tests/app';
 import { ruleIn, rulesOf } from '../../../../tests/cssom';
 import { loadDesignTokens } from '../../../../tests/setup';
+import { attentionAreas } from '../useAttentionAreas';
 import type { AttentionArea } from '../useAttentionAreas';
 import { medianScanpath } from './medianScanpath';
 import { OVERLAY_LAYERS } from './overlayLayers';
@@ -32,23 +31,12 @@ import { SCANPATH_LAYER, ScanpathKey, ScanpathLayer } from './ScanpathLayer';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const HEADING = 'Where your audience looked';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
-const attention = (variant = 'B', step = 'review', query = '') =>
-  mountApp(`${paths.attention(RUN_ID, variant, step)}${query}`);
 
-const ready = () => screen.findByRole('heading', { level: 1, name: HEADING });
 
-/** The page as it is once its screenshot has arrived, which jsdom never does on its own. */
-const decoded = (container: HTMLElement) => {
-  fireEvent.load(container.querySelector('#att-page img') as HTMLImageElement);
-};
 
-const scanToggle = () => screen.getByRole('button', { name: /Scanpath/ });
-const heatToggle = () => screen.getByRole('button', { name: /Attention heatmap/ });
-const zoomTo = (level: string) => userEvent.click(screen.getByRole('radio', { name: level }));
 
 const layerIn = (container: HTMLElement) => container.querySelector('[data-overlay-layer="scan"]');
 const keyIn = (container: HTMLElement) => container.querySelector('[data-scan-key]');
@@ -76,10 +64,6 @@ const saccadesIn = (container: HTMLElement) =>
     y2: Number(line.getAttribute('y2')),
     nonScalingStroke: line.getAttribute('vector-effect'),
   }));
-
-/** The sentence tied to one switch, as a screen reader is given it. */
-const reasonFor = (control: HTMLElement) =>
-  document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent ?? '';
 
 /** A page the width of a desktop capture, so an overlay unit is a round number of pixels. */
 const PAGE: Transform = { pageWidth: 1000, pageHeight: 4000 };
@@ -141,25 +125,48 @@ beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
 
 describe('the registry entry', () => {
-  it('is the prototype’s own switch: on by default, in its words', () => {
+  it('is in the prototype’s words, and is no longer offered on the Heatmaps screen', () => {
     expect(SCANPATH_LAYER.id).toBe('scan');
     expect(SCANPATH_LAYER.label).toBe('Scanpath');
     expect(SCANPATH_LAYER.hint).toBe('numbered fixations');
-    expect(SCANPATH_LAYER.defaultOn).toBe(true);
-    // Between the heatmap and the outlines, which is the prototype's order and also back
-    // to front: the heat is the ground the order is read over.
-    expect(OVERLAY_LAYERS[1]).toBe(SCANPATH_LAYER);
+    // `#screen-heatmaps` offers clicks, attention, scroll depth and the areas of interest,
+    // and its own lede says *three overlays*: the numbered-fixation layer belonged to the
+    // Attention screen this one replaces (decision 132). The component and its arithmetic
+    // are kept and are what the rest of this suite is about, so re-offering it is one line
+    // in the registry rather than a rebuild.
+    expect(OVERLAY_LAYERS).not.toContain(SCANPATH_LAYER);
   });
 });
 
-describe('on the screen', () => {
-  it('draws the order attention moved in without being asked, numbered from one', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
+describe('over the committed run’s own figures', () => {
+  /**
+   * The layer, handed the areas of the redesign's review step exactly as the screen's own
+   * hook joins them.
+   *
+   * These were screen tests while the scanpath was on the Attention screen. The claims are
+   * the layer's, not the screen's — the order, the numbers, the saccades, and what is left
+   * off — so they are made of the same run through the same join, one mount lower.
+   */
+  const reviewAreas = (over: (run: Run) => Run = (run) => run): readonly AttentionArea[] =>
+    attentionAreas(over(seedRun()), 'B', 'review').areas;
 
-    expect(scanToggle().getAttribute('aria-pressed')).toBe('true');
+  const capture = (run: Run): Transform => {
+    const shot = run.screenshots.find(
+      (one) => one.variant === 'B' && one.step === 'review',
+    ) as Run['screenshots'][number];
+    return { pageWidth: shot.viewport.width, pageHeight: shot.pageHeight };
+  };
+
+  const overReview = (over: Partial<OverlayLayerProps> = {}) =>
+    render(
+      <ScanpathLayer
+        {...given({ areas: reviewAreas(), transform: capture(seedRun()), ...over })}
+      />,
+    );
+
+  it('draws the order attention moved in, numbered from one', () => {
+    const { container } = overReview();
+
     // The redesign's review step: the order the committed run recorded, by median time to
     // first fixation — the summary first, then the planted fee row, then the payment row,
     // then the help link.
@@ -172,11 +179,8 @@ describe('on the screen', () => {
     expect(numeralsIn(container)).toEqual(['1', '2', '3', '4']);
   });
 
-  it('leaves the button nobody looked at off the path entirely', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
+  it('leaves the button nobody looked at off the path entirely', () => {
+    const { container } = overReview();
 
     // The completing action of the redesign, which no fixation ever landed in. No mark and
     // no number at all: its absence under the outline is the whole finding.
@@ -184,11 +188,8 @@ describe('on the screen', () => {
     expect(marksIn(container).length).toBe(4);
   });
 
-  it('joins consecutive marks with a saccade, in that order', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
+  it('joins consecutive marks with a saccade, in that order', () => {
+    const { container } = overReview();
 
     const marks = marksIn(container);
     const saccades = saccadesIn(container);
@@ -201,31 +202,8 @@ describe('on the screen', () => {
     );
   });
 
-  it('comes away with its scale when the reader switches it off, and leaves the heatmap alone', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
-
-    expect(keyIn(container)).not.toBeNull();
-
-    await userEvent.click(scanToggle());
-
-    expect(layerIn(container)).toBeNull();
-    expect(keyIn(container)).toBeNull();
-    expect(container.querySelector('[data-overlay-layer="heat"]')).not.toBeNull();
-
-    await userEvent.click(scanToggle());
-    expect(layerIn(container)).not.toBeNull();
-    expect(keyIn(container)).not.toBeNull();
-    expect(heatToggle().getAttribute('aria-pressed')).toBe('true');
-  });
-
-  it('isolates to one area, keeping the number the whole order gave it', async () => {
-    await serveRunData();
-    const { container } = attention('B', 'review', '?aoi=B-review-fee-row');
-    await ready();
-    decoded(container);
+  it('isolates to one area, keeping the number the whole order gave it', () => {
+    const { container } = overReview({ isolatedAoiId: 'B-review-fee-row' });
 
     expect(marksIn(container).map((mark) => [mark.number, mark.aoiId])).toEqual([
       [2, 'B-review-fee-row'],
@@ -235,49 +213,44 @@ describe('on the screen', () => {
     expect(saccadesIn(container)).toEqual([]);
   });
 
-  it('says an isolated area was never looked at rather than drawing it', async () => {
-    await serveRunData();
-    const { container } = attention('B', 'review', '?aoi=B-review-complete');
-    await ready();
-    decoded(container);
+  it('says an isolated area was never looked at rather than drawing it', () => {
+    const props = given({
+      areas: reviewAreas(),
+      transform: capture(seedRun()),
+      isolatedAoiId: 'B-review-complete',
+    });
 
-    expect(layerIn(container)).toBeNull();
-    const control = scanToggle();
-    expect(control.getAttribute('aria-disabled')).toBe('true');
+    expect(render(<ScanpathLayer {...props} />).container.querySelector('circle')).toBeNull();
+    const why = SCANPATH_LAYER.unavailable?.(props) ?? '';
     // The label the areas table calls it, never the id: the two are about the same row of
     // the same page.
-    expect(reasonFor(control)).toContain(
+    expect(why).toContain(
       'No fixation landed in “Completing action — A: "Place order", B: "Confirm purchase"”',
     );
-    expect(reasonFor(control)).toContain('so it has no place in the order');
+    expect(why).toContain('so it has no place in the order');
   });
 
-  it('draws nothing and says so where no area was fixated at all', async () => {
-    const run = seedRun();
+  it('draws nothing and says so where no area was fixated at all', () => {
     // A run whose figures say nobody ever looked anywhere: the committed one has no such
     // step, and "never" has to be a reading this layer can draw rather than a gap.
-    const changed: Run = {
-      ...run,
-      aoiMetrics: run.aoiMetrics.map((metric) => ({
-        ...metric,
-        timeToFirstFixationMs: null,
-        firstFixationDurationMs: null,
-        totalDwellMs: 0,
-        fixationCount: 0,
-        revisits: 0,
-        lookedAtShare: 0,
+    const props = given({
+      areas: reviewAreas((run) => ({
+        ...run,
+        aoiMetrics: run.aoiMetrics.map((metric) => ({
+          ...metric,
+          timeToFirstFixationMs: null,
+          firstFixationDurationMs: null,
+          totalDwellMs: 0,
+          fixationCount: 0,
+          revisits: 0,
+          lookedAtShare: 0,
+        })),
       })),
-    };
-    await serveRunData({ files: { [`/runs/${RUN_ID}/run.json`]: JSON.stringify(changed) } });
-    const { container } = attention();
-    await ready();
-    decoded(container);
+      transform: capture(seedRun()),
+    });
 
-    expect(layerIn(container)).toBeNull();
-    expect(keyIn(container)).toBeNull();
-    const control = scanToggle();
-    expect(control.getAttribute('aria-disabled')).toBe('true');
-    expect(reasonFor(control)).toBe(
+    expect(render(<ScanpathLayer {...props} />).container.querySelector('circle')).toBeNull();
+    expect(SCANPATH_LAYER.unavailable?.(props)).toBe(
       'No fixation landed anywhere on this version of this step, so there is no order to read.',
     );
   });
@@ -306,44 +279,38 @@ describe('what it draws', () => {
     ]);
   });
 
-  it('keeps its numbers and its strokes off the zoom, while the marks stay in register', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
-
-    const atCapturedSize = marksIn(container);
-    const numeralPlaces = () =>
-      [...container.querySelectorAll('[data-fixation-label]')].map(
-        (label) => (label as HTMLElement).style.cssText,
-      );
-    const places = numeralPlaces();
-
-    await zoomTo('50%');
-    expect(marksIn(container)).toEqual(atCapturedSize);
-    expect(numeralPlaces()).toEqual(places);
-    await zoomTo('200%');
-    expect(marksIn(container)).toEqual(atCapturedSize);
-    expect(numeralPlaces()).toEqual(places);
+  it('keeps its numbers and its strokes out of the space a zoom scales', () => {
+    const { container } = render(
+      <ScanpathLayer {...given({ areas: [area('summary'), area('fee-row', { x: 500 })] })} />,
+    );
 
     // A number's place is a percentage of the page's own box and its size is a length in
-    // CSS pixels, so neither is in the coordinate space the zoom scales. A saccade says
-    // the same of its width, to the renderer rather than to the stylesheet.
-    for (const line of saccadesIn(container)) {
+    // CSS pixels, so neither is in the coordinate space the zoom scales — which is why a
+    // mark cannot drift off the control it is about, whatever size the page is shown at.
+    // That the coordinates themselves come from `boxToOverlay` and nothing else is the
+    // claim of the anchoring test above; the stage's own suite drives the zoom control.
+    const places = [...container.querySelectorAll('[data-fixation-label]')].map(
+      (label) => (label as HTMLElement).style.cssText,
+    );
+    expect(places.length).toBeGreaterThan(0);
+    expect(places.every((place) => place.includes('%'))).toBe(true);
+
+    // A saccade says the same of its width, to the renderer rather than to the stylesheet.
+    const saccades = saccadesIn(container);
+    expect(saccades.length).toBeGreaterThan(0);
+    for (const line of saccades) {
       expect(line.nonScalingStroke).toBe('non-scaling-stroke');
     }
-    expect(places.every((place) => place.includes('%'))).toBe(true);
   });
 
-  it('leaves the drawing out of the accessibility tree, because it cannot be read out', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
+  it('leaves the drawing out of the accessibility tree, because it cannot be read out', () => {
+    const { container } = render(
+      <ScanpathLayer {...given({ areas: [area('summary'), area('fee-row')] })} />,
+    );
 
-    // The areas table under the stage is this screen's accessible representation of it,
-    // and the numbers here are text: it is the whole layer that is hidden, not only the
-    // vector surface inside it.
+    // The areas table under the stage is the screen's accessible representation of it, and
+    // the numbers here are text: it is the whole layer that is hidden, not only the vector
+    // surface inside it.
     expect((layerIn(container) as HTMLElement).getAttribute('aria-hidden')).toBe('true');
     expect(
       (container.querySelector('[data-overlay-layer="scan"] svg') as SVGElement).getAttribute(
@@ -455,17 +422,6 @@ describe('the scale beside the switch', () => {
     expect(container.textContent).toBe('brieflong dwell');
   });
 
-  it('sits in the Overlays panel, beside the switch it belongs to', async () => {
-    await serveRunData();
-    const { container } = attention();
-    await ready();
-    decoded(container);
-
-    const key = keyIn(container) as HTMLElement;
-    expect(
-      screen.getByRole('heading', { name: 'Overlays' }).closest('section')?.contains(key),
-    ).toBe(true);
-  });
 
   it('states the marks it could not place on the capture rather than dropping them', () => {
     const { container } = render(

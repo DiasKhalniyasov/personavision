@@ -36,6 +36,9 @@ describe('a link that names a version, a step and an area this test has', () => 
       variant: 'B',
       step: 'review',
       aoi: 'B-review-complete',
+      // A link naming no overlay opens on the clicks, which is the overlay
+      // `#screen-heatmaps` draws pressed and the one its question is about.
+      overlays: ['clicks'],
       fallback: null,
     });
   });
@@ -45,6 +48,7 @@ describe('a link that names a version, a step and an area this test has', () => 
       variant: 'Z',
       step: 'nowhere',
       aoi: 'nothing',
+      overlays: ['clicks'],
       fallback: null,
     });
   });

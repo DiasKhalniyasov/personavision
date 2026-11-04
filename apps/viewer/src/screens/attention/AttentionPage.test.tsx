@@ -2,7 +2,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { runPaths, runSchema } from '@personavision/contract';
+import { aggregateSchema, runPaths, runSchema } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
 import { paths, sessionsWithVariant } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
@@ -23,9 +23,17 @@ const RUN_ID = '2026-10-24-1402-northwind-demo';
 const layout = runPaths('');
 const runFile = `/runs/${RUN_ID}/run.json`;
 
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
+/**
+ * `#screen-heatmaps`' own lede. Its question is set in `<b>`, so it is matched on the
+ * paragraph's whole text rather than on a single text node.
+ */
 const LEDE =
-  'Every look your audience took on this version, over the page as they saw it. Fixation, dwell and scanpath are the technical words for it; the table under the page is the same thing in numbers.';
+  'One screen at a time, three overlays, and the filter that answers the question worth asking: where did the people who failed click?';
+
+const ledeText = (container: HTMLElement): string =>
+  (container.querySelector('.lede') as HTMLElement | null)?.textContent?.replace(/\s+/g, ' ') ??
+  '';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
@@ -43,9 +51,30 @@ const attention = (variant: string, step: string, query = '') =>
 const settled = async () => {
   await screen.findByRole('heading', { level: 1, name: HEADING });
   await waitFor(() => {
-    expect(screen.getByText('Reached this step').nextElementSibling?.textContent).not.toContain(
+    // The `This screen` panel's first reading, settled: every figure on this screen comes
+    // from the aggregate, so "settled" is that file having arrived.
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain(
       'reading',
     );
+  });
+  // And the areas, which the screen reads separately from the aggregate: the table's rows,
+  // the outlines and the isolate caption all come from that read.
+  await waitFor(() => {
+    expect(document.querySelector('[data-aoi-row]')).not.toBeNull();
+  });
+};
+
+/**
+ * The screen once the **sessions** are in as well.
+ *
+ * Only the two things that still read them need this — whether anybody reached the step at
+ * all, and an unreadable session file — and it is a wait of its own because every figure on
+ * the screen now comes from the aggregate, which lands first.
+ */
+const sessionsIn = async () => {
+  await screen.findByRole('heading', { level: 1, name: HEADING });
+  await waitFor(() => {
+    expect(document.querySelector('[data-reach="reading"]')).toBeNull();
   });
 };
 
@@ -53,6 +82,10 @@ const reading = (term: string): string =>
   screen.getByText(term, { selector: 'dt' }).nextElementSibling?.textContent ?? '';
 
 const version = (name: string) => screen.getByRole('button', { name });
+
+/** What the isolate caption under the stage says, or '' when nothing is isolated. */
+const isolatedSaid = (): string =>
+  (document.querySelector('#att-caption') as HTMLElement | null)?.textContent ?? '';
 
 beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
@@ -64,48 +97,61 @@ describe('the screen the evidence is on', () => {
 
     await settled();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(HEADING);
-    expect(screen.getByText(LEDE)).toBeDefined();
+    expect(ledeText(screen.getByRole('main'))).toBe(LEDE);
   });
 
-  it('says what the aggregate covers and who it leaves out, from the run’s own score', async () => {
+  it('says which people are shown, and that automation failures are not among them', async () => {
     await serveRunData();
     attention('B', 'review');
 
     await settled();
+    // What is drawn, of whom, and who is excluded — one sentence, every figure the
+    // aggregate's own. Unfiltered, the people are the whole test's scored sessions.
     expect(
-      screen.getByText('Aggregate of 11 people · the 1 our automation broke is excluded'),
+      screen.getByText('Clicks of all 22 people · the 2 our automation broke are excluded'),
     ).toBeDefined();
   });
 
-  it('follows the run rather than its own text when the score changes', async () => {
-    await serveChangedRun((run) => ({
-      ...run,
-      scores: run.scores.map((score) =>
-        score.variant === 'B'
-          ? {
-              ...score,
-              scoredSessionCount: 10,
-              completionRate: 0.2,
-              outcomeCounts: { ...score.outcomeCounts, abandoned: 5, automationFailure: 2 },
-            }
-          : score,
+  it('names both filters in that line once they are set', async () => {
+    await serveRunData();
+    attention('B', 'review', '?outcome=abandoned&segment=mobile%20%C2%B7%20in%20a%20hurry');
+
+    await settled();
+    // The composed slice's own count, and the two filters' own stored words.
+    expect(
+      screen.getByText(
+        'Clicks of 1 people · Gave up 8 · Mobile · in a hurry 6 · the 2 our automation broke are excluded',
       ),
-    }));
+    ).toBeDefined();
+  });
+
+  it('follows the aggregate rather than its own text when the figures change', async () => {
+    const aggregate = aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
+    // One field changed in the file and nothing else. A screen that counted the sessions
+    // itself would print the old number and this test would fail.
+    await serveRunData({
+      files: {
+        [`/runs/${RUN_ID}/${layout.aggregate}`]: JSON.stringify({
+          ...aggregate,
+          excludedAutomationFailures: 5,
+        }),
+      },
+    });
     attention('B', 'review');
 
     await settled();
     expect(
-      screen.getByText('Aggregate of 10 people · the 2 our automation broke are excluded'),
+      screen.getByText('Clicks of all 22 people · the 5 our automation broke are excluded'),
     ).toBeDefined();
   });
 
-  it('states the median caveat and carries the shell’s simulated line', async () => {
+  it('states the areas footnote and carries the shell’s simulated line', async () => {
     await serveRunData();
     const { container } = attention('B', 'review');
 
     await settled();
     expect(
-      screen.getByText(/Medians across the people whose session was scored, never one person/),
+      screen.getByText(/A row that reads never and 0% is a result, not missing data/),
     ).toBeDefined();
     expect(container.querySelector('[data-shell="simulated-disclaimer"]')).not.toBeNull();
   });
@@ -118,7 +164,7 @@ describe('the screen the evidence is on', () => {
     expect(screen.getByRole('heading', { name: 'Reading this' })).toBeDefined();
     expect(
       screen.getByText(
-        'Numbers are fixation order, median across sessions. Fixation size is dwell time. Click a row in the table to isolate one area of interest.',
+        'Filters compose: an overlay, an outcome and a segment. Every count is the people left after the filters, and automation failures are never among them.',
       ),
     ).toBeDefined();
   });
@@ -179,14 +225,17 @@ describe('the URL is the whole of what is on screen', () => {
     attention('B', 'review', '?aoi=B-review-fee-row');
 
     await settled();
-    expect(reading('Isolated')).toBe('Service fee row — planted defect');
+    // The `This screen` panel of `#screen-heatmaps` has five figures and no `Isolated` row:
+    // what is isolated is said under the stage, by the isolate caption.
+    expect(isolatedSaid()).toContain('Service fee row — planted defect');
   });
 
   it('reproduces the same view when the same URL is opened again', async () => {
     await serveRunData();
     const opened = attention('B', 'review', '?aoi=B-review-fee-row');
     await settled();
-    const first = ['Fixations', 'Total dwell', 'Reached this step', 'Isolated'].map(reading);
+    const READINGS = ['Reached it', 'Left here', 'Median time on it', 'Scrolled past the fold'];
+    const first = [...READINGS.map(reading), isolatedSaid()];
 
     // Closed and opened again on the same link, with every run and session forgotten: the
     // screen has nothing left but the URL to rebuild itself from.
@@ -196,15 +245,9 @@ describe('the URL is the whole of what is on screen', () => {
     attention('B', 'review', '?aoi=B-review-fee-row');
     await settled();
 
-    expect(['Fixations', 'Total dwell', 'Reached this step', 'Isolated'].map(reading)).toEqual(
-      first,
-    );
-    expect(first).toEqual([
-      '4 median per session',
-      '2.3 s',
-      '9 of 11',
-      'Service fee row — planted defect',
-    ]);
+    expect([...READINGS.map(reading), isolatedSaid()]).toEqual(first);
+    expect(first.slice(0, 4)).toEqual(['9 of 22', '7 of the 9 who reached it', '10.8 s', '9 of 9']);
+    expect(first[4]).toContain('Service fee row — planted defect');
   });
 });
 
@@ -232,7 +275,7 @@ describe('a link asking for something this test does not have', () => {
         'This test has no step “delivery”. Showing Cart, the earliest step your audience reached.',
       ),
     ).toBeDefined();
-    expect(reading('Reached this step')).toBe('11 of 11');
+    expect(reading('Reached it')).toBe('11 of 22');
   });
 
   it('drops an ?aoi= that names no area here and says so', async () => {
@@ -245,7 +288,7 @@ describe('a link asking for something this test does not have', () => {
         'There is no area “a-box-that-does-not-exist” on Redesign candidate at the Review step. Showing every area.',
       ),
     ).toBeDefined();
-    expect(reading('Isolated')).toBe('all areas');
+    expect(isolatedSaid()).toBe('');
   });
 });
 
@@ -261,9 +304,8 @@ describe('a step nobody in the audience reached', () => {
     await withUnreachedStep();
     const { container } = attention('B', 'delivery');
 
-    await settled();
     expect(
-      screen.getByRole('heading', {
+      await screen.findByRole('heading', {
         name: 'Nobody in your audience reached this step on variant B',
       }),
     ).toBeDefined();
@@ -279,10 +321,9 @@ describe('a step nobody in the audience reached', () => {
     await withUnreachedStep();
     attention('B', 'delivery');
 
-    await settled();
-    expect(screen.getByRole('link', { name: 'See where they ended' }).getAttribute('href')).toBe(
-      sessionsWithVariant(RUN_ID, 'B'),
-    );
+    expect(
+      (await screen.findByRole('link', { name: 'See where they ended' })).getAttribute('href'),
+    ).toBe(sessionsWithVariant(RUN_ID, 'B'));
   });
 
   it('is not shown while the sessions are still being read', async () => {
@@ -313,7 +354,7 @@ describe('accessibility', () => {
     const { container } = attention('B', 'review');
     await settled();
 
-    const screenOnly = container.querySelector('[data-section="attention"]') as HTMLElement;
+    const screenOnly = container.querySelector('[data-section="heatmaps"]') as HTMLElement;
     const violations = await axeViolations(screenOnly);
 
     expect(describeViolations(violations)).toBe('');
@@ -325,9 +366,9 @@ describe('accessibility', () => {
       steps: [...run.steps, { id: 'delivery', label: 'Delivery' }],
     }));
     const { container } = attention('B', 'delivery');
-    await settled();
+    await sessionsIn();
 
-    const screenOnly = container.querySelector('[data-section="attention"]') as HTMLElement;
+    const screenOnly = container.querySelector('[data-section="heatmaps"]') as HTMLElement;
     expect(describeViolations(await axeViolations(screenOnly))).toBe('');
   });
 });
