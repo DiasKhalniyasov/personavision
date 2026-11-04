@@ -817,6 +817,16 @@ Everything in path 1, and then:
   written before this revision carries none, and a screen that recorded none says so rather than claiming the
   run's variant URL.
 
+- **A click that navigated is a success, and a target that went with the navigation is not a failure.** Getting
+  somewhere is the page becoming something else, and the address is one of the three ways the driver reports that —
+  beside the step and the scroll position, neither of which can move on a one-URL run. A click that changed none of
+  the three still got the agent nowhere, which is the conservative reading the give-up budgets need. And a click
+  whose own target, or the execution context its checks were running in, went with the move it caused reports the
+  position it reached rather than a typed failure: the words are read where every other driver message is read, and
+  the address the click started from is what tells that click from one which broke and went nowhere. The record of
+  an action is otherwise unchanged — the driver's `ok` still means that nothing of **ours** broke, and a `false`
+  there still ends the session as our breakage.
+
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
 - **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded

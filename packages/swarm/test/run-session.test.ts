@@ -999,7 +999,16 @@ describeWithChromium('a live session of a single-page application', () => {
 
       expect(session.outcome.status).toBe('success');
       expect(session.outcome.reason).toContain(`the criterion “${READS_SIGNUP}” was observed`);
-      expect(session.actions.some((action) => action.type === 'click' && action.ok)).toBe(true);
+
+      // The one action of this session is a click recorded as having got the agent somewhere,
+      // which is what the give-up budgets read (#442). `decideOutcome` charges a fruitless
+      // action to patience and to persistence and resets both on an `ok` click — `outcome.ts`'s
+      // `PROGRESS_ACTIONS` — so recorded `ok: false`, which is what not reading the address
+      // left it, the one action of the owner's session that worked was spending the patience of
+      // an agent that was in fact making progress.
+      const clicks = session.actions.filter((action) => action.type === 'click');
+      expect(clicks).toHaveLength(1);
+      expect(clicks[0]?.ok).toBe(true);
 
       // The screen captured after the click is on the address the click pushed, and the
       // application loaded no document to get there.

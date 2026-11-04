@@ -21,6 +21,7 @@
 // control's viewport rect needs the DOM types, and the reference travels with the file.
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
+import type { Locator } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   act,
@@ -38,6 +39,7 @@ import type {
   PageHandle,
   TaskDefinition,
 } from '../src/index.js';
+import { destroyedContext, detachedTarget } from './helpers/driver-errors.js';
 import { serveFixtureSite } from './helpers/static-site.js';
 import type { FixtureSite } from './helpers/static-site.js';
 import { fileURLToPath } from 'node:url';
@@ -498,6 +500,14 @@ describeWithChromium('acting on a page', () => {
  *
  * The fixture is `fixtures/spa/`, whose push is deferred to the frame after the handler for
  * exactly this reason.
+ *
+ * **And a click that moved the page is a success even when its target went with the move**
+ * (#442). A framework resolves the route, renders the next view and removes the one the link
+ * was in, so a check still running against that node finds it gone — for an action that did
+ * exactly what the agent asked. Reported as a failure, it put the one action of the owner's
+ * session which worked into the artifact as a failure, and spent a give-up budget on it. The
+ * same words on a click that left the page where it was are the failure they have always
+ * been: the address the click started from is what separates the two.
  */
 describeWithChromium('a click that moves the address with no document load', () => {
   /** The single-page application of #441: see `fixtures/spa/README.md`. */
@@ -579,6 +589,152 @@ describeWithChromium('a click that moves the address with no document load', () 
         const result = await act(handle, { type: 'click', selector: '#view-heading' }, context());
 
         expect(result.ok).toBe(true);
+        expect(result.url).toBe(`${site.url}/app.html`);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  /**
+   * A handle whose click raises a driver error of our choosing, **after the click itself has
+   * happened** (#442).
+   *
+   * Playwright's own locator turns a node that went away under an action into a retry, and
+   * then into a timeout, so the detached-target and destroyed-context sentences a real site
+   * raises arrive from calls this module does not make and cannot be provoked through a
+   * fixture. What *can* be reproduced exactly is the situation they describe — a click that
+   * worked, whose target and whose execution context went with the navigation it caused — so
+   * the click is performed for real and the driver's own sentence, recorded from a real
+   * browser in `helpers/driver-errors.ts` and kept honest by `failures.test.ts`, is raised
+   * after it.
+   *
+   * Nothing else is stood in for. Every other call on the page and on the locator reaches the
+   * real thing, bound to it: a driver object's own methods read fields of their own, and
+   * `this` has to be the page rather than this proxy (see `capture.test.ts`).
+   */
+  const clickRaising = (handle: PageHandle, error: Error): PageHandle => {
+    const poison = (locator: Locator): Locator =>
+      new Proxy(locator, {
+        get: (target, property) => {
+          const value: unknown = Reflect.get(target, property, target);
+          if (typeof value !== 'function') return value;
+          if (property !== 'click') return value.bind(target);
+          return async (...args: unknown[]): Promise<never> => {
+            await (value as (...given: unknown[]) => Promise<void>).apply(target, args);
+            throw error;
+          };
+        },
+      });
+
+    const page = new Proxy(handle.page, {
+      get: (target, property) => {
+        const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== 'function') return value;
+        if (property !== 'locator') return value.bind(target);
+        return (...args: unknown[]): Locator =>
+          poison((value as (...given: unknown[]) => Locator).apply(target, args));
+      },
+    });
+
+    return { ...handle, page };
+  };
+
+  it(
+    'is a success when its own node went with the navigation, with the address it reached',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        // This link resolves its route **inside** the click: the address is pushed and the
+        // view redrawn while the click is still being dispatched, so the node the driver
+        // aimed at is out of the DOM before the click is done with it.
+        const result = await act(
+          handle,
+          { type: 'click', selector: '#start-detaching' },
+          context(),
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.failure).toBeUndefined();
+        expect(result.url).toBe(`${site.url}/joined`);
+        // The node really is gone, and no document was loaded to take it away.
+        expect(await handle.page.locator('#start-detaching').count()).toBe(0);
+        expect(await handle.page.locator('#joined-back').count()).toBe(1);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  for (const { what, error } of [
+    { what: 'a detached target', error: detachedTarget('locator.click') },
+    { what: 'a destroyed execution context', error: destroyedContext('locator.click') },
+  ]) {
+    it(
+      `reports ${what} on a click that moved the page as the success it is`,
+      async () => {
+        const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+        try {
+          const result = await act(
+            clickRaising(handle, error),
+            { type: 'click', selector: '#start-signup' },
+            context(),
+          );
+
+          // The click did exactly what the agent asked. Recording it a failure put the one
+          // action of the owner's session that worked in the artifact as a failure, and spent
+          // a give-up budget on it.
+          expect(result.ok).toBe(true);
+          expect(result.failure).toBeUndefined();
+          // And the position it reports is the one it reached, not the page it left — which
+          // this link pushes 50 ms after the click, so the answer is waited for.
+          expect(result.url).toBe(`${site.url}/signup`);
+        } finally {
+          await closeSession(handle);
+        }
+      },
+      BROWSER_TIMEOUT_MS,
+    );
+  }
+
+  it(
+    'leaves a detached target on a page that went nowhere the mystery it is today',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        // The heading is no link: this click moves neither the address nor the document, so
+        // the same sentence is a target that went away for a reason we cannot account for.
+        // `failure-mapping.ts` places it under none of the four reasons, and the caller
+        // rethrows it — exactly as it does on `main`.
+        await expect(
+          act(
+            clickRaising(handle, detachedTarget('locator.click')),
+            { type: 'click', selector: '#view-heading' },
+            context(),
+          ),
+        ).rejects.toThrow('Element is not attached to the DOM');
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'leaves a destroyed context on a page that went nowhere the navigation error it is today',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        const result = await act(
+          clickRaising(handle, destroyedContext('locator.click')),
+          { type: 'click', selector: '#view-heading' },
+          context(),
+        );
+
+        expect(result.ok).toBe(false);
+        expect(result.failure).toBe('navigation_error');
         expect(result.url).toBe(`${site.url}/app.html`);
       } finally {
         await closeSession(handle);

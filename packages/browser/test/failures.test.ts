@@ -23,6 +23,7 @@ import {
   closeSession,
   frameFailure,
   isDestroyedContext,
+  isLostTarget,
   mapToAutomationFailure,
   navigationFailure,
   openSession,
@@ -33,6 +34,7 @@ import {
 import type { AutomationFailureOutcome, AutomationFailureReason, Device } from '../src/index.js';
 import {
   destroyedContext,
+  detachedTarget,
   frameLoadTimeout,
   navigationRefused,
   navigationTimeout,
@@ -166,6 +168,30 @@ describe('a thrown error, read as one of ours', () => {
     expect(isDestroyedContext(navigationRefused('http://127.0.0.1:5173/x'))).toBe(false);
     expect(isDestroyedContext(selectorTimeout('#nope'))).toBe(false);
     expect(isDestroyedContext('not even an error')).toBe(false);
+  });
+
+  it('reads a target lost to a navigation as that, and places it under no reason of ours', () => {
+    const detached = detachedTarget();
+
+    // The two sentences are one situation seen from two sides: a click on a framework's link
+    // resolves a route, and the render that commits the new address removes the view the link
+    // was in. Which of the driver's checks was in flight decides which it reports (#442).
+    expect(isLostTarget(detached)).toBe(true);
+    expect(isLostTarget(destroyedContext('locator.click'))).toBe(true);
+
+    // And it is **not** a fifth reason, nor filed under one of the four: a detached target on
+    // a page that went nowhere stays the mystery it is, and its caller rethrows it.
+    expect(mapToAutomationFailure(detached)).toBeNull();
+    expect(toAutomationFailure(detached, 'clicking the sign-up link')).toBeNull();
+
+    // Nothing else is read as a lost target — least of all the selector that never resolved,
+    // which is a control nobody could have acted on rather than one that went away.
+    expect(isLostTarget(selectorTimeout('#nope'))).toBe(false);
+    expect(isLostTarget(resolvedLocatorTimeout('#btn'))).toBe(false);
+    expect(isLostTarget(navigationRefused('http://127.0.0.1:5173/x'))).toBe(false);
+    expect(isLostTarget(frameLoadTimeout())).toBe(false);
+    expect(isLostTarget('not even an error')).toBe(false);
+    expect(isLostTarget(null)).toBe(false);
   });
 
   it('does not blame the selector for an operation that timed out on an element it found', () => {
@@ -432,6 +458,60 @@ describeWithChromium('the four failures, against the fixture site', () => {
         expect(await waitUntil(() => watch.seen().length > beforeLeaving, 500)).toBe(false);
       } finally {
         watch.stop();
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+});
+
+/**
+ * The sentence a lost target really is, out of a real browser (#442).
+ *
+ * `helpers/driver-errors.ts` holds the shape `isLostTarget` reads, and this is what keeps it
+ * honest: a release that rewords it fails here rather than silently turning a click that
+ * worked back into a failure. It is its own suite because a lost target is **not** one of the
+ * four reasons — it is placed under none of them, and a caller that cannot answer the other
+ * half of the question rethrows it exactly as it does today.
+ */
+describeWithChromium('a target lost to a navigation, against the fixture site', () => {
+  let site: FixtureSite;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite();
+  }, BROWSER_TIMEOUT_MS);
+
+  afterAll(async () => {
+    await site?.close();
+  }, BROWSER_TIMEOUT_MS);
+
+  it(
+    'raises the detached-target sentence the helper records, and no reason of ours',
+    async () => {
+      const handle = await openSession({ id: 'control', url: `${site.url}/cart.html` }, MOBILE);
+      try {
+        // The driver's checks are made to re-run against a node the page no longer has: the
+        // element is resolved, the page goes somewhere else, and the operation is asked for
+        // anyway. It is what a framework's render does to the link a click was aimed at, with
+        // the difference that here nothing is left to a race.
+        const element = await handle.page.locator('#cart-checkout').elementHandle();
+        expect(element).not.toBeNull();
+        await handle.page.goto(`${site.url}/payment.html`, { timeout: BROWSER_TIMEOUT_MS });
+
+        const thrown: unknown = await element
+          ?.click({ timeout: CAP_MS })
+          .then(() => null)
+          .catch((error: unknown) => error);
+
+        expect(thrown).toBeInstanceOf(Error);
+        expect((thrown as Error).message).toContain('Element is not attached to the DOM');
+        expect(isLostTarget(thrown)).toBe(true);
+        // And the recorded shape says the same thing about the real one.
+        expect(isLostTarget(detachedTarget())).toBe(true);
+        // It is nobody's reason: `act.ts` answers the other half — where the page ended up —
+        // and a caller that cannot answer it rethrows, which is what happens today.
+        expect(mapToAutomationFailure(thrown)).toBeNull();
+      } finally {
         await closeSession(handle);
       }
     },

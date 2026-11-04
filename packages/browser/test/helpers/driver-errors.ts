@@ -59,3 +59,14 @@ export const frameLoadTimeout = (afterMs = 300): Error =>
  */
 export const destroyedContext = (call = 'page.evaluate'): Error =>
   new Error(`${call}: Execution context was destroyed, most likely because of a navigation.`);
+
+/**
+ * A node the driver's checks were re-run against and did not find again. Playwright raises
+ * it from the call that was still working on the element, and it is what a framework's link
+ * raises on the click that **worked**: the route resolved, the next view rendered, and the
+ * view the link was in was removed before the click's own checks were done with it (#442).
+ */
+export const detachedTarget = (call = 'elementHandle.click'): Error =>
+  new Error(
+    `${call}: Element is not attached to the DOM\nCall log:\n  - attempting click action\n  -   waiting for element to be visible, enabled and stable\n`,
+  );

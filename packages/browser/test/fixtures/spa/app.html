@@ -29,28 +29,43 @@
             'has not reached /signup, and a reader of the run must not be told that it did.',
           link: { id: 'cancelled-back', href: '/app.html', text: 'Back to the start' },
         },
+        '/joined': {
+          heading: 'You are in',
+          body:
+            'Reached by a link that took its own node out of the DOM on the way: the route ' +
+            'resolved inside the click, and the view the link was in was gone before the ' +
+            'click was done with it.',
+          link: { id: 'joined-back', href: '/app.html', text: 'Back to the start' },
+        },
       };
 
       const START = {
         heading: 'See how people use your site',
         body:
-          'The first view, and the only document this site ever loads. The control below moves ' +
-          'the address with no request of any kind.',
+          'The first view, and the only document this site ever loads. Every control below ' +
+          'moves the address with no request of any kind.',
         link: {
           id: 'start-signup',
           href: '/signup',
           text: 'Sign up to try it on your project',
         },
         second: { id: 'start-cancel', href: '/signup-cancelled', text: 'Not now' },
+        third: {
+          id: 'start-detaching',
+          href: '/joined',
+          text: 'Join without leaving the page',
+          detaches: true,
+        },
       };
 
       const box = (left, top, width, height) =>
         `left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px`;
 
       const linkMarkup = (link, top) =>
-        `<a id="${link.id}" href="${link.href}" style="${box(16, top, 320, 44)}">${link.text}</a>`;
+        `<a id="${link.id}" href="${link.href}"${link.detaches === true ? ' data-detaches' : ''} ` +
+        `style="${box(16, top, 320, 44)}">${link.text}</a>`;
 
-      /** The view for an address, drawn into the one element both views share. */
+      /** The view for an address, drawn into the one element every view shares. */
       const render = () => {
         const view = VIEWS[window.location.pathname] ?? START;
         const parts = [
@@ -59,6 +74,7 @@
           linkMarkup(view.link, 208),
         ];
         if (view.second !== undefined) parts.push(linkMarkup(view.second, 264));
+        if (view.third !== undefined) parts.push(linkMarkup(view.third, 320));
         document.getElementById('app').innerHTML = parts.join('\n');
       };
 
@@ -86,6 +102,18 @@
         if (link === null || !link.getAttribute('href').startsWith('/')) return;
         event.preventDefault();
         const to = link.getAttribute('href');
+        /*
+         * A route that resolves **inside** the click, which is the other half of #442: the
+         * address is pushed and the view redrawn while the click is still being dispatched,
+         * so the node the driver aimed at is out of the DOM before the click's own checks
+         * are done with it. The click did exactly what the agent asked, and its target went
+         * with the navigation it caused.
+         */
+        if (link.hasAttribute('data-detaches')) {
+          window.history.pushState({}, '', to);
+          render();
+          return;
+        }
         setTimeout(() => {
           window.history.pushState({}, '', to);
           render();

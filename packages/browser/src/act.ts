@@ -23,6 +23,10 @@
  * 3. Anything thrown while the action itself runs is handed to `mapToAutomationFailure`,
  *    and rethrown when it cannot be placed. Reading a timeout out of an error is that
  *    module's job; retrying, capping and counting is the budget's. This file invents neither.
+ *    One error is read before it gets there: a **click's target going with the navigation the
+ *    click caused**, which is an action that worked and not a failure at all. The words stay
+ *    `failure-mapping.ts`'s to recognise; what this file adds is the half only it can answer
+ *    — where the page ended up, against the address the click started from (#442).
  *
  * It does not retry. One action is one attempt, and the policy above it is #50's.
  *
@@ -35,9 +39,10 @@
 /// <reference lib="dom" />
 // The callback below runs inside the page, not in Node: this module needs the DOM types,
 // and the reference travels with the file (see `geometry.ts`).
+import type { Frame } from 'playwright';
 import { AutomationFailure } from './errors.js';
 import { extractElements } from './extract/elements.js';
-import { mapToAutomationFailure } from './failure-mapping.js';
+import { isLostTarget, mapToAutomationFailure } from './failure-mapping.js';
 import { readGeometry } from './geometry.js';
 import { readSessionState } from './session.js';
 import { detectStep } from './steps.js';
@@ -197,6 +202,58 @@ const following = async (handle: PageHandle, click: () => Promise<void>): Promis
   }
 };
 
+/**
+ * Whether the page's address or document is still the one it was on when this was armed.
+ *
+ * **Two signals, because either alone misses a case.** The address moves for a `pushState`
+ * and for an ordinary link alike, and on a single-page application it is the only thing that
+ * moves at all. The main frame navigating is what a new **document** at the same address
+ * looks like — the post-redirect-get that lands back where it started — and no reading of the
+ * address can see that one.
+ *
+ * Armed before the action and asked after it, **including after one that threw**: the single
+ * failure a click that worked can raise is its target going with the navigation it caused,
+ * and where the page ended up is what tells that from a click that broke and went nowhere.
+ * It is armed beside `following`'s own waits and reads the same address they do.
+ *
+ * **Asking waits**, under the cap a click's move is already given. At the instant a destroyed
+ * context is raised the move is not visible yet — the error *is* the context going away, and
+ * the navigation that destroyed it reaches the driver a moment later — so a reading taken at
+ * once reports the page the click left. A move already seen is answered without waiting, and
+ * a page that is going nowhere spends the cap once, on an action that has failed anyway.
+ */
+interface PageMovement {
+  /** Whether the page's address or document is not the one it was, waited for. */
+  moved(): Promise<boolean>;
+  /** Stops listening. Stopping twice is not an error. */
+  stop(): void;
+}
+
+const watchMovement = (handle: PageHandle): PageMovement => {
+  const { page } = handle;
+  const from = page.url();
+  let navigated = false;
+  const onNavigated = (frame: Frame): void => {
+    if (frame === page.mainFrame()) navigated = true;
+  };
+  page.on('framenavigated', onNavigated);
+  const seen = (): boolean => navigated || page.url() !== from;
+
+  return {
+    moved: async () => {
+      if (seen()) return true;
+      await page
+        .waitForEvent('framenavigated', {
+          predicate: (frame) => frame === page.mainFrame(),
+          timeout: NAVIGATION_START_MS,
+        })
+        .catch(() => undefined);
+      return seen();
+    },
+    stop: () => page.off('framenavigated', onNavigated),
+  };
+};
+
 /** A tap at a position, landing as a person's does: on whatever is on top there. */
 const tapAt = (handle: PageHandle, x: number, y: number): Promise<void> =>
   following(handle, () => handle.page.mouse.click(x, y));
@@ -282,6 +339,22 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     return failure === undefined
       ? { ok: true, action, url, scrollY, step }
       : { ok: false, action, url, scrollY, step, failure };
+  };
+
+  /**
+   * The page a click landed on, waited for and then read.
+   *
+   * Only a click can navigate, and a click that navigates must report the page it arrived at
+   * rather than the one it left. A document that was asked for and never parsed is the
+   * navigation error it has always been.
+   */
+  const landed = async (): Promise<ActResult> => {
+    try {
+      await settle(handle);
+    } catch {
+      return report('navigation_error');
+    }
+    return report();
   };
 
   /**
@@ -373,6 +446,9 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     return report();
   }
 
+  // Where the page was when the action started, for the one failure a click that worked can
+  // raise. Only a click can navigate, so only a click arms it.
+  const movement = action.type === 'click' ? watchMovement(handle) : null;
   try {
     switch (action.type) {
       case 'click':
@@ -400,6 +476,16 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
       }
     }
   } catch (error) {
+    // A click whose target went with the navigation it caused did what the agent asked. The
+    // driver lost the node, or the context its checks were running in, to the very move the
+    // click made — and the artifact used to say that the one action of the session which
+    // worked had failed, while `ok: false` spent a give-up budget on it (#442). So it is
+    // reported as the success it is, with the position it reached. A click that raised the
+    // same words and left the page where it was falls through to the reading below, which is
+    // the failure it is today.
+    if (movement !== null && isLostTarget(error) && (await movement.moved())) {
+      return await landed();
+    }
     const reason = mapToAutomationFailure(error);
     if (reason === null) throw error;
     // A control that never holds still (a playing video, a carousel) or sits under another
@@ -408,17 +494,9 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     if (reason !== 'timeout') return report(reason);
     const now = await target.boundingBox({ timeout: timeoutMs }).catch(() => null);
     if (!(await tapWhereSeen(now))) return report(reason);
+  } finally {
+    movement?.stop();
   }
 
-  // Only a click can navigate, and a click that navigates must report the page it arrived
-  // at rather than the one it left.
-  if (action.type === 'click') {
-    try {
-      await settle(handle);
-    } catch {
-      return report('navigation_error');
-    }
-  }
-
-  return report();
+  return action.type === 'click' ? landed() : report();
 };

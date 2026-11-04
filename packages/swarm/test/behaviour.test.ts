@@ -216,6 +216,10 @@ describe('a product defect reads as the product’s', () => {
       // would have advanced the step says "Gift options" and is not marked as a control at
       // all. The session ends on the suite's screen cap — `MISLABELLED_SCREEN_CAP` says why
       // — with the agent still on the step it started on.
+      //
+      // This is the conservative half of #442, held against the address joining the step and
+      // the scroll position in what counts as getting somewhere: a click the page does nothing
+      // with moves none of the three, so it is still an action that got the agent nowhere.
       expect(
         walkedSession.actions
           .filter((action) => action.type === 'click')

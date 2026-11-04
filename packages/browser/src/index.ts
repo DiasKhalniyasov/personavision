@@ -53,6 +53,7 @@ export {
   UNKNOWN_STEP,
   frameFailure,
   isDestroyedContext,
+  isLostTarget,
   mapToAutomationFailure,
   navigationFailure,
   toAutomationFailure,
