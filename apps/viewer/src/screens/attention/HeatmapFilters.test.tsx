@@ -561,6 +561,67 @@ describe('the URL carries the overlay, the segment and the outcome', () => {
     });
   });
 
+  it('lets a reader switch the last overlay off, and says so rather than snapping back', async () => {
+    await serveRunData();
+    const opened = heatmaps('B', 'payment', '?overlay=clicks');
+    const { router, container } = opened;
+    await settled();
+    decoded(container);
+    await waitFor(() => {
+      expect(layerIn(container, 'clicks')).not.toBeNull();
+    });
+
+    await userEvent.click(toggleFor('clicks'));
+
+    // Nothing drawn, the switch off, and the page left undimmed — the page as the audience
+    // saw it, which is a view a reader is entitled to. A default that turned the clicks
+    // straight back on would make this switch do nothing at all.
+    await waitFor(() => {
+      expect(layerIn(container, 'clicks')).toBeNull();
+    });
+    expect(toggleFor('clicks').getAttribute('aria-pressed')).toBe('false');
+    expect(stripButton('clicks').getAttribute('aria-pressed')).toBe('false');
+    expect((container.querySelector('#att-frame') as HTMLElement).hasAttribute('data-dim')).toBe(
+      false,
+    );
+    // And it survives a reload, because it is in the address: the empty value is this
+    // screen's own way of saying none, and `heatmapLink` cannot write it.
+    expect(router.state.location.search).toBe('?overlay=');
+
+    // Closed and opened again on the same link, so the screen has nothing but the URL left
+    // to rebuild itself from.
+    const link = `${paths.attention(RUN_ID, 'B', 'payment')}${router.state.location.search}`;
+    opened.unmount();
+    forgetRuns();
+    await serveRunData();
+    const reopened = mountApp(link);
+    await settled();
+    decoded(reopened.container);
+    expect(reopened.container.querySelector('[data-overlay-layer]')).toBeNull();
+  });
+
+  it('clears both filters in one write when the stated line offers it', async () => {
+    await serveRunData();
+    const { router } = heatmaps(
+      'B',
+      'payment',
+      '?outcome=failed&segment=mobile%20%C2%B7%20price-sensitive',
+    );
+    await screen.findByRole('heading', { level: 1, name: HEADING });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Show every outcome and segment' }),
+    );
+
+    // **Both**, not one. Two separate writes in one handler each build their query from the
+    // same render's, so the second is of a URL that never had the first's change in it.
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('');
+    });
+    await settled();
+    expect(reading('Reached it')).toBe('10 of 22');
+  });
+
   it('writes each filter as its own parameter, and clears it rather than writing empty', async () => {
     await serveRunData();
     const { router } = heatmaps('B', 'payment');

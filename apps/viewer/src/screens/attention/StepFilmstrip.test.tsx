@@ -225,6 +225,7 @@ const selectionFor = (step: string, setStep = vi.fn()): AttentionSelection => ({
   setOverlays: vi.fn(),
   setSegment: vi.fn(),
   setOutcome: vi.fn(),
+  clearFilters: vi.fn(),
   fallback: null,
 });
 

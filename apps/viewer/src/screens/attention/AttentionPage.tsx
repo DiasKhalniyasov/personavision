@@ -336,8 +336,9 @@ function StagePlace({
           <button
             type="button"
             onClick={() => {
-              selection.setOutcome(null);
-              selection.setSegment(null);
+              // One write, both parameters: two calls would each build their query from
+              // this render's, and the second would undo the first.
+              selection.clearFilters();
             }}
           >
             Show every outcome and segment

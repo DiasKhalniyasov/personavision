@@ -49,11 +49,23 @@ export type HeatmapOverlay = (typeof HEATMAP_OVERLAYS)[number];
 export const OVERLAY_PARAM = 'overlay';
 
 /**
- * What the screen opens on when the URL names no overlay: the clicks, which is the overlay
- * `#screen-heatmaps` draws pressed and the one the screen's own question is about — *where
- * did the people who failed click?*
+ * What the screen opens on when the URL names **no** overlay at all: the clicks, which is
+ * the overlay `#screen-heatmaps` draws pressed and the one the screen's own question is
+ * about — *where did the people who failed click?*
+ *
+ * It is the default for an **absent** parameter, not for an empty one. `?overlay=` with no
+ * value is a reader who switched the last overlay off, which is a view they are entitled to
+ * — the page as the audience saw it, undimmed — and falling back to the clicks there would
+ * make that switch do nothing at all. A control whose off looks exactly like its on is the
+ * one thing this screen's switches must never be.
+ *
+ * Nothing can write the empty form but this screen: `heatmapLink` drops a parameter with no
+ * value, so no citation can carry it.
  */
 export const DEFAULT_OVERLAYS: readonly HeatmapOverlay[] = ['clicks'];
+
+/** `?overlay=` with no value: the reader turned them all off, and means it. */
+const NO_OVERLAY = '';
 
 /** Whether a word is one of the three overlays, and not a fourth somebody invented. */
 const isOverlay = (value: string): value is HeatmapOverlay =>
@@ -73,11 +85,18 @@ export function resolveOverlays(asked: readonly string[]): {
   readonly overlays: readonly HeatmapOverlay[];
   readonly unknown: readonly string[];
 } {
-  const wanted = new Set(asked.filter(isOverlay));
+  // The empty value is this screen's own way of saying "none", not a name it failed to
+  // recognise, so it is neither drawn nor complained about.
+  const named = asked.filter((value) => value !== NO_OVERLAY);
+  const wanted = new Set(named.filter(isOverlay));
+  const askedForNone = asked.length > 0 && named.length === 0;
   return {
-    overlays:
-      wanted.size === 0 ? DEFAULT_OVERLAYS : HEATMAP_OVERLAYS.filter((one) => wanted.has(one)),
-    unknown: asked.filter((value) => !isOverlay(value)),
+    overlays: askedForNone
+      ? []
+      : wanted.size === 0
+        ? DEFAULT_OVERLAYS
+        : HEATMAP_OVERLAYS.filter((one) => wanted.has(one)),
+    unknown: named.filter((value) => !isOverlay(value)),
   };
 }
 
@@ -119,6 +138,15 @@ export interface AttentionSelection {
   setSegment(segment: string | null): void;
   /** Narrow to one outcome, or `null` for every outcome. */
   setOutcome(outcome: string | null): void;
+  /**
+   * Clear both filters at once.
+   *
+   * It exists because calling `setSegment(null)` and `setOutcome(null)` in one handler does
+   * **not** clear both: each builds its query from the same render's `query`, so the second
+   * write is of a URL that never had the first's change in it and silently undoes it. One
+   * write, both parameters.
+   */
+  clearFilters(): void;
   /** What could not be used as the URL asked, and what is shown instead. */
   readonly fallback: AttentionFallback | null;
 }
@@ -285,7 +313,11 @@ export function useAttentionSelection(): AttentionSelection {
   const askedVariant = params.variant ?? '';
   const askedStep = params.step ?? '';
   const askedAoi = query.get(AOI_PARAM);
-  const askedOverlays = query.getAll(OVERLAY_PARAM).join('\u0000');
+  // Joined so that a render which changed nothing resolves to what it resolved to before:
+  // `getAll` answers a fresh array every time. `null` is the key being absent, which is
+  // different from it being present and empty.
+  const askedOverlayList = query.getAll(OVERLAY_PARAM);
+  const askedOverlays = askedOverlayList.length === 0 ? null : askedOverlayList.join('\u0000');
   // The two filters are narrowings and not names the run can check: which segments and
   // outcomes a figure exists for is the aggregate's business, and a composition it holds no
   // slice for is stated on the screen rather than silently replaced here (criterion:
@@ -299,7 +331,7 @@ export function useAttentionSelection(): AttentionSelection {
         variant: askedVariant,
         step: askedStep,
         aoi: askedAoi,
-        overlays: askedOverlays === '' ? [] : askedOverlays.split('\u0000'),
+        overlays: askedOverlays === null ? [] : askedOverlays.split('\u0000'),
       }),
     [run, askedVariant, askedStep, askedAoi, askedOverlays],
   );
@@ -339,10 +371,12 @@ export function useAttentionSelection(): AttentionSelection {
       const written = new URLSearchParams(query);
       written.delete(OVERLAY_PARAM);
       // In the registry's order, so that two readers who turned the same overlays on are at
-      // the same URL however they got there.
+      // the same URL however they got there. None of them writes the empty form, which is
+      // what tells "the reader switched the last one off" from "this link named none".
       for (const one of HEATMAP_OVERLAYS) {
         if (next.includes(one)) written.append(OVERLAY_PARAM, one);
       }
+      if (next.length === 0) written.append(OVERLAY_PARAM, NO_OVERLAY);
       // Replace, not push: see decision 134. Flicking between overlays is reading, and
       // Back should leave the screen rather than retrace the flicks.
       setQuery(written, { replace: true });
@@ -375,6 +409,13 @@ export function useAttentionSelection(): AttentionSelection {
     [setFilter],
   );
 
+  const clearFilters = useCallback(() => {
+    const written = new URLSearchParams(query);
+    written.delete(SEGMENT_PARAM);
+    written.delete(OUTCOME_PARAM);
+    setQuery(written);
+  }, [query, setQuery]);
+
   return {
     runId,
     variant,
@@ -389,6 +430,7 @@ export function useAttentionSelection(): AttentionSelection {
     setOverlays,
     setSegment,
     setOutcome,
+    clearFilters,
     fallback,
   };
 }
