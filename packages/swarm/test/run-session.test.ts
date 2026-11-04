@@ -599,6 +599,150 @@ describe('runSession', () => {
     });
   });
 
+  describe('the criterion the run was given', () => {
+    /**
+     * The fixture site's own four screens, and a criterion only the last of them shows: the
+     * confirmation page names an image *A printed receipt*, and no page before it says either
+     * word, so this criterion needs the clicks that get there before it becomes true.
+     */
+    const NEEDS_A_CLICK = 'A printed receipt is visible.';
+
+    /** And one the cart satisfies the moment it loads, which is the defect being removed. */
+    const TRUE_ON_LANDING = 'The cart is visible.';
+
+    /** A criterion `readCriterion` refuses: nothing a session captures can answer it. */
+    const A_FEELING = 'The page feels trustworthy.';
+
+    /** An agent that looks and operates nothing: no click, no scroll, no keystroke. */
+    const hesitating = providerThat(() => ({
+      intent: 'I will take this in before doing anything.',
+      action: { kind: 'hesitate', targetElementId: null },
+      usage: FREE_USAGE,
+    }));
+
+    it('fails a session that lands where the criterion is not met and never acts', async () => {
+      const session = await runSession(
+        sessionOver(runDir, {
+          task: { ...TASK, successCriterion: NEEDS_A_CLICK },
+          providers: { decision: hesitating },
+          maxScreens: 1,
+        }),
+      );
+
+      expect(session.screens.map((screen) => screen.step)).toStrictEqual(['cart']);
+      expect(session.actions.filter((action) => action.type === 'click')).toStrictEqual([]);
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('success');
+      expect(session.outcome.step).toBe('cart');
+      // The reason names the criterion it looked for, the words it did not find and the step.
+      expect(session.outcome.reason).toContain(
+        `the criterion “${NEEDS_A_CLICK}” was never observed`,
+      );
+      expect(session.outcome.reason).toContain('"cart" step');
+      expect(session.outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+    });
+
+    it('succeeds the same session once the clicks have revealed it', async () => {
+      const session = await runSession(
+        sessionOver(runDir, {
+          task: { ...TASK, successCriterion: NEEDS_A_CLICK },
+          persona: personaWho('careful'),
+          seed: 1,
+        }),
+      );
+
+      expect(session.screens.map((screen) => screen.step)).toContain('confirmation');
+      expect(session.actions.some((action) => action.type === 'click' && action.ok)).toBe(true);
+      expect(session.outcome.status).toBe('success');
+      expect(session.outcome.step).toBe('confirmation');
+      expect(session.outcome.reason).toContain(`the criterion “${NEEDS_A_CLICK}” was observed`);
+    });
+
+    it('fails a session whose criterion was already true on landing and acted on nothing', async () => {
+      // The one-URL run this exists for: the criterion holds the moment the page loads, so
+      // the walk ends with the agent having done nothing. A success here would be a
+      // completion rate counting pages that rendered.
+      const session = await runSession(
+        sessionOver(runDir, { task: { ...TASK, successCriterion: TRUE_ON_LANDING } }),
+      );
+
+      expect(session.actions).toStrictEqual([]);
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('success');
+      expect(session.outcome.reason).toContain('was already true when the agent arrived');
+      expect(session.outcome.reason).toContain('nothing was acted on');
+    });
+
+    it('fails a criterion it cannot evaluate rather than falling back to the step', async () => {
+      // A one-step task is the shape a one-URL run derives, and its only step matches the
+      // moment the page loads: before #400 that made every such session a success.
+      const session = await runSession(
+        sessionOver(runDir, {
+          task: {
+            ...TASK,
+            steps: [TASK.steps[0] as (typeof TASK.steps)[number]],
+            successCriterion: A_FEELING,
+          },
+          providers: { decision: hesitating },
+          maxScreens: 1,
+        }),
+      );
+
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('success');
+      expect(session.outcome.reason).toContain('the criterion could not be observed');
+      expect(session.outcome.reason).toContain('is a judgement');
+      expect(session.outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+    });
+
+    it('still ends a declared multi-step walk at its last step', async () => {
+      // A declared task says where its end is, and that does not change because a goal was
+      // given: the criterion decides whether the session *succeeded*, not how far it walks.
+      // Walking on would drive the session onto a page the task recognises as no step, which
+      // this loop can only record as our own breakage — turning a product failure into an
+      // automation failure that no score counts.
+      const session = await runSession(
+        sessionOver(runDir, {
+          task: { ...TASK, successCriterion: 'A tractor icon is visible.' },
+          persona: personaWho('careful'),
+          seed: 1,
+        }),
+      );
+
+      expect(session.screens.at(-1)?.step).toBe('confirmation');
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('automation_failure');
+      expect(session.outcome.attribution).toBe('product');
+      expect(session.outcome.excludedFromScores).toBe(false);
+      expect(session.outcome.reason).toContain('was never observed');
+    });
+
+    it('leaves a run with no goal decided by the step it reached', async () => {
+      // The same walk, with and without a criterion: a `--steps` run, the committed example
+      // and the demo carry no goal and keep the rule they have.
+      const withNoGoal = await runSession(
+        sessionOver(runDir, { persona: personaWho('careful'), seed: 1 }),
+      );
+      const withGoal = await runSession(
+        sessionOver(runDir, {
+          task: { ...TASK, successCriterion: NEEDS_A_CLICK },
+          persona: personaWho('careful'),
+          seed: 1,
+          sessionId: 'S-02',
+        }),
+      );
+
+      expect(withNoGoal.outcome.status).toBe('success');
+      expect(withNoGoal.outcome.reason).toContain('Completed the task on the "confirmation" step.');
+      expect(withNoGoal.outcome.reason).not.toContain('criterion');
+      // The two agree on the walk — the same screens, the same actions — and differ only in
+      // what the reason says the session was judged by.
+      expect(withGoal.screens).toStrictEqual(withNoGoal.screens);
+      expect(withGoal.actions).toStrictEqual(withNoGoal.actions);
+      expect(withGoal.outcome.reason).toContain('criterion');
+    });
+  });
+
   describe('reproducibility', () => {
     it('produces an identical session from the same persona, seed and page', async () => {
       const first = await runSession(sessionOver(runDir));

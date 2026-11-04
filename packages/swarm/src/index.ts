@@ -28,6 +28,12 @@
  * session, the friction score (#26) reads `excludedFromScores` off the stored session, and
  * the screens read the outcome. Nothing re-derives it.
  *
+ * `criterionToObserve` and `observeCriterion` are how a run's **success criterion** becomes
+ * a fact about one session (#400): the sentence `readCriterion` classified, checked against
+ * the elements and the address a session captured, with no browser. Where a run has a goal
+ * that is what completes a session — an agent that merely arrived, or never acted, did not
+ * do the task — and where it has none the last declared step still is.
+ *
  * The **runner seam** is `runner/`: one session, either in this process (the default
  * everywhere) or as one Cloud Run job execution, chosen from `PV_RUNNER` in `chooseRunner`
  * and nowhere else (#317). `docs/adr/0004-where-sessions-run.md` records the choice and what
@@ -38,6 +44,8 @@
 
 export { calibrationOf, engineOnTheRecord } from './calibration.js';
 export type { EngineOnTheRecord, RunCalibration } from './calibration.js';
+export { criterionToObserve, observeCriterion } from './criterion.js';
+export type { CriterionSighting, CriterionToObserve, ObservableScreen } from './criterion.js';
 export { AUTOMATION_FAILURE_KINDS, decideOutcome, OUTCOME_POLICY } from './outcome.js';
 export { runSession } from './run-session.js';
 export type { RunSessionInput, SessionProviders, SessionScreen } from './run-session.js';
@@ -94,6 +102,7 @@ export type {
   SessionTrace,
   TraceAction,
   TraceActionType,
+  TraceCriterion,
   TraceFixation,
   TraceScreen,
 } from './outcome.js';
