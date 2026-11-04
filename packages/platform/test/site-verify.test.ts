@@ -315,7 +315,10 @@ describe('POST /sites/:siteId/verify', () => {
       await sites.recordLaunch(workspaceId, site.id, {
         id: 'a-launch',
         runId: '2026-11-03-0914-clipforge-create',
-        at: '2026-11-03T09:14:00.000Z',
+        // Inside the ledger's own window, which is trimmed to `LAUNCH_LEDGER_HOURS` on every
+        // write: what this asserts is that launching wrote the ledger and nothing else, so
+        // the instant is an offset from now rather than a date that ages out of it.
+        at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       });
       expect((await sites.byId(workspaceId, site.id))?.verification).toEqual(UNVERIFIED);
       expect((await sites.byId(workspaceId, site.id))?.launches).toHaveLength(1);
