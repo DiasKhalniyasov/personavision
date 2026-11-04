@@ -280,7 +280,7 @@ describe('quantiles and bins', () => {
 });
 
 describe('the surface the figures fill', () => {
-  it('fails loudly, naming the ticket that fills it, rather than returning zeroes', () => {
+  it('is filled: every figure of the step answers rather than naming its ticket', () => {
     const slice = funnelSliceSpecs(smallRun, smallRunSessions)[0];
     const screenSlice = screenSliceSpecs(smallRun, smallRunSessions)[0];
     if (slice === undefined || screenSlice === undefined) {
@@ -296,13 +296,16 @@ describe('the surface the figures fill', () => {
     // The per-screen figures are filled in (#291) and answer rather than throwing: their own
     // values are asserted in `aggregate-screens.test.ts`.
     expect(screenFiguresOfSlice({ run: smallRun, slice: screenSlice }).length).toBeGreaterThan(0);
-    expect(() =>
+    // And the composition over them (#292): its own properties — the agreement with
+    // `scores[]`, the slices summing to the whole, the bytes and the size — are asserted in
+    // `aggregate-compose.test.ts`, and what belongs here is only that it answers.
+    expect(
       composeAggregate({
         run: smallRun,
         sessions: smallRunSessions,
         computedAt: '2026-11-03T09:21:00.000Z',
-      }),
-    ).toThrow(/#292/);
+      }).scoredSessionCount,
+    ).toBe(5);
   });
 });
 
