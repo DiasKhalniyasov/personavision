@@ -14,7 +14,8 @@
  * 2. runs 4 generated people × 3 seed groups × 2 variants = 24 sessions over
  *    `demo/northwind/demo.config.ts`'s task, through Chromium, on the offline deterministic
  *    engine and provider — no API key read, nothing but loopback reached;
- * 3. scores the sessions, generates the findings and writes the verdict;
+ * 3. scores the sessions, generates the findings, writes the verdict and composes the
+ *    aggregate every figure of the results page is read from;
  * 4. writes the whole directory through `@personavision/contract`'s `writeRun`, with every
  *    path from `runPaths`, and reports what it measured against `docs/FLOW.md` section 5
  *    and `demo/northwind/defects.json`.
@@ -47,6 +48,7 @@ import {
 } from '@personavision/personas';
 import { createOfflineDeterministicProvider } from '@personavision/provider';
 import {
+  composeAggregate,
   evaluateAgainstPlantedDefects,
   findings as generateFindings,
   score,
@@ -58,7 +60,7 @@ import { NORTHWIND_TASK, northwindVariants } from '@personavision/northwind-demo
 import { serveDemoShop } from '@personavision/northwind-demo/serve.ts';
 import type { CaptureSource, Variant } from '@personavision/browser';
 import type { DemoShop } from '@personavision/northwind-demo/serve.ts';
-import type { Findings, Run, Session } from '@personavision/contract';
+import type { Aggregate, Findings, Run, Session } from '@personavision/contract';
 import type { PlantedDefectEvaluation } from '@personavision/scoring';
 import type { EngineOnTheRecord } from '@personavision/swarm';
 
@@ -234,14 +236,37 @@ const emptyFindings = (runId: string): Findings => ({
  * here, in one place, from the sessions and the areas the run itself records, so every
  * number in the artifact is derived from the artifact.
  */
-const scored = (run: Run, sessions: readonly Session[]): { run: Run; findings: Findings } => {
+const scored = (
+  run: Run,
+  sessions: readonly Session[],
+): { run: Run; findings: Findings; aggregate: Aggregate } => {
   const aoiMetrics = aggregate(sessions, run.aois);
   const scores = score(sessions, run.aois, aoiMetrics, run.task);
   const found = generateFindings(sessions, run.aois, aoiMetrics, scores);
+  const finished = {
+    ...run,
+    aoiMetrics,
+    scores,
+    verdict: writeVerdict(scores, found, run.audience),
+  };
 
   return {
-    run: { ...run, aoiMetrics, scores, verdict: writeVerdict(scores, found, run.audience) },
+    run: finished,
     findings: { schemaVersion: SCHEMA_VERSION, runId: run.runId, findings: found },
+    // The aggregate is a stage of this run rather than something a reader of the directory
+    // has to remember to compute (#295): the committed artifact carries every figure the
+    // results page reads, and a regeneration cannot leave it behind — `writeRun` removes
+    // the file when it is handed none, so an artifact written without this would arrive
+    // with its aggregate deleted.
+    //
+    // `computedAt` is the run's own clock and not this process's, the rule
+    // `personavision aggregate` applies (`packages/cli/src/commands/aggregate.ts`), so
+    // re-running that command over the committed directory rewrites the same bytes.
+    aggregate: composeAggregate({
+      run: finished,
+      sessions,
+      computedAt: finished.finishedAt ?? finished.startedAt ?? finished.createdAt,
+    }),
   };
 };
 
@@ -429,6 +454,7 @@ export const generateDemoRun = async (
       run: final.run,
       sessions: [...walked.sessions],
       findings: final.findings,
+      aggregate: final.aggregate,
     });
     // The capture cache is `packages/browser`'s own working state, not artifact data — it
     // says so itself, and `runPaths` spells no path into it. It also carries a key derived

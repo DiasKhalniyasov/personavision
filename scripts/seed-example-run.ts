@@ -57,6 +57,7 @@ import {
   writeRun,
 } from '@personavision/contract';
 import { aggregate } from '@personavision/engine';
+import { composeAggregate } from '@personavision/scoring';
 import type { Findings, Run, Session } from '@personavision/contract';
 
 /* ===== the run's fixed shape =============================================== */
@@ -1684,7 +1685,25 @@ export const writeSeedRun = async (runsRoot: string): Promise<string> => {
   const runDir = join(runsRoot, RUN_ID);
   const paths = runPaths(runDir);
 
-  await writeRun(runDir, { run, sessions, findings });
+  await writeRun(runDir, {
+    run,
+    sessions,
+    findings,
+    // The fixture carries its aggregate too (#295), composed from its own sessions, so the
+    // suites that read this copy see what the committed artifact under `runs/` has. It is
+    // written here rather than left to the command line because `writeRun` removes the file
+    // when it is handed none: a regeneration without this would delete it.
+    //
+    // `computedAt` follows the rule `personavision aggregate` applies
+    // (`packages/cli/src/commands/aggregate.ts`): the run's own clock, so re-running that
+    // command over the committed fixture rewrites the same bytes. This run records no
+    // `startedAt` and no `finishedAt`, so that clock is when it was created.
+    aggregate: composeAggregate({
+      run,
+      sessions,
+      computedAt: run.finishedAt ?? run.startedAt ?? run.createdAt,
+    }),
+  });
 
   for (const screenshot of run.screenshots) {
     const step = STEPS.find((candidate) => candidate.id === screenshot.step);

@@ -1,18 +1,19 @@
 import { spawn } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  aggregateSchema,
   findingsSchema,
   readRun,
   runPaths,
   runSchema,
   sessionSchema,
 } from '@personavision/contract';
-import type { RunArtifact } from '@personavision/contract';
+import type { Aggregate, Run, RunArtifact } from '@personavision/contract';
 
 /**
  * The cold start: what a developer who has just cloned this repository does, asserted end
@@ -183,7 +184,12 @@ const readRunOverHttp = async (base: string): Promise<RunArtifact> => {
       sessionSchema.parse(await getJson(base, under(layout.session(sessionId)))),
     ),
   );
-  return { run, sessions, findings };
+  // The aggregate is the fourth file of the layout and the Funnel and timing screens read it
+  // over this same mount (#295). It is optional in the contract — a run that computed none
+  // carries no file — so an absent one is read as absent rather than as a failure.
+  const served = await get(base, under(layout.aggregate));
+  const aggregate = served.status === 404 ? undefined : aggregateSchema.parse(await served.json());
+  return { run, sessions, findings, ...(aggregate !== undefined && { aggregate }) };
 };
 
 /**
@@ -290,6 +296,131 @@ describe('a fresh clone builds, and the app opens on the committed example run',
 
   it('serves the same artifact over HTTP as the contract reads from disk', async () => {
     expect(await readRunOverHttp(base)).toEqual(onDisk);
+  });
+});
+
+/**
+ * The aggregate the committed example run carries (#295) — `aggregate.json`, written by
+ * `personavision aggregate` over the sessions already in that directory.
+ *
+ * It is asserted here rather than in `tests/demo-run.test.ts` because what is being claimed
+ * is a property of **the file in git**: that a fresh clone finds it, that the contract reads
+ * it back as part of the artifact, that its figures say what `run.json`'s own summary says,
+ * and that re-running the command over the committed directory rewrites the same bytes. A
+ * temporary copy would prove none of those about the thing a clone actually gets.
+ */
+describe('the aggregate the committed example run carries', () => {
+  const aggregateFile = runPaths(runDir).aggregate;
+
+  /**
+   * The budget this file is committed under, and the real size beside it: at the time of
+   * writing the committed aggregate serialises to about 700 KiB over 23 sessions.
+   *
+   * It is far more than the 128 KiB ceiling `packages/scoring`'s own size test holds a
+   * hundred synthetic sessions to, and the difference is this shop rather than this run:
+   * `screenSlices` stores one click count per area of interest per screen per slice, the
+   * demo's pages declare about thirty areas each, and 17 slices × 8 screens of that is most
+   * of the weight — three quarters of those counts are zero. Shrinking it is a change to the
+   * composition in `@personavision/scoring` and is noted on #295 for whoever owns the
+   * figure; what this asserts is the budget the repository is actually carrying, so that a
+   * change which doubled it would be read as a decision rather than as noise.
+   */
+  const AGGREGATE_CEILING_BYTES = 1024 * 1024;
+
+  /** The `scores[]` row `run.json` already carries for a version. */
+  const storedScore = (run: Run, variant: string): Run['scores'][number] => {
+    const found = run.scores.find((score) => score.variant === variant);
+    if (found === undefined) throw new Error(`run.json carries no score for version "${variant}"`);
+    return found;
+  };
+
+  const funnelSlice = (aggregate: Aggregate, key: string): Aggregate['funnelSlices'][number] => {
+    const found = aggregate.funnelSlices.find((slice) => slice.key === key);
+    if (found === undefined) throw new Error(`the aggregate carries no funnel slice "${key}"`);
+    return found;
+  };
+
+  /**
+   * What the aggregate says a slice's completion rate is: how many of the people in it
+   * finished the run's last step, over the people the slice is of — read off the funnel's
+   * own last row rather than recounted from the sessions, because the claim is that the
+   * **stored** figure agrees with the summary.
+   */
+  const impliedCompletionRate = (slice: Aggregate['funnelSlices'][number]): number => {
+    const last = slice.funnel.at(-1);
+    if (last === undefined) throw new Error(`the funnel of slice "${slice.key}" holds no step`);
+    return last.completed / slice.sessionCount;
+  };
+
+  const readAggregate = async (): Promise<Aggregate> => {
+    const artifact = await readRun(runDir);
+    if (artifact.aggregate === undefined) {
+      throw new Error(`${aggregateFile} is not committed: the artifact carries no aggregate`);
+    }
+    return artifact.aggregate;
+  };
+
+  it('is committed, and the contract reads it back as part of the artifact', async () => {
+    const artifact = await readRun(runDir);
+
+    expect(artifact.aggregate?.runId).toBe(RUN_ID);
+    // Stamped with the run's own clock, so there is no field in it that moves on a
+    // re-aggregation — the determinism this file asserts below rests on that.
+    expect(artifact.aggregate?.computedAt).toBe(
+      artifact.run.finishedAt ?? artifact.run.startedAt ?? artifact.run.createdAt,
+    );
+    expect(artifact.aggregate?.runStatus).toBe(artifact.run.status ?? 'open');
+  });
+
+  it('agrees with the committed run.json, figure by figure', async () => {
+    const aggregate = await readAggregate();
+    const onDisk = await readRun(runDir);
+
+    // Every figure is of the sessions `scores[]` counted, so the two cannot disagree about
+    // how many people there were or about how many of them our own harness broke.
+    expect(aggregate.scoredSessionCount).toBe(
+      onDisk.run.scores.reduce((total, score) => total + score.scoredSessionCount, 0),
+    );
+    expect(aggregate.excludedAutomationFailures).toBe(
+      onDisk.run.scores.reduce((total, score) => total + score.outcomeCounts.automationFailure, 0),
+    );
+    // The first step of the funnel is reached by everybody the slice is of: anybody who ran
+    // at all landed on the first screen.
+    expect(funnelSlice(aggregate, 'all').funnel[0].reached).toBe(aggregate.scoredSessionCount);
+
+    for (const variant of onDisk.run.variants) {
+      const score = storedScore(onDisk.run, variant.id);
+      const slice = funnelSlice(aggregate, `variant:${variant.id}`);
+
+      expect(slice.sessionCount, variant.id).toBe(score.scoredSessionCount);
+      expect(slice.funnel[0].reached, variant.id).toBe(score.scoredSessionCount);
+      expect(impliedCompletionRate(slice), variant.id).toBeCloseTo(score.completionRate, 10);
+    }
+  });
+
+  it('is rewritten byte for byte by personavision aggregate over the committed directory', async () => {
+    const committed = await readFile(aggregateFile);
+
+    const aggregated = await runToCompletion(process.execPath, [CLI, 'aggregate', runDir]);
+    const after = await readFile(aggregateFile);
+    // Put back whatever a drifted composition wrote, so a failure here is a failure and not
+    // also an edit to a committed artifact.
+    if (!after.equals(committed)) await writeFile(aggregateFile, committed);
+
+    expect(aggregated.code, aggregated.output).toBe(0);
+    expect(aggregated.output).toContain(`Aggregated 23 sessions of ${RUN_ID}`);
+    expect(after.equals(committed), 'the committed aggregate is not what the command writes').toBe(
+      true,
+    );
+  }, 120_000);
+
+  it('stays inside the budget a screen fetches in one request, and reports its size', () => {
+    const bytes = statSync(aggregateFile).size;
+
+    expect(
+      bytes,
+      `the committed aggregate is ${String(bytes)} bytes, and this repository carries it up to ${String(AGGREGATE_CEILING_BYTES)}`,
+    ).toBeLessThanOrEqual(AGGREGATE_CEILING_BYTES);
   });
 });
 
