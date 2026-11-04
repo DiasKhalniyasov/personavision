@@ -1,9 +1,9 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { z } from 'zod';
 import { runPaths, sessionIdFromFileName } from './paths.js';
+import { validateRecommendations } from './recommendations.js';
 import type {
   Aggregate,
-  Citation,
   Findings,
   Recommendations,
   Run,
@@ -20,6 +20,8 @@ import {
   sessionSchema,
   ZERO_USAGE,
 } from './schemas.js';
+import type { Violation } from './violations.js';
+import { at, pointer } from './violations.js';
 
 /**
  * Reading, writing and validating a whole run directory. A round trip through disk is
@@ -27,14 +29,14 @@ import {
  * reader parses what it finds before it returns it.
  */
 
-/** One thing wrong with a run directory, at the place it is wrong. */
-export interface Violation {
-  /** The file, run-directory-relative — `run.json`, `sessions/S-01.json`, `findings.json`. */
-  file: string;
-  /** An RFC 6901 JSON Pointer to the offending value; `''` is the whole document. */
-  path: string;
-  message: string;
-}
+/**
+ * One thing wrong with a run directory, at the place it is wrong — re-exported here, where
+ * it has always been imported from. It is declared in `violations.ts`, beside the two
+ * helpers that build one, so that a checker in a module of its own — the citation validator
+ * of `recommendations.ts` — reports in this shape without importing this reader and the
+ * `node:fs` under it.
+ */
+export type { Violation };
 
 /** Every artifact file of one run, parsed. Sessions come in `run.sessionIds` order. */
 export interface RunArtifact {
@@ -63,15 +65,6 @@ export interface RunArtifact {
  * its bundle (`apps/viewer/tests/contract-in-the-browser.test.ts`).
  */
 const relative = /* @__PURE__ */ runPaths('');
-
-const pointer = (path: ReadonlyArray<PropertyKey>): string =>
-  path.map((segment) => `/${String(segment).replace(/~/g, '~0').replace(/\//g, '~1')}`).join('');
-
-const at = (file: string, path: ReadonlyArray<PropertyKey>, message: string): Violation => ({
-  file,
-  path: pointer(path),
-  message,
-});
 
 const readJsonFile = async (
   file: string,
@@ -370,69 +363,14 @@ const checkReferences = (
     });
   });
 
-  // Across two files, for the same reason: the Analysis screen builds every citation into a
-  // deep link — a replay at the millisecond named, a heatmap route, a funnel anchor — so a
-  // citation naming anything this run does not hold is a link to nothing, and the one thing
-  // section 14 asks of that screen is that it render citations rather than invent them. Each
-  // kind is checked against the same declarations a finding is. The write-up's claims cite
-  // the same way and are held to the same rule.
-  const checkCitations = (
-    list: 'recommendations' | 'writeUp',
-    index: number,
-    citations: ReadonlyArray<Citation>,
-  ): void => {
-    citations.forEach((citation, position) => {
-      const cited = (field: string, message: string): void => {
-        violations.push(
-          at(relative.recommendations, [list, index, 'citations', position, field], message),
-        );
-      };
-      switch (citation.kind) {
-        case 'session':
-          if (!seen.has(citation.sessionId)) {
-            cited(
-              'sessionId',
-              `"${citation.sessionId}" names no session listed in run.json sessionIds`,
-            );
-          }
-          break;
-        case 'heatmap':
-          if (!declaredVariants.has(citation.variant)) {
-            cited('variant', danglingVariant(citation.variant));
-          }
-          if (!declaredSteps.has(citation.step)) cited('step', danglingStep(citation.step));
-          if (citation.aoiId !== null && !declaredAois.has(citation.aoiId)) {
-            cited('aoiId', danglingAoi(citation.aoiId));
-          }
-          break;
-        case 'funnel':
-          if (!declaredSteps.has(citation.stepId)) cited('stepId', danglingStep(citation.stepId));
-          break;
-      }
-    });
-  };
-  recommendations?.recommendations.forEach((recommendation, index) => {
-    checkCitations('recommendations', index, recommendation.citations);
-    // The schema holds a recommendation to naming the findings it rests on; which file those
-    // names are in is only knowable here. A recommendation resting on a finding that
-    // findings.json does not carry is the drift that rule exists to prevent.
-    if (findings !== undefined) {
-      recommendation.findingIds.forEach((findingId, position) => {
-        if (!declaredFindings.has(findingId)) {
-          violations.push(
-            at(
-              relative.recommendations,
-              ['recommendations', index, 'findingIds', position],
-              danglingFinding(findingId),
-            ),
-          );
-        }
-      });
-    }
-  });
-  recommendations?.writeUp?.forEach((claim, index) => {
-    checkCitations('writeUp', index, claim.citations);
-  });
+  // Across two files, and needing the sessions, the areas of interest, the findings and the
+  // aggregate at once: every citation is resolved against the run it belongs to, and no
+  // recommendation is allowed to rest on a session our own automation broke. Those rules
+  // live in `recommendations.ts`, so that a caller holding a run artifact in memory can run
+  // them without going through this reader.
+  violations.push(
+    ...validateRecommendations({ run, sessions, findings, aggregate, recommendations }),
+  );
   // The aggregate is every figure the Funnel and timing and Heatmaps screens read, and every
   // one of them is addressed by a name this run declares: a funnel row naming a step
   // `run.json` does not is a row no screen can label, and a slowest-sessions row naming a

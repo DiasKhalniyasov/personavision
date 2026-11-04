@@ -97,12 +97,6 @@ export const paths = {
  * The order inside each list is the order `docs/FLOW.md` sections 3 and 14 write the query,
  * so two links to the same place are the same string.
  */
-/**
- * `step` is here beside `segment` because the Funnel and timing screen opens with a step
- * marked (#274): a recommendation citing a funnel step is a link to that screen with the
- * step on it, and the link is built here with every other one rather than on the screen
- * that writes it.
- */
 const FUNNEL_PARAMS = ['segment', 'step'] as const satisfies readonly EvidenceLinkParam[];
 const HEATMAP_PARAMS = [
   'aoi',
@@ -163,7 +157,14 @@ const query = (
   return written === '' ? '' : `?${written}`;
 };
 
-/** `/runs/<id>/funnel?segment=…&step=…`: where they dropped out, and on which step. */
+/**
+ * `/runs/<id>/funnel?segment=…&step=…`: where they dropped out, for one segment or for all.
+ *
+ * `step` is how a recommendation's funnel citation addresses the row it rests on — *funnel ·
+ * waiting* — so the Funnel and timing screen opens on that step rather than at the top of
+ * its funnel. It is URL state like the segment beside it, not a fragment, because the screen
+ * reads its own state from the query (`docs/FLOW.md` section 3).
+ */
 export const funnelLink = (runId: string, narrowing: FunnelNarrowing = {}): string =>
   `${paths.funnel(runId)}${query(FUNNEL_PARAMS, narrowing)}`;
 

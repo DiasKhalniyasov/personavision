@@ -65,6 +65,17 @@ const sectionsOf = (container: HTMLElement): string[] =>
     (section) => section.getAttribute('data-section') as string,
   );
 
+/**
+ * The one section of the signed-in lead that this public page does not carry.
+ *
+ * `/runs/:runId` is the **Summary** (#266), and for a run with two versions its lead is this
+ * page's Verdict with the ranked recommendations under it. Those are not here, for the same
+ * reason the four doors are not: every link in them — a session's replay at a cited second, a
+ * heatmap region, the funnel, the full analysis — is behind sign-in, and this page offers one
+ * action that stands for all of it rather than links that cannot open.
+ */
+const BEHIND_SIGN_IN = 'recommendations';
+
 beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
 
@@ -133,11 +144,15 @@ describe('the sections are the Verdict screen’s own', () => {
     await settled(verdict.container);
     const onVerdict = sectionsOf(verdict.container);
 
-    // The one difference the screen contract allows: the `.doors` block becomes the single
-    // sign-in action. Everything between the bar and it is the signed-in screen.
+    // The differences the screen contract allows: the `.doors` block becomes the single
+    // sign-in action, and the recommendations under the findings are behind sign-in with it.
+    // Everything between the bar and it is the signed-in screen.
     expect(onVerdict).toContain('detail-doors');
+    expect(onVerdict).toContain(BEHIND_SIGN_IN);
     expect(onDemo).toEqual(
-      onVerdict.map((section) => (section === 'detail-doors' ? 'behind-sign-in' : section)),
+      onVerdict
+        .filter((section) => section !== BEHIND_SIGN_IN)
+        .map((section) => (section === 'detail-doors' ? 'behind-sign-in' : section)),
     );
   });
 
@@ -161,7 +176,10 @@ describe('the sections are the Verdict screen’s own', () => {
     await settled(verdict.container);
     const onVerdict = words(verdict.container);
 
-    for (const section of Object.keys(onVerdict).filter((name) => name !== 'detail-doors')) {
+    const compared = Object.keys(onVerdict).filter(
+      (name) => name !== 'detail-doors' && name !== BEHIND_SIGN_IN,
+    );
+    for (const section of compared) {
       expect(onDemo[section], section).toBe(onVerdict[section]);
     }
   });

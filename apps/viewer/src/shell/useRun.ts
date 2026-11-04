@@ -30,7 +30,8 @@ import { matches, patterns } from './paths';
  * - `GET /runs/index.json` → the workspace's tests, newest first
  * - `GET /runs/<runId>/run.json` → one run, byte for byte as the pipeline wrote it
  * - `GET /runs/<runId>/findings.json` → that run's ranked findings
- * - `GET /runs/<runId>/aggregate.json` → the pre-sliced figures, when the run computed any
+ * - `GET /runs/<runId>/aggregate.json` → every figure the results screens read, when the
+ *   run computed one
  * - `GET /runs/<runId>/recommendations.json` → what to change, when the run produced any
  * - `HEAD /runs/<runId>/videos/<id>.webm` → how big one session's recording is
  *
@@ -168,6 +169,33 @@ const readFindings = async (runId: string): Promise<FindingsState> => {
 };
 
 /**
+ * The figures of this run, or the stated absence of them.
+ *
+ * `aggregate.json` is **optional** in a run directory, by the same rule as the
+ * recommendations beside it: a run that computed no aggregate has no file, which is not a
+ * set of zeroes somebody measured. A 404 is therefore `none`; every other failure is named,
+ * because a file that is there and will not parse is a broken run and not a run without
+ * figures.
+ *
+ * It is read here, with the rest of this app's network, so the Summary screen reads the
+ * stored figures rather than counting a hundred sessions in a browser —
+ * `docs/adr/0001-run-data-over-http-as-static-files.md`.
+ */
+const readAggregate = async (runId: string): Promise<AggregateState> => {
+  const url = aggregateUrl(runId);
+  const answer = await readJson(url);
+  if (!answer.ok) {
+    return answer.status === 404
+      ? { status: 'none' }
+      : { status: 'unreadable', runId, url, problem: answer.problem };
+  }
+  const parsed = aggregateSchema.safeParse(answer.body);
+  return parsed.success
+    ? { status: 'ready', aggregate: parsed.data }
+    : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
+};
+
+/**
  * What this run says to change, or the stated absence of it.
  *
  * `recommendations.json` is **optional** in a run directory: a run that produced none has
@@ -186,29 +214,6 @@ const readRecommendations = async (runId: string): Promise<RecommendationsState>
   const parsed = recommendationsSchema.safeParse(answer.body);
   return parsed.success
     ? { status: 'ready', recommendations: parsed.data }
-    : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
-};
-
-/**
- * The figures the two filtered results screens read, pre-sliced by the pipeline.
- *
- * `aggregate.json` is **optional** in a run directory, like `recommendations.json`: a run
- * that computed no aggregate has no file, which is never a funnel of zeroes somebody
- * measured. A 404 is therefore `none` and not a problem; every other failure is named,
- * because a file that is there and will not parse is a broken run and not a run without an
- * aggregate.
- */
-const readAggregate = async (runId: string): Promise<AggregateState> => {
-  const url = aggregateUrl(runId);
-  const answer = await readJson(url);
-  if (!answer.ok) {
-    return answer.status === 404
-      ? { status: 'none' }
-      : { status: 'unreadable', runId, url, problem: answer.problem };
-  }
-  const parsed = aggregateSchema.safeParse(answer.body);
-  return parsed.success
-    ? { status: 'ready', aggregate: parsed.data }
     : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
 };
 
@@ -321,9 +326,9 @@ const latestOf = (state: RunIndexState): LatestRunState => {
  */
 const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
+const aggregateCache = new Map<string, Promise<AggregateState>>();
 const excludedCache = new Map<string, Promise<ExcludedState>>();
 const recommendationsCache = new Map<string, Promise<RecommendationsState>>();
-const aggregateCache = new Map<string, Promise<AggregateState>>();
 let runIndex: Promise<RunIndexState> | null = null;
 
 const keep = <State extends { status: string }>(
@@ -345,14 +350,14 @@ const loadRun = (runId: string): Promise<RunState> =>
 const loadFindings = (runId: string): Promise<FindingsState> =>
   findingsCache.get(runId) ?? keep(runId, findingsCache, readFindings(runId));
 
+const loadAggregate = (runId: string): Promise<AggregateState> =>
+  aggregateCache.get(runId) ?? keep(runId, aggregateCache, readAggregate(runId));
+
 const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<ExcludedState> =>
   excludedCache.get(runId) ?? keep(runId, excludedCache, readExcluded(runId, sessionIds));
 
 const loadRecommendations = (runId: string): Promise<RecommendationsState> =>
   recommendationsCache.get(runId) ?? keep(runId, recommendationsCache, readRecommendations(runId));
-
-const loadAggregate = (runId: string): Promise<AggregateState> =>
-  aggregateCache.get(runId) ?? keep(runId, aggregateCache, readAggregate(runId));
 
 const loadRunIndex = (): Promise<RunIndexState> => {
   runIndex ??= readRunIndexFile().then((state) => {
@@ -366,9 +371,9 @@ const loadRunIndex = (): Promise<RunIndexState> => {
 export const refreshRun = (runId: string): void => {
   cache.delete(runId);
   findingsCache.delete(runId);
+  aggregateCache.delete(runId);
   excludedCache.delete(runId);
   recommendationsCache.delete(runId);
-  aggregateCache.delete(runId);
   runIndex = null;
 };
 
@@ -376,9 +381,9 @@ export const refreshRun = (runId: string): void => {
 export const clearRunCache = (): void => {
   cache.clear();
   findingsCache.clear();
+  aggregateCache.clear();
   excludedCache.clear();
   recommendationsCache.clear();
-  aggregateCache.clear();
   runIndex = null;
 };
 
@@ -392,11 +397,11 @@ export type FindingsState =
       readonly problem: string;
     };
 
-export type RecommendationsState =
+export type AggregateState =
   | { readonly status: 'loading' }
-  /** The run produced none: there is no file, which is an absence and not a failure. */
+  /** The run computed none: there is no file, which is an absence and not a failure. */
   | { readonly status: 'none' }
-  | { readonly status: 'ready'; readonly recommendations: Recommendations }
+  | { readonly status: 'ready'; readonly aggregate: Aggregate }
   | {
       readonly status: 'unreadable';
       readonly runId: string;
@@ -404,11 +409,11 @@ export type RecommendationsState =
       readonly problem: string;
     };
 
-export type AggregateState =
+export type RecommendationsState =
   | { readonly status: 'loading' }
-  /** The run computed none: there is no file, which is an absence and not a failure. */
+  /** The run produced none: there is no file, which is an absence and not a failure. */
   | { readonly status: 'none' }
-  | { readonly status: 'ready'; readonly aggregate: Aggregate }
+  | { readonly status: 'ready'; readonly recommendations: Recommendations }
   | {
       readonly status: 'unreadable';
       readonly runId: string;
@@ -571,6 +576,31 @@ export function useOptionalRun(runId: string | null): RunState | null {
 }
 
 /**
+ * This run's stored figures: read once per run while the app is open.
+ *
+ * The Summary screen's three headline figures are fields of this file, and the Funnel,
+ * timing and Heatmaps screens read their own slices of it. Nothing re-aggregates the
+ * sessions in the browser, which `docs/adr/0001` forbids: a screen that recounted a
+ * hundred sessions could disagree with the summary beside it.
+ */
+export function useAggregate(runId: string): AggregateState {
+  const [state, setState] = useState<AggregateState>({ status: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    setState({ status: 'loading' });
+    void loadAggregate(runId).then((next) => {
+      if (live) setState(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+
+  return state;
+}
+
+/**
  * What this run says to change: read once per run while the app is open.
  *
  * The replay's outcome card names the recommendations one session is evidence for, which is
@@ -584,32 +614,6 @@ export function useRecommendations(runId: string): RecommendationsState {
     let live = true;
     setState({ status: 'loading' });
     void loadRecommendations(runId).then((next) => {
-      if (live) setState(next);
-    });
-    return () => {
-      live = false;
-    };
-  }, [runId]);
-
-  return state;
-}
-
-/**
- * One run's aggregate: every figure the Funnel and timing and Heatmaps screens read, as the
- * pipeline pre-sliced it, read once per run while the app is open.
- *
- * Nothing is derived from it here and nothing is derived from it on a screen: a screen picks
- * the slice its filter names and prints the fields of it (`docs/adr/0001`). A run that
- * computed no aggregate answers `none`, and the screen states that absence in words rather
- * than drawing a funnel of zeroes.
- */
-export function useAggregate(runId: string): AggregateState {
-  const [state, setState] = useState<AggregateState>({ status: 'loading' });
-
-  useEffect(() => {
-    let live = true;
-    setState({ status: 'loading' });
-    void loadAggregate(runId).then((next) => {
       if (live) setState(next);
     });
     return () => {

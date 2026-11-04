@@ -92,6 +92,9 @@ export {
 } from './io.js';
 export type { RunArtifact, Violation } from './io.js';
 
+export { validateRecommendations } from './recommendations.js';
+export type { CitedRun } from './recommendations.js';
+
 export {
   createGoogleStorageTransport,
   createObjectVideoStore,

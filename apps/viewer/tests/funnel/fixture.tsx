@@ -72,9 +72,12 @@ export interface OpenOptions {
 /** The screen, mounted on its route over the aggregate a test asked for. */
 export async function openFunnel(options: OpenOptions = {}): Promise<ServedRunData> {
   const aggregate = options.aggregate === undefined ? fixtureAggregate() : options.aggregate;
-  const served = await serveRunData({
-    files: { [AGGREGATE_URL]: aggregate === null ? null : JSON.stringify(aggregate) },
-  });
+  const served = await serveRunData(
+    aggregate === null
+      ? // A run directory with no `aggregate.json`, which is a run that computed none.
+        { missing: [AGGREGATE_URL] }
+      : { files: { [AGGREGATE_URL]: JSON.stringify(aggregate) } },
+  );
   mountApp(funnelLink(RUN_ID, options.narrowing ?? {}));
   return served;
 }
