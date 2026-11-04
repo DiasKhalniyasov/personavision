@@ -171,8 +171,8 @@
   border-radius: var(--radius-full);
   background: linear-gradient(
     to right,
-    var(--color-heading) 0 calc(var(--trait-value) * 100%),
-    var(--color-surface-sunken) calc(var(--trait-value) * 100%) 100%
+    var(--color-heading) 0 calc(var(--trait-value, 0) * 100%),
+    var(--color-surface-sunken) calc(var(--trait-value, 0) * 100%) 100%
   );
 }
 
@@ -242,9 +242,10 @@
 }
 
 /* The areas and their stored figures: a long list read as rows, so it is
-   capped and scrolls. A scroll container is reachable without a pointer
-   because it is a list of links and text inside a `dl` the reader tabs past —
-   the figures are all on the page, which is what keeps this from hiding any. */
+   capped and scrolls. The `dl` carries a tab stop and a name of its own, as the
+   Attention screen's scrolling frame does, because a scroll container holding
+   no focusable child is otherwise unreachable without a pointer (WCAG 2.1.1).
+   Nothing is hidden from a reader either way: every figure is in the list. */
 .areas {
   display: grid;
   max-height: calc(var(--space-8) * 7);

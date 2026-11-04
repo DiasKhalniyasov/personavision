@@ -302,6 +302,28 @@ describe('the three views', () => {
     expect(slide.querySelectorAll('#rp-clicks [data-click]')).toHaveLength(drawable.length);
   });
 
+  it('leaves the capped areas list reachable without a pointer', async () => {
+    const set = committedSet();
+    const first = set.slides[0];
+    if (first === undefined) throw new Error('no slide');
+    const { container } = landing();
+    await slideOn(container);
+    const slide = await showView(container, 'aoi');
+
+    // The list is taller than its box and holds nothing focusable of its own, so it is a
+    // named group with a tab stop — the same treatment the Attention screen's scrolling
+    // frame has, and the only thing that makes the rows past the eighth reachable (WCAG
+    // 2.1.1).
+    const list = slide.querySelector('[data-areas]') as HTMLElement;
+    expect(list.getAttribute('tabindex')).toBe('0');
+    expect(list.getAttribute('role')).toBe('group');
+    const named = first.areas.filter((area) => area.label !== area.role);
+    expect(list.getAttribute('aria-label')).toContain('scrollable');
+    expect(list.querySelectorAll('[data-area]')).toHaveLength(named.length);
+    // Every named area is in the list: capping its height hides none of them.
+    expect(named.length).toBeGreaterThan(8);
+  });
+
   it('gives each view a text alternative saying what is drawn and on whose screen', async () => {
     const set = committedSet();
     const first = set.slides[0];
@@ -523,6 +545,31 @@ describe('moving between the people', () => {
     expect(slide.querySelector('[data-overlay-layer="aoi"]')).not.toBeNull();
     // The switch's arrow keys are its own: moving inside it did not also move the slide.
     expect(slide.getAttribute('data-slide')).toBe(committedSet().slides[0]?.sessionId);
+  });
+
+  it('starts each person on the default view, because the switch is per slide', async () => {
+    const set = committedSet();
+    const { container } = landing();
+    await slideOn(container);
+
+    // The reader picks the Path view on the first person.
+    let slide = await showView(container, 'path');
+    expect(slide.querySelector('#rp-vec')).not.toBeNull();
+
+    // Moving to the next person opens on that person's own default, not on the view the
+    // last one was left at: the switch belongs to the slide.
+    await userEvent.click(container.querySelector('[data-carousel="next"]') as HTMLElement);
+    slide = await slideOn(container);
+    expect(slide.getAttribute('data-slide')).toBe(set.slides[1]?.sessionId);
+    expect(viewButton(container, 'heat').getAttribute('data-state')).toBe('on');
+    expect(slide.querySelector('[data-overlay-layer="heat"]')).not.toBeNull();
+    expect(slide.querySelector('#rp-vec')).toBeNull();
+
+    // And coming back does not carry the second person's view onto the first either.
+    await userEvent.click(container.querySelector('[data-carousel="previous"]') as HTMLElement);
+    slide = await slideOn(container);
+    expect(slide.getAttribute('data-slide')).toBe(set.slides[0]?.sessionId);
+    expect(viewButton(container, 'heat').getAttribute('data-state')).toBe('on');
   });
 
   it('announces which person a reader is on', async () => {

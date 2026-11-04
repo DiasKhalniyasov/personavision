@@ -11,7 +11,7 @@ import {
   lookedAtShare,
   neverFixatedLabel,
 } from '@/screens/attention/attentionWording';
-import type { AoiMetric, AttentionArea } from '@/screens/attention/useAttentionAreas';
+import type { AttentionArea } from '@/screens/attention/useAttentionAreas';
 import { AoiOutlineLayer } from '@/screens/attention/stage/AoiOutlineLayer';
 import { HeatKey, HeatmapLayer } from '@/screens/attention/stage/HeatmapLayer';
 import type { OverlayLayerProps } from '@/screens/attention/stage/overlayLayers';
@@ -115,36 +115,35 @@ const TRAIT_WORDS: Readonly<Record<LandingSlide['person']['traits'][number]['key
  * How a session ended, in the product's own words for this page.
  *
  * The status and its colour token come from the session vocabulary (#20), so an outcome
- * gains a colour in `docs/design/tokens.css` and never here. Only `abandoned`'s *word*
- * differs from the tag's `Abandoned`: this page states it as **gave up**, which is what the
- * score cards, the segments table and the Sessions list already print it as, and what the
- * ticket's own line asks for. The four are never folded into one bucket, and
- * `automation_failure` carries the vocabulary's own label — no slide in the committed set is
- * one, because our own breakage is not a person's behaviour, and a set that held one would
- * say so plainly rather than dress it as a result.
+ * gains a colour in `docs/design/tokens.css` and never here, and the three other statuses
+ * take the vocabulary's own label rather than a copy of it. Only `abandoned`'s word is
+ * overridden: this page states it as **gave up**, which is what the score cards, the
+ * segments table and the Sessions list already print it as, and what the ticket's own line
+ * asks for. The four are never folded into one bucket; `automation_failure` therefore still
+ * reads as itself, because no slide in the committed set is one — our own breakage is not a
+ * person's behaviour — and a set that held one would say so plainly rather than dress it as
+ * a result.
  */
-const OUTCOME_WORD: Readonly<Record<LandingSlide['outcome']['status'], string>> = {
-  success: 'Success',
-  abandoned: 'Gave up',
-  failed: 'Failed',
-  automation_failure: 'Automation failure',
-};
+const outcomeWord = (status: LandingSlide['outcome']['status']): string =>
+  status === 'abandoned' ? 'Gave up' : outcomeWords(status).label;
 
 /** `iPhone 15 · 390 × 844`, as every other screenshot in the product is labelled. */
 const deviceLabel = (device: LandingSlide['person']['device']): string =>
   `${device.name} · ${device.viewport.width} × ${device.viewport.height}`;
 
 /**
- * Which version and step the slide's page is, as the artifact names them.
+ * Which version and step the slide's page is, in the artifact's own words, built once for
+ * the two places that name it: the device label above the frame and the stage's own
+ * alternative under it.
  *
  * Read off the areas, which carry both: a slide holds no run to look a step's label up in,
  * so what the page says is the run's own `A` and `review` rather than a word invented here.
  * `null` for a slide whose screen had no area of interest at all, and then the sentences
  * below say what is drawn without naming a screen they cannot name.
  */
-const screenOf = (slide: LandingSlide): { variant: string; step: string } | null => {
+const screenWords = (slide: LandingSlide): string | null => {
   const first = slide.areas[0];
-  return first === undefined ? null : { variant: first.variant, step: first.step };
+  return first === undefined ? null : `the ${first.step} step of ${first.variant}`;
 };
 
 /** The capture's page box: what every layer draws against (`overlayTransform`). */
@@ -153,42 +152,48 @@ const transformOf = (slide: LandingSlide): Transform => ({
   pageHeight: slide.screenshot.pageHeight,
 });
 
+/** One area of a slide, with the `aoiMetrics` row #427 nested inside it. */
+type SlideArea = LandingSlide['areas'][number];
+
 /**
- * The areas of this slide, in the shape the Attention screen's layers take.
+ * One slide area in the shape the Attention screen's layers take.
  *
  * `{ aoi, metric }` is `AttentionArea`, and both halves are copies: the area is the slide's
  * own row minus the metrics nested inside it, and the metric is that nested row with the
  * `aoiId` the area already carries put back on, which is the one field #427 leaves out
- * because a slide states nothing twice.
+ * because a slide states nothing twice. The metric is therefore **never** `null` here, which
+ * is why the list below reads `area.metrics` rather than going back through this shape and
+ * handling an absence that cannot arise.
  */
-const areasOf = (slide: LandingSlide): readonly AttentionArea[] =>
-  slide.areas.map(({ metrics, ...aoi }) => ({ aoi, metric: { aoiId: aoi.id, ...metrics } }));
+const asAttentionArea = ({ metrics, ...aoi }: SlideArea): AttentionArea => ({
+  aoi,
+  metric: { aoiId: aoi.id, ...metrics },
+});
 
 /**
- * The areas this test can name, which are the ones the *Areas of interest* view is about.
+ * Whether this test has a name for the area, rather than only a kind.
  *
  * The pipeline labels an area from the page and falls back to its accessibility role where
  * the element carries no accessible name — `label: "generic"` beside `role: "generic"` — so
- * a page of thirty boxes is mostly structure. This view outlines and lists the named ones,
- * which is the same rule the Verdict screen's caption uses to decide what a sentence may
- * name; the count of the rest is stated under the list rather than left out.
+ * a page of thirty boxes is mostly structure. The *Areas of interest* view outlines and
+ * lists the named ones, which is the same rule the Verdict screen's caption uses to decide
+ * what a sentence may name; the count of the rest is stated under the list rather than left
+ * out.
  */
-const isNamed = ({ aoi }: AttentionArea): boolean => aoi.label !== aoi.role;
+const isNamed = (area: SlideArea): boolean => area.label !== area.role;
 
 /** The named areas, longest dwell first: the order a reader of this list is asking for. */
-const namedAreas = (areas: readonly AttentionArea[]): readonly AttentionArea[] =>
-  areas
+const namedAreas = (slide: LandingSlide): readonly SlideArea[] =>
+  slide.areas
     .filter(isNamed)
     .slice()
-    .sort((one, other) => (other.metric?.totalDwellMs ?? 0) - (one.metric?.totalDwellMs ?? 0));
+    .sort((one, other) => other.metrics.totalDwellMs - one.metrics.totalDwellMs);
 
 /** How long this area held attention, or `never` where the run says none ever landed. */
-const dwellWord = (metric: AoiMetric | null): string =>
-  metric === null
-    ? '—'
-    : isNeverFixated(metric)
-      ? neverFixatedLabel()
-      : elapsedSeconds(metric.totalDwellMs);
+const dwellWord = (metrics: SlideArea['metrics']): string =>
+  isNeverFixated({ aoiId: '', ...metrics })
+    ? neverFixatedLabel()
+    : elapsedSeconds(metrics.totalDwellMs);
 
 /**
  * This person's trace, in the shape the replay's gaze layer draws.
@@ -463,7 +468,12 @@ function Carousel({ set }: { set: LandingSlides }) {
           go(to < from ? at + 1 : at - 1);
         }}
       >
-        <Slide slide={slide} />
+        {/* Keyed by the slide, so moving to another person mounts a new `Slide` and the
+            view switch starts at the default again: the switch is **per slide**, which it
+            would not be if React reused this position's state across a slide change. The
+            key is the session and the screen together, as the dots' is, because a set may
+            hold two screens of one session. */}
+        <Slide key={`${slide.sessionId}-${slide.screenIndex}`} slide={slide} />
       </div>
     </section>
   );
@@ -473,9 +483,15 @@ function Carousel({ set }: { set: LandingSlides }) {
 function Slide({ slide }: { slide: LandingSlide }) {
   const [view, setView] = useState<ViewId>(DEFAULT_VIEW);
   const { person } = slide;
-  const screen = screenOf(slide);
-  const areas = useMemo(() => areasOf(slide), [slide]);
-  const named = useMemo(() => namedAreas(areas), [areas]);
+  const onWhat = screenWords(slide) ?? 'this page';
+  const named = useMemo(() => namedAreas(slide), [slide]);
+  const unnamed = slide.areas.length - named.length;
+  // The layer is handed the areas of whichever view is drawn: the outlines view is about
+  // the areas this test can name, and the heat is about where this person looked.
+  const forLayer = useMemo(
+    () => (view === 'aoi' ? named : slide.areas).map(asAttentionArea),
+    [view, named, slide.areas],
+  );
   const thoughts = thoughtsOf(slide);
   const outcome = outcomeWords(slide.outcome.status);
   const transform = transformOf(slide);
@@ -491,16 +507,13 @@ function Slide({ slide }: { slide: LandingSlide }) {
   const layerProps: OverlayLayerProps = {
     fixations: slide.fixations,
     saccades: slide.saccades,
-    // The outlines view is about the areas this test can name; the heat is about where this
-    // person looked, and is drawn from their fixations whatever the areas say.
-    areas: view === 'aoi' ? named : areas,
+    areas: forLayer,
     isolatedAoiId: null,
     transform,
     screen: NO_AGGREGATE,
     loading: false,
   };
 
-  const onWhat = screen === null ? 'this page' : `the ${screen.step} step of ${screen.variant}`;
   const drawn = VIEWS.find((one) => one.id === view)?.drawn ?? '';
 
   return (
@@ -539,7 +552,7 @@ function Slide({ slide }: { slide: LandingSlide }) {
       <div className={styles.stage}>
         <p className="microlabel" data-device>
           {deviceLabel(person.device)}
-          {screen === null ? '' : ` \u00b7 ${screen.step} step of ${screen.variant}`}
+          {screenWords(slide) === null ? '' : ` \u00b7 ${onWhat}`}
         </p>
 
         <ToggleGroup
@@ -617,14 +630,24 @@ function Slide({ slide }: { slide: LandingSlide }) {
 
         {view === 'aoi' ? (
           <>
-            <dl className={styles.areas} data-areas>
+            {/* A capped, scrolling list, so it is **focusable and named**: a reader
+                without a pointer has no other way to move down a list taller than its box
+                (WCAG 2.1.1), which is the same reason the Attention screen's own frame is a
+                named `group` with a tab stop. */}
+            <dl
+              className={styles.areas}
+              data-areas
+              role="group"
+              aria-label={`Every area this test named on ${onWhat}, with its dwell and the share who looked, scrollable`}
+              tabIndex={0}
+            >
               {named.map((area) => (
-                <div key={area.aoi.id} className={styles.area} data-area={area.aoi.id}>
-                  <dt>{area.aoi.label}</dt>
+                <div key={area.id} className={styles.area} data-area={area.id}>
+                  <dt>{area.label}</dt>
                   <dd>
-                    <span data-area-dwell>{dwellWord(area.metric)}</span>{' '}
+                    <span data-area-dwell>{dwellWord(area.metrics)}</span>{' '}
                     <span className={styles.areaShare} data-area-share>
-                      {area.metric === null ? '\u2014' : lookedAtShare(area.metric.lookedAtShare)}
+                      {lookedAtShare(area.metrics.lookedAtShare)}
                     </span>
                   </dd>
                 </div>
@@ -633,9 +656,9 @@ function Slide({ slide }: { slide: LandingSlide }) {
             <p className="footnote">
               Dwell and the share who looked are this test&rsquo;s own figures for the whole
               audience, not this person&rsquo;s.{' '}
-              {areas.length - named.length === 0
+              {unnamed === 0
                 ? ''
-                : `${areas.length - named.length} more areas on this page carry no name of their own and are left off this list.`}
+                : `${unnamed} more areas on this page carry no name of their own and are left off this list.`}
             </p>
           </>
         ) : null}
@@ -679,7 +702,7 @@ function Slide({ slide }: { slide: LandingSlide }) {
         <p className={styles.outcome}>
           {/* The outcome's own colour token, read from the session vocabulary rather than
               written here, so the word and the colour cannot disagree. */}
-          <b style={{ color: `var(${outcome.token})` }}>{OUTCOME_WORD[slide.outcome.status]}</b> at
+          <b style={{ color: `var(${outcome.token})` }}>{outcomeWord(slide.outcome.status)}</b> at
           the {slide.outcome.step} step
         </p>
         <p className={styles.reason}>{slide.outcome.reason}</p>
