@@ -7,6 +7,7 @@ import { DEFAULT_PORT as DEFAULT_SERVE_PORT } from '@personavision/platform';
 import { DEFAULT_MODEL_MODE } from '@personavision/provider';
 import { Command } from 'commander';
 import { CliError } from './cli-error.js';
+import { aggregateCommand } from './commands/aggregate.js';
 import {
   EXIT_CODE_HELP,
   calibrateFetchCommand,
@@ -109,6 +110,19 @@ program
   .argument('<runDir>', 'the run directory to check, such as runs/2026-10-24-1402-northwind-demo')
   .action(async (runDir: string) => {
     await validateCommand({ runDir });
+  });
+
+program
+  .command('aggregate')
+  .description(
+    'Re-compute a run’s aggregate from the sessions on disk and write it: the figures the Funnel and timing and Heatmaps screens read, recomputed without re-driving a browser. The same sessions produce the same file, byte for byte.',
+  )
+  .argument(
+    '<runDir>',
+    'the run directory to re-aggregate, such as runs/2026-10-24-1402-northwind-demo',
+  )
+  .action(async (runDir: string) => {
+    await aggregateCommand({ runDir });
   });
 
 program

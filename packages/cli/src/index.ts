@@ -55,3 +55,5 @@ export type { ServeCommandOptions, ServeResult } from './commands/serve.js';
  */
 export { validateCommand } from './commands/validate.js';
 export type { ValidateCommandOptions } from './commands/validate.js';
+export { aggregateCommand } from './commands/aggregate.js';
+export type { AggregateCommandOptions } from './commands/aggregate.js';

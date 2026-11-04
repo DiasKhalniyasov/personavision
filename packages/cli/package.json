@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The personavision command line: serve, open, run and validate",
+  "description": "The personavision command line: serve, open, run, validate and aggregate",
   "bin": {
     "personavision": "./dist/cli.js"
   },
@@ -28,6 +28,7 @@
     "@personavision/personas": "workspace:*",
     "@personavision/platform": "workspace:*",
     "@personavision/provider": "workspace:*",
+    "@personavision/scoring": "workspace:*",
     "@personavision/swarm": "workspace:*",
     "commander": "^15.0.0",
     "open": "^11.0.4",
