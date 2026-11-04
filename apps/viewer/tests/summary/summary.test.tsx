@@ -366,6 +366,13 @@ describe('what to change, in order', () => {
     expect(said).toContain('nothing recorded');
     expect(said).toContain('This test recommends nothing to change.');
     expect(said).not.toContain('0');
+    // Silence is a measured result, so the section says so where it leads and points at the
+    // evidence a reader can judge for themselves (the owner's decision 75).
+    expect(links(container, 'recommendations')).toEqual([
+      ['the funnel', paths.funnel(SEED)],
+      ['the recordings', paths.sessions(SEED)],
+      ['Run this test again', '/new'],
+    ]);
     // The figures are still shown: the aggregate has them, and they are not what is missing.
     expect(words(container, 'headline-figures')).toContain('Completed');
   });
@@ -386,7 +393,11 @@ describe('what to change, in order', () => {
       recommendations: recommendations({ recommendations: [], nothingToRecommend: why }),
     });
 
-    expect(words(container, 'recommendations')).toContain(why);
+    const said = words(container, 'recommendations');
+    expect(said).toContain(why);
+    // And how much of the run was read, so a model that found nothing is told apart from
+    // one that barely looked.
+    expect(said).toContain('Muse Wonder read 20 of its 22 sessions');
   });
 });
 

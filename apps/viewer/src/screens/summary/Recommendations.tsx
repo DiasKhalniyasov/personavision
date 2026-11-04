@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import type { Recommendation, Run } from '@personavision/contract';
+import type { Recommendation, Run, SampleProvenance } from '@personavision/contract';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NothingRecorded } from '@/shell/NothingRecorded';
 import { paths } from '@/shell/paths';
@@ -51,15 +51,37 @@ function Rec({ recommendation, run }: { recommendation: Recommendation; run: Run
 /**
  * The run produced no recommendation: the stated card, never a zero and never an empty list.
  *
- * `nothingToRecommend` is the pipeline's own sentence for why, when it wrote one; a run with
- * no file at all produced none before the product asked for them, and the card says that
- * instead of inventing a reason.
+ * The owner's decision 75 on the Results page: **the section stays where it leads and says
+ * so** — silence is a measured result, not a missing feature — with why, how much of the run
+ * was read, and the way on to the evidence a reader can judge for themselves. So the
+ * nothing-recorded card of decision 74 carries three things beside its heading:
+ *
+ * - **why**, in `nothingToRecommend` — the pipeline's own stored sentence, when it wrote
+ *   one. A run with no file at all produced none before the product asked for them, and the
+ *   card says that rather than inventing a reason.
+ * - **the provenance**, where there is a file: how many of the run's sessions were read, so
+ *   the reader can tell a model that found nothing from one that barely looked.
+ * - **the funnel and the recordings**, which are where somebody who wanted advice goes next.
  */
-function NoRecommendations({ why }: { why: string | null }) {
+function NoRecommendations({
+  run,
+  sample,
+  why,
+}: {
+  run: Run;
+  /** How much of the run was read, where a file says; `null` for a run with no file. */
+  sample: SampleProvenance | null;
+  why: string | null;
+}) {
   return (
     <NothingRecorded heading="This test recommends nothing to change." section="recommendations">
       {why ??
-        'It produced no recommendations — not an empty list, and not a claim without the evidence behind it. Run the test again and what to change will be here.'}
+        'It produced no recommendations — not an empty list, and not a claim without the evidence behind it.'}
+      {sample === null
+        ? ''
+        : ` Muse Wonder read ${String(sample.read)} of its ${String(sample.of)} sessions.`}{' '}
+      Where people dropped out is on <Link to={paths.funnel(run.runId)}>the funnel</Link>, and every
+      attempt is in <Link to={paths.sessions(run.runId)}>the recordings</Link>.
     </NothingRecorded>
   );
 }
@@ -90,12 +112,14 @@ export function Recommendations({ run }: { run: Run }) {
     );
   }
 
-  if (state.status === 'none') return <NoRecommendations why={null} />;
+  if (state.status === 'none') return <NoRecommendations run={run} sample={null} why={null} />;
 
   const { recommendations, sample, nothingToRecommend } = state.recommendations;
   const shown = recommendations.filter((recommendation) => recommendation.citations.length > 0);
 
-  if (shown.length === 0) return <NoRecommendations why={nothingToRecommend ?? null} />;
+  if (shown.length === 0) {
+    return <NoRecommendations run={run} sample={sample} why={nothingToRecommend ?? null} />;
+  }
 
   return (
     <div className="section" data-section="recommendations">
