@@ -15,6 +15,7 @@ import {
   sessionAtSecond,
   sessionsLink,
 } from '../src/shell/paths';
+import { HEADLINE } from '../src/screens/landing/LandingPage';
 import type { SessionState } from '../src/shell/useSession';
 
 /**
@@ -49,9 +50,7 @@ describe('/ — the answer, with no clicks', () => {
     await serveRunData();
     const { router } = mountApp(paths.home, { session: SIGNED_OUT });
 
-    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Know which version your customers can actually use',
-    );
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(HEADLINE);
     expect(router.state.location.pathname).toBe(paths.home);
   });
 
