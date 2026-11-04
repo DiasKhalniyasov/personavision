@@ -24,7 +24,11 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { readRun, writeRun } from '@personavision/contract';
-import { selectWonderProvider, WONDER_MODEL_ID } from '@personavision/provider';
+import {
+  createMetaWonderProvider,
+  selectWonderProvider,
+  WONDER_MODEL_ID,
+} from '@personavision/provider';
 import type { RunArtifact } from '@personavision/contract';
 import type { WonderAsk } from '@personavision/provider';
 import { recommendationsOf } from './recommendations.js';
@@ -50,6 +54,13 @@ const die = (line: string): never => {
   process.stderr.write(`${line}\n`);
   process.exit(1);
 };
+
+/** Muse Wonder on the model, refused rather than answered offline when there is no key. */
+const modelWonder = () =>
+  selectWonderProvider({
+    requestedMode: { mode: 'model', modelId: WONDER_MODEL_ID },
+    createModelProvider: ({ apiKey, modelId }) => createMetaWonderProvider({ apiKey, modelId }),
+  }).provider;
 
 /* ===== what Wonder reads ================================================== */
 
@@ -187,9 +198,7 @@ const iterate = async (input: {
   check: string | undefined;
   turns: number;
 }): Promise<{ title: string; summary: string; transcript: string[] }> => {
-  const wonder = selectWonderProvider({
-    requestedMode: { mode: 'model', modelId: WONDER_MODEL_ID },
-  }).provider;
+  const wonder = modelWonder();
   const brief = briefing(describeRun(input.artifact), input.files, input.check);
   const allowed = new Set(input.files);
   const transcript: string[] = [];
@@ -199,14 +208,23 @@ const iterate = async (input: {
   for (let turn = 1; turn <= input.turns; turn += 1) {
     const ask: WonderAsk<Action> = {
       use: 'change',
-      document: `${brief}\n\n# The conversation so far\n${transcript.join('\n\n') || '(nothing yet: start by reading)'}\n\nTurn ${String(turn)} of at most ${String(input.turns)}. Your next action:`,
+      document: `${brief}\n\n# The conversation so far\n${transcript.join('\n\n') || '(nothing yet: start by reading)'}\n\nTurn ${String(turn)} of at most ${String(input.turns)}. Reply with only the JSON object of your next action.`,
       seed: turn,
       replySchema: { name: 'wonder_repo_action', schema: ACTION_SCHEMA },
       effort: 'medium',
       parse: (reply) => reply as Action,
       offline: () => die('improve:local needs a model: set MODEL_API_KEY'),
     };
-    const { value: action } = await wonder.ask(ask);
+    // A reply that drifted into prose is a turn to say so, not the end of the loop.
+    const reply = await wonder.ask(ask).catch((error: unknown) => error);
+    if (reply instanceof Error) {
+      say(`  ${String(turn)}. (no action: ${reply.message.slice(0, 120)})`);
+      transcript.push(
+        `Turn ${String(turn)}, you: (a reply that was not the JSON action)\nResult: refused; answer with one JSON action only.`,
+      );
+      continue;
+    }
+    const action = (reply as { value: Action }).value;
     say(
       `  ${String(turn)}. ${action.action}${action.path === null ? '' : ` ${action.path}`}: ${action.thought}`,
     );
@@ -330,8 +348,7 @@ const main = async (): Promise<void> => {
       sessions: artifact.sessions,
       findings: artifact.findings,
       aggregate: artifact.aggregate!,
-      wonder: selectWonderProvider({ requestedMode: { mode: 'model', modelId: WONDER_MODEL_ID } })
-        .provider,
+      wonder: modelWonder(),
       report: say,
     });
     artifact = { ...artifact, recommendations };

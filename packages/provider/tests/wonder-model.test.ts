@@ -15,7 +15,7 @@ import {
   WonderCallError,
 } from '../src/wonder-model.js';
 import type { MetaWonderProviderOptions } from '../src/wonder-model.js';
-import { fakeTransport, FAKE_TOKENS, TEST_ENV, TEST_KEY } from './wonder-fake.js';
+import { fakeProbeReply, fakeTransport, FAKE_TOKENS, TEST_ENV, TEST_KEY } from './wonder-fake.js';
 
 /**
  * Muse Wonder behind the seam: what the exported one-shot contract suite does not already
@@ -103,6 +103,53 @@ describe('one ask becomes one request', () => {
     expect(body && 'response_format' in body).toBe(false);
     expect(body?.store).toBe(false);
     expect(body?.max_output_tokens).toBe(MAX_OUTPUT_TOKENS);
+  });
+
+  it('reads the last message when a short preamble message comes before the reply', async () => {
+    const message = (id: string, text: string) => ({
+      type: 'message',
+      id,
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text, annotations: [] }],
+    });
+    const fake = fakeTransport({
+      response: () => ({
+        status: 200,
+        body: {
+          status: 'completed',
+          output: [
+            message('msg-1', 'Fixing your landing page; first reading the current page.'),
+            message('msg-2', fakeProbeReply(1)),
+          ],
+          usage: FAKE_TOKENS,
+        },
+      }),
+    });
+
+    const reply = await provider({ transport: fake.transport }).ask(wonderProbeAsk());
+
+    expect(reply.value).toEqual(JSON.parse(fakeProbeReply(1)));
+    expect(fake.requests).toHaveLength(1);
+  });
+
+  it('sends a union as `anyOf`, because the strict mode refuses `oneOf` with a 400', async () => {
+    const fake = fakeTransport();
+    const asked = wonderProbeAsk();
+    const union = {
+      type: 'object',
+      properties: { citation: { oneOf: [{ type: 'string' }, { type: 'number' }] } },
+    };
+
+    await provider({ transport: fake.transport }).ask({
+      ...asked,
+      replySchema: { name: asked.replySchema.name, schema: union },
+    });
+
+    expect(fake.requests[0]?.body.text.format.schema).toEqual({
+      type: 'object',
+      properties: { citation: { anyOf: [{ type: 'string' }, { type: 'number' }] } },
+    });
   });
 
   it('sends the effort the ask asked for', async () => {
