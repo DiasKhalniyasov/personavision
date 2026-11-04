@@ -105,7 +105,10 @@ export function AudienceStep() {
   // audience they reviewed, read again rather than remembered, because it is stored.
   const storedId = draft.audience?.audienceId ?? null;
   useEffect(() => {
-    if (storedId === null || record !== null) return;
+    // `record?.id !== storedId` rather than `record === null`: the draft can come to name a
+    // *different* audience — a saved one picked after a sentence was read — and the six
+    // fields then have to be that one's rather than the one already loaded.
+    if (storedId === null || record?.id === storedId) return;
     let live = true;
     void readAudience(storedId).then((answer) => {
       if (!live || !answer.ok) return;
@@ -127,7 +130,7 @@ export function AudienceStep() {
     if (!answer.ok) {
       // Every way this can fail is one sentence the reader can act on. An audience is never
       // half-drawn from a reply nobody could read, so the card below stays as it was.
-      setProblem(answer.kind === 'refused' ? (answer.issues[0]?.message ?? null) : answer.problem);
+      setProblem(answer.kind === 'refused' ? (answer.issues[0]?.message ?? '') : answer.problem);
       return;
     }
     setRecord(answer.value);
@@ -208,7 +211,7 @@ export function AudienceStep() {
 
       {texts === null && !reading ? null : (
         <ReadAudience
-          name={reading && record === null ? null : (record?.audience.name ?? null)}
+          name={record?.audience.name ?? ''}
           texts={texts}
           fields={fields}
           busy={reading}
@@ -450,7 +453,7 @@ function ReadAudience({
   onEdit,
   onGoOn,
 }: {
-  name: string | null;
+  name: string;
   texts: FieldTexts | null;
   fields: Readonly<Partial<Record<FieldKey | 'form', string>>>;
   busy: boolean;
@@ -465,7 +468,7 @@ function ReadAudience({
     <section className="card card-lg" aria-labelledby={labelId} aria-busy={busy}>
       <span className="microlabel">{READ_FROM_SENTENCE}</span>
       <h2 className={`${styles.audienceName} ${busy ? styles.reading : ''}`} id={labelId}>
-        {name ?? 'Reading your sentence…'}
+        {busy ? 'Reading your sentence…' : name}
       </h2>
       {fields.form === undefined ? null : (
         <p className="notice" role="alert">

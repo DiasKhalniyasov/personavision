@@ -410,6 +410,27 @@ describe('a saved audience instead', () => {
     expect(canLaunch(readWizardDraft())).toBe(true);
   });
 
+  it('replaces an audience a sentence became, rather than leaving the first one standing', async () => {
+    await serveStep({ records: [creatorsRecord(), savedAudienceRecord()] });
+    await open();
+    const user = act();
+    await turnIntoAudience();
+    await waitFor(() => {
+      expect(sixFields()['Age groups']).toBe('18–24 30% · 25–34 45% · 35–44 25%');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Use a saved audience instead' })).toBeTruthy();
+    });
+    await user.click(picker('Use a saved audience instead'));
+    await user.click(await screen.findByRole('option', { name: 'Outdoor-gear shoppers' }));
+
+    await waitFor(() => {
+      expect(sixFields()['Age groups']).toBe('25–45');
+    });
+    expect(readWizardDraft().audience?.audienceId).toBe('aud-outdoor-gear');
+  });
+
   it('offers the form instead when the workspace has saved none', async () => {
     await serveStep({ records: [] });
     await open();
