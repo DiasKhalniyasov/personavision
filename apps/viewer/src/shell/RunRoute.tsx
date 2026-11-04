@@ -2,7 +2,7 @@ import { useParams } from 'react-router';
 import type { Run } from '@personavision/contract';
 import { RunFailedScreen } from '@/screens/runstatus/RunFailedScreen';
 import { RunningScreen } from '@/screens/runstatus/RunningScreen';
-import { VerdictPage } from '@/screens/verdict/VerdictPage';
+import { SummaryPage } from '@/screens/summary/SummaryPage';
 import { RunNotFound } from './RunNotFound';
 import { runStatus } from './runStatus';
 import { useRun } from './useRun';
@@ -11,8 +11,12 @@ import { useRun } from './useRun';
  * What `/runs/:runId` is: one of three screens, chosen on the run's status.
  *
  * A test still running is the Running screen, a test that failed to start is the Test
- * failed screen, and a finished one is the Verdict. An id this workspace does not hold
- * renders a not-found state inside the chrome rather than throwing.
+ * failed screen, and a finished one is the **Summary** — the lead of the results page, which
+ * branches on the run and not on a "path" (`docs/FLOW.md` section 14.1): a run with one
+ * version leads with the recommendations and the three headline figures, a run with two
+ * leads with the before/after Verdict with the recommendations under it. **One route, no
+ * second route and no path flag in the URL.** An id this workspace does not hold renders a
+ * not-found state inside the chrome rather than throwing.
  */
 export function RunRoute() {
   const { runId = '' } = useParams();
@@ -40,6 +44,6 @@ export function RunScreen({ run }: { run: Run }) {
     case 'failed':
       return <RunFailedScreen run={run} />;
     case 'complete':
-      return <VerdictPage run={run} />;
+      return <SummaryPage run={run} />;
   }
 }
