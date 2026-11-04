@@ -1673,16 +1673,16 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
     <div class="wrap-narrow">
       <p class="breadcrumb"><a href="#" data-go="sites">Sites</a> / beta.clipforge.example</p>
       <div class="pagehead"><h1>beta.clipforge.example</h1></div>
-      <p class="lede">A site is a URL and nothing more. Correct it here, or remove it &mdash; there is nothing to prove.</p>
+      <p class="lede">A site is a URL and nothing more. There is nothing to prove about it &mdash; this is what the site is,
+        and what it is allowed.</p>
 
       <form class="form card card-lg" style="margin-top: var(--space-6)" onsubmit="return false">
         <div class="field-group">
           <label for="site-url">The URL the feature starts on</label>
-          <input id="site-url" type="url" value="https://beta.clipforge.example/create">
-          <p class="footnote">Added 3 Nov. No tests yet.</p>
+          <input id="site-url" type="url" value="https://beta.clipforge.example/create" readonly>
+          <p class="footnote">Added 3 Nov &middot; no tests yet. To test a different URL, add another site.</p>
         </div>
         <div class="formfoot">
-          <button class="btn btn-primary btn-sm" data-go="sites">Save the URL</button>
           <button class="btn btn-sm" data-go="sites">Remove this site</button>
         </div>
       </form>
