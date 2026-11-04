@@ -49,10 +49,16 @@ import type { Persona, SessionBrowser } from '@personavision/contract';
 /** What one region is, in a browser. */
 export interface BrowsingRegion {
   /**
-   * The names this region answers to, matched **case-insensitively** and with surrounding
-   * space ignored. The first is the one the product's own audiences are written with; the
-   * rest are the spellings the audiences in this repository, the five example templates and
-   * a person typing into the audience form actually use.
+   * The names this region answers to, matched **case-insensitively**, with surrounding space
+   * and a leading article ignored (`key`). The first is the one the product's own audiences
+   * are written with; the rest are the spellings the audiences in this repository, the
+   * example templates and a person typing into the audience form actually use.
+   *
+   * **The region's largest city is one of them**, because that is how a person writes an
+   * audience — `docs/FLOW.md` section 12's own worked example is *"busy parents in
+   * Almaty"* — and because the coordinates below are that city's anyway. A city nobody
+   * mapped would be an unrecognised region with no time zone, which is the one answer that
+   * is wrong when we do know the answer.
    */
   readonly names: readonly string[];
   /** The BCP-47 region subtag the locale is built over: `GB`. */
@@ -73,107 +79,115 @@ export interface BrowsingRegion {
 }
 
 /**
- * The table. Eleven regions: the ones this repository's audiences and the five example
- * templates name, plus the one the IKEA run was wrongly served (the United Arab Emirates),
- * so that the bug's own country is a row rather than an accident.
+ * The table. Eleven regions: the ones this repository's audiences and the example templates
+ * name, plus the one the IKEA run was wrongly served (the United Arab Emirates), so that the
+ * bug's own country is a row rather than an accident.
  *
- * Frozen, because it is the build's: a caller reads a row and changes nothing about it.
+ * **Frozen to the row**, not only to the array. It is published from this package's entry
+ * point, so a caller that wrote to a row would change the locale and the time zone every
+ * session opened later in the process runs under — and the session's own `browser` block
+ * would then be honest about a value nobody chose.
  */
-export const BROWSING_REGIONS: readonly BrowsingRegion[] = Object.freeze([
-  {
-    names: ['United Kingdom', 'UK', 'GB', 'Great Britain', 'England'],
-    subtag: 'GB',
-    timeZone: 'Europe/London',
-    latitude: 51.5074,
-    longitude: -0.1278,
-    language: 'en',
-  },
-  {
-    names: ['United States', 'USA', 'US', 'United States of America'],
-    subtag: 'US',
-    timeZone: 'America/New_York',
-    latitude: 40.7128,
-    longitude: -74.006,
-    language: 'en',
-  },
-  {
-    names: ['Ireland', 'IE', 'Republic of Ireland'],
-    subtag: 'IE',
-    timeZone: 'Europe/Dublin',
-    latitude: 53.3498,
-    longitude: -6.2603,
-    language: 'en',
-  },
-  {
-    names: ['Germany', 'DE', 'Deutschland'],
-    subtag: 'DE',
-    timeZone: 'Europe/Berlin',
-    latitude: 52.52,
-    longitude: 13.405,
-    language: 'de',
-  },
-  {
-    names: ['France', 'FR'],
-    subtag: 'FR',
-    timeZone: 'Europe/Paris',
-    latitude: 48.8566,
-    longitude: 2.3522,
-    language: 'fr',
-  },
-  {
-    names: ['Spain', 'ES', 'España'],
-    subtag: 'ES',
-    timeZone: 'Europe/Madrid',
-    latitude: 40.4168,
-    longitude: -3.7038,
-    language: 'es',
-  },
-  {
-    names: ['Netherlands', 'NL', 'The Netherlands', 'Holland'],
-    subtag: 'NL',
-    timeZone: 'Europe/Amsterdam',
-    latitude: 52.3676,
-    longitude: 4.9041,
-    language: 'nl',
-  },
-  {
-    names: ['Canada', 'CA'],
-    subtag: 'CA',
-    timeZone: 'America/Toronto',
-    latitude: 43.6532,
-    longitude: -79.3832,
-    language: 'en',
-  },
-  {
-    names: ['Australia', 'AU'],
-    subtag: 'AU',
-    timeZone: 'Australia/Sydney',
-    latitude: -33.8688,
-    longitude: 151.2093,
-    language: 'en',
-  },
-  {
-    names: ['United Arab Emirates', 'UAE', 'AE', 'Dubai'],
-    subtag: 'AE',
-    timeZone: 'Asia/Dubai',
-    latitude: 25.2048,
-    longitude: 55.2708,
-    language: 'ar',
-  },
-  {
-    // "Almaty" is here as a name of the region it is the largest city of, because that is
-    // how this repository's own audiences are written — `docs/FLOW.md` section 12's worked
-    // example is *"busy parents in Almaty"* — and a city nobody mapped would otherwise be
-    // an unrecognised region with no time zone, which is the one answer that is wrong when
-    // we do know the answer.
-    names: ['Kazakhstan', 'KZ', 'Almaty'],
-    subtag: 'KZ',
-    timeZone: 'Asia/Almaty',
-    latitude: 43.222,
-    longitude: 76.8512,
-    language: 'kk',
-  },
-]);
+export const BROWSING_REGIONS: readonly BrowsingRegion[] = Object.freeze(
+  (
+    [
+      {
+        names: ['United Kingdom', 'UK', 'GB', 'Great Britain', 'Britain', 'England', 'London'],
+        subtag: 'GB',
+        timeZone: 'Europe/London',
+        latitude: 51.5074,
+        longitude: -0.1278,
+        language: 'en',
+      },
+      {
+        names: ['United States', 'USA', 'US', 'United States of America', 'America', 'New York'],
+        subtag: 'US',
+        timeZone: 'America/New_York',
+        latitude: 40.7128,
+        longitude: -74.006,
+        language: 'en',
+      },
+      {
+        names: ['Ireland', 'IE', 'Republic of Ireland', 'Dublin'],
+        subtag: 'IE',
+        timeZone: 'Europe/Dublin',
+        latitude: 53.3498,
+        longitude: -6.2603,
+        language: 'en',
+      },
+      {
+        names: ['Germany', 'DE', 'Deutschland', 'Berlin'],
+        subtag: 'DE',
+        timeZone: 'Europe/Berlin',
+        latitude: 52.52,
+        longitude: 13.405,
+        language: 'de',
+      },
+      {
+        names: ['France', 'FR', 'Paris'],
+        subtag: 'FR',
+        timeZone: 'Europe/Paris',
+        latitude: 48.8566,
+        longitude: 2.3522,
+        language: 'fr',
+      },
+      {
+        names: ['Spain', 'ES', 'España', 'Madrid'],
+        subtag: 'ES',
+        timeZone: 'Europe/Madrid',
+        latitude: 40.4168,
+        longitude: -3.7038,
+        language: 'es',
+      },
+      {
+        // "The Netherlands" needs no entry of its own: `key` drops a leading article.
+        names: ['Netherlands', 'NL', 'Holland', 'Amsterdam'],
+        subtag: 'NL',
+        timeZone: 'Europe/Amsterdam',
+        latitude: 52.3676,
+        longitude: 4.9041,
+        language: 'nl',
+      },
+      {
+        names: ['Canada', 'CA', 'Toronto'],
+        subtag: 'CA',
+        timeZone: 'America/Toronto',
+        latitude: 43.6532,
+        longitude: -79.3832,
+        language: 'en',
+      },
+      {
+        names: ['Australia', 'AU', 'Sydney'],
+        subtag: 'AU',
+        timeZone: 'Australia/Sydney',
+        latitude: -33.8688,
+        longitude: 151.2093,
+        language: 'en',
+      },
+      {
+        names: ['United Arab Emirates', 'UAE', 'AE', 'Dubai'],
+        subtag: 'AE',
+        timeZone: 'Asia/Dubai',
+        latitude: 25.2048,
+        longitude: 55.2708,
+        language: 'ar',
+      },
+      {
+        // "Almaty" is here as a name of the region it is the largest city of, because that is
+        // how this repository's own audiences are written — `docs/FLOW.md` section 12's worked
+        // example is *"busy parents in Almaty"* — and a city nobody mapped would otherwise be
+        // an unrecognised region with no time zone, which is the one answer that is wrong when
+        // we do know the answer.
+        names: ['Kazakhstan', 'KZ', 'Almaty'],
+        subtag: 'KZ',
+        timeZone: 'Asia/Almaty',
+        latitude: 43.222,
+        longitude: 76.8512,
+        language: 'kk',
+      },
+    ] as const satisfies readonly BrowsingRegion[]
+  ).map((region) => Object.freeze(region)),
+);
 
 /**
  * The language names this project's audiences are written with, as BCP-47 language subtags.
@@ -205,15 +219,36 @@ export const LANGUAGE_SUBTAGS: ReadonlyMap<string, string> = new Map(
   }),
 );
 
-/** `  United Kingdom ` and `united kingdom` are one region name. */
-const key = (text: string): string => text.trim().toLowerCase();
+/**
+ * `  United Kingdom `, `united kingdom` and `the United Kingdom` are one region name.
+ *
+ * The leading article is dropped because an audience's `regions` are **free text**, and the
+ * one generator in this repository that writes them reads the place off a sentence — the
+ * words after `in`, `from` or `across` (`@personavision/provider`'s offline audience). So
+ * *"everyday shoppers in the UK"* stores the region `"the UK"`, and a table that matched only
+ * the bare name would answer `null` for it: the session would run with no time zone and no
+ * location, which is the #421 failure this table exists to prevent, for a phrasing the
+ * product's own audience step produces.
+ */
+const key = (text: string): string =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/^the\s+/u, '');
 
 /**
  * A BCP-47 language tag as it is actually written: `en`, `pt-BR`, `zh-Hant`. Only the
  * **language** part is read off it, because the region part is the audience's region's to
  * say and a persona drawn from Germany who reads `en-US` reads `en-DE`.
+ *
+ * Matching the shape is not enough to be a language: the part it finds has to be a subtag
+ * this table already knows (`languageSubtag`). `US` and `Eng` are both this shape, and a
+ * locale of `us-GB` or `eng-GB` is one no visitor has ever sent.
  */
 const BCP47_LANGUAGE = /^([a-z]{2,3})(?:-[a-z\d]{2,8})*$/i;
+
+/** Every subtag the name table spells, so a tag is read by lookup rather than by shape. */
+const KNOWN_SUBTAGS: ReadonlySet<string> = new Set(LANGUAGE_SUBTAGS.values());
 
 const BY_NAME: ReadonlyMap<string, BrowsingRegion> = new Map(
   BROWSING_REGIONS.flatMap((region) => region.names.map((spelling) => [key(spelling), region])),
@@ -239,10 +274,15 @@ export const browsingRegion = (region: string): BrowsingRegion | null =>
  * would be `ka`, which is Georgian — and a wrong locale is worse than none.
  */
 export const languageSubtag = (language: string): string | null => {
-  const named = LANGUAGE_SUBTAGS.get(key(language));
+  const named = LANGUAGE_SUBTAGS.get(language.trim().toLowerCase());
   if (named !== undefined) return named;
   const written = BCP47_LANGUAGE.exec(language.trim());
-  return written === null ? null : (written[1] as string).toLowerCase();
+  if (written === null) return null;
+  // Written as a tag, and a tag this table can spell. A short word that merely *looks* like
+  // one is not a language: `US` would become the locale `us-GB`, which is worse than having
+  // no locale at all, because a browser would then actually send it.
+  const subtag = (written[1] as string).toLowerCase();
+  return KNOWN_SUBTAGS.has(subtag) ? subtag : null;
 };
 
 /**

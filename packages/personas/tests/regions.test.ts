@@ -68,21 +68,53 @@ describe('the table from a region to a browser', () => {
     expect(BROWSING_REGIONS.filter((region) => !spellable.has(region.language))).toStrictEqual([]);
   });
 
-  it('gives no name to two regions', () => {
+  it('gives no name to two regions, and spells none of them twice', () => {
+    // Compared as the lookup compares them, article and case and space removed, so a second
+    // spelling of one name is a duplicate rather than a row that quietly never matches.
     const names = BROWSING_REGIONS.flatMap((region) =>
-      region.names.map((name) => name.toLowerCase()),
+      region.names.map((name) =>
+        name
+          .trim()
+          .toLowerCase()
+          .replace(/^the\s+/u, ''),
+      ),
     );
 
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('matches a name whatever its case and whatever space is around it', () => {
+  it('matches a name whatever its case, space, or leading article', () => {
     const uk = browsingRegion('United Kingdom');
 
     expect(uk?.subtag).toBe('GB');
     expect(browsingRegion('  UNITED KINGDOM  ')).toBe(uk);
     expect(browsingRegion('uk')).toBe(uk);
     expect(browsingRegion('GB')).toBe(uk);
+    expect(browsingRegion('the United Kingdom')).toBe(uk);
+    expect(browsingRegion('The Netherlands')?.subtag).toBe('NL');
+  });
+
+  it('reads the places the product own audience step actually writes', () => {
+    // `@personavision/provider`'s offline audience reads the place off a sentence — the words
+    // after `in`, `from` or `across` — so *"everyday shoppers in the UK"* stores the region
+    // "the UK", and a table that answered `null` for that would leave the #421 bug in place
+    // for a phrasing the product itself produces.
+    expect(browsingRegion('the UK')?.timeZone).toBe('Europe/London');
+    expect(browsingRegion('the US')?.timeZone).toBe('America/New_York');
+    expect(browsingRegion('America')?.subtag).toBe('US');
+    expect(browsingRegion('Britain')?.subtag).toBe('GB');
+    // A city is a name of its region, the way the worked example's "Almaty" is.
+    expect(browsingRegion('London')?.subtag).toBe('GB');
+    expect(browsingRegion('New York')?.subtag).toBe('US');
+    expect(browsingRegion('Berlin')?.subtag).toBe('DE');
+  });
+
+  it('is frozen to the row, so a caller cannot change what later sessions run under', () => {
+    const [row] = BROWSING_REGIONS;
+    if (row === undefined) throw new Error('the table has rows');
+
+    expect(Object.isFrozen(BROWSING_REGIONS)).toBe(true);
+    expect(Object.isFrozen(row)).toBe(true);
   });
 
   it('knows the audiences this repository is written with, down to the city the worked example names', () => {
@@ -107,6 +139,15 @@ describe('the table from a region to a browser', () => {
     expect(languageSubtag('Kazakh')).toBe('kk');
     expect(languageSubtag('Klingon')).toBeNull();
     expect(languageSubtag('')).toBeNull();
+  });
+
+  it('refuses a short word that merely looks like a tag, rather than inventing a locale', () => {
+    // `US` is the shape of a language subtag. Reading it as one would build the locale
+    // `us-GB` and a browser would actually send it, which is worse than sending none.
+    for (const guessed of ['US', 'Eng', 'Lao', 'xx', 'zz-ZZ']) {
+      expect(languageSubtag(guessed), guessed).toBeNull();
+    }
+    expect(browsingFor(who('United Kingdom', 'US'))?.locale).toBe('en-GB');
   });
 });
 
