@@ -922,11 +922,10 @@ const breaksFor = (inner: CaptureSource, personaId: string): CaptureSource => ({
  * The swarm resolves no site and reads none: the value arrives from the layer that decided
  * the caps, and all the swarm owes it is one write, early enough that the open run a reader
  * finds mid-flight already says what the finished one will. Nothing here branches on it —
- * the same sessions run against a verified site and an unverified one, which is the whole
- * point of recording rather than gating.
+ * what a run was pointed at decides nothing about how it runs.
  */
 describe('the site on the record', () => {
-  const NORTHWIND = { url: 'https://northwind.example/cart', verifiedAtLaunch: true };
+  const NORTHWIND = { url: 'https://northwind.example/cart' };
 
   /** The site as `run.json` holds it at the moment the first session starts. */
   const siteWhenTheFirstSessionStarts = async (
@@ -954,16 +953,6 @@ describe('the site on the record', () => {
     expect((await readRun(runDir)).run.site).toEqual(NORTHWIND);
   });
 
-  it('records an unverified site as unverified rather than as nothing', async () => {
-    await open();
-    const unverified = { url: 'https://northwind.example/cart', verifiedAtLaunch: false };
-
-    const { run } = await runSwarm(swarmOver({ site: unverified }));
-
-    expect(run.site).toEqual(unverified);
-    expect((await readRun(runDir)).run.site?.verifiedAtLaunch).toBe(false);
-  });
-
   it('writes no block at all for a caller that has no site', async () => {
     await open();
 
@@ -988,19 +977,15 @@ describe('the site on the record', () => {
   /**
    * The id is dropped by the writer, not by whoever calls it.
    *
-   * The platform's `SiteAtLaunch` — `{ id, url, verifiedAtLaunch }` — is structurally
-   * assignable to this input, and TypeScript checks excess properties only on object
-   * literals, so a caller passing its own resolved site straight through compiles. If the id
-   * travelled to the writer, `writeRun`'s strict parse would refuse the whole artifact at
-   * `site/id` and lose a run that ran, over a field nobody wanted on it.
+   * The platform's `SiteAtLaunch` — `{ id, url }` — is structurally assignable to this
+   * input, and TypeScript checks excess properties only on object literals, so a caller
+   * passing its own resolved site straight through compiles. If the id travelled to the
+   * writer, `writeRun`'s strict parse would refuse the whole artifact at `site/id` and lose
+   * a run that ran, over a field nobody wanted on it.
    */
   it('writes only the fields the artifact declares, whatever it was handed', async () => {
     await open();
-    const asThePlatformResolvesIt = {
-      id: 'site_01JQ8Z',
-      url: 'https://northwind.example/cart',
-      verifiedAtLaunch: true,
-    };
+    const asThePlatformResolvesIt = { id: 'site_01JQ8Z', url: 'https://northwind.example/cart' };
 
     const { run } = await runSwarm(swarmOver({ site: asThePlatformResolvesIt }));
 
@@ -1009,7 +994,7 @@ describe('the site on the record', () => {
     expect(await readFile(runPaths(runDir).run, 'utf8')).not.toContain(asThePlatformResolvesIt.id);
   });
 
-  it('drives the same sessions whether the site was verified or not', async () => {
+  it('drives the same sessions whatever URL it was pointed at', async () => {
     const sessionsOf = async (site: Run['site']): Promise<unknown> => {
       await sweep(runDir);
       runDir = await temporaryRunDir();
@@ -1018,7 +1003,7 @@ describe('the site on the record', () => {
       return sessions.map((session) => [session.sessionId, session.outcome.status]);
     };
 
-    expect(await sessionsOf({ ...NORTHWIND, verifiedAtLaunch: false })).toEqual(
+    expect(await sessionsOf({ url: 'https://elsewhere.example/cart' })).toEqual(
       await sessionsOf(NORTHWIND),
     );
   });

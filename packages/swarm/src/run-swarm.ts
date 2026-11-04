@@ -827,16 +827,15 @@ interface RunnerOnTheRecord {
  * A caller that handed over **no** site agrees with whatever is written, which is what keeps
  * this from unwriting a creator's own block: `personavision run` passes none, and a run
  * opened with a block by some future creator is left exactly as it was written. A caller that
- * handed one over agrees only if both halves match, so a block that disagrees is corrected to
+ * handed one over agrees only if the URL matches, so a block that disagrees is corrected to
  * what was true at launch rather than left to be read as the launch's own answer.
  */
 const sameSite = (recorded: Run['site'], handed: Run['site']): boolean =>
-  handed === undefined ||
-  (recorded?.url === handed.url && recorded.verifiedAtLaunch === handed.verifiedAtLaunch);
+  handed === undefined || recorded?.url === handed.url;
 
 /**
- * The site as the artifact declares it: the two fields, and whatever else came with them
- * left behind.
+ * The site as the artifact declares it: the one field it declares, and whatever else came
+ * with it left behind.
  *
  * The caller hands over what it resolved, and what it resolved is likely to be bigger than
  * this — the platform's own `SiteAtLaunch` carries the stored record's `id` beside the URL,
@@ -853,7 +852,6 @@ const sameSite = (recorded: Run['site'], handed: Run['site']): boolean =>
  */
 const siteOnTheRecord = (site: NonNullable<Run['site']>): NonNullable<Run['site']> => ({
   url: site.url,
-  verifiedAtLaunch: site.verifiedAtLaunch,
 });
 
 const openRun = async (

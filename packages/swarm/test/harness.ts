@@ -386,7 +386,7 @@ export const personOnMobile = (
  * sets alternating, each person with an id, a name and a device label of their own.
  *
  * The demo’s four are written out by hand below because they are the demo’s four. A run at
- * the size `docs/FLOW.md` section 13 allows a verified site — a hundred agents — cannot be,
+ * the size `docs/FLOW.md` section 13 allows — a hundred agents — cannot be,
  * and a swarm that has only ever been asked for two dozen sessions has not been asked the
  * question that matters: whether the pool, the per-session writes and the one queue at
  * `run.json` hold when there are a hundred of them.
