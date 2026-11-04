@@ -191,6 +191,12 @@ the new screen.
   order could change. That is not a style preference — it is the whole of what makes the cache hit.
 - **The volatile part goes last.** The elements fixated on this screen, the action history and the step are the tail of
   the array, after everything stable.
+- **A reply that is not JSON is asked again, once, with the parse error fed back** (#420): that request carries the
+  unreadable reply as an `output_text` assistant message and a `user` message naming the parse error and its position,
+  and the session's turns keep neither — what joins the conversation is the reply that could be read, so no later
+  screen re-sends or re-pays for a malformed one. An envelope that carried no reply at all (an empty `output`, a status
+  that is not `completed`) is asked again as the same request, with no correction to carry. Both calls are billed into
+  the screen's usage and both are recorded.
 
 ### `previous_response_id`: accepted, and deliberately not used
 

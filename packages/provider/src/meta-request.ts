@@ -36,6 +36,12 @@ import type { ModelId } from './meta-pricing.js';
  *    history, the step. A changed prefix is a cache miss on every screen of every session,
  *    and the run then pays uncached prices for the whole swarm.
  *
+ * One request is allowed to carry two messages that the conversation never keeps: a reply
+ * that could not be read, and the `correctionMessage` naming the parse error (#420). The
+ * append-only rule above is a rule about the session's **turns**, which such a reply never
+ * becomes — so the prefix a later screen opens with is the one a readable reply would have
+ * left.
+ *
  * Nothing here reads an environment variable, and nothing here knows the key: a request
  * body built in this module is safe to hand to a trajectory file as it stands (#139).
  */
@@ -270,6 +276,37 @@ export const assistantMessage = (replyText: string): ResponsesMessage => ({
 });
 
 /**
+ * What the model is told when the reply it just sent could not be read (#420): the reading's
+ * own detail — the parse error, with the position it names — and the shape asked for again, in
+ * the words the instructions already use.
+ *
+ * It is appended, with the unreadable reply as its `assistantMessage`, to **one** request
+ * body and never to the session's turns. A bad reply kept in the prefix would be re-sent and
+ * re-billed on every later screen of the session, and a model shown its own broken output
+ * tends to reproduce its shape.
+ *
+ * The detail for a parse failure is `JSON.parse`'s own message, which is what makes it worth
+ * sending: it names the position. It is also the engine's wording, so a trajectory recorded
+ * on one Node major and replayed on another could mismatch on this message alone
+ * (`replayTrajectory` compares request bodies byte for byte). The repo pins one major, so
+ * that is a note rather than a bug; a replay across majors is already outside what
+ * `package.json`'s `engines` supports.
+ */
+export const correctionMessage = (detail: string): ResponsesMessage => ({
+  role: 'user',
+  content: [
+    {
+      type: 'input_text',
+      text: [
+        `Your last reply could not be read: ${detail}`,
+        'Decide on that same screen again, and answer with one JSON object and nothing else — no',
+        'prose around it, no code fence.',
+      ].join('\n'),
+    },
+  ],
+});
+
+/**
  * One agent session's cache key: a digest of persona + seed, so that every screen of a
  * session shares one cache entry and two sessions never share one. A digest rather than the
  * two values themselves, so that a persona id a customer chose never travels to the provider
@@ -305,6 +342,23 @@ export interface ReportedTokens {
   readonly outputTokens: number;
   readonly reasoningTokens: number;
 }
+
+/**
+ * The calls of one screen, added up. A screen whose first reply could not be read costs two
+ * calls (#420) and both are billed, so the decision reports their sum and the price is
+ * estimated **from** the sum rather than added up from two estimates: one rounding, and the
+ * same arithmetic a screen answered once gets.
+ */
+export const sumTokens = (reported: readonly ReportedTokens[]): ReportedTokens =>
+  reported.reduce(
+    (total, one) => ({
+      inputTokens: total.inputTokens + one.inputTokens,
+      cachedInputTokens: total.cachedInputTokens + one.cachedInputTokens,
+      outputTokens: total.outputTokens + one.outputTokens,
+      reasoningTokens: total.reasoningTokens + one.reasoningTokens,
+    }),
+    { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+  );
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -426,9 +480,22 @@ export interface ReadReply {
   readonly relevanceHints?: RelevanceHints;
 }
 
+/**
+ * Why a reply produced no decision, and the two are told apart because only one of them is
+ * worth asking the model again for (#420):
+ *
+ * - `unreadable` — no JSON object came back at all: a truncated reply, prose where the object
+ *   should be, an array. The parse error names the position, which is something a model can
+ *   act on, so such a reply is asked again once with that error fed back.
+ * - `rejected` — a JSON object came back and the interface will not take it: an action kind
+ *   that does not exist, no intent, a target that is not a string. The model meant to send
+ *   it and would send it again, so it stays one ask.
+ */
+export type ReplyFault = 'unreadable' | 'rejected';
+
 export type ReplyReading =
   | { readonly ok: true; readonly value: ReadReply }
-  | { readonly ok: false; readonly detail: string };
+  | { readonly ok: false; readonly fault: ReplyFault; readonly detail: string };
 
 const FENCED = /```(?:json)?\s*([\s\S]*?)```/;
 
@@ -447,22 +514,40 @@ export const readReply = (replyText: string): ReplyReading => {
   } catch (error) {
     return {
       ok: false,
+      fault: 'unreadable',
       detail: `the reply is not JSON: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
-  if (!isObject(parsed)) return { ok: false, detail: 'the reply is not a JSON object' };
+  // `isObject` is true for an array, and an array is a shape slip a model really makes —
+  // the decision wrapped in one. It is no JSON object, so it is asked again like one rather
+  // than reported as an object missing an intent.
+  if (!isObject(parsed) || Array.isArray(parsed)) {
+    return { ok: false, fault: 'unreadable', detail: 'the reply is not a JSON object' };
+  }
   const { intent, action, relevanceHints, looks } = parsed;
-  if (typeof intent !== 'string') return { ok: false, detail: 'the reply carries no intent' };
-  if (!isObject(action)) return { ok: false, detail: 'the reply carries no action' };
+  if (typeof intent !== 'string') {
+    return { ok: false, fault: 'rejected', detail: 'the reply carries no intent' };
+  }
+  if (!isObject(action)) {
+    return { ok: false, fault: 'rejected', detail: 'the reply carries no action' };
+  }
 
   const kind = action.kind;
   if (typeof kind !== 'string' || !DECISION_ACTION_KINDS.includes(kind as never)) {
-    return { ok: false, detail: `the reply’s action kind is ${JSON.stringify(kind)}` };
+    return {
+      ok: false,
+      fault: 'rejected',
+      detail: `the reply’s action kind is ${JSON.stringify(kind)}`,
+    };
   }
   const target = action.targetElementId;
   if (target !== undefined && target !== null && typeof target !== 'string') {
-    return { ok: false, detail: `the reply’s target is ${JSON.stringify(target)}` };
+    return {
+      ok: false,
+      fault: 'rejected',
+      detail: `the reply’s target is ${JSON.stringify(target)}`,
+    };
   }
 
   const hints = isObject(relevanceHints)

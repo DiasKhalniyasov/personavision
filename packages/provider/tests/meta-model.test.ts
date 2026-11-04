@@ -10,6 +10,7 @@ import {
 } from '../src/meta-model.js';
 import type { ModelTransport, TrajectoryRecord } from '../src/meta-model.js';
 import {
+  assistantMessage,
   buildScreenMessage,
   INSTRUCTIONS,
   readReply,
@@ -284,27 +285,307 @@ describe('the Meta Model API provider', () => {
         JSON.stringify(requests[1]?.input.slice(0, 5)),
       );
     });
+  });
 
-    it('asks once more, with the same request, when a session’s reply could not be read', async () => {
+  /**
+   * One unreadable reply on one screen used to throw the whole session away (#420). It is
+   * asked again, once, with the parse error fed back — and nothing else is: a fault the model
+   * meant to send comes back the same the second time, and our own output cap would cut the
+   * answer off again.
+   */
+  describe('a reply that is not JSON, asked again', () => {
+    const replying = (text: string, usage?: unknown): unknown => ({
+      status: 'completed',
+      output: [{ type: 'message', content: [{ type: 'output_text', text }] }],
+      ...(usage === undefined ? {} : { usage }),
+    });
+
+    const DECISION = JSON.stringify({
+      intent: 'That is the jacket.',
+      action: { kind: 'click', targetElementId: 'el-jacket' },
+    });
+
+    /** A provider whose transport answers each reply in turn, counting the calls. */
+    const answeringInTurn = (bodies: readonly unknown[]) => {
       const requests: ResponsesRequestBody[] = [];
-      const garbled = answering({
-        status: 'completed',
-        output: [{ type: 'message', content: [{ type: 'output_text', text: '{"intent": "half' }] }],
-      });
+      const sink = recordingSink();
       const transport: ModelTransport = (request) => {
         requests.push(request.body);
-        return requests.length === 1 ? garbled(request) : fakeTransport().transport(request);
+        const body = bodies[requests.length - 1] ?? bodies.at(-1);
+        return Promise.resolve({ status: 200, body });
+      };
+      return {
+        requests,
+        sink,
+        provider: createMetaModelApiProvider({
+          mode: 'standard',
+          env: TEST_ENV,
+          transport,
+          trajectory: sink.sink,
+        }),
+      };
+    };
+
+    const UNREADABLE = '{"intent": "half';
+
+    const detailOf = (replyText: string): string => {
+      const reading = readReply(replyText);
+      return reading.ok ? 'it read' : reading.detail;
+    };
+
+    it('asks once more, appending its own reply and the parse error to that one request', async () => {
+      const { provider, requests } = answeringInTurn([replying(UNREADABLE), replying(DECISION)]);
+
+      await expect(provider.beginSession(anna).decide(contextOf())).resolves.toMatchObject({
+        action: { kind: 'click', targetElementId: 'el-jacket' },
+      });
+
+      expect(requests).toHaveLength(2);
+      const asked = requests[0]?.input ?? [];
+      const again = requests[1]?.input ?? [];
+      // The same question again, byte for byte, with two messages after it and none before.
+      expect(JSON.stringify(again.slice(0, asked.length))).toBe(JSON.stringify(asked));
+      const appended = again.slice(asked.length);
+      expect(appended).toHaveLength(2);
+      expect(appended[0]).toEqual(assistantMessage(UNREADABLE));
+      expect(appended[1]?.role).toBe('user');
+      // The reading's own detail: the parse error, with the position it names.
+      expect(textOf(appended[1])).toContain(detailOf(UNREADABLE));
+      expect(textOf(appended[1])).toContain('one JSON object and nothing else');
+    });
+
+    it('keeps the correction out of the conversation, so no later screen re-sends it', async () => {
+      const walk = async (garble: boolean): Promise<readonly ResponsesRequestBody[]> => {
+        const requests: ResponsesRequestBody[] = [];
+        const transport: ModelTransport = (request) => {
+          requests.push(request.body);
+          return garble && requests.length === 1
+            ? Promise.resolve({ status: 200, body: replying(UNREADABLE) })
+            : fakeTransport().transport(request);
+        };
+        await walkSession(
+          createMetaModelApiProvider({
+            mode: 'contributor',
+            env: TEST_ENV,
+            transport,
+          }).beginSession(anna),
+        );
+        return requests;
+      };
+
+      const corrected = await walk(true);
+      const readable = await walk(false);
+
+      expect(corrected).toHaveLength(4);
+      expect(readable).toHaveLength(3);
+      // The screens after the corrected one are byte-identical to the ones a readable reply
+      // would have produced: the conversation grew by the reply that could be read and by
+      // nothing else, so no later screen is billed for a malformed one.
+      expect(JSON.stringify(corrected[2])).toBe(JSON.stringify(readable[1]));
+      expect(JSON.stringify(corrected[3])).toBe(JSON.stringify(readable[2]));
+    });
+
+    it('fails with the second reading’s detail, and says it asked twice, when neither reads', async () => {
+      // Two different parse errors, so the detail reported can only be the second one's.
+      const second = '{"intent":"go","looks":[{"elementId":"el-jacket","ms":300},]}';
+      const { provider, requests } = answeringInTurn([
+        replying(UNREADABLE),
+        replying(second),
+        replying(DECISION),
+      ]);
+      const session = provider.beginSession(anna);
+
+      const thrown = await session
+        .decide(contextOf({ step: SESSION_STEPS[0] }))
+        .catch((error: unknown) => error);
+
+      expect(thrown).toBeInstanceOf(ModelDecisionError);
+      expect(thrown).toMatchObject({ kind: 'unparseable', attribution: 'automation' });
+      const message = (thrown as ModelDecisionError).message;
+      expect(message).toContain(detailOf(second));
+      expect(message).not.toContain(detailOf(UNREADABLE));
+      expect(message).toContain('twice');
+      expect(requests).toHaveLength(2);
+
+      // Nothing else about the session changed: the lost screen is no turn, so the next one
+      // opens with the prefix alone, exactly as the first did.
+      await session.decide(contextOf({ step: SESSION_STEPS[1] }));
+      expect(requests[2]?.input).toHaveLength(requests[0]?.input.length ?? 0);
+    });
+
+    it('asks the same request again when the envelope carried no reply to read', async () => {
+      // There is nothing to quote back and no parse error to feed back, so the retry carries
+      // no correction — but a response that arrived with an empty `output` is the transient
+      // glitch a second identical ask does answer, and Muse Wonder's own ask retries it too.
+      const empty = { status: 'completed', output: [], usage: FAKE_TOKENS };
+      const { provider, requests, sink } = answeringInTurn([
+        empty,
+        replying(DECISION, FAKE_TOKENS),
+      ]);
+
+      const decision = await provider.beginSession(anna).decide(contextOf());
+
+      expect(decision.action).toEqual({ kind: 'click', targetElementId: 'el-jacket' });
+      expect(requests).toHaveLength(2);
+      // Byte for byte the first request: nothing was appended, because nothing came back.
+      expect(JSON.stringify(requests[1])).toBe(JSON.stringify(requests[0]));
+      // And the call that carried no decision was still paid for.
+      expect(decision.usage.inputTokens).toBe(2 * FAKE_TOKENS.input_tokens);
+      expect(decision.usage.outputTokens).toBe(2 * FAKE_TOKENS.output_tokens);
+      expect(sink.records.map((record) => `${String(record.turn)}:${record.kind}`)).toEqual([
+        '1:request',
+        '1:response',
+        '2:request',
+        '2:response',
+      ]);
+    });
+
+    it('asks once more for a decision wrapped in an array, which is no JSON object', async () => {
+      const wrapped = JSON.stringify([
+        { intent: 'That is the jacket.', action: { kind: 'click', targetElementId: 'el-jacket' } },
+      ]);
+      const { provider, requests } = answeringInTurn([replying(wrapped), replying(DECISION)]);
+
+      await expect(provider.beginSession(anna).decide(contextOf())).resolves.toMatchObject({
+        action: { kind: 'click', targetElementId: 'el-jacket' },
+      });
+
+      expect(requests).toHaveLength(2);
+      expect(textOf((requests[1]?.input ?? []).at(-1))).toContain(detailOf(wrapped));
+    });
+
+    it('asks once for a refusal, an answer our own cap cut off, and a 500', async () => {
+      const cases: readonly (readonly [string, unknown, number])[] = [
+        [
+          'refusal',
+          {
+            status: 'completed',
+            output: [
+              { type: 'message', content: [{ type: 'refusal', refusal: 'I cannot help.' }] },
+            ],
+          },
+          200,
+        ],
+        [
+          'incomplete',
+          {
+            status: 'incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+            output: [{ type: 'reasoning', summary: [] }],
+          },
+          200,
+        ],
+        ['http_status', { error: { message: 'it broke' } }, 500],
+      ];
+
+      for (const [kind, body, status] of cases) {
+        let calls = 0;
+        const transport: ModelTransport = (request) => {
+          calls += 1;
+          return answering(body, status)(request);
+        };
+        const provider = createMetaModelApiProvider({
+          mode: 'standard',
+          env: TEST_ENV,
+          transport,
+        });
+
+        await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind });
+        expect(calls, `${kind} was asked ${String(calls)} times`).toBe(1);
+      }
+    });
+
+    it('asks once for a JSON object the interface rejects', async () => {
+      // Both of these parsed. One names an action that does not exist, the other an element
+      // the agent never looked at: the model meant to send each, and would send it again.
+      const rejected = [
+        { intent: 'I will teleport.', action: { kind: 'teleport', targetElementId: null } },
+        {
+          intent: 'I will click checkout.',
+          action: { kind: 'click', targetElementId: 'el-never-seen' },
+        },
+      ];
+
+      for (const reply of rejected) {
+        let calls = 0;
+        const transport: ModelTransport = (request) => {
+          calls += 1;
+          return answering(replying(JSON.stringify(reply)))(request);
+        };
+        const provider = createMetaModelApiProvider({
+          mode: 'standard',
+          env: TEST_ENV,
+          transport,
+        });
+
+        await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'unparseable' });
+        expect(calls, `${reply.action.kind} was asked ${String(calls)} times`).toBe(1);
+      }
+    });
+
+    it('asks once for a fenced reply, which still reads on the first ask', async () => {
+      let calls = 0;
+      const transport: ModelTransport = (request) => {
+        calls += 1;
+        return answering(replying(['```json', DECISION, '```'].join('\n')))(request);
       };
       const provider = createMetaModelApiProvider({
-        mode: 'contributor',
+        mode: 'standard',
         env: TEST_ENV,
         transport,
       });
-      const session = provider.beginSession(anna);
 
-      await expect(session.decide(contextOf({ step: SESSION_STEPS[0] }))).resolves.toBeDefined();
-      expect(requests).toHaveLength(2);
-      expect(JSON.stringify(requests[1])).toBe(JSON.stringify(requests[0]));
+      const decision = await provider.decide(contextOf());
+
+      expect(decision.action).toEqual({ kind: 'click', targetElementId: 'el-jacket' });
+      expect(calls).toBe(1);
+    });
+
+    it('hands both calls of the screen to the trajectory, as two calls', async () => {
+      const { provider, sink } = answeringInTurn([replying(UNREADABLE), replying(DECISION)]);
+
+      await provider.beginSession(anna).decide(contextOf());
+
+      expect(sink.records.map((record) => `${String(record.turn)}:${record.kind}`)).toEqual([
+        '1:request',
+        '1:response',
+        '2:request',
+        '2:response',
+      ]);
+    });
+
+    it('sums what both calls spent into the decision’s usage, and prices the sum', async () => {
+      const second = {
+        input_tokens: 1200,
+        input_tokens_details: { cached_tokens: 900 },
+        output_tokens: 180,
+        output_tokens_details: { reasoning_tokens: 90 },
+      };
+      const { provider } = answeringInTurn([
+        replying(UNREADABLE, FAKE_TOKENS),
+        replying(DECISION, second),
+      ]);
+
+      const decision = await provider.beginSession(anna).decide(contextOf());
+
+      // 1000 + 1200 input, 400 + 900 of it cached, 200 + 180 output, 150 + 90 reasoning — a
+      // run's usage still agrees with what was spent on the screen.
+      expect(decision.usage).toEqual({
+        inputTokens: 2200,
+        cachedInputTokens: 1300,
+        outputTokens: 380,
+        reasoningTokens: 240,
+        // (2200 − 1300) × $1.25 + 1300 × $0.15 + 380 × $4.25, per 1M: the price of the sum,
+        // which is the one the invoice adds up to.
+        estimatedCostUsd: 0.002935,
+      });
+      expect(decision.usage.estimatedCostUsd).toBe(
+        estimateCostUsd('muse-spark-1.3', {
+          inputTokens: 2200,
+          cachedInputTokens: 1300,
+          outputTokens: 380,
+        }),
+      );
     });
   });
 

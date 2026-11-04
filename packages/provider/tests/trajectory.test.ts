@@ -264,16 +264,17 @@ describe('the trajectory one session writes', () => {
         }),
       );
 
-      // A reply that could not be read is asked for once more, and both tries are on the record.
+      // A reply that could not be read is asked once more, with the parse error fed back, and
+      // both calls are on the record (#420). The screen failed once, so there is one failure.
       expect(written.map((line) => line.kind)).toEqual([
         'request',
         'response',
-        'failure',
         'request',
         'response',
         'failure',
       ]);
-      expect(written[5]?.kind === 'failure' && written[5].failure.kind).toBe('unparseable');
+      expect(written[4]?.kind === 'failure' && written[4].failure.kind).toBe('unparseable');
+      expect(written[4]?.kind === 'failure' && written[4].failure.message).toContain('twice');
     });
 
     it('records a non-2xx answer with its status and its error body', async () => {
