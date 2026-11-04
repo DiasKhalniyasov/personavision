@@ -4,6 +4,7 @@ import { sessionGuard } from './auth/guard.js';
 import { seedDemoWorkspace } from './seed.js';
 import type { SeededWorkspace } from './seed.js';
 import { audienceRoutes } from './server/routes/audiences.js';
+import type { WonderSeam } from './server/routes/audiences.js';
 import { estimateRoutes } from './server/routes/estimate.js';
 import { githubRoutes } from './server/routes/github.js';
 import type { GithubAppRegistration } from './server/routes/github.js';
@@ -48,6 +49,13 @@ export interface PlatformOptions {
    * answers. #319 owns the read behind it; nothing here reads the environment.
    */
   githubApp?: GithubAppRegistration;
+  /**
+   * How `POST /audiences/from-sentence` reaches Muse Wonder (#396). Absent — as it is in
+   * `personavision serve` — means the shipped selection over this process's environment:
+   * the model where `MODEL_API_KEY` is set, and a refusal in words where it is not. A test
+   * passes its own, so no suite reaches a model.
+   */
+  wonder?: WonderSeam;
 }
 
 export interface Platform {
@@ -86,6 +94,7 @@ export const createPlatform = async ({
   runsRoot,
   pipeline,
   githubApp,
+  wonder,
 }: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
   const resolvedRunsRoot = resolve(runsRoot);
@@ -121,7 +130,7 @@ export const createPlatform = async ({
         sessionCookie,
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
-      ...audienceRoutes({ store, readSession }),
+      ...audienceRoutes({ store, readSession, wonder }),
       ...siteRoutes({ store, readSession }),
       ...githubRoutes({ store, readSession, app: githubApp }),
       ...estimateRoutes({ store, readSession, runsRoot: resolvedRunsRoot }),
