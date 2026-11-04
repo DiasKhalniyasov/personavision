@@ -337,6 +337,98 @@ describe('buildRecommendations', () => {
     ]);
   });
 
+  /**
+   * The names a published recommendation may use.
+   *
+   * `io.ts` holds a recommendation's `findingIds`, a heatmap citation's version, step and area
+   * and a funnel citation's step to the run's own declarations exactly as strictly as it holds
+   * a session id, and one dangling reference stops the **whole run artifact** from being
+   * written. The seam is a function a caller hands in, so none of these is unreachable: each
+   * costs a chip, or the one claim, and never the run.
+   */
+  describe('drops what the run does not declare rather than making the run unwritable', () => {
+    it('drops a finding id the run never stated, and keeps the ones it did', async () => {
+      const { document, reported } = await buildReporting(
+        wonderReturning({ ...PROMPT, findingIds: ['F-2', 'F-404'] }),
+      );
+
+      expect(document.recommendations[0]?.findingIds).toEqual(['F-2']);
+      expect(reported).toEqual([
+        '"R-2" rests on finding F-404, which this run never stated: the reference is dropped.',
+      ]);
+    });
+
+    it('drops a heatmap citation naming a version, a step or an area the run has not', async () => {
+      const { document, reported } = await buildReporting(
+        wonderReturning({
+          ...PROMPT,
+          citations: [
+            sessionCitation('S-04', 0),
+            { kind: 'heatmap', variant: 'Z', step: 'prompt', aoiId: null },
+            { kind: 'heatmap', variant: 'B', step: 'checkout', aoiId: null },
+            { kind: 'heatmap', variant: 'B', step: 'prompt', aoiId: 'b-prompt-nothing' },
+          ],
+        }),
+      );
+
+      // The three bad ones are gone, and the region the finding itself names is attached.
+      expect(document.recommendations[0]?.citations).toEqual([
+        { kind: 'session', sessionId: 'S-04', offsetMs: 0 },
+        { kind: 'heatmap', variant: 'B', step: 'prompt', aoiId: 'b-prompt-primary' },
+        { kind: 'funnel', stepId: 'prompt' },
+      ]);
+      expect(reported).toEqual([
+        '"R-2" cites the version "Z", which this run does not declare: the citation is dropped.',
+        '"R-2" cites the step "checkout", which this run does not declare: the citation is dropped.',
+        '"R-2" cites the area of interest "b-prompt-nothing", which this run does not declare: the citation is dropped.',
+      ]);
+    });
+
+    it('drops a funnel citation naming a step the run has not', async () => {
+      const { document, reported } = await buildReporting(
+        wonderReturning({
+          ...PROMPT,
+          citations: [sessionCitation('S-04', 0), { kind: 'funnel', stepId: 'checkout' }],
+        }),
+      );
+
+      expect(document.recommendations[0]?.citations.map((one) => one.kind)).toEqual([
+        'session',
+        'heatmap',
+        'funnel',
+      ]);
+      expect(reported).toEqual([
+        '"R-2" cites the step "checkout", which this run does not declare: the citation is dropped.',
+      ]);
+    });
+
+    it('publishes no recommendation sitting on a step the run does not declare', async () => {
+      // The step is the second ranking key and the one chip the screen always expects, so
+      // there is nothing here to publish rather than a chip to drop.
+      const { document, reported } = await buildReporting(
+        wonderReturning({ ...PROMPT, step: 'checkout' }, GENERATE),
+      );
+
+      expect(document.recommendations.map((one) => one.id)).toEqual(['R-3']);
+      expect(reported).toEqual([
+        '"R-2" is not published: it sits on "checkout", which names no step this run declares.',
+      ]);
+    });
+
+    it('publishes one recommendation per id', async () => {
+      // `recommendationsSchema` does not hold ids apart, and the screens key their rows by id:
+      // two of one name is one of them lost.
+      const { document, reported } = await buildReporting(
+        wonderReturning(PROMPT, { ...GENERATE, id: 'R-2' }),
+      );
+
+      expect(document.recommendations.map((one) => one.step)).toEqual(['prompt']);
+      expect(reported).toEqual([
+        '"R-2" is not published: a recommendation of this run already has that id.',
+      ]);
+    });
+  });
+
   it('reports the reason a run recommends nothing rather than returning a bare empty list', async () => {
     const { document, reported } = await buildReporting(
       wonderReturning({ ...PROMPT, id: 'R-7', findingIds: ['F-5'] }),

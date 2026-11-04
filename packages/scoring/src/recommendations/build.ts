@@ -29,12 +29,16 @@ import type { SessionSample } from './sample.js';
  *    the `reached` of the step in the whole-run funnel slice and is never a number a model
  *    reported or this package counted on the side, so the ranking key and the funnel the
  *    reader is looking at cannot disagree.
- * 2. **No recommendation rests only on our own breakage.** Wonder is handed the sample, which
- *    the sampler has already cleared of automation failures — so the ask never *sees* an
- *    excluded session and is in no position to notice one being cited. This builder holds
- *    every session of the run, so it is where the check belongs: a citation naming a session
- *    the run is not about is dropped, and a recommendation left resting on nothing the
- *    product did is dropped whole (`docs/FLOW.md` section 11).
+ * 2. **No recommendation rests only on our own breakage, and none names anything this run does
+ *    not hold.** Wonder is handed the sample, which the sampler has already cleared of
+ *    automation failures — so the ask never *sees* an excluded session and is in no position
+ *    to notice one being cited. This builder holds the whole run, so it is where the check
+ *    belongs: a citation naming a session the run is not about is dropped, so is one naming a
+ *    version, a step or an area the run does not declare, and a recommendation left resting on
+ *    nothing the product did is dropped whole (`docs/FLOW.md` section 11). Every one of those
+ *    names is checked because `writeRun` checks every one of them — a single dangling
+ *    reference stops the whole run artifact from being written, so it costs one chip here
+ *    instead of the run.
  * 3. **The citation kinds a recommendation can honestly make are attached from its findings**
  *    — the heatmap region a finding names and the funnel step the recommendation sits on are
  *    facts about the run, not sentences for a model to compose, and the screen wants all
@@ -141,8 +145,47 @@ interface Publishing {
   /** The sessions the run is about: scored, so never an automation failure and never unknown. */
   readonly scored: ReadonlyMap<string, Session>;
   readonly findingById: ReadonlyMap<string, Finding>;
+  /** The names this run declares — a citation may use these and nothing else. */
+  readonly declared: {
+    readonly steps: ReadonlySet<string>;
+    readonly variants: ReadonlySet<string>;
+    readonly aois: ReadonlySet<string>;
+  };
+  /** The ids already published, so one id addresses one recommendation. */
+  readonly taken: Set<string>;
   readonly report: (line: string) => void;
 }
+
+/**
+ * Whether a citation names only things this run holds — and, for a session, only a session the
+ * run is **about**.
+ *
+ * Every one of these is checked because `writeRun` checks every one of them: `io.ts` holds a
+ * recommendation's `findingIds`, a heatmap citation's version, step and area, and a funnel
+ * citation's step to the run's own declarations exactly as strictly as it holds a session id.
+ * A single dangling reference is a violation that stops the **whole run artifact** from being
+ * written, so a name this builder cannot vouch for costs one chip here rather than the run.
+ */
+const dangling = (citation: Citation, { scored, declared }: Publishing): string | null => {
+  const undeclared = (what: string, value: string): string =>
+    `the ${what} "${value}", which this run does not declare`;
+  switch (citation.kind) {
+    case 'session':
+      return scored.has(citation.sessionId)
+        ? null
+        : `session ${citation.sessionId}, which is not among the sessions this run is about`;
+    case 'heatmap':
+      if (!declared.variants.has(citation.variant)) {
+        return undeclared('version', citation.variant);
+      }
+      if (!declared.steps.has(citation.step)) return undeclared('step', citation.step);
+      return citation.aoiId !== null && !declared.aois.has(citation.aoiId)
+        ? undeclared('area of interest', citation.aoiId)
+        : null;
+    case 'funnel':
+      return declared.steps.has(citation.stepId) ? null : undeclared('step', citation.stepId);
+  }
+};
 
 /**
  * One recommendation, cleared of what it may not rest on and completed with what it can
@@ -154,17 +197,40 @@ interface Publishing {
  */
 const publishable = (
   recommendation: Recommendations['recommendations'][number],
-  { scored, findingById, report }: Publishing,
+  publishing: Publishing,
 ): UnrankedRecommendation | null => {
+  const { scored, findingById, declared, taken, report } = publishing;
   const named = `"${recommendation.id}"`;
 
-  // A finding this run never stated is the seam's refusal and cannot reach here; a finding it
-  // stated about our own harness can, and advice about our harness is not advice about the
-  // site.
-  const supporting = recommendation.findingIds
+  // A recommendation is addressed by its id — by the screen that links to it and by the change
+  // that answers it — so two of one name is one of them lost.
+  if (taken.has(recommendation.id)) {
+    report(`${named} is not published: a recommendation of this run already has that id.`);
+    return null;
+  }
+
+  // The step is the second key the ranking is read from and the one chip the screen always
+  // expects, so a step the funnel does not have is not a recommendation this run can store.
+  if (!declared.steps.has(recommendation.step)) {
+    report(
+      `${named} is not published: it sits on "${recommendation.step}", which names no step this run declares.`,
+    );
+    return null;
+  }
+
+  // A finding this run never stated is a dangling reference that would stop the whole run
+  // artifact from being written, so it is dropped here; a finding the run stated about our own
+  // harness is kept and counted, because advice about our harness is not advice about the site.
+  const supporting = recommendation.findingIds.filter((findingId) => {
+    if (findingById.has(findingId)) return true;
+    report(
+      `${named} rests on finding ${findingId}, which this run never stated: the reference is dropped.`,
+    );
+    return false;
+  });
+  const product = supporting
     .map((findingId) => findingById.get(findingId))
-    .filter((finding): finding is Finding => finding !== undefined);
-  const product = supporting.filter((finding) => finding.attribution === 'product');
+    .filter((finding): finding is Finding => finding?.attribution === 'product');
   if (product.length === 0) {
     report(
       `${named} is not published: it rests on ${supporting.length === 0 ? 'no finding this run stated' : 'nothing the product did — every finding it names is our own automation failing'}.`,
@@ -173,16 +239,20 @@ const publishable = (
   }
 
   const cited = recommendation.citations.filter((citation) => {
-    if (citation.kind !== 'session' || scored.has(citation.sessionId)) return true;
-    report(
-      `${named} cites session ${citation.sessionId}, which is not among the sessions this run is about: the citation is dropped.`,
-    );
+    const complaint = dangling(citation, publishing);
+    if (complaint === null) return true;
+    report(`${named} cites ${complaint}: the citation is dropped.`);
     return false;
   });
+  // Nothing left to cite is the end of it, and **not** an invitation to find the claim better
+  // evidence: a claim whose only evidence was a session the run is not about is a claim about
+  // our own breakage, and attaching one of its findings' sessions would publish it anyway
+  // (`docs/FLOW.md` section 11, and #258's own criterion).
   if (cited.length === 0) {
     report(`${named} is not published: it cites no evidence this run is about.`);
     return null;
   }
+  taken.add(recommendation.id);
 
   // One citation of each kind this recommendation can honestly make, so the screen's three
   // chips are all there: the region a supporting finding names, and the step it sits on. A
@@ -213,19 +283,28 @@ const publishable = (
   if (!carried.has('heatmap')) {
     // `variant: null` is a finding about the run itself rather than about one version, and a
     // heatmap is addressed per version: there is no region to point at, so none is invented.
-    const regional = product.find((finding) => finding.variant !== null);
+    // A region is attached only where the run declares every part of it, for the reason the
+    // filter above exists.
+    const regional = product.find(
+      (finding) =>
+        finding.variant !== null &&
+        declared.variants.has(finding.variant) &&
+        declared.steps.has(finding.step) &&
+        (finding.aoiId === null || declared.aois.has(finding.aoiId)),
+    );
     const variant = regional?.variant;
     if (regional !== undefined && variant !== null && variant !== undefined) {
       attach({ kind: 'heatmap', variant, step: regional.step, aoiId: regional.aoiId });
     }
   }
+  // The step was held to the run's own above, so this chip is one the screen can always build.
   if (!carried.has('funnel')) attach({ kind: 'funnel', stepId: recommendation.step });
 
   return {
     id: recommendation.id,
     sentence: recommendation.sentence,
     evidence: recommendation.evidence,
-    findingIds: [...recommendation.findingIds],
+    findingIds: supporting,
     citations: attached.sort(
       (left, right) => CITATION_ORDER[left.kind] - CITATION_ORDER[right.kind],
     ),
@@ -274,6 +353,12 @@ export const buildRecommendations: RecommendationsBuilder = async (input) => {
       ),
     ),
     findingById: new Map(input.findings.map((finding) => [finding.id, finding] as const)),
+    declared: {
+      steps: new Set(input.run.steps.map((step) => step.id)),
+      variants: new Set(input.run.variants.map((variant) => variant.id)),
+      aois: new Set(input.run.aois.map((aoi) => aoi.id)),
+    },
+    taken: new Set<string>(),
     report: input.report ?? (() => {}),
   };
 
