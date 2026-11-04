@@ -2,6 +2,13 @@
 
 Webcam eye tracking on any website, run locally. Records where real people look, as heatmaps, gaze paths and a report, to teach PersonaVision's agents how people actually read a page.
 
+<p>
+  <img src="media/gaze-replay.gif" width="320" alt="Live gaze on a phone screen, with the person's own words">
+  <img src="media/heatmaps.gif" width="300" alt="Numbered gaze path and heatmap over each screen">
+</p>
+
+_Left: live gaze with the person's own words. Right: where they looked, in order._
+
 ## Run
 
 ```sh
