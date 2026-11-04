@@ -71,21 +71,17 @@ export type TestPipeline = (
 ) => Promise<StartedTest>;
 
 /**
- * The site a run was launched against, as the artifact records it (`site.verifiedAtLaunch`,
- * #243).
+ * The site a run was launched against, as the artifact records it (#243).
  *
- * **Recorded, not enforced.** `verifiedAtLaunch` is read off the site once, here, so that a
- * reader of a committed run can see whether the figures came from a site somebody had proved
- * they control. No cap reads it: the owner's answer of 2026-11-03 settled decision 71 as _no
- * gate on testing_, and `caps.ts` is handed no site state at all. A site that is verified
- * today and unverified tomorrow runs under exactly the same caps; the only thing that
- * differs between the two runs is this field.
+ * A site is a URL and nothing more (`docs/FLOW.md` section 13), so this is the URL and the
+ * record it was read from — and nothing about who controls the address, because the platform
+ * no longer keeps anything of the kind to read.
  *
- * **Two of these three fields reach the artifact.** `run.json`'s `site` block is the `url`
- * and `verifiedAtLaunch` and nothing else: `id` addresses a row in this package's own store,
- * and a run directory names no account, no workspace and no record of ours
- * (`docs/FLOW.md` section 8). It is carried here because the pipeline is handed the site that
- * was resolved, and it is the pipeline that drops it.
+ * **One of these two fields reaches the artifact.** `run.json`'s `site` block is the `url`
+ * and nothing else: `id` addresses a row in this package's own store, and a run directory
+ * names no account, no workspace and no record of ours (`docs/FLOW.md` section 8). It is
+ * carried here because the pipeline is handed the site that was resolved, and it is the
+ * pipeline that drops it.
  *
  * Absent for `personavision run`, which has no workspace and no site.
  */
@@ -94,12 +90,6 @@ export interface SiteAtLaunch {
   readonly id: string;
   /** The URL as the user typed it when they added the site. Written into the run. */
   readonly url: string;
-  /**
-   * Whether the site was verified at the moment this run was launched. Written into the run
-   * as `site.verifiedAtLaunch`, where it stays true of this run for ever: a site verified an
-   * hour later was not verified while these sessions ran.
-   */
-  readonly verifiedAtLaunch: boolean;
 }
 
 /** What the pipeline reported it ran, in the words a refusal states it in. */
@@ -374,9 +364,9 @@ export const startTest = async ({
   // here rather than in the pipeline because the pipeline is handed no workspace and no
   // site, and after the audience because one of them is about how many people it generates.
   //
-  // Nothing below consults `site.verification`. The caps take the audience's size and the
-  // site's own ledger, and no third thing: a verified site and an unverified one are refused
-  // and allowed at exactly the same numbers (decision 71, settled 2026-11-03).
+  // The caps take the audience's size and the site's own ledger, and no third thing: there
+  // is nothing else on a site record for them to read, and nothing about an address that
+  // moves a number (decision 71, settled 2026-11-03).
   //
   // `engineMode` is not consulted either, and that is the point: the offline deterministic
   // engine drives the same browsers at the same site, so it is bound by the same caps. The
@@ -408,8 +398,8 @@ export const startTest = async ({
   const at = launchedAt.toISOString();
   await sites.recordLaunch(workspaceId, site.id, { id: launchId, runId: null, at });
 
-  // What was true of the site at this instant, read **once** and only to be recorded. The
-  // pipeline copies it into the artifact (#243); no cap above has read it.
+  // The site this run is against, handed on only to be recorded. The pipeline copies the URL
+  // into the artifact (#243).
   //
   // What this does not check is that the request's variants are pages **of** this site: a
   // body naming one site's id and another address's URL is counted against the site it
@@ -417,11 +407,7 @@ export const startTest = async ({
   // comparison runs two versions of one page — but the platform does not yet refuse it, and
   // #239 was not scoped to decide what "a variant belongs to this site" means for the
   // two-variant form. Whoever owns that next has the seam here, with the record in hand.
-  const siteAtLaunch: SiteAtLaunch = {
-    id: site.id,
-    url: site.url,
-    verifiedAtLaunch: site.verification.state === 'verified',
-  };
+  const siteAtLaunch: SiteAtLaunch = { id: site.id, url: site.url };
 
   let started: StartedTest;
   try {

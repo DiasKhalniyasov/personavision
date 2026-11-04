@@ -2,17 +2,16 @@
  * The caps, in **one** place: how many agents one run may drive, how many browsers a site
  * may have on it at once, and how many runs a site may take in an hour.
  *
- * They exist so that a hundred stealth browsers cannot be pointed at a URL nobody has
- * proved they control, and so that a person exploring cannot accidentally hammer their own
- * site. `docs/FLOW.md` section 13 is the design contract they come from, and the owner's
- * answer of **2026-11-03** (decision 71, settled as _no gate on testing_) is the shape they
- * are in here.
+ * They exist so that a hundred stealth browsers cannot be pointed at a URL in numbers nobody
+ * asked for, and so that a person exploring cannot accidentally hammer their own site.
+ * `docs/FLOW.md` section 13 is the design contract they come from, and the owner's answer of
+ * **2026-11-03** (decision 71, settled as _no gate on testing_) is the shape they are in here.
  *
- * **Verification gates none of them.** There is no smaller cap for an unverified site and no
- * verification check on the launch path: the caps protect the site being driven, not the
- * person who asked, and what verification unlocks is **Improve my site** (#227). That is why
- * `CAPS` below is a frozen object of three numbers rather than a function of a site — it
- * structurally cannot read a verification state, because it is handed nothing to read.
+ * **Nothing about a site changes them.** There is no smaller cap for one site than another
+ * and nothing on the launch path that asks after the address: the caps protect the site being
+ * driven, not the person who asked. That is why `CAPS` below is a frozen object of three
+ * numbers rather than a function of a site — it structurally cannot read anything about one,
+ * because it is handed nothing to read.
  *
  * **Nothing else in the repository writes these numbers.** A screen states them by asking
  * the API for them, and `packages/platform/test/caps.test.ts` greps the repository to prove
@@ -24,7 +23,7 @@ import type { SiteLaunch } from './store/types.js';
 
 /**
  * The three numbers. Frozen, so the module cannot be edited at runtime by whatever imports
- * it, and plain data, so no caller can pass it a site, a workspace or a verification state.
+ * it, and plain data, so no caller can pass it a site or a workspace to be answered about.
  *
  * - **`agentsPerRun`** — the audience's `size`, at most this. Above it nothing is promised,
  *   which is the owner's own figure.
@@ -53,7 +52,7 @@ const AN_HOUR_IN_MS = 60 * 60 * 1000;
  * start at 10:12"_.
  *
  * **UTC**, which is the clock every instant in this product is written in (`run.createdAt`,
- * `verifiedAt`, `checkedAt`), so the sentence and the stored instant never disagree by a
+ * a launch's own `at`), so the sentence and the stored instant never disagree by a
  * time zone. A screen that wants the reader's own clock has `retryAt` as an instant beside
  * the sentence and renders the countdown from that — which is what the screen contract asks
  * for, and why the sentence is not the only thing a refusal carries.
@@ -233,7 +232,7 @@ const inTheTrailingHour = (launches: readonly SiteLaunch[], now: Date): SiteLaun
  * is the first moment the count is back under the limit. It is an instant rather than "in a
  * while", so the screen can draw a countdown beside the Launch button.
  *
- * Verified or not: this is the fifth run on a site, and the site does not care who asked.
+ * Whoever asked: this is the fifth run on a site, and the site does not care who asked.
  */
 export const refuseTooManyRunsThisHour = (
   launches: readonly SiteLaunch[],

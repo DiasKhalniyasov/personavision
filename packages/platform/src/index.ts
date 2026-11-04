@@ -194,46 +194,12 @@ export type { EstimateRouteOptions } from './server/routes/estimate.js';
 
 export {
   addSite,
-  AVAILABLE_SITE_VERIFICATION_METHODS,
-  checkConnectedRepository,
-  checkDnsTxt,
-  defaultSiteCheckDeps,
-  foundTheLine,
-  mintSiteToken,
-  noAnswer,
-  nodeTxtResolver,
   noSiteConnections,
-  nothingPublished,
-  otherValues,
   parseSiteUrl,
-  places,
-  SITE_TOKEN_PREFIX,
-  SITE_VERIFICATION_METHODS,
-  SITE_VERIFICATION_NAME,
-  siteCheckFor,
-  siteCheckResult,
-  SiteCheckNotAvailableError,
-  siteVerificationPair,
   SiteUrlNotAcceptedError,
   storedSiteConnections,
-  verificationDomains,
-  verifySite,
 } from './site/index.js';
-export type {
-  CheckedSite,
-  SiteCheck,
-  SiteCheckDeps,
-  SiteCheckFinding,
-  SiteCheckOutcome,
-  SiteCheckResult,
-  SiteCheckSubject,
-  SiteCheckTarget,
-  SiteConnections,
-  SiteIssue,
-  SiteRepositoryConnection,
-  TxtResolver,
-  VerifiedSite,
-} from './site/index.js';
+export type { SiteConnections, SiteIssue, SiteRepositoryConnection } from './site/index.js';
 
 export { siteRoutes } from './server/routes/sites.js';
 export type { SiteBody, SiteRouteOptions } from './server/routes/sites.js';
@@ -272,8 +238,6 @@ export type {
   SiteLaunch,
   SiteRecord,
   SiteStore,
-  SiteVerification,
-  SiteVerificationMethod,
   WorkspaceRecord,
   WorkspaceStore,
 } from './store/types.js';

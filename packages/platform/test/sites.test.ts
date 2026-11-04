@@ -1,20 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEMO_ACCOUNT_EMAIL } from '../src/seed.js';
-import {
-  mintSiteToken,
-  parseSiteUrl,
-  SITE_TOKEN_PREFIX,
-  SITE_VERIFICATION_NAME,
-  siteVerificationPair,
-  SiteUrlNotAcceptedError,
-} from '../src/site/index.js';
+import { parseSiteUrl, SiteUrlNotAcceptedError } from '../src/site/index.js';
 import { hashPassword } from '../src/store/password.js';
-import type { SiteVerification } from '../src/store/types.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
 
 /**
- * Sites: the record, the token and the `/sites` routes (#235).
+ * Sites: the record and the `/sites` routes (#235).
  *
  * Everything that can be is asserted **over HTTP**, because scoping that is only true inside
  * the process is not scoping, and because these are the routes the Sites and Add-a-site
@@ -22,20 +14,14 @@ import type { TestServer } from './http.js';
  * ownership: a site of another workspace is **404 and not 403**, which is the rule
  * `visibleRuns` already follows for runs.
  *
- * Nothing in this ticket can verify a site. Every assertion about the verification block is
- * that it reads `unverified` — including for a body that asks for anything else — because the
- * one writer is the passing check of a later ticket of #221.
+ * A site is a URL and nothing more: the record carries no state about who controls the
+ * address, so there is nothing a body could ask for and nothing a route could move.
  */
-
-/** The state every site this ticket can create reads. */
-const UNVERIFIED: SiteVerification = { state: 'unverified', method: null, verifiedAt: null };
 
 /** What a route answers with. Only what these tests read: the rest is the compiler's. */
 interface SiteBody {
   id: string;
   url: string;
-  token: string;
-  verification: SiteVerification;
   lastTest: { runId: string; at: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -118,12 +104,10 @@ describe('the site routes', () => {
   afterEach(() => served.close());
 
   describe('a site added through POST /sites', () => {
-    it('is created in the session’s workspace, unverified, with a token of its own', async () => {
+    it('is created in the session’s workspace, as the URL that was given', async () => {
       const site = await add();
 
       expect(site.url).toBe(A_URL);
-      expect(site.verification).toEqual(UNVERIFIED);
-      expect(site.token).toMatch(/^pv_[0-9a-f]{12}$/);
       expect((await served.platform.store.sites.byId(workspaceId, site.id))?.workspaceId).toBe(
         workspaceId,
       );
@@ -133,7 +117,7 @@ describe('the site routes', () => {
       const site = await add();
 
       expect((await listed()).map((entry) => entry.id)).toEqual([site.id]);
-      expect((await listed())[0]?.token).toBe(site.token);
+      expect((await listed())[0]?.url).toBe(site.url);
     });
 
     it('comes back from GET /sites/:siteId with every field intact', async () => {
@@ -233,7 +217,6 @@ describe('the site routes', () => {
       const mine = await add();
       const theirs = await served.platform.store.sites.create(theirWorkspaceId, {
         url: ANOTHER_URL,
-        token: mintSiteToken(),
       });
       await launch(mine.id, 'l-1', 'my-run', EARLIER);
       await served.platform.store.sites.recordLaunch(theirWorkspaceId, theirs.id, {
@@ -255,8 +238,8 @@ describe('the site routes', () => {
     });
   });
 
-  describe('nothing a body says can verify a site', () => {
-    it('ignores a submitted verification block, token and id', async () => {
+  describe('a site is its id, its URL and its workspace', () => {
+    it('reads one field of a body and carries nothing else back', async () => {
       const response = await send('/sites', 'POST', {
         url: A_URL,
         id: 'an-id-of-my-choosing',
@@ -267,30 +250,47 @@ describe('the site routes', () => {
       const site = await bodyOf(response);
 
       expect(site.id).not.toBe('an-id-of-my-choosing');
-      expect(site.token).not.toBe('pv_deadbeefcafe');
-      expect(site.token).toMatch(/^pv_[0-9a-f]{12}$/);
-      expect(site.verification).toEqual(UNVERIFIED);
-      // And it is the stored record that is unverified, not only the answer.
-      expect((await bodyOf(await send(`/sites/${site.id}`, 'GET'))).verification).toEqual(
-        UNVERIFIED,
-      );
+      const answered = { ...site } as Record<string, unknown>;
+      expect(answered.token).toBeUndefined();
+      expect(answered.verification).toBeUndefined();
+      expect(answered.lastCheck).toBeUndefined();
+      // And it is the stored record that carries none of them, not only the answer.
+      const stored = await served.platform.store.sites.byId(workspaceId, site.id);
+      expect(Object.keys(stored ?? {}).sort()).toEqual([
+        'createdAt',
+        'deletedAt',
+        'id',
+        'launches',
+        'updatedAt',
+        'url',
+        'workspaceId',
+      ]);
     });
 
-    it('offers no route that could move one', async () => {
+    it('is asked for no check: no route claims the path one used to be asked at', async () => {
       const site = await add();
-      for (const method of ['POST', 'PATCH', 'PUT'] as const) {
-        const response = await served.request(`/sites/${site.id}`, {
-          method,
-          headers: { cookie, 'content-type': 'application/json' },
-          body: JSON.stringify({ verification: { state: 'verified' } }),
-        });
-        // No route claims the path for these methods, so the request falls through to the
-        // app and is answered with the screen. Whatever it answers, it is not a record.
-        expect(response.headers.get('content-type')).not.toContain('application/json');
-      }
-      expect((await bodyOf(await send(`/sites/${site.id}`, 'GET'))).verification).toEqual(
-        UNVERIFIED,
-      );
+
+      // Structural first: the platform publishes no route for it, under any method, so there
+      // is nothing to reach however a request is shaped.
+      expect(
+        served.platform.routes.filter((route) => route.path.test(`/sites/${site.id}/verify`)),
+      ).toEqual([]);
+
+      // And over HTTP it is an unknown path: it falls past the routes to the app, exactly as
+      // `/whatever` does, and what comes back is a page rather than a record.
+      const response = await served.request(`/sites/${site.id}/verify`, {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ method: 'dns-txt' }),
+      });
+      const unknown = await served.request('/not-a-path-of-this-product', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json', accept: 'application/json' },
+        body: '{}',
+      });
+
+      expect(response.status).toBe(unknown.status);
+      expect(response.headers.get('content-type')).not.toContain('application/json');
     });
   });
 
@@ -403,19 +403,17 @@ describe('the site routes', () => {
       expect((await bodyOf(await send(`/sites/${mine.id}`, 'GET'))).deletedAt).toBeNull();
     });
 
-    it('gives both of them the same URL as two sites with two different tokens', async () => {
+    it('gives both of them the same URL as two sites, one of each workspace', async () => {
       const mine = await add(A_URL);
       const theirs = await add(A_URL, theirCookie);
 
       expect(mine.id).not.toBe(theirs.id);
-      expect(mine.token).not.toBe(theirs.token);
       expect((await listed()).map((entry) => entry.id)).toEqual([mine.id]);
       expect((await listed(theirCookie)).map((entry) => entry.id)).toEqual([theirs.id]);
-      // A token proves control of the site it is published on, for the workspace it was
-      // minted for: one workspace's published token is not the other's proof.
-      expect((await served.platform.store.sites.byId(theirWorkspaceId, theirs.id))?.token).not.toBe(
-        mine.token,
-      );
+      // A site is a row of a workspace rather than a claim on an address: neither record is
+      // reachable from the other workspace, and neither says anything about the other.
+      expect(await served.platform.store.sites.byId(theirWorkspaceId, mine.id)).toBeNull();
+      expect(await served.platform.store.sites.byId(workspaceId, theirs.id)).toBeNull();
     });
 
     it('lists each workspace’s own sites and no more', async () => {
@@ -479,25 +477,6 @@ describe('the site routes', () => {
 
       expect(response.headers.get('content-type')).toContain('application/json');
     });
-  });
-});
-
-describe('the verification token', () => {
-  it('is pv_ and twelve hex characters, as the Add-a-site screen prints it', () => {
-    expect(mintSiteToken()).toMatch(new RegExp(`^${SITE_TOKEN_PREFIX}[0-9a-f]{12}$`));
-  });
-
-  it('is not the same token twice', () => {
-    const minted = new Set(Array.from({ length: 64 }, () => mintSiteToken()));
-
-    expect(minted.size).toBe(64);
-  });
-
-  it('builds the line a user publishes, from the one place that name is written', () => {
-    expect(siteVerificationPair('pv_7f3c91a2d84e')).toBe(
-      'personavision-site-verification=pv_7f3c91a2d84e',
-    );
-    expect(SITE_VERIFICATION_NAME).toBe('personavision-site-verification');
   });
 });
 

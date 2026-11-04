@@ -223,13 +223,11 @@ describe('ten concurrent sessions per site', () => {
     siteId = (
       await served.platform.store.sites.create(workspaceId, {
         url: SITE_URL,
-        token: 'pv_capsexample',
       })
     ).id;
     otherSiteId = (
       await served.platform.store.sites.create(workspaceId, {
         url: OTHER_SITE_URL,
-        token: 'pv_otherexample',
       })
     ).id;
   });

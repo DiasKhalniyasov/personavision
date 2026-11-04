@@ -6,7 +6,6 @@ import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
 import type { Middleware } from '../src/server/routes/types.js';
 import type { GithubAppRegistration } from '../src/server/routes/github.js';
-import type { SiteCheckDeps, SiteConnections } from '../src/site/index.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 import type { TestDirectories } from './workspace.js';
 
@@ -33,18 +32,6 @@ export interface TestServerOptions {
    * `personavision serve` does today.
    */
   pipeline?: TestPipeline;
-  /**
-   * What the ownership checks resolve and read the clock with (#236). Omitted — as every
-   * suite but the one about verifying a site omits it — leaves the real resolver in place,
-   * which nothing then calls: no route runs a check until one is asked for.
-   */
-  siteChecks?: SiteCheckDeps;
-  /**
-   * The connection lookup the `connected-repository` check asks (#238). Omitted — as every
-   * suite but the one about that check omits it — leaves the default in place, which answers
-   * that no repository is connected to any site.
-   */
-  siteConnections?: SiteConnections;
   /**
    * Whether a GitHub App is registered, and where it is installed from (#299). Omitted — as
    * every suite but the one about the connection omits it — leaves the default in place: not
@@ -77,8 +64,6 @@ const viewerStandIn: Middleware = (_request, response) => {
 export const startTestServer = async ({
   runs = [],
   pipeline,
-  siteChecks,
-  siteConnections,
   githubApp,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
@@ -87,8 +72,6 @@ export const startTestServer = async ({
   const platform = await createPlatform({
     ...directories,
     pipeline,
-    siteChecks,
-    siteConnections,
     githubApp,
   });
   const server = await startPlatformServer({
