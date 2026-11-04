@@ -290,18 +290,22 @@ export function decideOutcome(
  * A scroll, a hesitation and a step back are not among {@link PROGRESS_ACTIONS}, and a
  * session made only of them has looked at a product rather than used it.
  */
-const acted = (trace: SessionTrace): boolean =>
-  trace.actions.some((action) => PROGRESS_ACTIONS.includes(action.type));
+function acted(trace: SessionTrace): boolean {
+  return trace.actions.some((action) => PROGRESS_ACTIONS.includes(action.type));
+}
 
 /** The one shape of a failed session's reason: where it ended, and what was not done. */
-const notDone = (trace: SessionTrace, step: string, because: string): string =>
-  `The session ended on the "${step}" step with the task not done: ${because}${primaryActionClause(trace)}`;
+function notDone(trace: SessionTrace, step: string, because: string): string {
+  return `The session ended on the "${step}" step with the task not done: ${because}${primaryActionClause(trace)}`;
+}
 
 /** The criterion's own words, quoted so a reader can see where the sentence ends. */
-const quoted = (criterion: string): string => `“${criterion}”`;
+function quoted(criterion: string): string {
+  return `“${criterion}”`;
+}
 
 /** What the screen was missing, in the criterion's own words. */
-const missingClause = (step: string, missing: readonly string[]): string => {
+function missingClause(step: string, missing: readonly string[]): string {
   if (missing.length === 0) {
     return `the "${step}" step did not show it`;
   }
@@ -311,7 +315,7 @@ const missingClause = (step: string, missing: readonly string[]): string => {
       ? (words[0] as string)
       : `${words.slice(0, -1).join(', ')} or ${words.at(-1) as string}`;
   return `nothing on the "${step}" step named ${said}`;
-};
+}
 
 /**
  * Our own breakage, from whichever of the three ways it shows up in a trace. The

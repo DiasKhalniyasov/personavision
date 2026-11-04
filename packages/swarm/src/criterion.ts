@@ -293,6 +293,14 @@ const SCAFFOLDING = new Set(
 /** A quoted span: page copy, taken whole. Both the typographic and the straight pair. */
 const QUOTED_SPAN = /"([^"]+)"|“([^”]+)”|‘([^’]+)’/gu;
 
+/**
+ * The punctuation a sentence puts after a term rather than the page putting it in one: the
+ * full stop of `the address bar reads /checkout/success.`, and the one inside a quoted span
+ * a model closed with the sentence. Dropped from a term, never from the screen, so a term
+ * only ever becomes easier to find.
+ */
+const TRAILING_STOP = /[.,;:!?]+$/u;
+
 /** A full address, or a path at the start of a word — the pattern `readCriterion` reads. */
 const ADDRESS_SPAN = /https?:\/\/[^\s"”]+|(?:^|[\s"“'(])(\/[A-Za-z0-9._~/?&=%-]+)/gu;
 
@@ -372,7 +380,7 @@ const haystackOf = (screen: ObservableScreen): Haystack => {
  * A term naming an address is looked for in the address, because that is the only place an
  * address is; a term of several words is looked for in the screen's copy as one run, and in
  * the address, because a quoted span is a phrase and not a bag of words; a single word is
- * looked for among the screen's words, on its stem.
+ * looked for among the screen's words, where one word may be the other's beginning.
  */
 const holds = (term: string, haystack: Haystack): boolean => {
   const sought = fold(term);
@@ -404,11 +412,11 @@ const sameWord = (left: string, right: string): boolean => {
 /** What the criterion is about, as terms: a quoted span, an address, or its content words. */
 const termsOf = (criterion: string, kind: CriterionKind): readonly string[] => {
   const quoted = [...criterion.matchAll(QUOTED_SPAN)]
-    .map((match) => (match[1] ?? match[2] ?? match[3] ?? '').trim())
+    .map((match) => (match[1] ?? match[2] ?? match[3] ?? '').trim().replace(TRAILING_STOP, ''))
     .filter((span) => span !== '');
   if (kind === 'url') {
     const addresses = [...criterion.matchAll(ADDRESS_SPAN)]
-      .map((match) => (match[1] ?? match[0]).trim().replace(/[.,;:]+$/u, ''))
+      .map((match) => (match[1] ?? match[0]).trim().replace(TRAILING_STOP, ''))
       .filter((address) => address !== '');
     if (addresses.length > 0) return [...new Set(addresses)];
   }
@@ -431,7 +439,10 @@ const contentWordsOf = (criterion: string): readonly string[] => {
 
 /** Accents folded and case dropped, so a page's `Café` answers for a criterion's `cafe`. */
 function fold(text: string): string {
-  return text.normalize('NFKD').replace(/[̀-ͯ]/gu, '').toLowerCase();
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLowerCase();
 }
 
 /** The words of folded text: letters and digits, in the order they are written. */
