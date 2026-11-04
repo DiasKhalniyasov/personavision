@@ -74,6 +74,16 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
   const [url, setUrl] = useState('');
   const [issues, setIssues] = useState<readonly SiteIssue[]>([]);
   const [saving, setSaving] = useState(false);
+  /**
+   * Whether the footer is asking the second time.
+   *
+   * Removing a site is the one thing on this screen a reader cannot undo — the platform's
+   * removal is soft, but nothing in this product puts a removed site back, and adding the
+   * address again mints a different site. The prototype draws one button; a single click on
+   * a button beside a field somebody opened the page to read is not a decision, so the
+   * button asks before it acts rather than acting and apologising.
+   */
+  const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   /**
    * The one sentence above the form: a platform that could not be reached, and a refusal the
@@ -97,6 +107,31 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
         <div className="empty">
           <p>
             This workspace has no site at <span className="mono">{paths.site(state.siteId)}</span>.
+          </p>
+          <div className="actions">
+            <Link to={paths.sites}>Back to your sites</Link>
+          </div>
+        </div>
+      </Frame>
+    );
+  }
+
+  if (site !== null && site.deletedAt !== null) {
+    // The platform keeps a removed site **readable** on purpose: a finished test ran
+    // against it and the screen reporting that test has to be able to say which site it
+    // was. What it is not is a site this workspace can still act on, so the page says so
+    // rather than redrawing the form a reader has just used — which is what the Back
+    // button after a removal would otherwise land on, with a second Remove under it.
+    return (
+      <Frame title={siteName(site.url)} breadcrumb={siteName(site.url)}>
+        {/* The address is written through `siteName` here, as it is everywhere but the field
+            itself: it drops any user and password in the URL, which the platform stores as
+            given and a screenshot of this page would otherwise keep. */}
+        <div className="empty">
+          <p>
+            This site was removed from the workspace. Tests that already ran against{' '}
+            <span className="mono">{siteName(site.url)}</span> still name it; nothing new can be
+            started here.
           </p>
           <div className="actions">
             <Link to={paths.sites}>Back to your sites</Link>
@@ -152,8 +187,9 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
         answer.kind === 'refused'
           ? (answer.issues[0]?.message ?? 'That site could not be removed.')
           : answer.problem,
-      // A site already gone answers 404, which is an answer: the reader is not asked to
-      // wait for a platform that just told them something.
+      // A site of another workspace answers 404, and a platform that refuses the removal
+      // answers its own sentence. Both are answers, so neither asks the reader to wait for
+      // a platform that has just told them something.
       outage: answer.kind === 'unreachable' && answer.answered !== true,
     });
   };
@@ -194,7 +230,10 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
             // Nothing is in it and nothing can be done with it until the site is read.
             disabled={!isNew && site === null}
             aria-invalid={field !== undefined}
-            aria-describedby={isNew ? hintId : undefined}
+            // The line under the field is this field's own: on `/sites/new` what a URL has
+            // to look like, and on a site's page when it was added and what to do about an
+            // address that is wrong. A reader who hears only the label learns neither.
+            aria-describedby={site === null && !isNew ? undefined : hintId}
             onChange={(event) => {
               setUrl(event.target.value);
               // The refusal was about what was in the field; it is not about what is in it
@@ -215,7 +254,9 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
           ) : site === null ? (
             <Skeleton className="h-4 w-64" />
           ) : (
-            <span className={styles.hint}>{siteFootnote(site)}</span>
+            <span className={styles.hint} id={hintId}>
+              {siteFootnote(site)}
+            </span>
           )}
         </div>
         <div className={styles.formfoot}>
@@ -223,14 +264,44 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
             <Button type="submit" disabled={saving}>
               Add the site
             </Button>
+          ) : confirming && site !== null ? (
+            <>
+              {/* The weight is in the words and in having been asked at all. Neither
+                  shadcn's `destructive` variant nor a rule of this screen's own paints
+                  this button in the severity colour in the built app — measured over CDP —
+                  so nothing here claims a colour it does not get. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={removing}
+                onClick={() => void remove(site)}
+              >
+                Yes, remove it
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={removing}
+                onClick={() => {
+                  setConfirming(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <span className="faint">
+                It leaves your sites. Tests that already ran against it still name it.
+              </span>
+            </>
           ) : (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={site === null || removing}
+              disabled={site === null}
               onClick={() => {
-                if (site !== null) void remove(site);
+                setConfirming(true);
               }}
             >
               Remove this site

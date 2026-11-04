@@ -42,6 +42,14 @@
   gap: var(--space-2);
 }
 
+/* The site's address under the chooser is one unbroken word to a line-breaker, and so is
+   a feature a reader pasted: the line wraps inside its track rather than widening the page
+   at 390px. `minmax(0, …)` above lets the track be narrower than its content; this is what
+   lets the content be narrower than itself. */
+.fieldGroup > :global(.footnote) {
+  overflow-wrap: anywhere;
+}
+
 .fieldGroup > label,
 .groupLabel {
   font-size: var(--text-sm);

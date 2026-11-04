@@ -62,6 +62,9 @@ const json = (status: number, body: unknown): Response =>
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 
+/** When a removed site was removed, as the soft delete stamps it. */
+export const REMOVED_AT = '2026-11-04T12:00:00.000Z';
+
 /** The id `/sites/new` gives the site it creates, which is where the screen then goes. */
 export const CREATED_SITE_ID = 'site-created';
 
@@ -113,7 +116,7 @@ export async function serveSite(behaviour: SiteBehaviour = {}): Promise<ServedSi
       }
       if (site === null) return json(404, { error: 'There is no such site.' });
       // The removal is soft, so the route answers the record with `deletedAt` set.
-      return json(200, { ...servedSite(site), deletedAt: '2026-11-04T12:00:00.000Z' });
+      return json(200, servedSite({ ...site, deletedAt: REMOVED_AT }));
     }
 
     if (one !== null && method === 'GET') {

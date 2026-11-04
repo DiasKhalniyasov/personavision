@@ -22,8 +22,15 @@ const time = new Intl.DateTimeFormat('en-US', {
   hour12: false,
 });
 
-/** An instant as a reader reads it, or `null` for one that is not an instant at all. */
-const whenWords = (at: string): string | null => {
+/**
+ * An instant as a reader reads it — `Nov 3 09:12` — or `null` for one that is not an
+ * instant at all.
+ *
+ * Exported because a site's own page states the same `lastTest.at` the card does, and a
+ * second formatter beside this one spelled the same instant two ways (`Nov 3 09:12` here
+ * and `Nov 3, 09:12` there) on two screens about one site.
+ */
+export const whenWords = (at: string): string | null => {
   const parsed = new Date(at);
   return Number.isNaN(parsed.getTime()) ? null : `${day.format(parsed)} ${time.format(parsed)}`;
 };

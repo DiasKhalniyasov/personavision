@@ -114,11 +114,16 @@ export function SitesPage() {
 /**
  * The space two cards will take, while the platform is being read.
  *
- * The grid must not move once the answer arrives, so the placeholders are the shape of the
- * cards they stand in for — a microlabel, the address, and the lines of figures under it —
- * and they are the grid's **only** other children: the card for adding a site is already
- * there, and the line that says a read is in flight is announced rather than drawn, so the
- * grid holds the same number of cells before and after.
+ * The grid must not move once the answer arrives, so the placeholders are the shape of a
+ * card: the microlabel, the address, the two lines of figures, and the test it last ran.
+ * They are the grid's **only** other children — the card for adding a site is already
+ * there, and the line that says a read is in flight is announced rather than drawn — so
+ * the grid holds the same number of cells before and after.
+ *
+ * A site the platform has no last test on record for says nothing about tests, so its card
+ * arrives one line shorter than this. Five is the taller of the two on purpose: a grid that
+ * settles upward leaves the page where the reader found it, where one that grows pushes the
+ * footnote down under them.
  */
 function LoadingCards() {
   return (

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { axeViolations, describeViolations } from '../axe';
 import { forgetRuns, mountApp } from '../app';
-import { CREATED_SITE_ID, serveSite, THE_SITE } from './fixture';
+import { CREATED_SITE_ID, REMOVED_AT, serveSite, THE_SITE } from './fixture';
 import { FIXTURE_RUN_ID, SERVED_CAPS } from '../sites/fixture';
 import { paths } from '../../src/shell/paths';
 import { clearSiteCache } from '../../src/sites/useSites';
@@ -60,6 +60,17 @@ const removeButton = (): HTMLButtonElement =>
   within(screen.getByRole('main')).getByRole('button', {
     name: 'Remove this site',
   }) as HTMLButtonElement;
+
+const confirmButton = (): HTMLButtonElement =>
+  within(screen.getByRole('main')).getByRole('button', {
+    name: 'Yes, remove it',
+  }) as HTMLButtonElement;
+
+/** Press the button, and then answer the question it asks. */
+const pressRemove = async (): Promise<void> => {
+  await userEvent.click(removeButton());
+  await userEvent.click(confirmButton());
+};
 
 /** The three figures the platform served, as one line. */
 const FIGURES = `${SERVED_CAPS.agents} agents per run allowed · ${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`;
@@ -209,17 +220,18 @@ describe('the site’s own page', () => {
       site: { ...THE_SITE, lastTest: { runId: FIXTURE_RUN_ID, at: '2026-11-03T09:12:00.000Z' } },
     });
 
-    const instant = (at: string, withTime: boolean): string =>
-      new Intl.DateTimeFormat('en-US', {
-        day: 'numeric',
-        month: 'short',
-        ...(withTime
-          ? { hour: '2-digit' as const, minute: '2-digit' as const, hour12: false }
-          : {}),
-      }).format(new Date(at));
+    // Spelled the way the Sites screen spells the same two instants — the point of the one
+    // formatter is that a card and this page never say one instant two different ways.
+    const day = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' });
+    const time = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const at = new Date('2026-11-03T09:12:00.000Z');
 
     expect(said()).toContain(
-      `Added ${instant(THE_SITE.createdAt as string, false)} · last test ${instant('2026-11-03T09:12:00.000Z', true)}.`,
+      `Added ${day.format(new Date(THE_SITE.createdAt as string))} · last test ${day.format(at)} ${time.format(at)}.`,
     );
   });
 
@@ -273,11 +285,36 @@ describe('the site’s own page', () => {
 });
 
 describe('removing the site', () => {
+  it('asks before it acts, and removes nothing on the first press', async () => {
+    // Nothing in this product puts a removed site back, and the button sits beside a field
+    // somebody opened the page to read: one click is not a decision.
+    const served = await openSite();
+
+    await userEvent.click(removeButton());
+
+    expect(served.removed()).toEqual([]);
+    expect(confirmButton()).toBeTruthy();
+    expect(within(screen.getByRole('main')).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(said()).toContain('Tests that already ran against it still name it.');
+  });
+
+  it('takes the question back when the reader cancels, and the site stands', async () => {
+    const served = await openSite();
+
+    await userEvent.click(removeButton());
+    await userEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Cancel' }));
+
+    expect(served.removed()).toEqual([]);
+    expect(removeButton()).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yes, remove it' })).toBeNull();
+    expect(urlField().value).toBe(THE_SITE.url);
+  });
+
   it('asks the platform to remove it, and goes back to the list', async () => {
     const served = await openSite();
     const { router } = served;
 
-    await userEvent.click(removeButton());
+    await pressRemove();
 
     await waitFor(() => {
       expect(served.removed()).toEqual([THE_SITE.id]);
@@ -290,9 +327,9 @@ describe('removing the site', () => {
   it('takes no second press while the first is in flight', async () => {
     const served = await openSite({ site: THE_SITE, removal: { hold: true } });
 
-    await userEvent.click(removeButton());
+    await pressRemove();
     await waitFor(() => {
-      expect(removeButton().disabled).toBe(true);
+      expect(confirmButton().disabled).toBe(true);
     });
 
     served.releaseRemoval();
@@ -309,7 +346,7 @@ describe('removing the site', () => {
       removal: { answers: { status: 409, body: { error: refusal } } },
     });
 
-    await userEvent.click(removeButton());
+    await pressRemove();
 
     const notice = await waitFor(() => screen.getByRole('alert'));
     expect(notice.textContent).toBe(refusal);
@@ -322,12 +359,28 @@ describe('removing the site', () => {
   it('says one sentence when the platform cannot be reached at all', async () => {
     await openSite({ site: THE_SITE, removal: { unreachable: true } });
 
-    await userEvent.click(removeButton());
+    await pressRemove();
 
     const notice = await waitFor(() => screen.getByRole('alert'));
     expect(notice.textContent).toContain('That site could not be removed.');
     expect(notice.textContent).toContain('Try again when it is back.');
     expect(urlField().value).toBe(THE_SITE.url);
+  });
+
+  it('says a site that is already removed is removed, and offers nothing to press', async () => {
+    // The platform keeps a removed site readable on purpose, so the Back button after a
+    // removal lands here. It must not be the form the reader has just used.
+    await serveSite({ site: { ...THE_SITE, deletedAt: REMOVED_AT } });
+    await open(paths.site(THE_SITE.id as string), THE_HEADING);
+
+    await waitFor(() => {
+      expect(said()).toContain('This site was removed from the workspace.');
+    });
+    expect(said()).toContain('still name it');
+    expect(said()).toContain(THE_HEADING);
+    expect(screen.getByRole('link', { name: 'Back to your sites' })).toBeTruthy();
+    expect(within(screen.getByRole('main')).queryAllByRole('button')).toEqual([]);
+    expect(screen.queryByLabelText('The URL the feature starts on')).toBeNull();
   });
 });
 
@@ -365,6 +418,31 @@ describe('the states of the screen', () => {
     expect(urlField().disabled).toBe(true);
   });
 
+  it('shows no site of its own while the path moves from one site to another', async () => {
+    // Both paths are one mounted component, so without a guard the first painted frame of
+    // the second site carries the first site's heading, its figures and a Remove bound to
+    // it. What that frame is, is a site being read.
+    const other = { ...THE_SITE, id: 'site-app', url: 'https://app.clipforge.example' };
+    await serveSite({ site: THE_SITE });
+    const { router } = await open(paths.site(THE_SITE.id as string), /./);
+    await waitFor(() => {
+      expect(urlField().value).toBe(THE_SITE.url);
+    });
+
+    await serveSite({ site: other, hold: true });
+    await router.navigate(paths.site(other.id));
+
+    // The second site's read is held, so the heading can only ever become the noun: a
+    // screen that kept the first site's record would keep its heading, its figures and a
+    // live *Remove this site* bound to it for as long as the read takes.
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Site');
+    });
+    expect(urlField().value).toBe('');
+    expect(urlField().disabled).toBe(true);
+    expect(said()).not.toContain(THE_SITE.url);
+  });
+
   it('says a path naming no site names none, and offers the way back', async () => {
     await serveSite({ site: null });
     await open(paths.site('site-gone'), 'No site with that id');
@@ -386,6 +464,24 @@ describe('the states of the screen', () => {
     // shadcn primitives carry are theirs, and `site.module.css` declares no animation at
     // all — `stylesheet.test.ts` holds that end of it.
     expect(screen.getByRole('main').innerHTML).not.toMatch(/\banimate-/);
+  });
+
+  it('names the line under the field as the field’s own description, in both states', async () => {
+    await serveSite();
+    const { unmount } = await openNew();
+    const hintId = urlField().getAttribute('aria-describedby');
+    expect(hintId).toBeTruthy();
+    expect(document.getElementById(hintId as string)?.textContent).toContain(
+      'The whole address, scheme and all',
+    );
+    unmount();
+
+    await openSite();
+    const siteHintId = urlField().getAttribute('aria-describedby');
+    expect(siteHintId).toBeTruthy();
+    expect(document.getElementById(siteHintId as string)?.textContent).toContain(
+      'To test a different URL, add another site.',
+    );
   });
 
   it('sets no inline style, so every value comes from the stylesheet and the tokens', async () => {

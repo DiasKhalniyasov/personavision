@@ -94,37 +94,48 @@ export type SiteState =
  * no site clears the answer rather than leaving the last site standing in the new form.
  */
 export function useSite(siteId: string | null): SiteState {
-  const [state, setState] = useState<SiteState>({ status: 'loading' });
+  /**
+   * The answer, **and the site it is an answer about**.
+   *
+   * The id is held beside the state because the effect below runs after the render that
+   * changed it: a reader going from `/sites/A` to `/sites/B` stays on one mounted
+   * component, so without this the first painted frame of B would carry A's URL as the
+   * heading, A's figures, and a *Remove this site* bound to A. Comparing the two during
+   * the render closes that window — the frame is `loading`, which is what it is.
+   */
+  const [answered, setAnswered] = useState<{
+    readonly siteId: string | null;
+    readonly state: SiteState;
+  }>({ siteId: null, state: { status: 'none' } });
 
   useEffect(() => {
     if (siteId === null) {
-      setState({ status: 'none' });
+      setAnswered({ siteId: null, state: { status: 'none' } });
       return;
     }
     let live = true;
-    setState({ status: 'loading' });
     void readSite(siteId).then((answer) => {
       if (!live) return;
-      if (answer.ok) {
-        setState({ status: 'ready', site: answer.value });
-        return;
-      }
-      setState(
-        answer.kind === 'not-found'
-          ? { status: 'not-found', siteId }
-          : {
-              status: 'unreadable',
-              problem:
-                answer.kind === 'unreachable'
-                  ? answer.problem
-                  : (answer.issues[0]?.message ?? 'That site could not be read.'),
-            },
-      );
+      setAnswered({
+        siteId,
+        state: answer.ok
+          ? { status: 'ready', site: answer.value }
+          : answer.kind === 'not-found'
+            ? { status: 'not-found', siteId }
+            : {
+                status: 'unreadable',
+                problem:
+                  answer.kind === 'unreachable'
+                    ? answer.problem
+                    : (answer.issues[0]?.message ?? 'That site could not be read.'),
+              },
+      });
     });
     return () => {
       live = false;
     };
   }, [siteId]);
 
-  return state;
+  if (answered.siteId === siteId) return answered.state;
+  return siteId === null ? { status: 'none' } : { status: 'loading' };
 }

@@ -44,6 +44,8 @@ export interface SiteSeed {
   readonly url: string;
   /** When it joined the workspace, which is the microlabel on its card. */
   readonly createdAt?: string;
+  /** When it was removed. Absent is a site still in the workspace. */
+  readonly deletedAt?: string;
   /** The last launch that opened a run. `null`, or absent, is a site nothing has run against. */
   readonly lastTest?: { readonly runId: string; readonly at: string } | null;
   /** What binds this one, when a test is about the figures changing. */
@@ -97,8 +99,8 @@ export const servedSite = (seed: SiteSeed): Record<string, unknown> => {
     },
     lastTest: seed.lastTest ?? null,
     createdAt,
-    updatedAt: createdAt,
-    deletedAt: null,
+    updatedAt: seed.deletedAt ?? createdAt,
+    deletedAt: seed.deletedAt ?? null,
   };
 };
 

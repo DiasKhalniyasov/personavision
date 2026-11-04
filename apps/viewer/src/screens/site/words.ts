@@ -1,4 +1,4 @@
-import { addedWords } from '@/screens/sites/words';
+import { addedWords, whenWords } from '@/screens/sites/words';
 import type { SiteRecord } from '@/sites/store';
 
 /**
@@ -10,25 +10,11 @@ import type { SiteRecord } from '@/sites/store';
  * input of **2026-11-04**) — what this screen says about a site is what it *is*: the URL, the
  * day it was added, the test it last ran, and the figures it is bound by.
  *
- * **No figure is composed here.** The three caps are `caps` on the platform's answer, said
- * in the Sites screen's own nouns (`screens/sites/words`), so the site's page and the
- * audience step of `/new` describe the same site in the same words.
+ * **No figure and no instant is composed here.** The caps are `caps` on the platform's
+ * answer and the clock is the Sites screen's own (`screens/sites/words`), so the site's
+ * page, a card and the audience step of `/new` describe the same site in the same words —
+ * down to how one `lastTest.at` is spelled.
  */
-
-/** `3 Nov 09:04`, in the reader's own time zone and on the clock the rest of the app prints. */
-const when = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
-
-/** An instant as a reader reads it, or `null` for one that is not an instant at all. */
-const instant = (at: string): string | null => {
-  const parsed = new Date(at);
-  return Number.isNaN(parsed.getTime()) ? null : when.format(parsed);
-};
 
 /**
  * Why there is no way to edit the URL in front of it, in the prototype's own words.
@@ -50,7 +36,7 @@ const ANOTHER_SITE = 'To test a different URL, add another site.';
  */
 export const siteFootnote = (site: SiteRecord): string => {
   const added = addedWords(site.createdAt);
-  const tested = site.lastTest === null ? null : instant(site.lastTest.at);
+  const tested = site.lastTest === null ? null : whenWords(site.lastTest.at);
   const head = added === null ? 'Added to this workspace' : added;
   return tested === null
     ? `${head}. ${ANOTHER_SITE}`
