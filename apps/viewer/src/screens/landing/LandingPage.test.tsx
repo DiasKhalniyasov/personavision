@@ -7,7 +7,7 @@ import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { loadDesignTokens } from '../../../tests/setup';
-import { EXAMPLE_RUN_ID } from './LandingPage';
+import { EXAMPLE_RUN_ID, HEADLINE } from './LandingPage';
 
 /**
  * `/` for a visitor with no session, over the repository's own committed example run.
@@ -23,8 +23,6 @@ import { EXAMPLE_RUN_ID } from './LandingPage';
  */
 
 const SIGNED_OUT = { status: 'signed-out' } as const;
-
-const HEADLINE = 'Find out if people get what your product is for';
 
 const runFile = `/runs/${EXAMPLE_RUN_ID}/run.json`;
 
