@@ -24,7 +24,7 @@ import { EXAMPLE_RUN_ID } from './LandingPage';
 
 const SIGNED_OUT = { status: 'signed-out' } as const;
 
-const HEADLINE = 'Know which version your customers can actually use';
+const HEADLINE = 'Find out if people get what your product is for';
 
 const runFile = `/runs/${EXAMPLE_RUN_ID}/run.json`;
 
@@ -62,6 +62,12 @@ describe('the page itself', () => {
     await screen.findByRole('heading', { name: 'How it works' });
     const steps = screen.getAllByRole('listitem');
     expect(steps.map((step) => step.querySelector('p')?.textContent)).toEqual([
+      'What is this product for?',
+      'Where did that impression come from?',
+      'Did they get it — or give up?',
+      'Sign up — no real traffic needed',
+      'Point it at your own page',
+      'Read whether they got it',
       'Describe your audience',
       'Point at two versions and a task',
       'Read the verdict',
@@ -102,6 +108,20 @@ describe('the two actions', () => {
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.demo);
+    });
+  });
+
+  it('points every *Sign up to try it on your project* at /signup and navigates there', async () => {
+    await serveRunData();
+    const { router } = landing();
+
+    await screen.findByRole('heading', { level: 1 });
+    const signUp = screen.getAllByRole('link', { name: 'Sign up to try it on your project' });
+    expect(signUp.length).toBeGreaterThan(0);
+    for (const link of signUp) expect(link.getAttribute('href')).toBe('/signup');
+    await userEvent.click(signUp[0] as HTMLElement);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/signup');
     });
   });
 
