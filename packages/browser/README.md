@@ -235,31 +235,31 @@ area-of-interest metrics be aggregated over sessions that do not share a seed or
 `src/index.ts` is the whole of it, and nine tickets of the browser-driving step fill one
 function each behind it without changing a name.
 
-| Export                               | What it does                                                          |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `openSession` `closeSession`         | Launch Chromium with the device applied; close it                     |
-| `readSessionState`                   | What the page says about its viewport, pixel ratio, touch and scroll  |
-| `readGeometry` `isBelowFold`         | The viewport, the page height and the fold; the fold rule             |
-| `capture`                            | One captured screen, composed from everything below                   |
-| `captureCacheKey` `readContentHash`  | The cache key, and the hash of what the page currently is             |
-| `extractElements` `stableElementId`  | The candidate elements, and the id that is the same every session     |
-| `writeScreenshot`                    | The full-page image, into the run directory                           |
-| `toScreenshotEntries` `toAoiEntries` | Captures, projected into `run.json`                                   |
-| `detectStep` `resolvePrimaryAction`  | Which step the page is on, and the control that advances it           |
-| `act`                                | Click, scroll, type, back — and what the page became                  |
-| `SessionBudget`                      | The per-session cap on retries and wall-clock time                    |
-| `mapToAutomationFailure`             | A thrown error, read as one of our four reasons                       |
-| `toAutomationFailure`                | That reason, worded with what was being attempted                     |
-| `navigationFailure` `frameFailure`   | The two failures of ours that nothing throws                          |
-| `watchFrameFailures`                 | A page's frame failures, as they arrive                               |
-| `toAutomationFailureOutcome`         | The session outcome a failure of ours produces                        |
-| `withCache`                          | Capture caching, keyed on content                                     |
-| `createLiveSource` `walkTask`        | The `CaptureSource` over Chromium, and the walk above it              |
-| `prepareRecording` `videoFrame`      | A session's recording, and the 720p frame it is recorded at           |
-| `storeRecording`                     | The finished bytes handed to the store one variable chooses           |
-| `discardRecording`                   | A recording that was made and will not be reported, out of both homes |
-| `readRecording` `cutRecording`       | A recording's own duration and frame; the same file cut at a cap      |
-| `createFixtureSource`                | The `CaptureSource` that replays captures from disk                   |
+| Export                               | What it does                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------- |
+| `openSession` `closeSession`         | Launch Chromium with the device applied; close it                                       |
+| `readSessionState`                   | What the page says about its viewport, pixel ratio, touch, scroll, locale and time zone |
+| `readGeometry` `isBelowFold`         | The viewport, the page height and the fold; the fold rule                               |
+| `capture`                            | One captured screen, composed from everything below                                     |
+| `captureCacheKey` `readContentHash`  | The cache key, and the hash of what the page currently is                               |
+| `extractElements` `stableElementId`  | The candidate elements, and the id that is the same every session                       |
+| `writeScreenshot`                    | The full-page image, into the run directory                                             |
+| `toScreenshotEntries` `toAoiEntries` | Captures, projected into `run.json`                                                     |
+| `detectStep` `resolvePrimaryAction`  | Which step the page is on, and the control that advances it                             |
+| `act`                                | Click, scroll, type, back — and what the page became                                    |
+| `SessionBudget`                      | The per-session cap on retries and wall-clock time                                      |
+| `mapToAutomationFailure`             | A thrown error, read as one of our four reasons                                         |
+| `toAutomationFailure`                | That reason, worded with what was being attempted                                       |
+| `navigationFailure` `frameFailure`   | The two failures of ours that nothing throws                                            |
+| `watchFrameFailures`                 | A page's frame failures, as they arrive                                                 |
+| `toAutomationFailureOutcome`         | The session outcome a failure of ours produces                                          |
+| `withCache`                          | Capture caching, keyed on content                                                       |
+| `createLiveSource` `walkTask`        | The `CaptureSource` over Chromium, and the walk above it                                |
+| `prepareRecording` `videoFrame`      | A session's recording, and the 720p frame it is recorded at                             |
+| `storeRecording`                     | The finished bytes handed to the store one variable chooses                             |
+| `discardRecording`                   | A recording that was made and will not be reported, out of both homes                   |
+| `readRecording` `cutRecording`       | A recording's own duration and frame; the same file cut at a cap                        |
+| `createFixtureSource`                | The `CaptureSource` that replays captures from disk                                     |
 
 ### Which of them are neutral
 

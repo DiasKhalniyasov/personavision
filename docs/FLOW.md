@@ -533,6 +533,28 @@ the aggregate is about our harness and not about the site.
 The persona generator's mapping table in section 1 gains three rows and loses none: the gender split and the age-group
 shares are drawn the way the device mix already is, and `languages` picks the language a persona reads and types in.
 
+### A persona is drawn a region, and browses in it
+
+`regions` draws a fourth: **the one region each persona browses from**, apportioned evenly over the list, because a list
+declares no shares. And a session **browses in that region**. One table in `@personavision/personas` turns the
+audience's own word into the three things a browser can be told — a BCP-47 region subtag, an IANA time zone and a
+coarse latitude and longitude of the region's largest city — and the session's browser is opened with them before the
+first byte of the page is parsed. A session records what it ran under, so a reader of a finished run can see it.
+
+The locale is **the person's language over the region's subtag**: `en` + `GB` → `en-GB`. Where the persona was drawn no
+language, the region's own main language is used. Where the region is **not in the table**, the locale is the language
+subtag alone and there is **no** time zone and **no** location — an unrecognised region is visible in the run as the
+absence it is, rather than quietly becoming someone else's country. A person drawn neither a region nor a language
+opens a session exactly as one was opened before this existed.
+
+No `Accept-Language` header is written by hand. The locale is what sets both `navigator.language` and the
+`Accept-Language` request header, and two spellings of one fact would drift.
+
+This is not a refinement. Without it a site that geolocates its visitors serves whatever country the machine sits in:
+every session of the IKEA test was redirected to `www.ikea.com/ae/ar/` — the United Arab Emirates store, in Arabic —
+while the audience was UK and US shoppers, so the agents tested a site the audience would never see and the derived
+step stopped matching the page they landed on.
+
 ### Two ways to describe it, one object
 
 - **Structured.** The fields above, on the Audience form of section 3, extended: gender split, age groups, participants

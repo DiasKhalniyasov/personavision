@@ -465,6 +465,34 @@ describe('serveFixtureSite', () => {
       await response.arrayBuffer();
     }
   });
+
+  /**
+   * The headers a request arrived with, which is the only side some of what a context was
+   * opened with is visible from: a session opened with a locale sends `Accept-Language`, and
+   * that header is what a site reads to decide which country's store to serve (#421).
+   */
+  it('records every request it was asked for, with the headers it arrived with', async () => {
+    const own = await serveFixtureSite();
+    try {
+      expect(own.requests).toStrictEqual([]);
+
+      const response = await fetch(`${own.url}/cart.html`, {
+        headers: { 'accept-language': 'en-GB' },
+      });
+      await response.arrayBuffer();
+      const missing = await fetch(`${own.url}/nothing-here.html`);
+      await missing.arrayBuffer();
+
+      expect(own.requests.map((request) => `${request.method} ${request.path}`)).toStrictEqual([
+        'GET /cart.html',
+        // A request the site answered with a 404 is still one it was asked for.
+        'GET /nothing-here.html',
+      ]);
+      expect(own.requests[0]?.headers['accept-language']).toBe('en-GB');
+    } finally {
+      await own.close();
+    }
+  });
 });
 
 /* -------------------------------------------------------------------- the pages' landmarks */

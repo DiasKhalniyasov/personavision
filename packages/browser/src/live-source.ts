@@ -216,6 +216,9 @@ const captureOnce: CaptureSource['capture'] = async (page, ctx) => {
  * **A caller that names the session it is recording wins.** `openSession`'s own
  * `SessionRequest` is per session, which is what a swarm driving many sessions through one
  * source has: each session names its own `videos/S-NN.webm` and nothing has to be told twice.
+ * Where and how a session browses is per session for the same reason — the people of one
+ * audience are drawn different regions — so a request that names it wins over the source's
+ * own, which is then the default for every session that names none.
  *
  * **The source's own `video` records one session**, because a `video` request names the
  * session the file belongs to and one file cannot be two sessions. A source whose own request
@@ -233,7 +236,11 @@ export const createLiveSource = (options: OpenSessionOptions = {}): CaptureSourc
   return {
     openSession: (variant, device, session) => {
       const video = session?.video ?? ownVideo();
-      return openSession(variant, device, { ...options, video });
+      // The session's own region over the source's. Unlike the recording there is nothing to
+      // spend: a locale is not a file, and every session of a run may legitimately be opened
+      // with the same one.
+      const browsing = session?.browsing ?? options.browsing;
+      return openSession(variant, device, { ...options, video, browsing });
     },
     capture: captureOnce,
     act,

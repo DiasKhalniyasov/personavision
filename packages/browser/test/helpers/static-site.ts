@@ -23,6 +23,11 @@
  * stalling and for failing, and it serves no markdown so that its own record cannot be
  * fetched as a page.
  *
+ * It also **records every request it is asked for**, headers included (`site.requests`).
+ * Some of what a browser context is opened with is only visible from the other side of the
+ * wire: a session opened with a locale sends `Accept-Language`, and that header is what a
+ * site reads to decide which country's store to serve (#421).
+ *
  * Three behaviours here exist only so that failures can be provoked:
  *
  * 1. `/slow` accepts the connection and never answers, so a wait times out for real.
@@ -79,11 +84,35 @@ export interface ServeFixtureSiteOptions {
   readonly root?: string;
 }
 
+/** One request the site was asked for, as it arrived. */
+export interface RecordedRequest {
+  readonly method: string;
+  /** The request target as the client sent it: `/cart.html`, query string included. */
+  readonly path: string;
+  /**
+   * The request headers, lower-cased as `node:http` hands them over.
+   *
+   * They are recorded because some of what a browser context is opened with is only visible
+   * from the server's side. `Accept-Language` is the one that matters: a session opened as
+   * `en-GB` asks for `en-GB` pages, and that header is **what the real site read** when it
+   * redirected every session of the IKEA test to its Arabic store (#421). Asserting it from
+   * the page would assert `navigator.language` a second time; asserting it here asserts the
+   * thing the site was actually told.
+   */
+  readonly headers: Readonly<Record<string, string>>;
+}
+
 export interface FixtureSite {
   /** Origin the site answers on, with no trailing slash — e.g. `http://127.0.0.1:53412`. */
   readonly url: string;
   /** The port that origin resolves to, chosen by the operating system unless one was given. */
   readonly port: number;
+  /**
+   * Every request the site has been asked for, oldest first, including the ones it answered
+   * with a 404 or never answered at all. Appended to as they arrive, so a test reads it
+   * after the navigation it is about.
+   */
+  readonly requests: readonly RecordedRequest[];
   /**
    * Stops listening and frees the port. Open connections are destroyed, so a request held
    * by `/slow` cannot keep this from resolving.
@@ -231,7 +260,22 @@ export const serveFixtureSite = async (
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 0;
 
+  const requests: RecordedRequest[] = [];
+
   const server = createServer((req, res) => {
+    // Recorded before the route is chosen, so a request the site refuses or never answers is
+    // still one it was asked for.
+    requests.push({
+      method: req.method ?? 'GET',
+      path: req.url ?? '/',
+      // One value per name: `node:http` joins repeats itself, except for `set-cookie`, which
+      // is a response header and never arrives here.
+      headers: Object.fromEntries(
+        Object.entries(req.headers).flatMap(([name, value]) =>
+          value === undefined ? [] : [[name, Array.isArray(value) ? value.join(', ') : value]],
+        ),
+      ),
+    });
     handle(root, req, res).catch(() => {
       if (!res.headersSent) {
         sendText(res, 500, 'Internal server error\n');
@@ -275,6 +319,7 @@ export const serveFixtureSite = async (
   return {
     url: `http://${hostInUrl}:${boundPort}`,
     port: boundPort,
+    requests,
     close: () =>
       new Promise<void>((closed, failed) => {
         if (!server.listening) {

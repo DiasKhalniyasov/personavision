@@ -8,6 +8,7 @@ import {
   genderApportionment,
   languageApportionment,
   parseAudience,
+  regionApportionment,
   traitCentre,
 } from './audience.js';
 import type { Apportioned } from './audience.js';
@@ -209,26 +210,31 @@ const assignDeviceClasses = (audience: Audience, people: readonly Archetype[]): 
 };
 
 /**
- * The streams the three drawn audience fields are dealt and sampled on, as salts the set's
+ * The streams the four drawn audience fields are dealt and sampled on, as salts the set's
  * own seed is mixed with.
  *
  * Each field gets a stream of its own, and none of them is the stream the traits are drawn
  * from. Both halves of that matter:
  *
- * - **the traits' stream is untouched**, so an audience that declares none of the three
- *   fields draws exactly the people it drew before they existed — byte for byte, which is
- *   what lets `GENERATOR_VERSION` stay where it is;
- * - **the three do not share a stream**, so adding a language list to an audience does not
- *   move the genders of the people it already generated. A field a user has not edited is a
- *   field whose people do not change under them.
+ * - **the traits' stream is untouched**, so an audience that declares none of these fields
+ *   draws exactly the people it drew before they existed — byte for byte, which is what
+ *   lets `GENERATOR_VERSION` stay where it is;
+ * - **the four do not share a stream**, so adding a language list to an audience does not
+ *   move the genders of the people it already generated, and adding a region to this
+ *   generator moved nobody's device, age group, gender or language. A field a user has not
+ *   edited is a field whose people do not change under them, and that is a property of the
+ *   streams rather than a promise.
  *
- * The salts are the three mixing constants of the contract's own generator, used here for
- * what they are: three arbitrary, well-separated 32-bit numbers. `createSeededRandom` reads
- * a seed as `seed >>> 0`, so a salt is mixed in with `^` on the same 32 bits it keeps.
+ * The first three salts are the mixing constants of the contract's own generator, used here
+ * for what they are: arbitrary, well-separated 32-bit numbers. The region's is a fourth of
+ * the same kind, and the separation is what `tests/regions.test.ts` holds.
+ * `createSeededRandom` reads a seed as `seed >>> 0`, so a salt is mixed in with `^` on the
+ * same 32 bits it keeps.
  */
 const GENDER_STREAM = 0x9e37_79b9;
 const AGE_STREAM = 0x85eb_ca6b;
 const LANGUAGE_STREAM = 0xc2b2_ae35;
+const REGION_STREAM = 0x27d4_eb2f;
 
 /**
  * The apportioned values dealt out one per person, in a seeded order.
@@ -306,6 +312,23 @@ const drawnLanguages = (audience: Audience, seed: number): readonly string[] | n
 };
 
 /**
+ * The region each person browses from, or `null` where the audience lists none.
+ *
+ * Dealt the way the language is — evenly apportioned, shuffled on a stream of its own — and
+ * for the same reason: handing two regions out in order over four people placed round-robin
+ * at the archetypes would make the region a proxy for the behaviour beside it, and every
+ * result grouped by region would be reporting the archetype.
+ *
+ * What the region then becomes in a browser is `regions.ts`' table to say. This draws the
+ * audience's own word and nothing else, so a region the table does not know still reaches
+ * the person and is visible in the run.
+ */
+const drawnRegions = (audience: Audience, seed: number): readonly string[] | null => {
+  const apportioned = regionApportionment(audience);
+  return apportioned === null ? null : dealt(apportioned, createSeededRandom(seed ^ REGION_STREAM));
+};
+
+/**
  * Person `index`'s share of a dealt field, or `undefined` where the audience declared no
  * such field for anybody to be dealt from.
  *
@@ -352,12 +375,13 @@ export const generatePersonas = (
     (_unused, index) => ARCHETYPES[index % ARCHETYPES.length] as Archetype,
   );
   const deviceClasses = assignDeviceClasses(parsed, people);
-  // The three drawn fields are the audience's and the seed's together — how many of each is
+  // The four drawn fields are the audience's and the seed's together — how many of each is
   // the audience's, who gets which is the seed's — so they are settled for the whole set
   // before anybody's traits are sampled, exactly as the device quota is.
   const ages = drawnAges(parsed, seed);
   const genders = drawnGenders(parsed, seed);
   const languages = drawnLanguages(parsed, seed);
+  const regions = drawnRegions(parsed, seed);
   // One centre for the audience, or one per person where an age was drawn for them. The two
   // are the same arithmetic on a different age, and an audience with no age groups takes the
   // first — which is what keeps its people byte-identical to the ones it generated before
@@ -388,6 +412,7 @@ export const generatePersonas = (
     const traits = { ...archetype.offsets };
     const gender = dealtTo(genders, index, 'gender split');
     const language = dealtTo(languages, index, 'language');
+    const region = dealtTo(regions, index, 'region');
     const centre = centres[index];
     if (centre === undefined) {
       throw new Error(
@@ -423,6 +448,7 @@ export const generatePersonas = (
       // contract's own word for that is the field not being there.
       ...(gender === undefined ? {} : { gender }),
       ...(language === undefined ? {} : { language }),
+      ...(region === undefined ? {} : { region }),
     });
   });
 };

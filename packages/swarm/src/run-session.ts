@@ -76,6 +76,7 @@ import {
   sampleFixations,
   saccadeDurationMsFor,
 } from '@personavision/engine';
+import { browsingFor } from '@personavision/personas';
 import { openTrajectoryFile, validateDecision } from '@personavision/provider';
 import { criterionToObserve, observeCriterion, readsTheAddress } from './criterion.js';
 import { decideOutcome } from './outcome.js';
@@ -91,7 +92,7 @@ import type {
   TaskDefinition,
   Variant,
 } from '@personavision/browser';
-import type { Persona, Session, SessionVideo } from '@personavision/contract';
+import type { Persona, Session, SessionBrowser, SessionVideo } from '@personavision/contract';
 import type {
   Aoi,
   Capture as EngineCapture,
@@ -492,6 +493,17 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
    */
   const criterion = criterionToObserve(task.successCriterion);
   /**
+   * Where and how this person browses, derived from the persona once: the locale, the time
+   * zone and the location the context is opened with, and what the session records under
+   * `browser`.
+   *
+   * It is `@personavision/personas`' one table that turns the audience's own region name
+   * into them (`browsingFor`), because that is where the audience's words live and two
+   * tables of one fact would drift. `null` is a person who was drawn neither a region nor a
+   * language: nothing to open a browser with and nothing to record.
+   */
+  const browsing = browsingFor(persona);
+  /**
    * What the agent is trying to do on the screen it is on: the step's own goal where the
    * task declares one, and the whole prompt where it does not.
    *
@@ -605,7 +617,7 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     recorded.of?.action(atMs);
   };
 
-  const page = await open(input, budget);
+  const page = await open(input, budget, browsing);
   if (page.handle === null) failure = page.failure;
   recorded.of = page.handle?.video;
 
@@ -1025,6 +1037,11 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     // all, which is the contract's difference between a session that recorded none and one
     // that lost one. A recording that failed is here, with its reason in words.
     ...(recorded.video === undefined ? {} : { video: recorded.video }),
+    // What the browser was opened as: the very object `open` passed to `openSession`, so the
+    // session cannot report a locale it did not run under. Absent where the person was drawn
+    // neither a region nor a language, which is the session that was opened with none of it:
+    // a block of three nulls would claim the question had been asked and answered.
+    ...(browsing === null ? {} : { browser: browsing }),
   };
 
   await writeSession(input.runDir, session);
@@ -1036,7 +1053,12 @@ type OpenedPage =
   | { readonly handle: PageHandle; readonly failure: null }
   | { readonly handle: null; readonly failure: AutomationFailure };
 
-const open = async (input: RunSessionInput, budget: SessionBudget): Promise<OpenedPage> => {
+const open = async (
+  input: RunSessionInput,
+  budget: SessionBudget,
+  /** What `runSession` derived from the persona, so the open and the record are one reading. */
+  browsing: SessionBrowser | null,
+): Promise<OpenedPage> => {
   const attempting = `opening ${input.variant.url}`;
   // The open in flight, kept so that a session which arrives after the budget has given up
   // on it is still closed: a browser nobody holds is a process that never goes away.
@@ -1051,6 +1073,11 @@ const open = async (input: RunSessionInput, budget: SessionBudget): Promise<Open
         // directory is a scratch directory of its own, and a recording filed under that
         // name is an object nothing could read back (`@personavision/browser`).
         video: { runDir: input.runDir, runId: input.runId, sessionId: input.sessionId },
+        // Where this person browses, per session for the same reason: one source drives
+        // every session of a run, and the people of one audience are drawn different
+        // regions. `null` is skipped rather than passed, so a persona who was drawn neither
+        // a region nor a language opens a session exactly as one was opened before #421.
+        ...(browsing === null ? {} : { browsing }),
       });
       return started.inFlight;
     }, attempting);

@@ -169,17 +169,19 @@ declare any device without this package being edited. A known class whose declar
 disagrees with the model's keeps its own too: a touch device implies the mobile viewport and
 the fold that goes with it, and a lookup table does not get to overrule the audience on that.
 
-## 4. The three fields the audience draws
+## 4. The four fields the audience draws
 
 `docs/FLOW.md` section 12 extends the audience with a **gender split**, **age groups** and a
-**language** list, and leaves the generator's mapping table three new rows (#278). The table
-itself is in `src/audience.ts`, beside the arithmetic it describes:
+**language** list, and leaves the generator's mapping table three new rows (#278); `regions`
+draws a fourth (#421). The table itself is in `src/audience.ts`, beside the arithmetic it
+describes:
 
-| Audience field | What it moves                                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `genderSplit`  | the `gender` each person is drawn as, by share                                                                            |
-| `ageGroups`    | the bracket each person is drawn from and the age they are drawn at — and so their own `patience` and `scanningVsReading` |
-| `languages`    | the one `language` each person reads and types in, **apportioned evenly**                                                 |
+| Audience field | What it moves                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `genderSplit`  | the `gender` each person is drawn as, by share                                                                                                                |
+| `ageGroups`    | the bracket each person is drawn from and the age they are drawn at — and so their own `patience` and `scanningVsReading`                                     |
+| `languages`    | the one `language` each person reads and types in, **apportioned evenly**                                                                                     |
+| `regions`      | the one `region` each person browses from, **apportioned evenly** — and so the locale, time zone and location their browser is opened with (`src/regions.ts`) |
 
 **One rule for every share.** The largest-remainder apportionment the device mix is built on
 is `largestRemainder` in `src/devices.ts`, and all three of these go through it, so a declared
@@ -239,15 +241,56 @@ in the traits the person carries. What a bracket means in years is read off its 
 `25–34` is 25 to 34 wherever it is printed — so a bracket added to the contract needs no edit
 here and there is no second table of years to drift from the first.
 
+### One table from a region to a browser
+
+A region is drawn as **the audience's own word** — "United Kingdom", "Almaty" — because that
+is what the audience said and what a reader of a run should see. What that word becomes in a
+browser is `src/regions.ts`: a BCP-47 region subtag, an IANA time zone, and a coarse latitude
+and longitude of the region's largest city. `browsingFor` is the whole of its interface, and
+it answers with the three settings a context is opened with and a session records.
+
+It is **a table to extend**, not a derivation: there is no algorithm from "Almaty" to
+`Asia/Almaty`, there is a list. And it is the **only** copy — nothing else in the repository
+holds a second table of locales, time zones or coordinates, because two tables of one fact
+drift and the drift would be a session reporting a locale it did not run under.
+`tests/boundaries.test.ts` holds that, module by module.
+
+The locale rule and its fallback, in one place: the person's language subtag over the region's
+subtag (`en` + `GB` → `en-GB`); the region's own main language where the person was drawn none;
+the **bare language subtag with no time zone and no location** where the region is not in the
+table; and nothing at all — no block on the session, a browser opened exactly as it was before
+any of this — where the person was drawn neither. Defaulting an unknown region to `en-US` was
+the obvious third option and is the bug this exists to fix wearing a different flag: a site
+that geolocates its visitors served every session of the IKEA test the Arabic store of the
+United Arab Emirates, and a wrong country we chose on purpose would be no better than a wrong
+country we were handed.
+
+Nothing here sets an `Accept-Language` header. Playwright's `locale` sets both
+`navigator.language` and the `Accept-Language` request header, so a context opened as `en-GB`
+asks the site for `en-GB` pages; a header spelt out beside the locale would be the same fact
+twice.
+
 ### Why this is not a new generator version
 
-`GENERATOR_VERSION` is still `persona-gen-1`, and adding these three rows did not move it.
+`GENERATOR_VERSION` is still `persona-gen-1`, and adding these four rows did not move it.
 
-All three fire **only on an audience that carries the field**. An audience declaring none of
+All four fire **only on an audience that carries the field**. An audience declaring none of
 them draws byte-identical people — same ids, same names, same segments, same devices, same
-traits to the last digit — because the three draws run on streams of their own and the trait
+traits to the last digit — because the four draws run on streams of their own and the trait
 stream is untouched. `tests/drawn-fields.test.ts` asserts that, and the eight test files that
 were here before this change pass unedited.
+
+`regions` is the one of the four that is **not** optional on the audience, so almost every
+audience carries it and almost every person generated from one now carries a `region` they did
+not carry before. That is a field **added** to a person and not a person changed: nobody's id,
+name, segment, device, gender, language, age bracket or trait moves, because the region is
+dealt on a stream of its own — `tests/regions.test.ts` asserts exactly that, against an
+audience with one region, an audience with three and an audience with none. The promise the
+version makes is that _these people are reproducible against that version_, and they are: the
+same audience and seed draw the same people, now with one more thing said about each of them.
+Moving the version would say otherwise, and `parseAudience` refuses an audience whose
+`generatedFrom.generatorVersion` is not this build's — so every audience in the seeded demo
+workspace, all of them written by `persona-gen-1`, would stop generating people at all.
 
 That is the promise, and it is no wider than that. An audience that **does** carry `ageGroups`
 draws the same ids, names, segments and devices as before but different **traits**, because its
@@ -348,7 +391,7 @@ here knows what a pull request is, and nothing here reads a run.
 rather than a set of people who look plausible and are not. The platform stores audiences a
 user typed, so this is the error an audience form reports field by field.
 
-The three fields of section 4 report the same way, at their own paths, so a form can mark the
+The drawn fields of section 4 report the same way, at their own paths, so a form can mark the
 field the user typed rather than the audience: `genderSplit` for a split that is not a
 distribution and `genderSplit.male` for a share that is not a share; `ageGroups` for group
 shares that do not sum to one or that disagree with `ageRange`, and `ageGroups[1].group` for

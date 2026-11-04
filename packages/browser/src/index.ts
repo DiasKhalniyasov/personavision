@@ -90,6 +90,8 @@ export type {
   Action,
   AutomationFailureReason,
   Box,
+  Browsing,
+  BrowsingLocation,
   Capture,
   CaptureContext,
   CaptureElement,
