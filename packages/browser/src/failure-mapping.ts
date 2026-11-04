@@ -171,6 +171,11 @@ export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
   if (raised === null) return null;
   const message = readMessage(raised);
 
+  // Read before the frame, because a destroyed context is a navigation whichever object's
+  // call raised it: a frame whose context a navigation destroyed is not a frame that never
+  // loaded, and recording it as one would both read falsely and blame the wrong thing.
+  if (DESTROYED_CONTEXT.test(message)) return 'navigation_error';
+
   // A frame's own call is a frame failure whatever broke it: a page whose frame never
   // arrives is not a page that timed out, and the swarm's integrity counters say so.
   if (readCallObject(message) === 'frame' || DETACHED_FRAME.test(message)) return 'frame_error';
@@ -184,9 +189,7 @@ export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
     return waitedOnSelector ? 'selector_not_found' : 'timeout';
   }
 
-  if (NET_ERROR.test(message) || INTERRUPTED.test(message) || DESTROYED_CONTEXT.test(message)) {
-    return 'navigation_error';
-  }
+  if (NET_ERROR.test(message) || INTERRUPTED.test(message)) return 'navigation_error';
 
   return null;
 };

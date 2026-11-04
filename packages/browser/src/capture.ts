@@ -130,14 +130,29 @@ const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Cap
 };
 
 /**
+ * How long the document a navigation landed on is waited for.
+ *
+ * Generous for a document that is coming — a page heavy with media parses in about five
+ * seconds (`session.ts`) — and a cap rather than the rest of the session, because the
+ * caller's budget is not always the session's: `live-source.ts` gives a capture a budget of
+ * one attempt and a wall clock of twenty-five days, so what is "left" of it is no bound at
+ * all. A destination that never parses therefore costs this and is then the navigation
+ * error it is, rather than the whole session's wall clock spent waiting and recorded as a
+ * timeout.
+ */
+const SETTLE_MS = 10_000;
+
+/**
  * Waits for the document a navigation under the read landed on, so that the second
  * composition reads a parsed page rather than one still unloading.
  *
  * The same settle an action does (`act.ts`), with the document asked directly as well — the
- * opening navigation does that too (`session.ts`) — and bounded by what is left of the
- * session's wall clock, so waiting out a redirect cannot outlive the session.
+ * opening navigation does that too (`session.ts`) — under whichever is smaller of the settle's
+ * own cap and what is left of the caller's budget, so waiting out a redirect can outlive
+ * neither.
  */
-const settle = async (page: PageHandle, withinMs: number): Promise<void> => {
+const settle = async (page: PageHandle, remainingMs: number): Promise<void> => {
+  const withinMs = Math.min(remainingMs, SETTLE_MS);
   await page.page.waitForLoadState('domcontentloaded', { timeout: withinMs });
   await page.page.waitForFunction(() => document.readyState !== 'loading', undefined, {
     timeout: withinMs,
