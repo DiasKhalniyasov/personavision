@@ -132,6 +132,17 @@ export const startTest = async (request: RunRequest): Promise<StartResult> => {
  * must be quoted for **the engine the button will really use**, or its cost is a price for a
  * test nobody is about to start. So it is named here, beside the request that relies on it,
  * and the estimate below sends it rather than taking it from a caller who could disagree.
+ *
+ * **The one case this is wrong for, and why it is still sent from here.** A `contributor`
+ * workspace whose model cannot be served runs offline rather than being refused (*"no key
+ * means offline, not an error"*, `run/start.ts`), so its run is billed nothing while this
+ * estimate quotes dollars. A `standard` workspace — which is what signing up creates — is
+ * refused instead, with the 503 this screen renders, so the quote is right for every
+ * workspace the product can create today. The browser cannot tell the difference: whether a
+ * key is present is a fact only the server holds (decision 44), and the engine therefore
+ * belongs beside `modelMode` and the concurrency, which `POST /runs/estimate` already
+ * computes itself rather than trusting the body. When it computes the engine too, this
+ * constant goes and the screen sends three fields instead of four.
  */
 const LAUNCHES_ON = 'model' satisfies RunRequest['engineMode'];
 

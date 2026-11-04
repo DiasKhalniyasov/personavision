@@ -11,6 +11,7 @@ import {
   minutesFigure,
   NOT_MEASURED,
   NOTHING_TO_PAY,
+  observedLabel,
   sessionClock,
   storageArithmetic,
   timeArithmetic,
@@ -112,6 +113,16 @@ describe('the units', () => {
     expect(usdFigure({ low: 0, high: 0 }).text).not.toContain('$0.00');
   });
 
+  it('prints a bound below the unit as "up to", rather than joining a phrase to a figure', () => {
+    // `under $0.01–$3.40` and `0–5 min` are each a phrase and a figure with a dash between
+    // them, which reads as neither — and both are still ranges, so the label still applies.
+    expect(usdFigure({ low: 0.0004, high: 3.4 })).toEqual({ text: 'up to $3.40', range: true });
+    // A low bound of nothing at all. Twenty seconds is a minute, not nought: anything that
+    // takes any time at all is rounded up to one.
+    expect(minutesFigure({ low: 0, high: 300_000 })).toEqual({ text: 'up to 5 min', range: true });
+    expect(minutesFigure({ low: 20_000, high: 300_000 }).text).toBe('1–5 min');
+  });
+
   it('prints bytes in the units a disk is sold in, and tokens as the card writes them', () => {
     expect(bytesFigure(1_400_000_000)).toBe('1.4 GB');
     expect(bytesFigure(14_000_000)).toBe('14 MB');
@@ -207,6 +218,8 @@ describe('what the estimate is made of', () => {
     expect(made).toContain('around 6.8k input and 500 output tokens a session');
     expect(made).toContain('docs/meta-model-api.md');
     expect(made).toContain('muse-spark-1.3');
+    // A **date** and not an instant, so it names the same day in every time zone: in a zone
+    // west of Greenwich, reading `2026-10-27` locally would cite rates read on the 26th.
     expect(made).toContain('27 Oct');
   });
 
@@ -237,6 +250,13 @@ describe('what the estimate is made of', () => {
 });
 
 describe('a refused launch', () => {
+  it('says what the observed figure is, which is not the same for every cap', () => {
+    // `caps.ts` observes the agents a launch asked for, but for the hourly cap it observes
+    // the runs the site has already had — a figure about the hour, not about this launch.
+    expect(observedLabel('agentsPerRun')).toBe('This launch');
+    expect(observedLabel('runsPerSitePerHour')).toBe('Already this hour');
+  });
+
   it('names each cap in words, and prints an unknown one as the platform spelt it', () => {
     expect(capLabel('agentsPerRun')).toBe('agents in one run');
     expect(capLabel('runsPerSitePerHour')).toBe('runs an hour on this site');

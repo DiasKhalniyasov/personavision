@@ -59,12 +59,17 @@ const minutesText = (minutes: number): string =>
  *
  * Rounded first and compared after: two bounds eleven seconds apart are the same number of
  * minutes, and `18–18 min` is a range of a number to itself.
+ *
+ * A low bound under a minute is printed as `up to 5 min` rather than as `0–5 min`: a bound
+ * of nought reads as a measurement of nothing, and this is still a range — the figure says
+ * so, so the line under it still labels it as one.
  */
 export const minutesFigure = (ms: EstimateRange): Figure => {
   const low = inMinutes(ms.low);
   const high = inMinutes(ms.high);
-  return low === high
-    ? { text: minutesText(low), range: false }
+  if (low === high) return { text: minutesText(low), range: false };
+  return low === 0
+    ? { text: `up to ${minutesText(high)}`, range: true }
     : { text: `${String(low)}${EN_DASH}${minutesText(high)}`, range: true };
 };
 
@@ -81,18 +86,27 @@ const money = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+/** Below half a cent there is no price to print: `$0.00` reads as one somebody checked. */
+const UNDER_A_CENT = 0.005;
+
 /**
  * `$2.10`, and **never a price of zero**: a bill that rounds to nothing is stated as being
  * under a cent, because `$0.00` reads as a price somebody checked.
  */
-const usdText = (usd: number): string => (usd < 0.005 ? 'under $0.01' : money.format(usd));
+const usdText = (usd: number): string => (usd < UNDER_A_CENT ? 'under $0.01' : money.format(usd));
 
-/** `$2.10–$3.40`, or one figure where both bounds round to the same cent. */
+/**
+ * `$2.10–$3.40`, or one figure where both bounds round to the same cent.
+ *
+ * A low bound under a cent is printed as `up to $3.40`, for the same reason the time is:
+ * `under $0.01–$3.40` is a phrase and a figure joined by a dash, which reads as neither.
+ */
 export const usdFigure = (usd: EstimateRange): Figure => {
   const low = usdText(usd.low);
   const high = usdText(usd.high);
-  return low === high
-    ? { text: low, range: false }
+  if (low === high) return { text: low, range: false };
+  return usd.low < UNDER_A_CENT
+    ? { text: `up to ${high}`, range: true }
     : { text: `${low}${EN_DASH}${high}`, range: true };
 };
 
@@ -135,9 +149,16 @@ export const clockTime = (instant: string): string | null => {
  * Day then month, as every date in the prototype is printed, which is why the two are
  * formatted apart: `en-US` writes the pair the other way round in one format
  * (`screens/analysis/provenance.ts` does the same, for the same reason).
+ *
+ * **Read in UTC, unlike every other date in this app.** `ratesReadOn` is a *date* and not an
+ * instant — `@personavision/provider` writes it `2026-10-27` — which `Date` parses as UTC
+ * midnight, so formatting it in the reader's zone moves it a day west of Greenwich and the
+ * Cost row cites rates read the day before they were. A date names a day, not a moment, so
+ * the day it names is the day printed. The clock above is the opposite case and stays local:
+ * `retryAt` is a real instant and the reader needs it on their own wall.
  */
-const dayOfMonth = new Intl.DateTimeFormat('en-US', { day: 'numeric' });
-const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
+const dayOfMonth = new Intl.DateTimeFormat('en-US', { day: 'numeric', timeZone: 'UTC' });
+const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
 
 export const dayOf = (date: string): string | null => {
   const at = new Date(date);
@@ -271,6 +292,17 @@ export const costArithmetic = (cost: CostEstimate): string => {
  * sentence; a cap this build has not met is printed as the platform spelt it rather than
  * guessed at.
  */
+/**
+ * What the refusal's `observed` figure **is**, which is not the same for every cap.
+ *
+ * `agentsPerRun` observes the launch's own agents — a hundred and forty people asked for.
+ * `runsPerSitePerHour` observes the runs this site has **already had** in the trailing hour
+ * (`caps.ts` counts the ledger), which is a figure about the hour and not about this launch,
+ * so labelling it "this launch" would say four runs are one.
+ */
+export const observedLabel = (cap: string): string =>
+  cap === 'runsPerSitePerHour' ? 'Already this hour' : 'This launch';
+
 export const capLabel = (cap: string): string =>
   cap === 'agentsPerRun'
     ? 'agents in one run'

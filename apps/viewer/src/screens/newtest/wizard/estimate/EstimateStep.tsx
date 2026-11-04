@@ -19,6 +19,7 @@ import {
   costLine,
   hostOf,
   MODEL_API_DOC,
+  observedLabel,
   storageArithmetic,
   timeArithmetic,
   timeFigure,
@@ -435,7 +436,9 @@ function Refusal({ refused }: { refused: Exclude<LaunchResult, { ok: true }> }) 
             Cap · <b>{capLabel(cap)}</b>
           </span>
           <span className="num">Limit · {limit}</span>
-          <span className="num">This launch · {observed}</span>
+          <span className="num">
+            {observedLabel(cap)} · {observed}
+          </span>
           {retry === null ? null : <span className="num">Next allowed · {retry} your time</span>}
         </p>
         <p className={styles.why}>
