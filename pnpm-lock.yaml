@@ -225,6 +225,9 @@ importers:
       '@personavision/provider':
         specifier: workspace:*
         version: link:../provider
+      '@personavision/scoring':
+        specifier: workspace:*
+        version: link:../scoring
       '@personavision/swarm':
         specifier: workspace:*
         version: link:../swarm
