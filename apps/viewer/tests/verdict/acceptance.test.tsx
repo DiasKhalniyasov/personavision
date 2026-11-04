@@ -472,7 +472,8 @@ describe('under prefers-reduced-motion: reduce', () => {
     const hero = run.verdict.heroEvidence;
     const deeper = [
       [paths.breakdown(SEED), '[data-section="score-cards"]'],
-      [paths.attention(SEED, hero.variant, hero.step), '[data-section="attention"]'],
+      // The Attention tab is the Heatmaps section of `docs/FLOW.md` section 14 (#272).
+      [paths.attention(SEED, hero.variant, hero.step), '[data-section="heatmaps"]'],
       // The Sessions screen opens on the grid of video thumbnails (#268); the rows are
       // the view this list resolves on, and the grid's own stillness is asserted in
       // `tests/sessions/grid.test.tsx`, over a run that has recordings to draw.

@@ -355,8 +355,9 @@ describe('nowhere else moves', () => {
     const deeper = [
       [paths.breakdown(SEED), '[data-section="score-cards"]'],
       [
+        // The Attention tab is the Heatmaps section of `docs/FLOW.md` section 14 (#272).
         paths.attention(SEED, heroEvidence.variant, heroEvidence.step),
-        '[data-section="attention"]',
+        '[data-section="heatmaps"]',
       ],
       // The Sessions screen opens on the grid of video thumbnails (#268); the rows are
       // the view this list resolves on, and the grid's own stillness is asserted in

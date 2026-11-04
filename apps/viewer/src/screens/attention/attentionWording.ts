@@ -244,19 +244,16 @@ export function peopleShown({
  */
 export const noPeopleMatch = (outcome: string | null, segment: string | null): string => {
   if (outcome !== null && segment !== null) {
-    return `Nobody in ${segment} ${outcomePhrase(outcome)}. The two filters compose, and no session in this test satisfies both, so there are no figures to show rather than an empty page.`;
+    return `Nobody in “${segment}” ended as “${outcome}”. The two filters compose, and no session in this test satisfies both, so there are no figures to show rather than an empty page.`;
   }
   if (segment !== null) {
-    return `This test has no ${segment} among the people it scored, so there are no figures for them.`;
+    return `This test scored nobody in “${segment}”, so there are no figures for them.`;
   }
   if (outcome !== null) {
-    return `Nobody in this test ${outcomePhrase(outcome)}, so there are no figures for them.`;
+    return `No session in this test ended as “${outcome}”, so there are no figures for them.`;
   }
   return 'This test scored nobody, so there are no figures to show for anybody.';
 };
-
-/** How an outcome reads in the middle of a sentence, from the words the filter carries. */
-const outcomePhrase = (outcome: string): string => `matches “${outcome}”`;
 
 /**
  * A step these people reached but nobody of them stood on, with the filters named.

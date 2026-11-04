@@ -507,12 +507,21 @@ describe('the caption, and the one click to beat 5', () => {
 
     await userEvent.click(captionOf(container).querySelector('a') as HTMLAnchorElement);
 
-    await screen.findByRole('heading', { level: 1, name: HEADING });
+    // The Attention tab is the Heatmaps section of `docs/FLOW.md` section 14 (#272), and
+    // this caption's link is what opens it.
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Where they looked, clicked and stopped scrolling',
+    });
     expect(router.state.location.pathname).toBe(paths.attention(RUN_ID, HERO.variant, HERO.step));
     expect(router.state.location.search).toBe(`?aoi=${COMPLETE}`);
-    // The screen says which area it is isolated to, so the link really arrived there.
-    const isolated = await screen.findByText('Isolated');
-    expect(isolated.nextElementSibling?.textContent).toContain('Confirm purchase');
+    // The screen says which area it is isolated to, so the link really arrived there. It is
+    // said under the stage, by the isolate caption: that screen's own `This screen` panel
+    // carries five figures and no `Isolated` row. This area is the one no fixation ever
+    // landed in, so the caption is that finding, named.
+    await waitFor(() => {
+      expect(document.querySelector('#att-caption')?.textContent).toContain('Confirm purchase');
+    });
   });
 });
 
