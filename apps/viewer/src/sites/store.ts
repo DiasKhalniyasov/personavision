@@ -153,7 +153,23 @@ export type StoreResult<Value> =
   /** There is no such site in this workspace. */
   | { readonly ok: false; readonly kind: 'not-found'; readonly problem: string }
   /** The store could not be reached, or answered something this build cannot read. */
-  | { readonly ok: false; readonly kind: 'unreachable'; readonly problem: string };
+  | {
+      readonly ok: false;
+      readonly kind: 'unreachable';
+      readonly problem: string;
+      /**
+       * Whether the platform **answered** — a considered refusal (a `4xx` carrying its own
+       * sentence, such as a method it does not run yet) rather than a platform that is away.
+       * A screen uses it to decide whether to tell a reader to try again when it is back:
+       * a platform that just answered them is not away, and saying so would be the generic
+       * wording `docs/FLOW.md` section 13 rules out.
+       *
+       * **Present only when it is true.** A platform that is away, and a `5xx` from one
+       * that is having a problem of its own, leave it off: the reader is asked to try again
+       * when it is back, which is the default a screen gets by not reading this at all.
+       */
+      readonly answered?: true;
+    };
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -170,13 +186,24 @@ const refusalSchema = z.object({
   issues: z.array(issueSchema).optional(),
 });
 
-/** The sentence a reader is given when the platform itself is the problem. */
-const UNREACHABLE = 'Your sites could not be read.';
+/**
+ * The sentence a reader is given when the platform itself is the problem — **one per call**,
+ * because a reader who pressed "Check the record" is not owed a sentence about their sites.
+ * It is the whole of what a screen prints above the methods, so it names what was asked.
+ */
+const UNREACHABLE = {
+  list: 'Your sites could not be read.',
+  site: 'That site could not be read.',
+  create: 'That site could not be saved.',
+  check: 'That check could not be run.',
+} as const;
 
 interface Attempt {
   readonly method: 'GET' | 'POST';
   readonly url: string;
   readonly body?: unknown;
+  /** What the reader asked for, for the one sentence an unreachable platform gets. */
+  readonly subject: string;
 }
 
 const ask = async <Value>(
@@ -196,7 +223,7 @@ const ask = async <Value>(
       ...(attempt.body === undefined ? {} : { body: JSON.stringify(attempt.body) }),
     });
   } catch (error) {
-    return { ok: false, kind: 'unreachable', problem: `${UNREACHABLE} ${reason(error)}` };
+    return { ok: false, kind: 'unreachable', problem: `${attempt.subject} ${reason(error)}` };
   }
 
   let body: unknown;
@@ -208,7 +235,8 @@ const ask = async <Value>(
       kind: 'unreachable',
       problem: response.ok
         ? `The platform answered something that is not JSON: ${reason(error)}`
-        : `${UNREACHABLE} It answered ${String(response.status)}.`,
+        : `${attempt.subject} It answered ${String(response.status)}.`,
+      ...(response.ok || response.status < 500 ? { answered: true as const } : {}),
     };
   }
 
@@ -224,19 +252,25 @@ const ask = async <Value>(
     return {
       ok: false,
       kind: 'unreachable',
-      problem: stated.error ?? `${UNREACHABLE} It answered ${String(response.status)}.`,
+      problem: stated.error ?? `${attempt.subject} It answered ${String(response.status)}.`,
+      // A `4xx` is the platform's own answer about what was asked; a `5xx` is the platform
+      // itself having a problem, which is the one a reader is asked to wait out.
+      ...(response.status < 500 ? { answered: true as const } : {}),
     };
   }
 
   const parsed = schema.safeParse(body);
   return parsed.success
     ? { ok: true, value: parsed.data }
-    : { ok: false, kind: 'unreachable', problem: firstViolation(parsed.error) };
+    : { ok: false, kind: 'unreachable', problem: firstViolation(parsed.error), answered: true };
 };
 
 /** The workspace's sites, as the platform lists them. A soft-deleted one is not among them. */
 export const listSites = async (): Promise<StoreResult<readonly SiteRecord[]>> => {
-  const answer = await ask({ method: 'GET', url: SITES_PATH }, listSchema);
+  const answer = await ask(
+    { method: 'GET', url: SITES_PATH, subject: UNREACHABLE.list },
+    listSchema,
+  );
   return answer.ok ? { ok: true, value: answer.value.sites } : answer;
 };
 
@@ -247,7 +281,7 @@ export const listSites = async (): Promise<StoreResult<readonly SiteRecord[]>> =
  * what is stored rather than what was listed before somebody else changed it.
  */
 export const readSite = async (siteId: string): Promise<StoreResult<SiteRecord>> =>
-  ask({ method: 'GET', url: sitePath(siteId) }, siteSchema);
+  ask({ method: 'GET', url: sitePath(siteId), subject: UNREACHABLE.site }, siteSchema);
 
 /**
  * A new site, by URL.
@@ -258,4 +292,44 @@ export const readSite = async (siteId: string): Promise<StoreResult<SiteRecord>>
  * come back as a `refused` result carrying the message for the `url` field.
  */
 export const createSite = async (url: string): Promise<StoreResult<SiteRecord>> =>
-  ask({ method: 'POST', url: SITES_PATH, body: { url } }, siteSchema);
+  ask({ method: 'POST', url: SITES_PATH, body: { url }, subject: UNREACHABLE.create }, siteSchema);
+
+/** `/sites/<id>/verify`: where a check is asked for. `POST` only — nothing navigates here. */
+export const siteVerifyPath = (siteId: string): string => `${sitePath(siteId)}/verify`;
+
+/** The site as it now stands, and what the check that was just run found. */
+export interface CheckedSite {
+  readonly site: SiteRecord;
+  readonly check: SiteCheck;
+}
+
+// The route answers the whole site with the result beside it, so the screen redraws its
+// state from one and the method's own line from the other.
+const checkedSiteSchema = siteSchema.extend({ check: checkSchema });
+
+/**
+ * Run one of the four checks of `docs/FLOW.md` section 13 against this site.
+ *
+ * **The platform does the checking.** What is sent is the name of the method and nothing
+ * else: a body cannot verify a site, and there is no field here that could — the platform
+ * resolves the TXT record, fetches the page, reads the file or asks after the installation,
+ * and only a passing check moves the site (`packages/platform/src/site/verify.ts`).
+ *
+ * A check that **failed is an answer, not an error**: it comes back `ok` with the site
+ * unverified and `check` carrying what it looked for, where it looked and what it found
+ * instead. The `unreachable` result is for the other thing — a platform that could not be
+ * reached, or one that does not run this method yet, which answers its own sentence naming
+ * the methods it does run.
+ */
+export const verifySite = async (
+  siteId: string,
+  method: string,
+): Promise<StoreResult<CheckedSite>> => {
+  const answer = await ask(
+    { method: 'POST', url: siteVerifyPath(siteId), body: { method }, subject: UNREACHABLE.check },
+    checkedSiteSchema,
+  );
+  if (!answer.ok) return answer;
+  const { check, ...site } = answer.value;
+  return { ok: true, value: { site, check } };
+};
