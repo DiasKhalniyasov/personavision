@@ -82,16 +82,25 @@ export interface RecommendationsStageInput {
 
 /**
  * Why a run that read nothing recommends nothing, in the one sentence
- * `recommendationsSchema` stores.
+ * `recommendationsSchema` stores — the two ways a run can have nothing to read.
  *
- * It is the one case the ask itself refuses — an analysis is written from the sessions a run
- * produced, and a run whose every session our own automation broke has none to read — so the
- * sentence is written here rather than being Wonder's. The file is still written: *"no
+ * It is the one case the ask itself refuses: an analysis is written from the sessions a run
+ * produced, and a run with no readable session has none to offer it. So the sentence is
+ * written here rather than being Wonder's. The file is still written either way: *"no
  * recommendations, and here is why"* is a fact about the run, and an absent file says only
  * that nobody looked.
+ *
+ * They are two sentences and not one because the Summary prints them: *"our own automation
+ * broke every one of them"* is true of a run whose sessions are all excluded and false of a
+ * run that holds no session at all, and a stored sentence naming a cause the run does not
+ * have is exactly the kind of claim this step refuses everywhere else.
  */
 export const NOTHING_READ =
   'Muse Wonder read no session of this run, because our own automation broke every one of them, so there is nothing it could recommend about the site.';
+
+/** The same, for a run that holds no session at all: nothing happened, and nobody broke it. */
+export const NOTHING_RAN =
+  'This run holds no session for Muse Wonder to read, so there is nothing it could recommend about the site.';
 
 /**
  * The seed the sample is drawn with and the ask is answered from: the run's own first seed
@@ -139,7 +148,7 @@ export const recommendationsOf = async (
         runId: run.runId,
         sample: sample.sample,
         recommendations: [],
-        nothingToRecommend: NOTHING_READ,
+        nothingToRecommend: sessions.length === 0 ? NOTHING_RAN : NOTHING_READ,
       });
     }
 

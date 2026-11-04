@@ -454,31 +454,33 @@ export const generateDemoRun = async (
     });
 
     const final = scored(walked.run, walked.sessions);
-    // The last stage, and the one that can refuse: `recommendationsOf` samples, calls the
-    // offline Wonder implementation, generates the write-up and resolves every citation
-    // against this run before anything is written. A citation that does not resolve throws
-    // with its JSON path and this directory keeps the files it had, which is the point —
-    // a screen full of dead links is worse than a run with no advice in it.
-    const recommendations = await recommendationsOf({
-      run: final.run,
-      sessions: walked.sessions,
-      findings: final.findings,
-      aggregate: final.aggregate,
-      report,
-    });
-    await writeRun(runDir, {
+    const measured = {
       run: final.run,
       sessions: [...walked.sessions],
       findings: final.findings,
       aggregate: final.aggregate,
-      recommendations,
-    });
+    };
+    // The scored run lands **before** the stage that can refuse. Twenty-four sessions of
+    // Chromium are the expensive half of this command, and the directory it writes into was
+    // swept at the top: a citation that did not resolve would otherwise leave the committed
+    // artifact as the open run this script opened with, and the sessions would have to be
+    // walked again to get it back.
+    await writeRun(runDir, measured);
     // The capture cache is `packages/browser`'s own working state, not artifact data — it
     // says so itself, and `runPaths` spells no path into it. It also carries a key derived
     // from the port the shop happened to bind, so leaving it behind would be the one part
     // of the directory that two regenerations cannot agree on, and 24 sessions of it is
     // most of the committed weight.
     await rm(join(runDir, CAPTURE_CACHE_DIR), { recursive: true, force: true });
+
+    // The last stage, and the one that can refuse: `recommendationsOf` samples, calls the
+    // offline Wonder implementation, generates the write-up and resolves every citation
+    // against this run before anything is written. A citation that does not resolve throws
+    // with its JSON path, and what is on disk is the run above without recommendations —
+    // a screen full of dead links is worse than a run with no advice in it. The second
+    // write adds the file and rewrites the same bytes for everything else.
+    const recommendations = await recommendationsOf({ ...measured, report });
+    await writeRun(runDir, { ...measured, recommendations });
 
     return {
       run: final.run,

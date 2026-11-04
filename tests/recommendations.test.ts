@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readRun, runPaths, SCHEMA_VERSION, writeRun } from '@personavision/contract';
 import { composeAggregate } from '@personavision/scoring';
-import { NOTHING_READ, recommendationsOf, recommendOverRun } from '../scripts/recommendations.js';
+import {
+  NOTHING_RAN,
+  NOTHING_READ,
+  recommendationsOf,
+  recommendOverRun,
+} from '../scripts/recommendations.js';
 import type { Aggregate, Recommendations, RunArtifact } from '@personavision/contract';
 
 /**
@@ -334,6 +339,24 @@ describe('a run with nothing to recommend', () => {
     expect(await readJsonFile(join(runDir, layout.recommendations))).toEqual(document);
 
     await rm(runsRoot, { recursive: true, force: true });
+  });
+
+  it('says so without naming our automation when the run holds no session at all', async () => {
+    const read = await readRun(fixtureDir);
+    const run = { ...read.run, sessionIds: [] };
+    const document = await recommendationsOf({
+      run,
+      sessions: [],
+      findings: read.findings,
+      aggregate: composeAggregate({ run, sessions: [], computedAt: run.createdAt }),
+    });
+
+    expect(document.recommendations).toEqual([]);
+    // Nothing ran is not the same fact as everything broke, and the stored sentence is
+    // printed on the Summary: a cause this run does not have would be a claim nobody can
+    // check.
+    expect(document.nothingToRecommend).toBe(NOTHING_RAN);
+    expect(document.nothingToRecommend).not.toMatch(/automation/);
   });
 });
 
