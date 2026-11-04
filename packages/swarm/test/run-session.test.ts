@@ -17,7 +17,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { appendFinishedSession, runPaths, sessionSchema, validate } from '@personavision/contract';
-import { createFixtureSource, toScreenshotEntries } from '@personavision/browser';
+import { createFixtureSource, createLiveSource, toScreenshotEntries } from '@personavision/browser';
 import {
   auditRunTrajectories,
   auditTrajectory,
@@ -27,7 +27,7 @@ import {
   totalUsage,
   trajectoryPath,
 } from '@personavision/provider';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decideOutcome, runSession } from '../src/index.js';
 import type { ActResult, Capture, CaptureSource } from '@personavision/browser';
 import type { Decision } from '@personavision/provider';
@@ -35,9 +35,12 @@ import type { Session } from '@personavision/contract';
 import type { Aoi } from '@personavision/engine';
 import type { SessionScreen, SessionTrace } from '../src/index.js';
 import {
+  clicksTheLinkSaying,
   COMMITTED,
   DESKTOP,
   MOBILE,
+  SPA,
+  spaTask,
   TASK,
   metaProviderOverFake,
   personaWho,
@@ -51,6 +54,9 @@ import {
   watchingActs,
   writeOpenRun,
 } from './harness.js';
+import { CHROMIUM_INSTALLED } from '../../browser/test/helpers/chromium.js';
+import { serveFixtureSite } from '../../browser/test/helpers/static-site.js';
+import type { FixtureSite } from '../../browser/test/helpers/static-site.js';
 
 /** The action types the browser driver performs; the other two are the agent's own. */
 const PAGE_ACTIONS = new Set<Session['actions'][number]['type']>(['click', 'scroll', 'back']);
@@ -916,4 +922,169 @@ describe('runSession', () => {
       expect(await readdir(join(runDir, 'trajectories'))).toEqual([`${session.sessionId}.jsonl`]);
     });
   });
+});
+
+/** See `packages/browser/test/geometry.test.ts`: without the browser, skipped; CI is not. */
+const describeWithChromium = CHROMIUM_INSTALLED || process.env.CI ? describe : describe.skip;
+
+/** One live session is a browser launch, a few captures and a model-shaped decision each. */
+const LIVE_TIMEOUT_MS = 60_000;
+
+/**
+ * A live session of a single-page application, where the address is the only thing that
+ * moves (#441) — the owner's own run, as a fixture.
+ *
+ * Five sessions over `http://127.0.0.1:5176/` with the criterion *"The address bar reads
+ * /signup."*: two clicked a react-router `<Link to="/signup">`, arrived on the sign-up view
+ * — the next screen's intent quoted words only that view has — and were recorded
+ * `abandoned` with the criterion never observed. A third did exactly the same thing and was
+ * a success. The criterion was read against an address nothing ever re-read: the walk kept
+ * one, set from the variant and replaced only by what an action reported, and a same-document
+ * navigation makes no request for an action's wait to see. On a one-URL run the derived step
+ * matched both views and the scroll position did not move either, so nothing in the session
+ * contradicted it.
+ *
+ * The pages are `packages/browser/test/fixtures/spa/`, which pushes its address 50 ms after
+ * the click — long after the click's own promise — for exactly that reason.
+ */
+describeWithChromium('a live session of a single-page application', () => {
+  /** The criterion the owner's run was given, word for word. */
+  const READS_SIGNUP = 'The address bar reads /signup.';
+
+  /** The control that moves the address, as the owner's own site words it. */
+  const SIGN_UP = 'Sign up to try it on your project';
+
+  /** And the one that moves it to a path which *extends* the one the criterion asks for. */
+  const NOT_NOW = 'Not now';
+
+  let site: FixtureSite;
+  let runDir: string;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite({ root: SPA });
+  });
+
+  afterAll(async () => {
+    await site.close();
+  });
+
+  beforeEach(async () => {
+    runDir = await temporaryRunDir();
+  });
+
+  afterEach(async () => {
+    await sweep(runDir);
+  });
+
+  /** One live session over this application, opened at a path of it. */
+  const walk = (
+    over: Partial<Parameters<typeof sessionOver>[1]> & { readonly at?: string } = {},
+  ): Promise<Session> => {
+    const { at, ...rest } = over;
+    return runSession(
+      sessionOver(runDir, {
+        source: createLiveSource(),
+        variant: { id: 'A', url: `${site.url}${at ?? '/app.html'}` },
+        task: spaTask(READS_SIGNUP),
+        providers: { decision: clicksTheLinkSaying(SIGN_UP) },
+        ...rest,
+      }),
+    );
+  };
+
+  it(
+    'succeeds on the view a client-side navigation reached, and records where it was',
+    async () => {
+      const session = await walk();
+
+      expect(session.outcome.status).toBe('success');
+      expect(session.outcome.reason).toContain(`the criterion “${READS_SIGNUP}” was observed`);
+      expect(session.actions.some((action) => action.type === 'click' && action.ok)).toBe(true);
+
+      // The screen captured after the click is on the address the click pushed, and the
+      // application loaded no document to get there.
+      expect(session.screens.map((screen) => screen.url)).toStrictEqual([
+        `${site.url}/app.html`,
+        `${site.url}/signup`,
+      ]);
+      // And the rest of the screen is held still: the same step, the same scroll position.
+      // The address is the only thing that moved, which is the whole of what this walk had
+      // to notice and the whole of what it used to miss.
+      expect(session.screens.map((screen) => screen.step)).toStrictEqual(['page', 'page']);
+      expect(session.screens.map((screen) => screen.scrollY)).toStrictEqual([0, 0]);
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  it(
+    'succeeds where the click was on the last screen the cap allows',
+    async () => {
+      const session = await walk({ maxScreens: 1 });
+
+      // One screen, captured before the click, so no captured screen was ever at /signup:
+      // the criterion is read against the address the action reached and not only against a
+      // screen that is never captured.
+      expect(session.screens).toHaveLength(1);
+      expect(session.screens[0]?.url).toBe(`${site.url}/app.html`);
+      expect(session.actions.some((action) => action.type === 'click' && action.ok)).toBe(true);
+      expect(session.outcome.status).toBe('success');
+      expect(session.outcome.reason).toContain(`the criterion “${READS_SIGNUP}” was observed`);
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  it(
+    'succeeds where the agent gave up on the turn after the click',
+    async () => {
+      const session = await walk({
+        providers: { decision: clicksTheLinkSaying(SIGN_UP, 'abandon') },
+      });
+
+      // Observed is observed. `docs/FLOW.md` section 8's order of outcomes is untouched: a
+      // give-up after the task was done is not a give-up on the task (`findGiveUp`).
+      expect(session.actions.map((action) => action.type)).toStrictEqual(['click', 'abandon']);
+      expect(session.screens.at(-1)?.url).toBe(`${site.url}/signup`);
+      expect(session.outcome.status).toBe('success');
+      expect(session.outcome.status).not.toBe('abandoned');
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  it(
+    'reads the criterion at an address the page moved itself to, with nobody acting',
+    async () => {
+      // The application pushes `/signup` as its document is parsed, so the session lands on
+      // a page that is already somewhere else. No action reported that move and no action
+      // ever could: this is the navigation only a capture that asks the page where it is
+      // can see.
+      const session = await walk({ at: '/app.html?move=/signup', maxScreens: 1 });
+
+      expect(session.screens[0]?.url).toBe(`${site.url}/signup`);
+      // Observed, and still not a success: nothing was tested, because nothing was acted on.
+      // That rule is #400's and is not loosened here.
+      expect(session.actions).toStrictEqual([]);
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.reason).toContain('was already true when the agent arrived');
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  it(
+    'does not observe a criterion on a path that extends the one it asks for',
+    async () => {
+      const session = await walk({
+        providers: { decision: clicksTheLinkSaying(NOT_NOW) },
+        maxScreens: 2,
+      });
+
+      expect(session.screens.map((screen) => screen.url)).toStrictEqual([
+        `${site.url}/app.html`,
+        `${site.url}/signup-cancelled`,
+      ]);
+      expect(session.outcome.status).not.toBe('success');
+      expect(session.outcome.reason).toContain('was never observed');
+      expect(session.outcome.reason).toContain('no “/signup”');
+    },
+    LIVE_TIMEOUT_MS,
+  );
 });

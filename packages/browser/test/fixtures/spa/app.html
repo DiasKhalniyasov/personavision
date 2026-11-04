@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>See how people use your site - fixture single-page application</title>
+    <link rel="stylesheet" href="./spa.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // A single-page application, in the smallest form that reproduces the owner's run: one
+      // document, two views, and an address that changes without the document being loaded
+      // again. A `history.pushState` is what a react-router `<Link to="/signup">` does, and
+      // it commits once the route has resolved — which can be after the click's own promise
+      // has settled, and which asks the network for nothing at all.
+      const VIEWS = {
+        '/signup': {
+          heading: 'Point it at your site',
+          body:
+            'Point it at your site, describe the people you serve, and watch a hundred of them ' +
+            'try it. No document was loaded to get here: only the address changed.',
+          link: { id: 'signup-back', href: '/app.html', text: 'Back to the start' },
+        },
+        '/signup-cancelled': {
+          heading: 'Nothing was started',
+          body:
+            'The path that extends the one a criterion asked for. A session that lands here ' +
+            'has not reached /signup, and a reader of the run must not be told that it did.',
+          link: { id: 'cancelled-back', href: '/app.html', text: 'Back to the start' },
+        },
+      };
+
+      const START = {
+        heading: 'See how people use your site',
+        body:
+          'The first view, and the only document this site ever loads. The control below moves ' +
+          'the address with no request of any kind.',
+        link: {
+          id: 'start-signup',
+          href: '/signup',
+          text: 'Sign up to try it on your project',
+        },
+        second: { id: 'start-cancel', href: '/signup-cancelled', text: 'Not now' },
+      };
+
+      const box = (left, top, width, height) =>
+        `left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px`;
+
+      const linkMarkup = (link, top) =>
+        `<a id="${link.id}" href="${link.href}" style="${box(16, top, 320, 44)}">${link.text}</a>`;
+
+      /** The view for an address, drawn into the one element both views share. */
+      const render = () => {
+        const view = VIEWS[window.location.pathname] ?? START;
+        const parts = [
+          `<h1 id="view-heading" style="${box(16, 24, 340, 40)}">${view.heading}</h1>`,
+          `<p id="view-body" style="${box(16, 80, 340, 112)}">${view.body}</p>`,
+          linkMarkup(view.link, 208),
+        ];
+        if (view.second !== undefined) parts.push(linkMarkup(view.second, 264));
+        document.getElementById('app').innerHTML = parts.join('\n');
+      };
+
+      /**
+       * How long this application takes to resolve a route before it pushes the address.
+       *
+       * It is the timing the case needs, and it is why the number is not zero. A framework
+       * resolves its route and renders before it pushes, so the push lands well after the
+       * handler — and after the click's own promise — has returned: a driver that reads the
+       * address as soon as the click returns reads the page the click left. Pushing inline,
+       * or on the next frame, commits the new address inside the round trip that reads it,
+       * which is the half of the owner's race that already worked.
+       *
+       * Far below the one-second cap a click is given to move the page, and far above a
+       * loopback round trip, so both answers are decided rather than raced.
+       */
+      const ROUTE_MS = 50;
+
+      /**
+       * A click on one of this application's own links: the address is pushed and the view is
+       * redrawn, and the browser is never asked for a document.
+       */
+      document.addEventListener('click', (event) => {
+        const link = event.target.closest('a');
+        if (link === null || !link.getAttribute('href').startsWith('/')) return;
+        event.preventDefault();
+        const to = link.getAttribute('href');
+        setTimeout(() => {
+          window.history.pushState({}, '', to);
+          render();
+        }, ROUTE_MS);
+      });
+
+      window.addEventListener('popstate', render);
+
+      /**
+       * The same move, with nobody acting: a `setTimeout` `pushState`, timed by whoever is
+       * reading the page. It is the navigation an action-reported address can never see —
+       * a consent bounce, a framework route resolving on its own — and the capture reads the
+       * address it moved to because it asks the page where it is.
+       */
+      window.pvMoveIn = (ms, to) => {
+        setTimeout(() => {
+          window.history.pushState({}, '', to);
+          render();
+        }, ms);
+      };
+
+      /**
+       * The same move, decided before the page is even readable: `?move=/path` pushes that
+       * address as this document is parsed. A session opened on it lands on a page whose
+       * address is not the one it asked for — a consent bounce, a framework route resolving
+       * on its own — and no address carried from an action can ever see that.
+       */
+      const asked = new URLSearchParams(window.location.search).get('move');
+      if (asked !== null) window.history.pushState({}, '', asked);
+
+      render();
+    </script>
+  </body>
+</html>

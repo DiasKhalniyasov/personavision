@@ -143,17 +143,33 @@ const settle = async (handle: PageHandle): Promise<void> => {
   await handle.page.waitForLoadState('domcontentloaded');
 };
 
-/** How long a click is given to ask for a new document, if it asks for one. */
+/** How long a click is given to ask for a new document or to move the address, if it does. */
 const NAVIGATION_START_MS = 1000;
 
 /**
- * Runs a click and, when it asked the main frame for a new document, waits until that document
- * has answered. A click returns once the request is out, and on a slow site the answer takes
- * seconds: a page read in between is read while it unloads, and the reading goes down with it.
+ * Runs a click and, when it moved the page, waits until the move has committed — so the
+ * position the result reports is the one the click reached.
+ *
+ * **Two ways a page moves, and both are waited for.** A click that asks the main frame for a
+ * new document returns once the request is out, and on a slow site the answer takes seconds:
+ * a page read in between is read while it unloads, and the reading goes down with it. A click
+ * that moves the page **within** one document asks for nothing at all — a framework's link
+ * pushes its history entry once the route has resolved, which can be after the click's own
+ * promise has settled — so waiting for a request would not see it, and the address read
+ * afterwards is the page the click left (#441). `waitForURL(…, { waitUntil: 'commit' })`
+ * resolves on a `pushState` as well, which is what makes the second wait the same kind of
+ * thing as the first.
+ *
+ * Both are armed **before** the click and under the one cap, so they are one wait rather than
+ * two in a row: a click that goes nowhere costs what it cost when only the request was
+ * waited for, and a click that moved the page returns as soon as the move has committed. A
+ * document that was asked for and has not arrived within that cap keeps the session's own
+ * navigation timeout, as every navigation this module starts does.
  */
 const following = async (handle: PageHandle, click: () => Promise<void>): Promise<void> => {
   const { page } = handle;
   const before = page.url();
+  const elsewhere = (url: URL): boolean => url.href !== before;
   const asked = page
     .waitForRequest(
       (request) => request.isNavigationRequest() && request.frame() === page.mainFrame(),
@@ -163,11 +179,21 @@ const following = async (handle: PageHandle, click: () => Promise<void>): Promis
       () => true,
       () => false,
     );
+  const moved = page
+    .waitForURL(elsewhere, { waitUntil: 'commit', timeout: NAVIGATION_START_MS })
+    .then(
+      () => true,
+      () => false,
+    );
   await click();
+  // The address having moved is enough on its own, whichever way it moved: the page is
+  // already where the click sent it, and there is no document left to wait for.
+  if (await moved) return;
+  // It has not moved within the cap. If a document was asked for, it is still on its way:
+  // that wait is the session's own navigation timeout, as it has always been — a click that
+  // worked must not be read while the page it answered with is still unloading.
   if (await asked) {
-    await page
-      .waitForURL((url) => url.href !== before, { waitUntil: 'commit' })
-      .catch(() => undefined);
+    await page.waitForURL(elsewhere, { waitUntil: 'commit' }).catch(() => undefined);
   }
 };
 

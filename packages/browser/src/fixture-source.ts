@@ -451,10 +451,22 @@ const positionUrl = (variant: Variant, path: string): string => {
   }
 };
 
-/** A capture nothing else holds a reference into: equal to the recorded one, and separate. */
-const copyOfCapture = (capture: RecordedCapture, screenshot: string | null): Capture => ({
+/**
+ * A capture nothing else holds a reference into: equal to the recorded one, and separate.
+ *
+ * `url` is where the replay is standing — the recorded path resolved against the variant the
+ * session was opened on, exactly as a replayed action reports its position. A recording
+ * carries no origin, so the address a replayed screen records is the caller's own URL space
+ * and never the ephemeral port the set was recorded on.
+ */
+const copyOfCapture = (
+  capture: RecordedCapture,
+  screenshot: string | null,
+  url: string,
+): Capture => ({
   variant: capture.variant,
   step: capture.step,
+  url,
   screenshot,
   viewport: { width: capture.viewport.width, height: capture.viewport.height },
   pageHeight: capture.pageHeight,
@@ -669,8 +681,12 @@ export const createFixtureSource: CreateFixtureSource = (dir) => {
     },
 
     capture: async (page, ctx) => {
-      const { capture } = await current(page, ctx);
-      return copyOfCapture(capture, await placeScreenshot(capture, ctx.runDir));
+      const { step, capture } = await current(page, ctx);
+      return copyOfCapture(
+        capture,
+        await placeScreenshot(capture, ctx.runDir),
+        positionUrl(page.variant, step.path),
+      );
     },
 
     act: async (page, action, ctx) => {

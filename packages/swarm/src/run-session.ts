@@ -382,13 +382,22 @@ const fixatedElementsOf = (
  * character. The driver's own `ok` is kept where it belongs — a `false` there ends the
  * session as our breakage.
  *
- * Getting somewhere is the page becoming something else, in the two ways the driver reports:
- * the step it is on, and where it is scrolled to. A page that changed in place without
- * changing either — an accordion opening — is read as having got the agent nowhere, which is
- * the conservative reading and the only one the driver's answer supports.
+ * Getting somewhere is the page becoming something else, in the three ways the driver
+ * reports: the step it is on, **the address it is at**, and where it is scrolled to. A page
+ * that changed in place without changing any of them — an accordion opening — is read as
+ * having got the agent nowhere, which is the conservative reading and the only one the
+ * driver's answer supports.
+ *
+ * The address is one of the three because on a one-URL run the other two cannot move: the
+ * derived step is the whole site, so it matches every view of a single-page application, and
+ * a view that replaces another starts at the top like the one before it. A `<Link>` that
+ * moved the agent from the landing page to the sign-up page would otherwise be read as a
+ * click that achieved nothing — which resets no give-up budget and counts towards running
+ * one out, and is how the owner's two sessions that reached the sign-up view were written up
+ * as the person abandoning the product there (#441).
  */
-const gotSomewhere = (acted: ActResult, step: string, scrollY: number): boolean =>
-  acted.step !== step || acted.scrollY !== scrollY;
+const gotSomewhere = (acted: ActResult, step: string, scrollY: number, url: string): boolean =>
+  acted.step !== step || acted.scrollY !== scrollY || acted.url !== url;
 
 /**
  * The one driver refusal that is the agent's doing and not our breakage: a `back` from a
@@ -519,10 +528,16 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   /**
    * Where the session is, and what the last screen showed of the criterion.
    *
-   * A capture records the page's elements and not its address, so the address is carried
-   * along the walk: the variant's URL to begin with, and whatever the driver reports the
-   * page became after each action. It is what a criterion `readCriterion` called a URL is
-   * read against.
+   * **The address is the page's own**: every capture reads it (`Capture.url`), and after an
+   * action it is what the driver reports the page became. The variant's URL is only the
+   * value before the first screen has been captured, and a capture that knows no address
+   * leaves the last one standing rather than replacing it with a guess.
+   *
+   * It used to be carried from the last action alone, and that is the defect #441 removes: a
+   * client-side navigation makes no request, so a `<Link>` that pushed its history entry
+   * after the click's promise settled left this reading the page the click left — and nothing
+   * read it again for the rest of the walk. It is what a criterion `readCriterion` called a
+   * URL is read against, so the same click was a success or an abandonment by a race.
    */
   let url = variant.url;
   let lastSighting: CriterionSighting | null = null;
@@ -612,6 +627,11 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       // where it was captured and not where the answer about it arrived.
       const capturedAtMs = recorded.of?.at();
       const step = capture.step;
+      // Where the page itself says it is: a `pushState`, a framework route, a redirect or a
+      // consent bounce that happened while nobody was acting moved the session, and this is
+      // the only thing that sees it. A capture that recorded no address leaves the walk
+      // reading the last one it had.
+      url = capture.url ?? url;
       const screenshot = capture.screenshot ?? runPaths('').screenshot(variant.id, step);
 
       const goal = goalOn(step);
@@ -792,6 +812,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
         step,
         screenshot,
         scrollY,
+        // Where this screen was, so that a reader of the finished run can say which page it
+        // is looking at. Omitted rather than invented where the capture knew no address:
+        // the field is optional in the artifact for exactly that case.
+        ...(capture.url === undefined ? {} : { url: capture.url }),
         // The agent's own words, when it managed any. Never ours: an invented intent would
         // be the simulation putting words in the mouth of the person it is reporting on.
         intent: typeof decision?.intent === 'string' ? decision.intent : '',
@@ -847,7 +871,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           record(kind, aoi, false, null, actedAtMs);
           history.push({ ...attempted, ok: false });
         } else if (executed !== null) {
-          const worked = executed.ok && gotSomewhere(executed, step, scrollY);
+          // `url` is still the address the screen was captured at: it is replaced below.
+          const worked = executed.ok && gotSomewhere(executed, step, scrollY, url);
           // Depth counts navigations and not progress: a scroll gets the agent somewhere
           // and puts nothing behind it to go back to.
           if (executed.ok && executed.step !== step) {
@@ -856,6 +881,23 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           scrollY = executed.scrollY;
           // Where the page ended up, which the next screen's criterion is read against.
           url = executed.url;
+          // And read against it now, before there is a next screen. A click is the moment a
+          // URL criterion becomes true, and a session that navigated on the last screen the
+          // cap allows — or on the turn it gave up on — would otherwise be decided by the
+          // page before it. Observed is observed: the walk's own ending is untouched, and so
+          // is `docs/FLOW.md` section 8's order of outcomes.
+          //
+          // Only a URL criterion. An element or a piece of text is a claim about what the
+          // page drew, and the elements in hand are the screen the action left — so reading
+          // one here would answer a question about the destination with the source's words.
+          if (criterion !== null && criterion.kind === 'url') {
+            lastSighting = observeCriterion(criterion, {
+              step: executed.step ?? step,
+              url,
+              elements: capture.elements,
+            });
+            completed = completed || lastSighting.observed;
+          }
           record(kind, aoi, worked, kind === 'scroll' ? String(executed.scrollY) : null, actedAtMs);
           history.push({ ...attempted, ok: worked });
           // The driver reports a target it could not resolve rather than throwing one, so

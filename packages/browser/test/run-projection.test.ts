@@ -113,6 +113,28 @@ describe('toScreenshotEntries', () => {
     ]);
   });
 
+  it('leaves the address a capture was taken at out of the row', () => {
+    // A screenshot row is addressed by variant *and* step and is written once however many
+    // sessions captured the screen, so there is no one address it could carry: a single-page
+    // application's two routes are two addresses on one step, and a row claiming either
+    // would be a statement about one session's walk in a table that is the run's. Where a
+    // screen was is recorded per session (`sessionSchema.screens[].url`), which is where a
+    // reader can ask it of a session rather than of the run (#441).
+    const moved = capture({ url: 'https://shop.invalid/signup' });
+
+    expect(toScreenshotEntries([moved])).toEqual([
+      {
+        variant: 'A',
+        step: 'cart',
+        path: 'screenshots/A/cart.png',
+        viewport: { width: 390, height: 844 },
+        pageHeight: 1400,
+        foldY: 844,
+      },
+    ]);
+    expect(toAoiEntries([moved])).toEqual(toAoiEntries([capture()]));
+  });
+
   it('records one row for a screen a dozen sessions all captured', () => {
     const sessions = Array.from({ length: 12 }, () => capture());
 

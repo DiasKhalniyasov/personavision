@@ -93,6 +93,27 @@ export interface CaptureElement {
 export interface Capture {
   variant: string;
   step: string | null;
+  /**
+   * The address the screen was captured at, read out of the page itself.
+   *
+   * A capture used to record a page's elements and not its location, and the walk above it
+   * carried an address along from the last action instead — so a navigation nobody acted on
+   * was never seen at all, and a `pushState` that committed after a click's promise settled
+   * left every screen after it reading the address of the page the click left (#441). A
+   * screen that knows where it was is what a URL success criterion is read against, and what
+   * a session records so that a reader of a finished run can say which page a screen was on.
+   *
+   * It is **not** part of the cache key (`captureCacheKey`): an address is not what makes two
+   * screens the same page to cache, so a cache hit is answered with this visit's address
+   * rather than with the cached visit's.
+   *
+   * Optional, because a source may not know it: the shape is the one #41 published and every
+   * capture built before this revision carries none, so a reader falls back rather than
+   * claiming the variant's URL. Both sources that ship fill it — Chromium reads it through
+   * `readSessionState`, and a replay resolves the recorded path against the variant the
+   * session was opened on.
+   */
+  url?: string;
   screenshot: string | null;
   viewport: Viewport;
   pageHeight: number;

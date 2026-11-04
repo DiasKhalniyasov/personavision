@@ -174,7 +174,11 @@ describe('two fixture-mode captures of one recorded page', () => {
       expect(other.elements.map((element) => element.bbox)).toEqual(
         one.elements.map((element) => element.bbox),
       );
-      expect(other).toEqual(one);
+      // Where each capture was is the one thing that is the session's rather than the
+      // recording's: these two were opened on two different variant URLs, and a replay
+      // reports its position in the URL space of the variant it was opened on.
+      expect(other.url).not.toBe(one.url);
+      expect({ ...other, url: one.url }).toEqual(one);
     } finally {
       await first.close(onePage);
       await second.close(otherPage);

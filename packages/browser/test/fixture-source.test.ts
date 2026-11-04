@@ -159,6 +159,22 @@ describe('createFixtureSource', () => {
       });
     });
 
+    it('records the address the replayed screen is at, in the variant’s own URL space', async () => {
+      await session('A', MOBILE, async (source, page, ctx) => {
+        const cart = await source.capture(page, ctx);
+        expect(cart.url).toBe('https://shop.invalid/cart.html');
+
+        // And it moves with the walk, to the same address a replayed action reports: a
+        // recording carries no origin, so both resolve the recorded path against the
+        // variant the session was opened on.
+        const primary = cart.elements.find((element) => element.isPrimaryAction);
+        const advanced = await source.act(page, { type: 'click', elementId: primary?.id }, ctx);
+
+        expect((await source.capture(page, ctx)).url).toBe('https://shop.invalid/payment.html');
+        expect(advanced.url).toBe('https://shop.invalid/payment.html');
+      });
+    });
+
     it('marks exactly one element as the step the task declares its primary action', async () => {
       await session('A', MOBILE, async (source, page, ctx) => {
         const capture = await source.capture(page, ctx);

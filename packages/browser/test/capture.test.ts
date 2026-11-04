@@ -57,6 +57,9 @@ const describeWithChromium = CHROMIUM_INSTALLED || process.env.CI ? describe : d
 /** This ticket's own pages: see `fixtures/navigation/README.md`. */
 const NAVIGATION_DIR = fileURLToPath(new URL('./fixtures/navigation', import.meta.url));
 
+/** The single-page application of #441: see `fixtures/spa/README.md`. */
+const SPA_DIR = fileURLToPath(new URL('./fixtures/spa', import.meta.url));
+
 const DESKTOP: Device = {
   name: 'desktop',
   viewport: { width: 1440, height: 900 },
@@ -314,6 +317,127 @@ describeWithChromium('a navigation under a capture', () => {
       // At most two compositions in that one attempt: the bound holds on a page that offers
       // the capture an unbounded number of new documents.
       expect(watched.compositions()).toBeLessThanOrEqual(2);
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+});
+
+/**
+ * A capture knows where it was (#441).
+ *
+ * A capture used to record a page's elements and not its location, and the walk above it
+ * carried an address along from the last action instead — so a `pushState` nobody acted on
+ * was never seen, and a success criterion about the address was read against whatever page
+ * the last action had reported. What is held here is that the address a capture records is
+ * **the page's own**, read where the rest of the screen is read, and that it is no part of
+ * what makes two screens the same page to cache.
+ */
+describeWithChromium('the address a capture records', () => {
+  let site: FixtureSite;
+  let runDir: string;
+  const opened: PageHandle[] = [];
+
+  /**
+   * The one step of this fixture, as a one-URL run derives it: `'/'` is the pattern
+   * `packages/cli`'s `taskFor` compiles for a site served at its root — which the owner's
+   * own run was — so the same step matches both views and nothing but the address differs
+   * between them.
+   */
+  const ONE_STEP: TaskDefinition = {
+    id: 'signing-up',
+    prompt: 'Sign up.',
+    steps: [
+      { id: 'page', label: 'The page', match: { urlPattern: '/', requiredSelector: '#app' } },
+    ],
+    successCriterion: 'The address bar reads /signup.',
+  };
+
+  beforeAll(async () => {
+    site = await serveFixtureSite({ root: SPA_DIR });
+  });
+
+  afterAll(async () => {
+    await site.close();
+  });
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'personavision-capture-address-'));
+  });
+
+  afterEach(async () => {
+    await Promise.all(opened.splice(0).map((handle) => closeSession(handle)));
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const open = async (): Promise<PageHandle> => {
+    const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+    opened.push(handle);
+    return handle;
+  };
+
+  const contextFor = (): CaptureContext => ({
+    variant: 'A',
+    device: DESKTOP,
+    task: ONE_STEP,
+    runDir,
+  });
+
+  /** The same move the page makes for a click, with nobody acting: a `setTimeout` `pushState`. */
+  const movesItselfTo = async (handle: PageHandle, to: string): Promise<void> => {
+    await handle.page.evaluate((path) => {
+      (window as unknown as { pvMoveIn: (ms: number, to: string) => void }).pvMoveIn(0, path);
+    }, to);
+    await handle.page.waitForURL((url) => url.pathname === to, { waitUntil: 'commit' });
+  };
+
+  it(
+    'is the one the page reports, on the screen the session landed on',
+    async () => {
+      const handle = await open();
+
+      const captured = await capture(handle, contextFor());
+
+      expect(captured.url).toBe(`${site.url}/app.html`);
+      expect(captured.step).toBe('page');
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'is the address a page moved itself to with nobody acting',
+    async () => {
+      const handle = await open();
+      await movesItselfTo(handle, '/signup');
+
+      const captured = await capture(handle, contextFor());
+
+      // The page is somewhere else and the session was opened nowhere else: an address
+      // carried from the variant or from the last action cannot see this navigation at all.
+      expect(captured.url).toBe(`${site.url}/signup`);
+      expect(handle.variant.url).toBe(`${site.url}/app.html`);
+      expect(captured.step).toBe('page');
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'is this visit’s, even where the markup is a cache hit',
+    async () => {
+      const handle = await open();
+      const first = await capture(handle, contextFor());
+
+      // The same view at another address: this application draws its first view for every
+      // path it does not know, so the markup, the step and the device are the three things
+      // the cache key is made of and all three are unchanged.
+      await movesItselfTo(handle, '/elsewhere');
+      const second = await capture(handle, contextFor());
+
+      expect(second.contentHash).toBe(first.contentHash);
+      expect(second.url).toBe(`${site.url}/elsewhere`);
+      expect(first.url).toBe(`${site.url}/app.html`);
+      // Nothing else about the hit changed: the address is not part of the screen the cache
+      // answered with.
+      expect({ ...second, url: first.url }).toEqual(first);
     },
     BROWSER_TIMEOUT_MS,
   );

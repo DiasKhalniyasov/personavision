@@ -65,11 +65,15 @@ export interface ObservableScreen {
   /** The step the screen is on, as the task recognised it. */
   readonly step: string;
   /**
-   * The address the screen was at: where the last action landed, or — on the **first** screen
-   * of a walk — the URL the session was opened with, because a capture records a page's
-   * elements and not its location and nothing is asked of the page itself. A site that
-   * redirects on load is therefore read at the address that was asked for on that one screen;
-   * every screen after it carries the address the driver reported.
+   * The address the screen was at: **the page's own**, as the capture read it, or — after an
+   * action — the position the driver reported the action reached (#441).
+   *
+   * It used to be the URL the session was opened with until an action replaced it, because a
+   * capture recorded a page's elements and not its location. A client-side navigation makes
+   * no request, so a framework link that pushed its history entry a moment after the click
+   * was never seen at all: the criterion was read against the page the click left, and the
+   * same click was a success or an abandonment depending on which side of the push the
+   * address happened to be read.
    */
   readonly url: string;
   /** What the capture extracted: each element's accessible name and its visible text. */
