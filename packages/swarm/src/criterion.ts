@@ -18,6 +18,12 @@
  * capture set and for the offline engine — and a session already written to disk can be
  * re-read against a criterion without being walked again.
  *
+ * **The kind decides which of the two is read.** A URL criterion is answered by the address;
+ * an element or a piece of text is answered by what the page drew, and never by the address.
+ * A page at `/order/summary` with nothing on it satisfies no claim that an order summary is
+ * visible, and a rule that let a filename answer one would put a completion rate on pages
+ * nobody could see.
+ *
  * **How a criterion becomes something to look for.** Its *terms*:
  *
  * - a **quoted span** is page copy by definition and is taken whole — `the “Create video”
@@ -35,7 +41,8 @@
  * `prices` and for `priced`, and `confirm` for `confirmation`. Not *any* term: a site whose
  * navigation says *Pricing* would otherwise satisfy "the pricing page is shown, with at least
  * one plan's price visible" on its home page, which is the defect this module exists to
- * remove.
+ * remove. A term naming a path is matched to the end of a path segment, so a failure page at
+ * `/checkout/success-failed` does not answer for `/checkout/success`.
  *
  * **It errs towards not observed.** A criterion naming a control by a category word the page
  * never utters — `the checkout link is visible`, on a page that says *Checkout* but never
@@ -57,7 +64,13 @@ import type { CriterionKind } from '@personavision/provider';
 export interface ObservableScreen {
   /** The step the screen is on, as the task recognised it. */
   readonly step: string;
-  /** The address the screen was at: the variant's URL, or where the last action landed. */
+  /**
+   * The address the screen was at: where the last action landed, or — on the **first** screen
+   * of a walk — the URL the session was opened with, because a capture records a page's
+   * elements and not its location and nothing is asked of the page itself. A site that
+   * redirects on load is therefore read at the address that was asked for on that one screen;
+   * every screen after it carries the address the driver reported.
+   */
   readonly url: string;
   /** What the capture extracted: each element's accessible name and its visible text. */
   readonly elements: readonly {
@@ -342,7 +355,7 @@ export const observeCriterion = (
   read: CriterionToObserve,
   screen: ObservableScreen,
 ): CriterionSighting => {
-  const haystack = haystackOf(screen);
+  const haystack = haystackOf(read, screen);
   const found: string[] = [];
   const missing: string[] = [];
   for (const term of read.terms) {
@@ -356,39 +369,59 @@ export const observeCriterion = (
   };
 };
 
-/** What a screen can be searched: its address as written, its words, and its copy as one run. */
+/** The one part of a screen a criterion of this kind is answered by, folded. */
 interface Haystack {
-  readonly url: string;
-  readonly copy: string;
+  /** The whole of it as one run of text, for a term of several words. */
+  readonly text: string;
+  /** Its words, for a term of one. */
   readonly words: ReadonlySet<string>;
+  /** Whether it is the address, which makes a term that names a path a path and not words. */
+  readonly isAddress: boolean;
 }
 
-const haystackOf = (screen: ObservableScreen): Haystack => {
+/**
+ * **The kind decides where the screen is searched**, and it is the whole reason
+ * `readCriterion` classifies a criterion at all.
+ *
+ * A **URL** criterion is about the address, so that is what it is read against. An
+ * **element** or a piece of **text** is about what the page drew, so those are read against
+ * the elements' accessible names and visible text and **never against the address**: `the
+ * order summary is visible` is a claim about a page, and a page at `/order/summary` with
+ * nothing on it at all satisfies no such claim. Letting a filename answer "is visible" would
+ * reopen the false-success channel this module exists to close — it is how a run reports a
+ * completion rate for a page nobody could see.
+ */
+const haystackOf = (read: CriterionToObserve, screen: ObservableScreen): Haystack => {
+  if (read.kind === 'url') {
+    const address = fold(screen.url);
+    return { text: address, words: new Set(wordsIn(address)), isAddress: true };
+  }
   const spoken: string[] = [];
   for (const element of screen.elements) {
     if (element.name != null && element.name !== '') spoken.push(element.name);
     if (element.text != null && element.text !== '') spoken.push(element.text);
   }
   const copy = fold(spoken.join(' · '));
-  const url = fold(screen.url);
-  return { url, copy, words: new Set([...wordsIn(copy), ...wordsIn(url)]) };
+  return { text: copy, words: new Set(wordsIn(copy)), isAddress: false };
 };
 
 /**
- * Whether one term is on a screen.
+ * Whether one term is on the part of the screen its kind is answered by.
  *
- * A term naming an address is looked for in the address, because that is the only place an
- * address is; a term of several words is looked for in the screen's copy as one run, and in
- * the address, because a quoted span is a phrase and not a bag of words; a single word is
- * looked for among the screen's words, where one word may be the other's beginning.
+ * A term naming a path is matched **to the end of a path segment**, so `/checkout/success`
+ * is not answered by `/checkout/success-failed`: a failure page whose path extends the
+ * success path is the one case where a substring would count the opposite of what was asked.
+ * A term of several words — a quoted span is a phrase and not a bag of words — is looked for
+ * as one run. A single word is looked for among the words, where one word may be the other's
+ * beginning.
  */
 const holds = (term: string, haystack: Haystack): boolean => {
   const sought = fold(term);
-  if (sought.startsWith('/') || sought.startsWith('http')) {
-    return haystack.url.includes(sought);
+  if (haystack.isAddress && (sought.startsWith('/') || sought.startsWith('http'))) {
+    return atPathBoundary(sought, haystack.text);
   }
   if (/[^a-z0-9]/u.test(sought)) {
-    return haystack.copy.includes(sought) || haystack.url.includes(sought);
+    return haystack.text.includes(sought);
   }
   const stem = singular(sought);
   for (const word of haystack.words) {
@@ -396,6 +429,21 @@ const holds = (term: string, haystack: Haystack): boolean => {
   }
   return false;
 };
+
+/**
+ * Whether an address holds a path, ending where the path ends: at the end of the address, or
+ * at the delimiter of a deeper segment, a query or a fragment.
+ */
+const atPathBoundary = (path: string, address: string): boolean => {
+  for (let at = address.indexOf(path); at !== -1; at = address.indexOf(path, at + 1)) {
+    const after = address.charAt(at + path.length);
+    if (after === '' || PATH_DELIMITERS.has(after)) return true;
+  }
+  return false;
+};
+
+/** What may follow a path without being part of it. */
+const PATH_DELIMITERS = new Set(['/', '?', '#', '&']);
 
 /**
  * Two words are the same word when one is the other's beginning: `price` answers for

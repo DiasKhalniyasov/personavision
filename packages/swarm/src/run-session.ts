@@ -449,6 +449,21 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   const maxScreens = input.maxScreens ?? SCREENS_PER_STEP * Math.max(1, task.steps.length);
   const finalStepId = task.steps.at(-1)?.id ?? null;
   /**
+   * Whether the walk ends when the task's last step is reached, whatever the criterion says.
+   *
+   * **A declared multi-step task says where its end is** (`docs/FLOW.md` section 12): its
+   * last step is the end of the errand, and walking past it would drive the session off the
+   * task it was given — onto a page the task recognises as no step, which this loop can only
+   * record as our own breakage. A task declaring **one** step says nothing of the kind: a
+   * one-URL run derives that single step from the URL it was handed, and the page matches it
+   * on load, so stopping there is stopping before anything has happened — which is the whole
+   * of #400.
+   *
+   * Reaching the end is not the same as having done the task. On a run with a goal the
+   * criterion still decides that; this only decides where the walk stops.
+   */
+  const walkEndsAtFinalStep = task.steps.length > 1;
+  /**
    * What the run said counts as having done the task, read once before the walk — `null` on
    * a run with no goal, where the final declared step is the end of the task (#400).
    *
@@ -499,6 +514,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   let scrollY = 0;
   let clockMs = 0;
   let completed = false;
+  /** Whether the walk reached the task's last declared step: the step rule, as a fact. */
+  let reachedFinalStep = false;
   /**
    * Where the session is, and what the last screen showed of the criterion.
    *
@@ -681,8 +698,13 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       if (criterion !== null) {
         lastSighting = observeCriterion(criterion, { step, url, elements: capture.elements });
       }
+      reachedFinalStep = reachedFinalStep || step === finalStepId;
       completed =
         criterion === null ? step === finalStepId : completed || lastSighting?.observed === true;
+      // Where the walk stops, which on a run with a goal is not the same question as whether
+      // the task was done: a declared multi-step task still ends at its last step even when
+      // its criterion was never observed, because the task declares nowhere to go next.
+      const endOfWalk = completed || (walkEndsAtFinalStep && step === finalStepId);
 
       /** One look at an area, after the screen's last one: where the eye went and for how long. */
       const lookAt = (area: Aoi, durationMs: number): SampledFixation => {
@@ -789,8 +811,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       } else if (kind === 'abandon') {
         record(kind, null, true);
         history.push({ step, kind, targetElementId: null, ok: true });
-      } else if (completed) {
-        // The task's last step: the agent is asked what it makes of the screen it arrived on
+      } else if (endOfWalk) {
+        // The end of the walk: the agent is asked what it makes of the screen it arrived on
         // and the walk ends there. Executing that decision would drive the session off the
         // task it was given — the task declares no step after this one to walk to.
       } else if (!PAGE_OPERATIONS.has(kind)) {
@@ -846,7 +868,7 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       }
 
       input.onScreen?.({ index: screenIndex, step, capture, aois, decision, executed });
-      if (failure !== null || completed || kind === 'abandon') break;
+      if (failure !== null || endOfWalk || kind === 'abandon') break;
     }
   } finally {
     await decider.close().catch(() => undefined);
@@ -879,7 +901,11 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       ok: action.ok,
     })),
     durationMs,
-    taskCompleted: completed,
+    // The **step rule**, always, which is what `decideOutcome` documents this field as and
+    // the only thing it reads it for: a run with no goal is decided by it, and a run with one
+    // is decided by `criterion` below. Writing the criterion's answer here as well would
+    // leave a reader of a trace unable to say which rule produced the boolean.
+    taskCompleted: reachedFinalStep,
     // The criterion as this session read it, where the run had one: what it looked for,
     // whether it saw it, and what the screen it ended on was missing. `decideOutcome` turns
     // that into the status and the words a reader gets; nothing here decides either.

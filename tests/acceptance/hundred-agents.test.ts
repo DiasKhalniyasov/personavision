@@ -112,16 +112,16 @@ const FEATURE = 'Checking out and paying for one item on my phone, start to fini
  * Its criterion is **what the sessions are now decided by** (#400): a session of a run with
  * a goal completes the task when the criterion is observed on a screen it captured, and not
  * by having reached the last declared step. So the sentence has to be one `readCriterion`
- * accepts and one the fixture site really satisfies — the receipt is a region of the
- * confirmation page and of no page before it. The sentence this walk carried before —
- * *"The confirmation screen shows an order number"* — names an order number rather than
- * anything of the three observable kinds, and the reader refuses it: under the rule this
- * walk now exercises, every one of the hundred sessions would have been `failed` for a
- * criterion nothing could evaluate.
+ * accepts and one the fixture site really satisfies **in what it drew** — the confirmation
+ * page names an image *A printed receipt* and a region *Receipt*, and no page before it says
+ * either word. The sentence this walk carried before — *"The confirmation screen shows an
+ * order number"* — names an order number rather than anything of the three observable kinds,
+ * and the reader refuses it: under the rule this walk now exercises, every one of the hundred
+ * sessions would have been `failed` for a criterion nothing could evaluate.
  */
 const GOAL: Goal = {
   task: FIXTURE_SITE_ERRAND,
-  successCriterion: 'The confirmation receipt is visible.',
+  successCriterion: 'A printed receipt is visible.',
   lastWrittenBy: 'user',
 };
 

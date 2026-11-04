@@ -209,10 +209,14 @@ const PROGRESS_ACTIONS: readonly TraceActionType[] = ['click', 'type'];
  * 2. **Did the persona give up?** Either it said so — an `abandon` action — or its patience
  *    or its persistence ran out over the trace. Asked before success, because a
  *    low-patience persona abandons part-way through a trace that a persistent persona
- *    walks to the end.
+ *    walks to the end. (Question 3 below is the one thing asked before it, and only
+ *    because it says this session measured nothing at all.)
  * 3. **Could the criterion be observed at all?** A criterion the reader cannot evaluate
- *    leaves the session nothing to have done, so it is `failed` saying so — never a success
- *    on the strength of the step the walk ended on.
+ *    leaves the session nothing to have done, so it is `failed` saying so. It is asked
+ *    before the persona and not after: a walk that spent its patience against a criterion
+ *    nobody could evaluate would otherwise be recorded as the person giving up on the
+ *    product, which is a verdict the run cannot support. Abandonment keeps its precedence
+ *    over the **success** test, which is what it is precedence over.
  * 4. **Was the criterion observed?** Where the run had one, that is the success condition.
  *    Where it had none, the step rule stands: the task's last declared step.
  * 5. **Did the agent act?** Success needs one action that operated the page. An arrival on
@@ -236,17 +240,22 @@ export function decideOutcome(
     return automationOutcome(failure, endStep);
   }
 
-  const giveUp = findGiveUp(trace, completed, persona, policy);
-  if (giveUp) {
-    return productOutcome('abandoned', giveUp.step, giveUpReason(trace, giveUp));
-  }
-
+  // Asked before the persona, and after our own browsing only: a criterion nothing can
+  // evaluate means this session measured nothing, so neither a success nor a give-up can be
+  // read off it. A walk that ran its patience out against an unevaluable criterion would
+  // otherwise be recorded as the person giving up on the product — a verdict the run cannot
+  // support, counted against the product's own score.
   if (criterion !== null && criterion.unobservable !== null) {
     return productOutcome(
       'failed',
       endStep,
       notDone(trace, endStep, `the criterion could not be observed. ${criterion.unobservable}`),
     );
+  }
+
+  const giveUp = findGiveUp(trace, completed, persona, policy);
+  if (giveUp) {
+    return productOutcome('abandoned', giveUp.step, giveUpReason(trace, giveUp));
   }
   if (!completed) {
     return productOutcome(
@@ -309,12 +318,9 @@ function missingClause(step: string, missing: readonly string[]): string {
   if (missing.length === 0) {
     return `the "${step}" step did not show it`;
   }
-  const words = missing.map((term) => `“${term}”`);
-  const said =
-    words.length === 1
-      ? (words[0] as string)
-      : `${words.slice(0, -1).join(', ')} or ${words.at(-1) as string}`;
-  return `nothing on the "${step}" step named ${said}`;
+  // "no X and no Y", never "X or Y": every term is required, and a reader told the step
+  // named neither would otherwise understand that either one would have done.
+  return `the "${step}" step named ${missing.map((term) => `no “${term}”`).join(' and ')}`;
 }
 
 /**

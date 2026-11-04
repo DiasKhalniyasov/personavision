@@ -602,10 +602,10 @@ describe('runSession', () => {
   describe('the criterion the run was given', () => {
     /**
      * The fixture site's own four screens, and a criterion only the last of them shows: the
-     * receipt is a region of the confirmation page and is on none of the three before it, so
-     * this criterion needs the clicks that get there before it becomes true.
+     * confirmation page names an image *A printed receipt*, and no page before it says either
+     * word, so this criterion needs the clicks that get there before it becomes true.
      */
-    const NEEDS_A_CLICK = 'The confirmation receipt is visible.';
+    const NEEDS_A_CLICK = 'A printed receipt is visible.';
 
     /** And one the cart satisfies the moment it loads, which is the defect being removed. */
     const TRUE_ON_LANDING = 'The cart is visible.';
@@ -693,6 +693,28 @@ describe('runSession', () => {
       expect(session.outcome.reason).toContain('the criterion could not be observed');
       expect(session.outcome.reason).toContain('is a judgement');
       expect(session.outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+    });
+
+    it('still ends a declared multi-step walk at its last step', async () => {
+      // A declared task says where its end is, and that does not change because a goal was
+      // given: the criterion decides whether the session *succeeded*, not how far it walks.
+      // Walking on would drive the session onto a page the task recognises as no step, which
+      // this loop can only record as our own breakage — turning a product failure into an
+      // automation failure that no score counts.
+      const session = await runSession(
+        sessionOver(runDir, {
+          task: { ...TASK, successCriterion: 'A tractor icon is visible.' },
+          persona: personaWho('careful'),
+          seed: 1,
+        }),
+      );
+
+      expect(session.screens.at(-1)?.step).toBe('confirmation');
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('automation_failure');
+      expect(session.outcome.attribution).toBe('product');
+      expect(session.outcome.excludedFromScores).toBe(false);
+      expect(session.outcome.reason).toContain('was never observed');
     });
 
     it('leaves a run with no goal decided by the step it reached', async () => {

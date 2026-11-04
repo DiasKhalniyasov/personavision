@@ -433,7 +433,7 @@ describe('a session succeeds only when its criterion was observed', () => {
     expect(outcome.status).toBe('failed');
     expect(outcome.step).toBe('review');
     expect(outcome.reason).toContain(`the criterion “${CRITERION}” was never observed`);
-    expect(outcome.reason).toContain('nothing on the "review" step named “receipt”');
+    expect(outcome.reason).toContain('the "review" step named no “receipt”');
     expect(outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
   });
 
@@ -467,6 +467,29 @@ describe('a session succeeds only when its criterion was observed', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.reason).toContain('without the agent acting on anything');
+  });
+
+  it('says a criterion could not be observed rather than that the person gave up', () => {
+    // A walk that spent its patience against a criterion nobody could evaluate measured
+    // nothing, so neither a success nor a give-up can be read off it. Calling it abandoned
+    // would put a verdict on the product — `attribution: "product"`, counted — that the run
+    // cannot support, and it is the one question asked before the persona's.
+    const stared: SessionTrace = {
+      screens: [{ index: 0, step: 'page' }],
+      fixations: [fixation(0, 500, 'hero'), fixation(0, 60_000, 'hero')],
+      actions: [{ tMs: 1_000, type: 'click', aoiId: 'hero', ok: true }],
+      durationMs: 90_000,
+      taskCompleted: false,
+      primaryActionAoiId: null,
+    };
+
+    // The same walk with no criterion is the ordinary give-up, which is unchanged.
+    expect(decideOutcome(stared, IMPATIENT).status).toBe('abandoned');
+
+    const outcome = decideOutcome(withCriterion(stared, UNOBSERVABLE), IMPATIENT);
+    expect(outcome.status).toBe('failed');
+    expect(outcome.status).not.toBe('abandoned');
+    expect(outcome.reason).toContain('the criterion could not be observed');
   });
 
   it('keeps abandonment and our own breakage ahead of the criterion', () => {

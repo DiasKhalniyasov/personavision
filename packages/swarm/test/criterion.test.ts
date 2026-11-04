@@ -73,11 +73,13 @@ describe('the criterion a run was given', () => {
 
 describe('matching the three kinds against a captured screen', () => {
   it('matches an element by its accessible name', () => {
-    // "Receipt" is the name of a region the page gives no visible text at all: a criterion
-    // about it is answered by what the accessibility tree says, which is what a capture has.
-    const criterion = read('The confirmation receipt is visible.');
+    // "A printed receipt" is the name of an image the page gives no visible text at all: a
+    // criterion about it is answered by what the accessibility tree says, which is what a
+    // capture has.
+    const criterion = read('A printed receipt is visible.');
 
     expect(criterion.kind).toBe('element');
+    expect(criterion.terms).toStrictEqual(['printed', 'receipt']);
     expect(observeCriterion(criterion, CONFIRMATION).observed).toBe(true);
     expect(observeCriterion(criterion, CART).observed).toBe(false);
   });
@@ -176,29 +178,56 @@ describe('what a screen has to have', () => {
     );
   });
 
-  it('reads the address as part of the screen, whatever kind the criterion is', () => {
-    // The step is ours and the page's words are the page's; the address is the one other
-    // thing a session captured, and a criterion naming where it ended up is answered by it.
-    const criterion = read('The confirmation receipt is visible.');
+  it('never lets the address answer for something being visible', () => {
+    // A page at /order/summary with nothing drawn on it satisfies no claim that an order
+    // summary is visible. A filename answering "is visible" would be the false success this
+    // module exists to remove, arriving by the back door.
+    const criterion = read('The order summary is visible.');
 
-    expect(criterion.terms).toStrictEqual(['confirmation', 'receipt']);
+    expect(criterion.kind).toBe('element');
     expect(
-      observeCriterion(criterion, screen('https://fixture.test/thanks', [{ name: 'Receipt' }]))
-        .observed,
+      observeCriterion(criterion, screen('https://shop.test/order/summary', [])).observed,
     ).toBe(false);
+    expect(
+      observeCriterion(criterion, screen('https://shop.test/x', [{ text: 'Order summary' }]))
+        .observed,
+    ).toBe(true);
+    // The same for a piece of text: the address is not copy anybody wrote on the page.
+    const quoted = read('The page shows the text “Checkout”.');
+    expect(quoted.kind).toBe('text');
+    expect(observeCriterion(quoted, screen('https://shop.test/checkout.html', [])).observed).toBe(
+      false,
+    );
+  });
+
+  it('reads the address, and only the address, for a URL criterion', () => {
+    const criterion = read('The address bar reads /checkout/success.');
+
+    // To the end of a path segment: the failure page whose path extends the success path is
+    // the one case where a substring would count the opposite of what was asked.
+    expect(
+      observeCriterion(criterion, screen('https://shop.test/checkout/success', [])).observed,
+    ).toBe(true);
+    expect(
+      observeCriterion(criterion, screen('https://shop.test/checkout/success?id=7', [])).observed,
+    ).toBe(true);
+    expect(
+      observeCriterion(criterion, screen('https://shop.test/checkout/success-failed', [])).observed,
+    ).toBe(false);
+    // And a page that merely draws the path is not at it.
     expect(
       observeCriterion(
         criterion,
-        screen('https://fixture.test/confirmation', [{ name: 'Receipt' }]),
+        screen('https://shop.test/cart', [{ text: 'You will land on /checkout/success' }]),
       ).observed,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('names the step it looked on, so a reason can say where it looked', () => {
-    const sighting = observeCriterion(read('The confirmation receipt is visible.'), CART);
+    const sighting = observeCriterion(read('A printed receipt is visible.'), CART);
 
     expect(sighting.step).toBe('page');
-    expect(sighting.missing).toStrictEqual(['confirmation', 'receipt']);
+    expect(sighting.missing).toStrictEqual(['printed', 'receipt']);
     expect(observeCriterion(read('The cart is visible.'), CART).step).toBe('page');
   });
 
@@ -222,6 +251,19 @@ describe('a criterion nothing can look for', () => {
     for (const where of [CART, CONFIRMATION]) {
       expect(observeCriterion(judgement, where).observed).toBe(false);
     }
+  });
+
+  it('is never answered by a URL criterion’s own words turning up on the page', () => {
+    // The kinds are not interchangeable: "the slug changes to pricing" is about the address,
+    // so a page that merely says Pricing has not answered it.
+    const slug = read('The slug changes to pricing.');
+
+    expect(slug.kind).toBe('url');
+    expect(slug.terms).toStrictEqual(['pricing']);
+    expect(
+      observeCriterion(slug, screen('https://usestring.ai/', [{ text: 'Pricing' }])).observed,
+    ).toBe(false);
+    expect(observeCriterion(slug, screen('https://usestring.ai/pricing', [])).observed).toBe(true);
   });
 
   it('is a criterion naming none of the three kinds, as well as one naming a feeling', () => {
