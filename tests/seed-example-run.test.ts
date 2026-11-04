@@ -109,8 +109,8 @@ describe('the committed run directory', () => {
   it('holds every file the layout fixes, at the path the contract spells', () => {
     expect(existsSync(paths.run)).toBe(true);
     expect(existsSync(paths.findings)).toBe(true);
-    // Since #295 the fixture carries its aggregate too, so a screen's suite reads the same
-    // file here that the committed artifact under `runs/` has.
+    // Since #295 the fixture carries its own aggregate too, composed from the sessions
+    // beside it, so the results-page step reads figures here as well as under `runs/`.
     expect(existsSync(paths.aggregate)).toBe(true);
     for (const sessionId of SESSION_IDS) {
       expect(existsSync(paths.session(sessionId))).toBe(true);
@@ -210,6 +210,11 @@ describe('the generator', () => {
  * `@personavision/scoring`, written by the generator above, and read here as the Funnel and
  * timing screens will read it.
  *
+ * No screen reads it yet — `apps/viewer`'s own tests serve `run.json`, `findings.json` and
+ * the sessions and nothing else — and that is what the results-page step (#226) turns on.
+ * What this gives that step is a fixture already carrying the figures, so its screens are
+ * written against known data instead of an invented fixture.
+ *
  * It is not a copy of the aggregate under `runs/`. The two directories are two different
  * runs — this one is the hand-authored run of `docs/design/prototype.html`, that one is
  * whatever the engine measured over the demo shop — so a file copied across would state 23
@@ -235,6 +240,13 @@ describe('the aggregate the fixture carries', () => {
     return last.completed / slice.sessionCount;
   };
 
+  /** Everybody who ran landed on the first screen, so this row is what the slice is of. */
+  const reachedFirstStep = (slice: Aggregate['funnelSlices'][number]): number => {
+    const first = slice.funnel[0];
+    if (first === undefined) throw new Error(`the funnel of slice "${slice.key}" holds no step`);
+    return first.reached;
+  };
+
   it('is of this run, stamped with this run’s own clock', () => {
     expect(storedAggregate.runId).toBe(RUN_ID);
     expect(storedAggregate.computedAt).toBe(run.createdAt);
@@ -258,8 +270,7 @@ describe('the aggregate the fixture carries', () => {
       const slice = funnelSlice(`variant:${variant}`);
 
       expect(slice.sessionCount, variant).toBe(score.scoredSessionCount);
-      // Everybody who ran landed on the first screen.
-      expect(slice.funnel[0].reached, variant).toBe(score.scoredSessionCount);
+      expect(reachedFirstStep(slice), variant).toBe(score.scoredSessionCount);
       // `scores[]` stores this rate rounded to six places, which is the precision the two
       // figures can agree to; the aggregate divides its own counts.
       expect(impliedCompletionRate(slice), variant).toBeCloseTo(score.completionRate, 5);
@@ -270,7 +281,7 @@ describe('the aggregate the fixture carries', () => {
     const whole = funnelSlice('all');
 
     expect(whole.sessionCount).toBe(storedAggregate.scoredSessionCount);
-    expect(whole.funnel[0].reached).toBe(storedAggregate.scoredSessionCount);
+    expect(reachedFirstStep(whole)).toBe(storedAggregate.scoredSessionCount);
     expect(whole.funnel.map((row) => row.step)).toEqual(STEP_IDS);
   });
 });

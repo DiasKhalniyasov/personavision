@@ -188,6 +188,9 @@ const readRunOverHttp = async (base: string): Promise<RunArtifact> => {
   // over this same mount (#295). It is optional in the contract — a run that computed none
   // carries no file — so an absent one is read as absent rather than as a failure.
   const served = await get(base, under(layout.aggregate));
+  if (!served.ok && served.status !== 404) {
+    throw new Error(`GET ${layout.aggregate} answered ${String(served.status)}`);
+  }
   const aggregate = served.status === 404 ? undefined : aggregateSchema.parse(await served.json());
   return { run, sessions, findings, ...(aggregate !== undefined && { aggregate }) };
 };
@@ -352,6 +355,13 @@ describe('the aggregate the committed example run carries', () => {
     return last.completed / slice.sessionCount;
   };
 
+  /** Everybody who ran landed on the first screen, so this row is what the slice is of. */
+  const reachedFirstStep = (slice: Aggregate['funnelSlices'][number]): number => {
+    const first = slice.funnel[0];
+    if (first === undefined) throw new Error(`the funnel of slice "${slice.key}" holds no step`);
+    return first.reached;
+  };
+
   const readAggregate = async (): Promise<Aggregate> => {
     const artifact = await readRun(runDir);
     if (artifact.aggregate === undefined) {
@@ -386,32 +396,44 @@ describe('the aggregate the committed example run carries', () => {
     );
     // The first step of the funnel is reached by everybody the slice is of: anybody who ran
     // at all landed on the first screen.
-    expect(funnelSlice(aggregate, 'all').funnel[0].reached).toBe(aggregate.scoredSessionCount);
+    expect(reachedFirstStep(funnelSlice(aggregate, 'all'))).toBe(aggregate.scoredSessionCount);
 
     for (const variant of onDisk.run.variants) {
       const score = storedScore(onDisk.run, variant.id);
       const slice = funnelSlice(aggregate, `variant:${variant.id}`);
 
       expect(slice.sessionCount, variant.id).toBe(score.scoredSessionCount);
-      expect(slice.funnel[0].reached, variant.id).toBe(score.scoredSessionCount);
+      expect(reachedFirstStep(slice), variant.id).toBe(score.scoredSessionCount);
       expect(impliedCompletionRate(slice), variant.id).toBeCloseTo(score.completionRate, 10);
     }
   });
 
-  it('is rewritten byte for byte by personavision aggregate over the committed directory', async () => {
+  it('is rewritten byte for byte by personavision aggregate over the committed sessions', async () => {
+    // The bytes compared are **git's**: the committed file is read first and is what the
+    // command's output has to equal. The command itself runs over a copy, because the
+    // committed directory is fingerprinted by the acceptance suites while this one runs —
+    // `tests/acceptance/helpers/harness.ts` hashes its bytes and sizes and asserts they did
+    // not move — and rewriting 700 KiB in place is neither atomic nor undone if the run is
+    // interrupted. The aggregate is deleted from the copy first, so what is asserted is a
+    // composition from the sessions rather than a file left where it was.
     const committed = await readFile(aggregateFile);
+    const elsewhere = await mkdtemp(join(tmpdir(), 'personavision-aggregate-'));
+    const copy = join(elsewhere, RUN_ID);
+    try {
+      await cp(runDir, copy, { recursive: true });
+      await rm(runPaths(copy).aggregate);
 
-    const aggregated = await runToCompletion(process.execPath, [CLI, 'aggregate', runDir]);
-    const after = await readFile(aggregateFile);
-    // Put back whatever a drifted composition wrote, so a failure here is a failure and not
-    // also an edit to a committed artifact.
-    if (!after.equals(committed)) await writeFile(aggregateFile, committed);
+      const aggregated = await runToCompletion(process.execPath, [CLI, 'aggregate', copy]);
 
-    expect(aggregated.code, aggregated.output).toBe(0);
-    expect(aggregated.output).toContain(`Aggregated 23 sessions of ${RUN_ID}`);
-    expect(after.equals(committed), 'the committed aggregate is not what the command writes').toBe(
-      true,
-    );
+      expect(aggregated.code, aggregated.output).toBe(0);
+      expect(aggregated.output).toContain(`Aggregated 23 sessions of ${RUN_ID}`);
+      expect(
+        await readFile(runPaths(copy).aggregate),
+        'the committed aggregate is not what the command writes',
+      ).toEqual(committed);
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true });
+    }
   }, 120_000);
 
   it('stays inside the budget a screen fetches in one request, and reports its size', () => {
