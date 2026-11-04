@@ -3,13 +3,14 @@ import { z } from 'zod';
 import type { Audience } from '@personavision/contract';
 
 /**
- * The audience store, as the screens read and write it: **#102's four routes and nothing
- * else**.
+ * The audience store, as the screens read and write it: **#102's four routes, and the one
+ * that writes an audience from a sentence**.
  *
  * - `GET /audiences` — the workspace's audiences, each with the people it generates
  * - `GET /audiences/:id` — one of them
  * - `POST /audiences` — a new one
  * - `PATCH /audiences/:id` — an edit to one that exists
+ * - `POST /audiences/from-sentence` — one written from the user's own sentence (#273)
  *
  * Every answer carries the audience **and its people**, because the people are generated
  * rather than stored: the server runs `@personavision/personas` and the browser never
@@ -173,3 +174,26 @@ export const updateAudience = async (
   audience: Audience,
 ): Promise<StoreResult<AudienceRecord>> =>
   ask({ method: 'PATCH', url: audienceUrl(recordId), body: audience }, recordSchema);
+
+/**
+ * `/audiences/from-sentence`: the one call the New test wizard's audience step makes.
+ *
+ * *"first-time creators in Kazakhstan, mostly on phones"* goes in and **one stored audience
+ * comes out** — the platform asks Muse Wonder for the structured audience (#257), stores it
+ * and answers with the record every other route here answers with, so the screen that shows
+ * the result reads the people it generates in the same breath (`docs/FLOW.md` section 12).
+ *
+ * It is one call and not two because the screen is about to show the result as *what the
+ * model made of your sentence*: an audience the user can see but that the platform has not
+ * accepted would be a form that can refuse the audience it has already drawn.
+ *
+ * A sentence that could not be read comes back as an ordinary refusal — there is nothing
+ * here that pretends a reply was readable — and the step prints it beside the box with the
+ * structured form as the way on (`AudienceStep`).
+ */
+export const FROM_SENTENCE = `${AUDIENCES}/from-sentence`;
+
+export const audienceFromSentence = async (
+  sentence: string,
+): Promise<StoreResult<AudienceRecord>> =>
+  ask({ method: 'POST', url: FROM_SENTENCE, body: { sentence } }, recordSchema);

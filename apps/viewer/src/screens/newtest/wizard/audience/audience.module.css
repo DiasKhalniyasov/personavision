@@ -1,0 +1,106 @@
+/* =============================================================================
+   `/new?step=audience` — the audience and the feature, on one screen.
+
+   `#screen-newtest-feature` of `docs/design/prototype.html`: the `.form.card-lg`
+   with the site, the feature and the audience sentence, and under it the second
+   `.card-lg` whose `.segbar` holds the six fields of what that sentence became.
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies; the one number here is the prototype's own
+   `.segbar` breakpoint, which a media query cannot read from a token.
+
+   The rules are scoped to this module rather than written as the prototype's own
+   global class names, because its `Forms` block — `.form`, `.field-group`,
+   `.formfoot`, `.segbar` — is shared with screens other tickets own. The shared
+   primitives these cards sit inside (`.card`, `.card-lg`, `.pagehead`,
+   `.footnote`, `.microlabel`, `.notice`) are the app's own, in
+   `src/styles/base.css`.
+
+   Two departures from the prototype, both stated rather than silent:
+
+   - its `.segbar` is `220px 1fr auto`, which is the three-part progress row of
+     `#screen-breakdown`. Here the bar holds **six labelled fields**, so it is
+     three equal tracks: a fixed 220px column would set `Participants` and
+     `Region and language` to two different widths for no reason a reader can see.
+   - nothing animates except the heading while a sentence is being read, which is
+     `pv-pulse` from the tokens — the one animation this screen is allowed.
+   ========================================================================== */
+
+.form {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-6);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* One column, and `minmax(0, …)` on every track: a track sized `auto` grows to its
+   widest item, so a long footnote would push the card wider rather than wrapping. */
+.fieldGroup {
+  display: grid;
+  min-inline-size: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.fieldGroup > label,
+.groupLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The prototype's own gap under the field the pair of controls belongs to. */
+.fieldGroup > .formfoot {
+  padding-top: var(--space-2);
+}
+
+.err {
+  color: var(--sev-critical);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- What we read from that sentence ------------------------------------ */
+
+.audienceName {
+  margin-top: var(--space-2);
+  font-size: var(--text-md);
+}
+
+/* The one moving thing on this screen, and only while the sentence is being read.
+   `pv-pulse` is the tokens' own keyframe, which `prefers-reduced-motion: reduce`
+   flattens there — so this heading is complete and still under reduce. */
+.reading {
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
+
+.segbar {
+  display: grid;
+  margin-top: var(--space-4);
+  align-items: start;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  font-size: var(--text-sm);
+}
+
+.segbar + :global(.footnote) {
+  margin-top: var(--space-4);
+}
+
+/* The picker beside the button: as wide as its own words and no wider, so the pair
+   of controls reads as a pair rather than as a second field. */
+.savedPicker {
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  .segbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

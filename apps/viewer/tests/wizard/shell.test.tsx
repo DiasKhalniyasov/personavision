@@ -91,7 +91,7 @@ describe('the step in the query', () => {
 
     for (const [step, name] of [
       ['path', 'What would you like us to do?'],
-      ['audience', 'Audience & feature'],
+      ['audience', 'Who should try it, and what should they try?'],
       ['goal', GOAL_HEADING],
       // It names the run it is about rather than itself; its own suite asserts the heading
       // in full (`tests/wizard/estimate/`).
@@ -107,7 +107,8 @@ describe('the step in the query', () => {
     await serveRunData();
     const { router } = mountApp(newTestStep('feature'));
 
-    expect(await heading('Audience & feature')).toBeTruthy();
+    // The step's own page head (#273), which is the screen `feature` is the second name of.
+    expect(await heading('Who should try it, and what should they try?')).toBeTruthy();
     // Canonicalised in place: the alias rendered its step and the address now names it, so
     // a reload or a shared link lands on the same screen.
     await waitFor(() => {
@@ -177,7 +178,7 @@ describe('the breadcrumb', () => {
   it('names the four steps in the prototype’s order and wording', async () => {
     await serveRunData();
     mountApp(newTestStep('audience'));
-    await heading('Audience & feature');
+    await heading('Who should try it, and what should they try?');
 
     expect(breadcrumb().textContent).toBe('Path / Audience & feature / Goal / Launch');
   });
@@ -444,7 +445,14 @@ describe('every screen this ticket mounts', () => {
       // hand-written width or colour would be a value restated outside the tokens.
       const main = document.querySelector('main') as HTMLElement;
       expect(main.querySelector('.wrap, .wrap-narrow'), address).not.toBeNull();
-      expect([...main.querySelectorAll('[style]')], address).toHaveLength(0);
+      // The registry's `select` writes two inline styles of its own wherever a screen uses
+      // one — the value's `pointer-events`, and the hidden control a form submission
+      // bubbles through. Those are the primitive's mechanics; what this asserts is that no
+      // *screen* wrote a value by hand, so the registry's own nodes are left out of it.
+      const byHand = [...main.querySelectorAll('[style]')].filter(
+        (node) => !node.hasAttribute('data-slot') && node.getAttribute('aria-hidden') !== 'true',
+      );
+      expect(byHand, address).toHaveLength(0);
       unmount();
     }
   });
