@@ -324,7 +324,7 @@ describe('the weight the repository carries', () => {
     for (const file of filesUnder(runDir)) {
       expect(file, 'a dotted path is working state, not artifact').not.toMatch(/(^|\/)\./);
       expect(file).toMatch(
-        /^(run\.json|findings\.json|sessions\/S-\d\d\.json|screenshots\/.+\.png)$/,
+        /^(run\.json|findings\.json|aggregate\.json|sessions\/S-\d\d\.json|screenshots\/.+\.png)$/,
       );
     }
   });

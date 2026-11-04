@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runPaths, validate } from '@personavision/contract';
 import { aggregate } from '@personavision/engine';
-import type { Findings, Run, Session } from '@personavision/contract';
+import type { Aggregate, Findings, Run, Session } from '@personavision/contract';
 import { RUN_ID, writeSeedRun } from '../scripts/seed-example-run.js';
 
 /**
@@ -30,6 +30,7 @@ const readJson = <Parsed>(file: string): Parsed => JSON.parse(readFileSync(file,
 
 const run = readJson<Run>(paths.run);
 const findings = readJson<Findings>(paths.findings);
+const storedAggregate = readJson<Aggregate>(paths.aggregate);
 const sessions = run.sessionIds.map((sessionId) => readJson<Session>(paths.session(sessionId)));
 
 const SESSION_IDS = Array.from(
@@ -108,6 +109,9 @@ describe('the committed run directory', () => {
   it('holds every file the layout fixes, at the path the contract spells', () => {
     expect(existsSync(paths.run)).toBe(true);
     expect(existsSync(paths.findings)).toBe(true);
+    // Since #295 the fixture carries its own aggregate too, composed from the sessions
+    // beside it, so the results-page step reads figures here as well as under `runs/`.
+    expect(existsSync(paths.aggregate)).toBe(true);
     for (const sessionId of SESSION_IDS) {
       expect(existsSync(paths.session(sessionId))).toBe(true);
     }
@@ -198,6 +202,87 @@ describe('the generator', () => {
     // The placeholder screenshots rasterise text, so their bytes follow the fonts the
     // machine has. The data is stable everywhere, and that is what the screens read.
     expect(jsonOnly(hashTree(join(first, RUN_ID)))).toEqual(jsonOnly(hashTree(committedDir)));
+  });
+});
+
+/**
+ * The aggregate this fixture carries (#295): composed from **its own** sessions by
+ * `@personavision/scoring`, written by the generator above, and read here as the Funnel and
+ * timing screens will read it.
+ *
+ * No screen reads it yet — `apps/viewer`'s own tests serve `run.json`, `findings.json` and
+ * the sessions and nothing else — and that is what the results-page step (#226) turns on.
+ * What this gives that step is a fixture already carrying the figures, so its screens are
+ * written against known data instead of an invented fixture.
+ *
+ * It is not a copy of the aggregate under `runs/`. The two directories are two different
+ * runs — this one is the hand-authored run of `docs/design/prototype.html`, that one is
+ * whatever the engine measured over the demo shop — so a file copied across would state 23
+ * sessions and a 0.92 completion rate about a run of 22 sessions that completed 0.82 of
+ * them. What the two have in common is the one thing a reader needs: each directory carries
+ * the aggregate of the sessions beside it, and each agrees with its own `run.json`.
+ *
+ * This run records no `startedAt` and no `finishedAt`, so it reads as still open — which
+ * makes it the fixture that also covers the open-run aggregate `docs/FLOW.md` section 14
+ * asks for.
+ */
+describe('the aggregate the fixture carries', () => {
+  const funnelSlice = (key: string): Aggregate['funnelSlices'][number] => {
+    const found = storedAggregate.funnelSlices.find((slice) => slice.key === key);
+    if (found === undefined) throw new Error(`the aggregate carries no funnel slice "${key}"`);
+    return found;
+  };
+
+  /** What the funnel's own last row says about the people in a slice who finished. */
+  const impliedCompletionRate = (slice: Aggregate['funnelSlices'][number]): number => {
+    const last = slice.funnel.at(-1);
+    if (last === undefined) throw new Error(`the funnel of slice "${slice.key}" holds no step`);
+    return last.completed / slice.sessionCount;
+  };
+
+  /** Everybody who ran landed on the first screen, so this row is what the slice is of. */
+  const reachedFirstStep = (slice: Aggregate['funnelSlices'][number]): number => {
+    const first = slice.funnel[0];
+    if (first === undefined) throw new Error(`the funnel of slice "${slice.key}" holds no step`);
+    return first.reached;
+  };
+
+  it('is of this run, stamped with this run’s own clock', () => {
+    expect(storedAggregate.runId).toBe(RUN_ID);
+    expect(storedAggregate.computedAt).toBe(run.createdAt);
+    // No status, no `startedAt`, no `finishedAt`: an open run, and the file says so rather
+    // than presenting a partial figure as final.
+    expect(storedAggregate.runStatus).toBe('open');
+  });
+
+  it('counts the sessions scores[] counted, and the two automation failures it left out', () => {
+    expect(storedAggregate.scoredSessionCount).toBe(22);
+    expect(storedAggregate.scoredSessionCount).toBe(sessions.filter(scored).length);
+    expect(storedAggregate.excludedAutomationFailures).toBe(2);
+    expect(storedAggregate.excludedAutomationFailures).toBe(
+      run.scores.reduce((total, score) => total + score.outcomeCounts.automationFailure, 0),
+    );
+  });
+
+  it('implies, for each version, the completionRate run.json stores', () => {
+    for (const variant of VARIANT_IDS) {
+      const score = scoreOf(variant);
+      const slice = funnelSlice(`variant:${variant}`);
+
+      expect(slice.sessionCount, variant).toBe(score.scoredSessionCount);
+      expect(reachedFirstStep(slice), variant).toBe(score.scoredSessionCount);
+      // `scores[]` stores this rate rounded to six places, which is the precision the two
+      // figures can agree to; the aggregate divides its own counts.
+      expect(impliedCompletionRate(slice), variant).toBeCloseTo(score.completionRate, 5);
+    }
+  });
+
+  it('reaches the first step with everybody the run scored', () => {
+    const whole = funnelSlice('all');
+
+    expect(whole.sessionCount).toBe(storedAggregate.scoredSessionCount);
+    expect(reachedFirstStep(whole)).toBe(storedAggregate.scoredSessionCount);
+    expect(whole.funnel.map((row) => row.step)).toEqual(STEP_IDS);
   });
 });
 
