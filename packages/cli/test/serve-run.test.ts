@@ -472,3 +472,156 @@ describe('the package the screens talk to', () => {
     expect(declared).not.toContain('playwright');
   });
 });
+
+/**
+ * A served workspace a launch can be posted to: the demo workspace seeded by the start, an
+ * audience on the capture set's own device, a site at the fixture's address, and a session
+ * cookie for the workspace that owns all three.
+ *
+ * It exists because the two cases below are about **when** a launch starts rather than about
+ * what it writes, and both need the whole of that setup to ask the question.
+ */
+const launchable = async (
+  gate: { source: CaptureSource },
+  people = 2,
+): Promise<{
+  workspace: TestWorkspace;
+  served: ServeResult;
+  logged: string[];
+  post: () => Promise<Response>;
+  runNow: (runId: string) => Promise<Run>;
+  runDirs: () => Promise<string[]>;
+  cleanup: () => Promise<void>;
+}> => {
+  const logged: string[] = [];
+  const workspace = await temporaryWorkspace();
+  const served = await serveCommand({
+    dataDir: join(workspace.dir, '.personavision'),
+    runsRoot: workspace.runsRoot,
+    viewerDist: workspace.viewerDist,
+    repoRoot,
+    port: 0,
+    build: false,
+    openBrowser: false,
+    log: (line) => void logged.push(line),
+    announce: () => undefined,
+    captureSource: gate.source,
+    runEnv: {},
+  });
+  const workspaceId = served.platform.seeded?.workspaceId ?? '';
+  const audience = await served.platform.store.audiences.create(workspaceId, audienceOf(people));
+  const site = await served.platform.store.sites.create(workspaceId, { url: SITE_URL });
+  const session = await served.platform.store.sessions.create({
+    accountId: served.platform.seeded?.accountId ?? '',
+    workspaceId,
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+  const cookie = `${SESSION_COOKIE}=${served.platform.signSession(session.id)}`;
+
+  return {
+    workspace,
+    served,
+    logged,
+    post: () =>
+      fetch(new URL('/runs', served.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify(submission(audience.id, site.id)),
+      }),
+    runNow: async (runId) =>
+      runSchema.parse(
+        JSON.parse(await readFile(runPaths(join(workspace.runsRoot, runId)).run, 'utf8')),
+      ),
+    // The run directories this server wrote: the committed fixture run the workspace was
+    // seeded from is not one of them.
+    runDirs: async () =>
+      (await readdir(workspace.runsRoot)).filter((entry) => entry !== workspace.runId),
+    cleanup: async () => {
+      await served.close().catch(() => undefined);
+      await workspace.cleanup();
+    },
+  };
+};
+
+/** The id a `201` answered. */
+const launchedRunId = async (response: Response): Promise<string> => {
+  expect(response.status).toBe(201);
+  return ((await response.json()) as { runId: string }).runId;
+};
+
+/**
+ * One run per site at a time, which is the gate `startTest` has always had and which a
+ * pipeline answering at the open could quietly defeat: the site has to stay taken until the
+ * run **ends**, or a second launch — and the hourly cap allows four — would put its own ten
+ * browsers on a site the first is still driving.
+ */
+describe('two launches on one site', () => {
+  let gate: { source: CaptureSource; release: () => void };
+  let captures: string;
+  let launch: Awaited<ReturnType<typeof launchable>>;
+
+  beforeAll(async () => {
+    captures = await onePageCaptureSet();
+    gate = heldAtTheFirstScreen(createFixtureSource(captures));
+    launch = await launchable(gate, 1);
+  });
+
+  afterAll(async () => {
+    gate.release();
+    await launch.cleanup();
+    await rm(captures, { recursive: true, force: true });
+  });
+
+  it('holds the second until the first run has finished', async () => {
+    const firstId = await launchedRunId(await launch.post());
+
+    // Sent and deliberately not awaited: nothing of it may open while the first run is still
+    // held at its first screen.
+    const second = launch.post();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(await launch.runDirs()).toEqual([firstId]);
+
+    gate.release();
+    const secondId = await launchedRunId(await second);
+    expect(secondId).not.toBe(firstId);
+    // The first was over before the second opened, which is the whole of what the queue
+    // promises: what a second launch loses is time, not sessions.
+    expect((await launch.runNow(firstId)).status).toBe('finished');
+    expect((await launch.runDirs()).sort()).toEqual([firstId, secondId].sort());
+  }, 120_000);
+});
+
+/**
+ * A run started by `POST /runs` outlives the response that answered it, so the command that
+ * started it has to own it: closing stops it and waits for it, rather than leaving a
+ * `run.json` saying `open` for ever and a directory still being written.
+ */
+describe('a server that closes while a run is in flight', () => {
+  let gate: { source: CaptureSource; release: () => void };
+  let captures: string;
+  let launch: Awaited<ReturnType<typeof launchable>>;
+
+  beforeAll(async () => {
+    captures = await onePageCaptureSet();
+    gate = heldAtTheFirstScreen(createFixtureSource(captures));
+    launch = await launchable(gate, 2);
+  });
+
+  afterAll(async () => {
+    gate.release();
+    await launch.cleanup();
+    await rm(captures, { recursive: true, force: true });
+  });
+
+  it('waits for the run it started and leaves it closed', async () => {
+    const runId = await launchedRunId(await launch.post());
+    expect((await launch.runNow(runId)).status).toBe('open');
+
+    gate.release();
+    await launch.served.close();
+
+    const run = await launch.runNow(runId);
+    expect(run.status).not.toBe('open');
+    expect(run.finishedAt).toBeDefined();
+  }, 120_000);
+});

@@ -8,7 +8,6 @@ import type {
   Platform,
   PlatformServer,
   SeededWorkspace,
-  StartedTest,
   TestPipeline,
 } from '@personavision/platform';
 import { modelCredentialPresent, ModelModeUnavailableError } from '@personavision/provider';
@@ -20,6 +19,7 @@ import { RunNotStartedError, startRun } from '../run/start.js';
 import { ensureViewerBuilt } from '../viewer-build.js';
 import type { CaptureSource } from '@personavision/browser';
 import type { RunRequest } from '@personavision/contract';
+import type { OpenedRun } from '../run/start.js';
 
 /**
  * `personavision serve` — the product's entry point: the platform server on localhost,
@@ -135,6 +135,20 @@ const asThisDeploymentCanServeIt = (
  * renders (#144). So the cause is what the pipeline reports, and the artifact beside it is
  * the record of the run that was refused.
  */
+/**
+ * A failure in one line, for the log.
+ *
+ * `(error as Error).message` prints `undefined` for anything thrown that is not an `Error`,
+ * and a run that broke at the level of the run often carries the real account in its
+ * `cause` — so both are read, and neither is assumed. It stays one line because that is
+ * what a server log of a background run gets; the artifact beside it is the record.
+ */
+const said = (error: unknown): string => {
+  const head = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const cause = error instanceof Error ? error.cause : undefined;
+  return cause === undefined ? head : `${head} (caused by ${String(cause)})`;
+};
+
 const asThePlatformReadsIt = (error: unknown): unknown =>
   error instanceof RunNotStartedError && error.cause instanceof ModelModeUnavailableError
     ? error.cause
@@ -167,27 +181,33 @@ const swarmPipeline =
   ({
     runsRoot,
     log,
+    running,
+    closing,
     captureSource,
     runEnv,
   }: {
     runsRoot: string;
     log: (line: string) => void;
+    /** The runs this server started and has not seen the end of, for `close` to wait on. */
+    running: Set<Promise<unknown>>;
+    /** Whether the server is shutting down, read by each run as its sessions land. */
+    closing: () => boolean;
     captureSource?: CaptureSource;
     runEnv?: Readonly<Record<string, string | undefined>>;
   }): TestPipeline =>
   async (request, audience, site, concurrency) => {
     /** The run once it is open, or `null` while the response is still being waited for. */
     let openedRunId: string | null = null;
-    let answer: (opened: StartedTest) => void = () => undefined;
+    let answer: (opened: OpenedRun) => void = () => undefined;
     let refuse: (reason: unknown) => void = () => undefined;
-    const opened = new Promise<StartedTest>((resolveWith, rejectWith) => {
+    const opened = new Promise<OpenedRun>((resolveWith, rejectWith) => {
       answer = resolveWith;
       refuse = rejectWith;
     });
 
     // Started and **not awaited**: see above. The handlers below are the whole of what
     // happens when it finishes, which is why this is not a floating promise.
-    void startRun({
+    const finished = startRun({
       runsRoot,
       request: asThisDeploymentCanServeIt(request, runEnv),
       audience,
@@ -203,6 +223,10 @@ const swarmPipeline =
       ...(concurrency === undefined ? {} : { concurrency }),
       ...(captureSource === undefined ? {} : { source: captureSource }),
       ...(runEnv === undefined ? {} : { env: runEnv }),
+      // A server that is going down takes its runs with it: the run ends on the sessions it
+      // has, and `startRun` closes the artifact as stopped rather than leaving it `open` for
+      // ever with nothing driving it.
+      stopping: closing,
       onOpen: (open) => {
         openedRunId = open.runId;
         answer(open);
@@ -219,12 +243,25 @@ const swarmPipeline =
         // of `run.json` the way it reads a finished run — so this logs one line and leaves it
         // there. It is a handler rather than nothing so that a background run that throws is
         // recorded rather than raised as an unhandled rejection that takes the server down.
-        if (openedRunId === null) refuse(asThePlatformReadsIt(error));
-        else log(`The test in ${openedRunId} did not finish: ${(error as Error).message}`);
+        if (openedRunId === null) {
+          // A run that could not start has an artifact of its own, which `startRun` wrote and
+          // which belongs to no workspace — so the one thing a deployment is told is where it
+          // is, since nothing in the product will offer it.
+          if (error instanceof RunNotStartedError) {
+            log(`A test was refused before it started: its record is in ${error.runDir}`);
+          }
+          refuse(asThePlatformReadsIt(error));
+        } else log(`The test in ${openedRunId} did not finish: ${said(error)}`);
       },
     );
 
-    return await opened;
+    // Waited on by `close`, so a server does not go down while a run is still writing into
+    // the directory it serves, and handed to the platform, which holds the site this run is
+    // driving until it ends rather than until it was answered.
+    running.add(finished);
+    void finished.finally(() => running.delete(finished));
+
+    return { ...(await opened), finished };
   };
 
 export const serveCommand = async ({
@@ -249,6 +286,17 @@ export const serveCommand = async ({
   // offer the connect flow, and absent means path 2 renders locked with the reason. This
   // is the only place the seam is filled — `createPlatform`'s default stays "not
   // registered", so no test depends on what the machine running it happens to export.
+  /**
+   * The runs this server has started and not seen the end of, and whether it is going down.
+   *
+   * A run started by `POST /runs` outlives the response that answered it, so the command has
+   * to own it: nothing else would stop it, and a server that went down with sessions in
+   * flight would leave a `run.json` saying `open` for ever and a directory still being
+   * written after whoever started it had gone.
+   */
+  const running = new Set<Promise<unknown>>();
+  let closing = false;
+
   const platform = await createPlatform({
     dataDir,
     runsRoot,
@@ -261,6 +309,8 @@ export const serveCommand = async ({
     pipeline: swarmPipeline({
       runsRoot: resolve(runsRoot),
       log,
+      running,
+      closing: () => closing,
       ...(captureSource === undefined ? {} : { captureSource }),
       ...(runEnv === undefined ? {} : { runEnv }),
     }),
@@ -319,5 +369,19 @@ export const serveCommand = async ({
       log(`Could not launch a browser (${(error as Error).message}). Open the URL above.`);
     }
   }
-  return { ...server, platform };
+  return {
+    ...server,
+    /**
+     * The socket first, so no further launch can arrive, then the runs already in flight —
+     * which end at their next session boundary, because `stopping` is now true. So a closed
+     * server leaves its runs closed on what they kept, and nothing is still writing into the
+     * run directory it was serving.
+     */
+    close: async (): Promise<void> => {
+      closing = true;
+      await server.close();
+      await Promise.all([...running]);
+    },
+    platform,
+  };
 };

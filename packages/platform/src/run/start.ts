@@ -41,6 +41,20 @@ export interface StartedTest {
   readonly engineMode: RunRequest['engineMode'];
   /** The mode that ran, or absent where no model was called. */
   readonly modelMode?: ModelMode;
+  /**
+   * The run, once it has **ended** — handed over by a pipeline that answers at the open
+   * rather than at the end (#398), so that the per-site queue below can hold the site for
+   * the whole run instead of releasing it the moment the id was answered.
+   *
+   * It must **settle rather than reject**, and nothing here reads an outcome off it: a run
+   * that broke is recorded by the pipeline that started it, and the only thing this says is
+   * that the site is free again.
+   *
+   * Absent for a pipeline that answers when the run is over — released at once, because by
+   * then it is over. Nothing outside `whileNothingElseRunsOnTheSite` reads it: `POST /runs`
+   * answers the run id.
+   */
+  readonly finished?: Promise<unknown>;
 }
 
 /**
@@ -301,15 +315,21 @@ const queueBySite = new Map<string, Promise<void>>();
  * is the order they run in — a second launch that waited ten minutes is not overtaken by a
  * third that arrived after it.
  *
- * `mine` only ever **resolves**: it is settled in a `finally`, so a run that throws releases
- * the site rather than leaving every launch behind it waiting for a run that is over. The
- * last one out deletes the key, so the map holds an entry per site being driven rather than
- * one per site that ever was.
+ * `mine` only ever **resolves**: a run that throws releases the site rather than leaving
+ * every launch behind it waiting for a run that is over. The last one out deletes the key, so
+ * the map holds an entry per site being driven rather than one per site that ever was.
+ *
+ * **It is released when the run ends, not when the launch was answered.** A pipeline that
+ * answers at the open (#398) hands back `StartedTest.finished`, and the site stays taken
+ * until that settles — otherwise a second launch, which the hourly cap allows four of, would
+ * put its own ten browsers on a site the first launch is still driving, which is the twenty
+ * this gate exists to keep off it. A pipeline that answers at the end hands back none and is
+ * released at once, which is the same moment as before.
  */
-const whileNothingElseRunsOnTheSite = async <T>(
+const whileNothingElseRunsOnTheSite = async (
   siteId: string,
-  run: () => Promise<T>,
-): Promise<T> => {
+  run: () => Promise<StartedTest>,
+): Promise<StartedTest> => {
   const ahead = queueBySite.get(siteId);
   let done: () => void = () => undefined;
   const mine = new Promise<void>((resolve) => {
@@ -317,12 +337,21 @@ const whileNothingElseRunsOnTheSite = async <T>(
   });
   queueBySite.set(siteId, mine);
   await ahead;
-  try {
-    return await run();
-  } finally {
+  const release = (): void => {
     if (queueBySite.get(siteId) === mine) queueBySite.delete(siteId);
     done();
+  };
+  let started: StartedTest;
+  try {
+    started = await run();
+  } catch (error) {
+    release();
+    throw error;
   }
+  if (started.finished === undefined) release();
+  // Either way: what it settles as says nothing about the run, only that the site is free.
+  else void started.finished.then(release, release);
+  return started;
 };
 
 export const startTest = async ({
