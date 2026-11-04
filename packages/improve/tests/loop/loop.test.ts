@@ -1,9 +1,11 @@
-import { readRun } from '@personavision/contract';
+import { readRun, SCHEMA_VERSION, writeRun } from '@personavision/contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMMENT_MARKER, runImproveLoop } from '../../src/index.js';
+import { validAggregate } from '../../../contract/tests/fixtures.js';
 import {
   CHANGE_TITLE,
   commentIsPosted,
+  comparisonDriven,
   HELD_OUT_ID,
   loopFixture,
   opensTheChange,
@@ -120,6 +122,37 @@ describe('the whole loop over a recorded repository', () => {
     // The holdout's own figures sit beside the two versions', about the holdout alone.
     const held = run.scores.find((score) => score.holdout !== undefined);
     expect(held?.holdout?.scoredSessionCount).toBe(1);
+  });
+
+  /**
+   * The figures the run wrote for itself as its sessions landed (#293).
+   *
+   * This write is where they could be lost: it is the loop's own, over the whole artifact,
+   * and `writeRun` removes an `aggregate.json` it is not given. The driver here writes the
+   * directory the way the swarm leaves it — figures and all — because the fixture's own
+   * driver writes nothing, which is the case the loop already handled.
+   */
+  it('keeps the figures the run wrote for itself while it was open', async () => {
+    const figures = { ...validAggregate(), runId: RUN_ID };
+
+    const result = finished(
+      await runImproveLoop(
+        fixture.request({
+          drive: async (request) => {
+            const driven = comparisonDriven(request);
+            await writeRun(request.runDir, {
+              run: driven.run,
+              sessions: [...driven.sessions],
+              findings: { schemaVersion: SCHEMA_VERSION, runId: request.runId, findings: [] },
+              aggregate: figures,
+            });
+            return driven;
+          },
+        }),
+      ),
+    );
+
+    expect((await readRun(result.runDir)).aggregate).toEqual(figures);
   });
 
   it('posts one comment carrying the marker a re-run finds it by', async () => {

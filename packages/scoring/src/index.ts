@@ -75,6 +75,7 @@ export type {
 } from './recommendations/index.js';
 
 export {
+  aggregateComputedAt,
   BIN_COUNT,
   composeAggregate,
   distributionOf,

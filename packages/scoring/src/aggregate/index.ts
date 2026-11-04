@@ -52,5 +52,5 @@ export type { TimingBuilder, TimingInput } from './timing.js';
 export { screenFiguresOfSlice } from './screens.js';
 export type { ScreenFiguresBuilder, ScreenFiguresInput } from './screens.js';
 
-export { composeAggregate } from './compose.js';
+export { aggregateComputedAt, composeAggregate } from './compose.js';
 export type { AggregateComposer, AggregateInput } from './compose.js';

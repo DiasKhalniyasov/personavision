@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runPaths, validate } from '@personavision/contract';
+import { aggregateSchema, runPaths, validate } from '@personavision/contract';
 import { CAPS, ONE_URL_VARIANT_ID } from '@personavision/platform';
 import { MODEL_ID_BY_MODE } from '@personavision/provider';
 import { engineOnTheRecord } from '@personavision/swarm';
@@ -421,6 +421,20 @@ describe('a run that is stopped', () => {
     expect(run.progress?.finishedSessions).toBeGreaterThan(0);
     expect(run.progress?.finishedSessions).toBeLessThan(6);
     expect(run.sessionIds).toHaveLength(run.progress?.finishedSessions ?? 0);
+
+    // The figures are of the run as it ended, not of the moment it was interrupted (#293).
+    // The loop writes `aggregate.json` as its sessions land and says `open` in every one of
+    // them, because at the time it writes them the run is; the file carried through this
+    // close unchanged would tell a reader a finished run's figures are partial for ever, and
+    // its `computedAt` would no longer be the one `personavision aggregate` derives.
+    const aggregate = aggregateSchema.parse(
+      JSON.parse(await readFile(runPaths(runDir).aggregate, 'utf8')),
+    );
+    expect(aggregate.runStatus).toBe('finished');
+    expect(aggregate.computedAt).toBe(run.finishedAt);
+    expect(aggregate.scoredSessionCount + aggregate.excludedAutomationFailures).toBe(
+      run.sessionIds.length,
+    );
   });
 });
 

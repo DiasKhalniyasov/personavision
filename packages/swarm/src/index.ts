@@ -12,6 +12,12 @@
  * that is not held out, and a plan whose two sides are not the same people on the same
  * seeds, are refused before a run is written.
  *
+ * `aggregateRun` is the run's own `aggregate.json`, composed over the sessions on disk and
+ * written through the contract (#293). The run loop calls it as each session lands and once
+ * more when the run closes, so the results page has figures to read while the test is still
+ * running; it is exported because every call is the same whole re-composition, so whatever
+ * holds a run directory re-aggregates one by calling it.
+ *
  * `engineOnTheRecord` is the run artifact's calibration block and the engine version beside
  * it (#92): the figures the header badge states, carried from the engine's own configuration,
  * or `null` from an engine nobody calibrated. The run loop writes both before its first
@@ -37,7 +43,7 @@ export { runSession } from './run-session.js';
 export type { RunSessionInput, SessionProviders, SessionScreen } from './run-session.js';
 export { holdoutRefusal, sameSeedsOnBothSides } from './holdout.js';
 export type { SwarmHoldout } from './holdout.js';
-export { DEFAULT_CONCURRENCY, planSwarm, runSwarm } from './run-swarm.js';
+export { aggregateRun, DEFAULT_CONCURRENCY, planSwarm, runSwarm } from './run-swarm.js';
 export {
   chooseRunner,
   DEFAULT_JOB,

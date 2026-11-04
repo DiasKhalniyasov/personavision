@@ -33,6 +33,27 @@ export interface AggregateInput {
 export type AggregateComposer = (input: AggregateInput) => Aggregate;
 
 /**
+ * **When an aggregate of this run was computed: the run's own clock, never a wall clock.**
+ *
+ * The file has to be recomputable — delete it, aggregate the directory again, get the same
+ * bytes back (#294) — and that is only true if the one field nothing else derives is read
+ * off the run rather than off the moment somebody asked. A wall clock would put a fresh
+ * timestamp in every re-aggregation, so the diff after a fix to a figure would never be only
+ * the fix, and the byte-identical file the run loop is held to (#293) would be unreachable.
+ *
+ * A run that has finished is stamped with when it finished; one still open with when it
+ * started, which is the earliest thing it can honestly claim; and a run that recorded
+ * neither with when it was asked for, which every run has.
+ *
+ * It lives here, beside the composer, because it is part of composing: the two callers that
+ * land the file — the run loop as its sessions land, and `personavision aggregate` over a
+ * directory — have to agree about it to the character, and two copies of a rule that has to
+ * agree is the one way to make these bytes differ.
+ */
+export const aggregateComputedAt = (run: Run): string =>
+  run.finishedAt ?? run.startedAt ?? run.createdAt;
+
+/**
  * The aggregate of a run, over the sessions that exist at this moment.
  *
  * Four properties are held by how this is written, rather than by anything it computes:
