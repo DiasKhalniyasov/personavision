@@ -1,0 +1,401 @@
+/* =============================================================================
+   The carousel of agent runs on the front page (#428).
+
+   The front page has no prototype section, so what is reproduced here is the
+   step's own language: the `.strip` the section sits in, `.microlabel`,
+   `.footnote` and `.num` from `src/styles/base.css`, the shadcn controls of
+   `src/components/ui/`, and the mat's own values from `docs/FLOW.md` section 10.
+   The one piece of layout invented here is the slide's two columns and the
+   trait rows, which is what the ticket's screen contract allows.
+
+   Every value below is a custom property from `docs/design/tokens.css`. No
+   colour, size, spacing step, radius, duration or breakpoint value is restated
+   as a literal, with the single exception the rest of this app already makes:
+   a media query cannot read a custom property, so the two breakpoints are the
+   prototype's own numbers of pixels, as `landing.module.css` states them.
+
+   Nothing here animates and nothing transitions. The slides do not slide, at
+   any motion setting: the carousel is complete and still on first paint, which
+   is what the rest of `/` already is, and the page's animated moments belong to
+   #125 rather than to this section.
+
+   What is **not** here is anything measured. Where a fixation lands, how large
+   a page is and how far along its track a trait value sits are read out of the
+   artifact and set inline by the component, because they are data and not
+   design.
+   ========================================================================== */
+
+.section {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* `--text-xl` is the section headline of `docs/FLOW.md` section 10, as *How it
+   works* below is set; the document shell gives every heading its family. */
+.heading {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+/* The task once, above the slides: the one thing every person in a set shares. */
+.task {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+/* ---- The controls ------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A dot is a real tab, so it is a button with a visible focus ring rather than
+   a decoration: the ring is the app's own, from `base.css`'s `:focus-visible`. */
+.dot {
+  width: var(--space-3);
+  height: var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.dot[aria-selected='true'] {
+  border-color: var(--color-heading);
+  background: var(--color-heading);
+}
+
+/* ---- One slide ---------------------------------------------------------- */
+
+.panel {
+  margin-top: var(--space-2);
+}
+
+/* The invented layout: who they are, what they thought and how it ended down
+   the left, and the stage beside all three. */
+.slide {
+  display: grid;
+  align-items: start;
+  gap: var(--space-6) var(--space-8);
+  grid-template-areas:
+    'who stage'
+    'thinking stage'
+    'ended stage';
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-rows: auto auto 1fr;
+}
+
+.who {
+  display: grid;
+  gap: var(--space-2);
+  grid-area: who;
+}
+
+.stage {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  grid-area: stage;
+}
+
+.thinking {
+  display: grid;
+  gap: var(--space-2);
+  grid-area: thinking;
+}
+
+.ended {
+  display: grid;
+  gap: var(--space-1);
+  grid-area: ended;
+}
+
+/* ---- 1. Who they are ---------------------------------------------------- */
+
+/* The person's name is the slide's own heading, under the section's `h2`. */
+.name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.role {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.traits {
+  display: grid;
+  margin-top: var(--space-2);
+  gap: var(--space-2);
+}
+
+/* A label, a track and the value: three cells on one row, so the tracks line
+   up under one another and can be read against each other. */
+.trait {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.trait dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trait dd {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* The track is a bar in the sunken colour that form fields and bar tracks
+   already use, filled to the artifact's own value. The fill is a gradient stop
+   rather than a second element, so the row is one box and the value that sets
+   it is the only number the component writes. */
+.track {
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    to right,
+    var(--color-heading) 0 calc(var(--trait-value) * 100%),
+    var(--color-surface-sunken) calc(var(--trait-value) * 100%) 100%
+  );
+}
+
+.trait dd b {
+  color: var(--color-heading);
+  font-size: var(--text-xs);
+}
+
+/* ---- 2. What they did --------------------------------------------------- */
+
+.views {
+  justify-content: start;
+}
+
+.figure {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* The mat the capture lies on, carrying the values `docs/FLOW.md` section 10
+   gives a screenshot frame: a page screenshot is never flush against the
+   layout. A touch device's is the phone's own shell instead — the same padding
+   in the heading colour, which is what makes the frame read as a handset
+   without a drawing of one. */
+.mat {
+  display: grid;
+  justify-items: center;
+  padding: var(--frame-mat-pad);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-sunken);
+}
+
+.mat[data-frame='phone'] {
+  padding: var(--space-3);
+  background: var(--color-heading);
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.mat[data-frame='phone'] .frame {
+  border-color: var(--color-heading);
+  border-radius: var(--radius-lg);
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page img {
+  display: block;
+  width: 100%;
+}
+
+/* The stage's text alternative, set as the Verdict screen's caption is. */
+.caption {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The areas and their stored figures: a long list read as rows, so it is
+   capped and scrolls. A scroll container is reachable without a pointer
+   because it is a list of links and text inside a `dl` the reader tabs past —
+   the figures are all on the page, which is what keeps this from hiding any. */
+.areas {
+  display: grid;
+  max-height: calc(var(--space-8) * 7);
+  padding-right: var(--space-2);
+  gap: var(--space-1);
+  overflow-y: auto;
+  font-size: var(--text-xs);
+}
+
+.area {
+  display: grid;
+  align-items: baseline;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-bottom: var(--border-width) solid var(--color-border);
+  padding-bottom: var(--space-1);
+}
+
+.area dt {
+  overflow: hidden;
+  color: var(--color-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.area dd {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.areaShare {
+  color: var(--color-text-faint);
+}
+
+/* ---- 3. What they thought ----------------------------------------------- */
+
+.thoughts {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+/* The sentence, with the fixation number it sits at beside it. The number is
+   the tie to the Path view's marker: the same figure, on both. */
+.thought {
+  display: grid;
+  align-items: start;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  color: var(--color-heading);
+  font-size: var(--text-sm);
+}
+
+.pin {
+  display: grid;
+  place-items: center;
+  min-width: var(--space-6);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-heading);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+.noThought {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- 4. How it ended ---------------------------------------------------- */
+
+.outcome {
+  color: var(--color-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.reason {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.replay {
+  margin-top: var(--space-1);
+  justify-self: start;
+  font-size: var(--text-sm);
+}
+
+/* ---- The two states ----------------------------------------------------- */
+
+/* While the slide set is being read: the section holds the height a slide will
+   have, so the page below it does not jump when the slides arrive. */
+.waiting {
+  block-size: calc(var(--space-8) * 16);
+  border-radius: var(--radius-xl);
+}
+
+/* The slide set could not be read. One quiet line, and never a broken frame. */
+.unavailable {
+  max-width: var(--layout-max-narrow);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- Narrow windows ----------------------------------------------------
+   The prototype's own two breakpoints, as `landing.module.css` states them. */
+
+@media (max-width: 1000px) {
+  /* Everything stacks rather than squashes, in the order the ticket reads the
+     four parts in: who they are, what they did, what they thought, how it
+     ended. */
+  .slide {
+    grid-template-areas:
+      'who'
+      'stage'
+      'thinking'
+      'ended';
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .heading {
+    font-size: var(--text-lg);
+  }
+
+  /* The mat loses its border so the phone frame inside it has the column's full
+     width to fit in, which is what keeps a 390px capture from overflowing a
+     390px window. */
+  .mat {
+    padding: var(--space-2);
+  }
+
+  /* A trait row becomes two: the label over its own track and value, because
+     three columns at this width leave the label a word wide. */
+  .trait {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .trait dd {
+    grid-column: 1 / -1;
+  }
+
+  /* Both controls and the dots are one row that wraps rather than three
+     buttons squeezed to their initials. */
+  .controls {
+    gap: var(--space-2);
+  }
+}
