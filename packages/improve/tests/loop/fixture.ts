@@ -59,7 +59,7 @@ export const PULL_NUMBER = 482;
 export const PULL_URL = `https://github.com/clipforge/web/pull/${String(PULL_NUMBER)}`;
 export const PREVIEW_URL = 'https://clipforge-web-git-pv.preview.example/cart';
 export const RUN_URL =
-  'https://app.personavision.example/runs/improve-2026-10-24-1402-northwind-demo';
+  'https://app.personavision.example/runs/2026-10-24-1402-northwind-demo-improve';
 
 export const DEPLOYMENT_ID = 7701;
 export const COMMENT_ID = 55_501;

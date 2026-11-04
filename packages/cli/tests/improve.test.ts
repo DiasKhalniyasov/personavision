@@ -65,7 +65,7 @@ const path = {
   statuses: `/repos/${REPOSITORY}/deployments/${String(DEPLOYMENT_ID)}/statuses?per_page=100`,
   comments: `/repos/${REPOSITORY}/issues/${String(PULL_NUMBER)}/comments?per_page=100`,
   postComment: `/repos/${REPOSITORY}/issues/${String(PULL_NUMBER)}/comments`,
-  ourBranch: (runId: string) => `/repos/${REPOSITORY}/git/ref/heads/personavision/improve-${runId}`,
+  ourBranch: (runId: string) => `/repos/${REPOSITORY}/git/ref/heads/personavision/${runId}-improve`,
 } as const;
 
 const readsTheFile: RecordedExchange = {
@@ -284,12 +284,14 @@ describe('personavision improve, over the recorded transport and the capture set
     expect(result.kind).toBe('finished');
     if (result.kind !== 'finished') return;
     const { run } = await readRun(result.runDir);
-    expect(run.runId).toBe(`improve-${improvable.runId}`);
+    expect(run.runId).toBe(`${improvable.runId}-improve`);
     expect(run.improve?.pullRequest).toEqual({
       repository: REPOSITORY,
       number: PULL_NUMBER,
       url: PULL_URL,
       title: RECOMMENDATION_SENTENCE,
+      // The state the Improve screen prints beside the number (#307).
+      state: 'open',
     });
     expect(run.improve?.preview).toEqual({ url: PREVIEW_URL });
     expect(run.improve?.changedFile).toBe(CHANGED_FILE);
@@ -420,7 +422,7 @@ describe('personavision improve when a step stops the loop', () => {
     expect(error.message).toContain(PULL_URL);
     expect(error.message).toContain('stays open: nothing about it was undone');
     // And the run it recorded says what had already happened.
-    const { run } = await readRun(join(improvable.fixture.runsRoot, `improve-${improvable.runId}`));
+    const { run } = await readRun(join(improvable.fixture.runsRoot, `${improvable.runId}-improve`));
     expect(run.status).toBe('failed');
     expect(run.failure?.detail).toContain(PULL_URL);
   });
