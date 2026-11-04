@@ -129,6 +129,23 @@ const INTERRUPTED = /is interrupted by another navigation/i;
  */
 const DESTROYED_CONTEXT = /Execution context was destroyed/i;
 
+/**
+ * A node the driver's checks were re-run against and did not find again: Playwright's own
+ * sentence for an element taken out of the DOM under an action.
+ *
+ * It is what a framework's link raises on the click that **worked**. The route resolves, the
+ * next view renders, the view the link was in is removed — and a check still running against
+ * that node finds it gone, for an action that did exactly what the agent asked. So the
+ * message alone says nothing about whether anything of ours broke, which is why it is read
+ * together with where the page ended up (`isLostTarget`).
+ *
+ * It is deliberately **not** one of `mapToAutomationFailure`'s readings. An error this file
+ * cannot place is returned as `null` and rethrown by its caller, and a detached target on a
+ * page that went nowhere stays that mystery rather than becoming a fifth reason or being
+ * filed under one of the four.
+ */
+const DETACHED_ELEMENT = /Element is not attached to the DOM/i;
+
 /** The lowest HTTP status a session cannot be driven on: a page that is an error, not a page. */
 const FIRST_ERROR_STATUS = 400;
 
@@ -160,6 +177,28 @@ const readSelector = (message: string): string | null => {
 export const isDestroyedContext = (error: unknown): boolean => {
   const raised = asError(error);
   return raised !== null && DESTROYED_CONTEXT.test(readMessage(raised));
+};
+
+/**
+ * Whether an error is the driver saying that **what the action was aimed at is no longer
+ * there to aim at**: the node was taken out of the DOM, or the execution context its checks
+ * were running in was destroyed by a navigation.
+ *
+ * One question answers both sentences because they are one situation seen from two sides. A
+ * click on a single-page application's link resolves a route, and the render that commits the
+ * new address removes the view the link was in; whether the driver misses the node or the
+ * context first is only a matter of which of its checks was still in flight.
+ *
+ * It is a question about the message and nothing else. Whether the action *worked* cannot be
+ * known from here — that depends on where the page ended up — and that half belongs to
+ * `act.ts`, which holds the address the click started from. The words are read here so that
+ * the one place which owns what a driver's sentences mean keeps owning them (#442).
+ */
+export const isLostTarget = (error: unknown): boolean => {
+  const raised = asError(error);
+  if (raised === null) return false;
+  const message = readMessage(raised);
+  return DETACHED_ELEMENT.test(message) || DESTROYED_CONTEXT.test(message);
 };
 
 export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
