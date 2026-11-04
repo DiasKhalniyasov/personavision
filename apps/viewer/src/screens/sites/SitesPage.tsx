@@ -7,11 +7,15 @@ import { SiteCard } from './SiteCard';
 import styles from './sites.module.css';
 
 /**
- * `/sites` — which of my sites can I test, and which are proved mine?
+ * `/sites` — which of my sites can I test, and what is each allowed?
  *
  * `#screen-sites` of `docs/design/prototype.html`: the workspace's sites as cards, each
  * reading its own figures rather than the word "limited", and a card for adding one. The
  * screen a new workspace lands on, and the only way in to `/sites/new`.
+ *
+ * **There is nothing to prove about a site** (`docs/FLOW.md` section 13, as the owner's input
+ * of **2026-11-04** settles it): no card carries a state, because a site is a URL that
+ * belongs to a workspace and every one of them is bound by the same figures.
  *
  * **It states no cap of its own.** The three figures on a card are `caps` on the platform's
  * answer, composed in `packages/platform/src/caps.ts` and served per site. A screen holding
@@ -59,9 +63,9 @@ export function SitesPage() {
           <h1>Your sites</h1>
         </div>
         <p className="lede">
-          A site is a URL in this workspace. Before a hundred simulated people visit it, we ask you
-          to prove you control it — a hundred browsers against somebody else’s site is abuse and
-          load, not a test.
+          A site is a URL in this workspace — the page the feature starts on. Every site is bound by
+          the same figures, because they protect the site being driven rather than the person who
+          asked.
         </p>
 
         {list.status === 'unreadable' ? (
@@ -98,8 +102,9 @@ export function SitesPage() {
         </div>
 
         <p className="footnote">
-          Connecting a GitHub repository counts as verification for the site that repository
-          deploys, and is what unlocks <b>Improve my site</b>.
+          <b>Improve my site</b> needs the PersonaVision app installed on the repository that
+          deploys a site — being able to install it is the proof that matters there. Nothing else
+          about a site is proved.
         </p>
       </div>
     </div>

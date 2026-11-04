@@ -44,7 +44,7 @@ export const THE_AUDIENCE = (): AudienceRecord => {
 export const THE_SITE: SiteSeed = {
   id: 'site-clipforge',
   url: 'https://app.clipforge.example/create',
-  verified: { method: 'dns-txt', at: '2026-11-02T10:00:00.000Z' },
+  createdAt: '2026-11-02T10:00:00.000Z',
 };
 
 /** The draft a user arrives at this step with: a site, a feature, an audience and a goal. */

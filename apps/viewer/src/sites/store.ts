@@ -6,12 +6,16 @@ import { z } from 'zod';
  * - `GET /sites` — the workspace's sites, each with what binds it
  * - `GET /sites/:siteId` — one of them
  * - `POST /sites` — a new one, by URL
+ * - `DELETE /sites/:siteId` — removing one
  *
- * **One module per interface**, which is why `readSite` and `createSite` live here beside
- * the list the Sites screen reads: the Add-a-site screen (#269) is the caller of both, and
- * it adds the verification call — `POST /sites/:siteId/verify` — to this module rather than
- * opening a second one beside it. A site is read and written in one place in this app the
- * way an audience is (`screens/audience/store.ts`).
+ * **One module per interface**, which is why all four live here beside the list the Sites
+ * screen reads: a site is read and written in one place in this app the way an audience is
+ * (`screens/audience/store.ts`).
+ *
+ * **A site is a URL and nothing more** (`docs/FLOW.md` section 13, and the owner's input of
+ * **2026-11-04**). Nothing on a site record says anything about who controls the address —
+ * not here and not in the platform — and no route could put it there: what a site has is its
+ * id, its URL, the caps every site is bound by, and the last test it ran.
  *
  * **No cap is written here.** Every figure a screen states about a site — the agents a run
  * may drive, the runs an hour, the browsers at a time — is `caps` on the answer, which the
@@ -48,27 +52,11 @@ export interface SiteIssue {
 const issueSchema = z.object({ path: z.string(), message: z.string() });
 
 /**
- * Whether this site is proved to be the workspace's, by which method, and when.
- *
- * `method` and `kind` below are read as plain strings rather than as the platform's closed
- * lists. No screen branches on them — a card prints the method in the reader's words and
- * the platform's own `sentence` for a check — so narrowing them here would buy nothing and
- * would take the whole list down the day the platform learns a fifth way to prove a site.
- */
-const verificationSchema = z.object({
-  state: z.union([z.literal('unverified'), z.literal('verified')]),
-  method: z.string().nullable(),
-  verifiedAt: z.string().nullable(),
-});
-
-export type SiteVerification = z.infer<typeof verificationSchema>;
-
-/**
  * What binds this site: the three caps, by the names the platform answers them under.
  *
- * Identical for every site, verified or not — the owner settled decision 71 as _no gate on
- * testing_ on **2026-11-03**, because the caps protect the site being driven rather than the
- * person who asked. What verification is worth is **Improve my site**.
+ * Identical for every site, because the caps protect the site being driven rather than the
+ * person who asked — decision 71, settled **2026-11-03** as _no gate on testing_, and there
+ * is nothing about a site that could make them larger or smaller.
  */
 const capsSchema = z.object({
   agentsPerRun: z.number(),
@@ -77,32 +65,6 @@ const capsSchema = z.object({
 });
 
 export type SiteCaps = z.infer<typeof capsSchema>;
-
-/**
- * The last check this site was put through: what it looked for, where it looked, what it
- * found, whether it passed, and the one sentence the platform wrote about it.
- *
- * It is **data a screen prints**, not an error a screen interprets: `sentence` is written in
- * `packages/platform` so that the card, the Add-a-site screen and the CLI say the same
- * words, and it carries no full stop and no clock — the screen owns the punctuation and the
- * reader's time zone, and `checkedAt` is the instant.
- */
-const checkSchema = z.object({
-  method: z.string(),
-  passed: z.boolean(),
-  lookedFor: z.string(),
-  lookedIn: z.array(z.object({ kind: z.string(), value: z.string() })),
-  found: z.object({
-    outcome: z.string(),
-    at: z.array(z.string()),
-    values: z.array(z.string()),
-    because: z.string().nullable(),
-  }),
-  sentence: z.string(),
-  checkedAt: z.string(),
-});
-
-export type SiteCheck = z.infer<typeof checkSchema>;
 
 /**
  * The most recent launch against this site that opened a run, or `null` for a site nothing
@@ -127,11 +89,7 @@ const siteSchema = z.object({
   id: z.string().min(1),
   /** The URL as the user typed it. The platform does not normalise it, and neither do we. */
   url: z.string().min(1),
-  /** The public proof of control, which the Add-a-site screen prints as the line to copy. */
-  token: z.string(),
-  verification: verificationSchema,
   caps: capsSchema,
-  lastCheck: checkSchema.nullable(),
   // `.default(null)` rather than required: a platform that predates the field leaves the
   // key out, and a site with nothing to say about its last test is not an unreadable site.
   lastTest: lastTestSchema.nullable().default(null),
@@ -188,18 +146,18 @@ const refusalSchema = z.object({
 
 /**
  * The sentence a reader is given when the platform itself is the problem — **one per call**,
- * because a reader who pressed "Check the record" is not owed a sentence about their sites.
- * It is the whole of what a screen prints above the methods, so it names what was asked.
+ * because a reader who pressed "Remove this site" is not owed a sentence about their sites.
+ * It is the whole of what a screen prints above its form, so it names what was asked.
  */
 const UNREACHABLE = {
   list: 'Your sites could not be read.',
   site: 'That site could not be read.',
   create: 'That site could not be saved.',
-  check: 'That check could not be run.',
+  remove: 'That site could not be removed.',
 } as const;
 
 interface Attempt {
-  readonly method: 'GET' | 'POST';
+  readonly method: 'GET' | 'POST' | 'DELETE';
   readonly url: string;
   readonly body?: unknown;
   /** What the reader asked for, for the one sentence an unreachable platform gets. */
@@ -277,8 +235,8 @@ export const listSites = async (): Promise<StoreResult<readonly SiteRecord[]>> =
 /**
  * One site, by the id its URL carries.
  *
- * Read by the Add-a-site screen (#269), which opens on `/sites/:siteId` and has to show
- * what is stored rather than what was listed before somebody else changed it.
+ * Read by the site's own screen, which opens on `/sites/:siteId` and has to show what is
+ * stored rather than what was listed before somebody else changed it.
  */
 export const readSite = async (siteId: string): Promise<StoreResult<SiteRecord>> =>
   ask({ method: 'GET', url: sitePath(siteId), subject: UNREACHABLE.site }, siteSchema);
@@ -286,50 +244,21 @@ export const readSite = async (siteId: string): Promise<StoreResult<SiteRecord>>
 /**
  * A new site, by URL.
  *
- * One field is sent, because one field is read: the platform mints the token and states the
- * unverified block, and nothing a submission says can verify a site (`docs/FLOW.md` section
- * 13). A URL with no scheme, one that is not a URL, and one already in this workspace each
- * come back as a `refused` result carrying the message for the `url` field.
+ * One field is sent, because one field is read: a site record has nothing else on it for a
+ * submission to reach (`docs/FLOW.md` section 13). A URL with no scheme, one that is not a
+ * URL, and one already in this workspace each come back as a `refused` result carrying the
+ * message for the `url` field.
  */
 export const createSite = async (url: string): Promise<StoreResult<SiteRecord>> =>
   ask({ method: 'POST', url: SITES_PATH, body: { url }, subject: UNREACHABLE.create }, siteSchema);
 
-/** `/sites/<id>/verify`: where a check is asked for. `POST` only — nothing navigates here. */
-export const siteVerifyPath = (siteId: string): string => `${sitePath(siteId)}/verify`;
-
-/** The site as it now stands, and what the check that was just run found. */
-export interface CheckedSite {
-  readonly site: SiteRecord;
-  readonly check: SiteCheck;
-}
-
-// The route answers the whole site with the result beside it, so the screen redraws its
-// state from one and the method's own line from the other.
-const checkedSiteSchema = siteSchema.extend({ check: checkSchema });
-
 /**
- * Run one of the four checks of `docs/FLOW.md` section 13 against this site.
+ * Remove this site from the workspace.
  *
- * **The platform does the checking.** What is sent is the name of the method and nothing
- * else: a body cannot verify a site, and there is no field here that could — the platform
- * resolves the TXT record, fetches the page, reads the file or asks after the installation,
- * and only a passing check moves the site (`packages/platform/src/site/verify.ts`).
- *
- * A check that **failed is an answer, not an error**: it comes back `ok` with the site
- * unverified and `check` carrying what it looked for, where it looked and what it found
- * instead. The `unreachable` result is for the other thing — a platform that could not be
- * reached, or one that does not run this method yet, which answers its own sentence naming
- * the methods it does run.
+ * The removal is **soft**, which is why the route answers the record rather than an empty
+ * `204`: a finished test ran against this site and the screen reporting that test still has
+ * to be able to say which site it was. The site's own screen takes the reader back to the
+ * list, so what it does with the answer is drop the remembered list and go.
  */
-export const verifySite = async (
-  siteId: string,
-  method: string,
-): Promise<StoreResult<CheckedSite>> => {
-  const answer = await ask(
-    { method: 'POST', url: siteVerifyPath(siteId), body: { method }, subject: UNREACHABLE.check },
-    checkedSiteSchema,
-  );
-  if (!answer.ok) return answer;
-  const { check, ...site } = answer.value;
-  return { ok: true, value: { site, check } };
-};
+export const removeSite = async (siteId: string): Promise<StoreResult<SiteRecord>> =>
+  ask({ method: 'DELETE', url: sitePath(siteId), subject: UNREACHABLE.remove }, siteSchema);

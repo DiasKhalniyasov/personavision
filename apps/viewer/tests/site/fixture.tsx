@@ -6,13 +6,12 @@ import { servedSite } from '../sites/fixture';
 import type { SiteSeed } from '../sites/fixture';
 
 /**
- * One site, as `GET /sites/:siteId` answers it, and the check `POST /sites/:siteId/verify`
- * runs — served over the stubbed `fetch` the run data already uses.
+ * One site, as `GET /sites/:siteId` answers it, created by `POST /sites` and removed by
+ * `DELETE /sites/:siteId` — served over the stubbed `fetch` the run data already uses.
  *
  * The platform is faked **at the network boundary and not at the module boundary**: the
  * screen reads its own store, which parses what comes back, so a test can serve the shape
- * the real route answers with (the whole site, with the check's result beside it) and see
- * what the screen does with it.
+ * the real route answers with and see what the screen does with it.
  *
  * The site itself is built by the Sites screen's own fixture (`../sites/fixture`), so the
  * two screens are tested against one served record rather than two that drift. **The
@@ -21,17 +20,13 @@ import type { SiteSeed } from '../sites/fixture';
  * prints the numbers it was *served*.
  */
 
-/** What a check answers: whether it found what it looked for, and in what words. */
-export interface CheckAnswer {
-  readonly passed: boolean;
-  /** The platform's own sentence — no full stop and no clock, as the route answers it. */
-  readonly sentence: string;
-  readonly checkedAt?: string;
-  /** Answer with this status and body instead, for a platform that refuses the check. */
+/** How `DELETE /sites/:siteId` answers. The default is the soft-deleted record, as it does. */
+export interface RemovalAnswer {
+  /** Answer with this status and body instead, for a platform that refuses the removal. */
   readonly answers?: { readonly status: number; readonly body?: unknown };
   /** The platform is not there at all. */
   readonly unreachable?: boolean;
-  /** Hold the answer until `releaseCheck` is called, for a test about a check in flight. */
+  /** Hold the answer until `releaseRemoval` is called, for a removal in flight. */
   readonly hold?: boolean;
 }
 
@@ -44,8 +39,8 @@ export interface SiteBehaviour {
   readonly unreachable?: boolean;
   /** What `POST /sites` answers: the site it created, or a refusal against the `url` field. */
   readonly create?: { readonly refuse?: string; readonly id?: string };
-  /** What each method's check answers. A method absent from here is never checked by a test. */
-  readonly checks?: Readonly<Record<string, CheckAnswer>>;
+  /** What `DELETE /sites/:siteId` answers. Absent is the removal going through. */
+  readonly removal?: RemovalAnswer;
 }
 
 export interface ServedSite {
@@ -53,12 +48,12 @@ export interface ServedSite {
   reads: () => number;
   /** Answer a held read. */
   release: () => void;
-  /** Answer a held check. */
-  releaseCheck: () => void;
+  /** Answer a held removal. */
+  releaseRemoval: () => void;
   /** The URLs posted to `POST /sites`, in order. */
   created: () => readonly string[];
-  /** The methods posted to `POST /sites/:siteId/verify`, in order. */
-  checked: () => readonly string[];
+  /** The site ids sent to `DELETE /sites/:siteId`, in order. */
+  removed: () => readonly string[];
 }
 
 const json = (status: number, body: unknown): Response =>
@@ -66,21 +61,6 @@ const json = (status: number, body: unknown): Response =>
     status,
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
-
-const DEFAULT_CHECKED_AT = '2026-11-03T09:04:00.000Z';
-
-/** The site and the check, in the shape the verify route answers with. */
-const checkedSite = (seed: SiteSeed, method: string, answer: CheckAnswer): unknown => {
-  const at = answer.checkedAt ?? DEFAULT_CHECKED_AT;
-  const lastCheck = { passed: answer.passed, sentence: answer.sentence, checkedAt: at, method };
-  const site = servedSite({
-    ...seed,
-    lastCheck,
-    // Only a passing check moves a site, and the platform is the one that moves it.
-    ...(answer.passed ? { verified: { method, at } } : {}),
-  }) as Record<string, unknown>;
-  return { ...site, check: site['lastCheck'] };
-};
 
 /** The id `/sites/new` gives the site it creates, which is where the screen then goes. */
 export const CREATED_SITE_ID = 'site-created';
@@ -94,7 +74,7 @@ export async function serveSite(behaviour: SiteBehaviour = {}): Promise<ServedSi
   const runData = globalThis.fetch;
   let reads = 0;
   const created: string[] = [];
-  const checked: string[] = [];
+  const removed: string[] = [];
 
   let release = (): void => {};
   const held =
@@ -104,9 +84,9 @@ export async function serveSite(behaviour: SiteBehaviour = {}): Promise<ServedSi
         })
       : null;
 
-  let releaseCheck = (): void => {};
-  const heldCheck = new Promise<void>((resolve) => {
-    releaseCheck = resolve;
+  let releaseRemoval = (): void => {};
+  const heldRemoval = new Promise<void>((resolve) => {
+    releaseRemoval = resolve;
   });
 
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -122,23 +102,21 @@ export async function serveSite(behaviour: SiteBehaviour = {}): Promise<ServedSi
       return json(201, servedSite({ id: behaviour.create?.id ?? CREATED_SITE_ID, url }));
     }
 
-    const verifying = /^\/sites\/([^/]+)\/verify$/.exec(pathname);
-    if (verifying !== null && method === 'POST') {
-      const asked = (JSON.parse(String(init?.body ?? '{}')) as { method?: string }).method ?? '';
-      checked.push(asked);
-      const answer = behaviour.checks?.[asked];
-      if (answer === undefined || site === null) {
-        return json(400, { error: `"${asked}" is not a check this test serves.` });
-      }
+    const one = /^\/sites\/([^/]+)$/.exec(pathname);
+    if (one !== null && method === 'DELETE') {
+      removed.push(decodeURIComponent(one[1] as string));
+      const answer = behaviour.removal ?? {};
       if (answer.unreachable === true) throw new TypeError('Failed to fetch');
-      if (answer.hold === true) await heldCheck;
+      if (answer.hold === true) await heldRemoval;
       if (answer.answers !== undefined) {
         return json(answer.answers.status, answer.answers.body ?? {});
       }
-      return json(200, checkedSite(site, asked, answer));
+      if (site === null) return json(404, { error: 'There is no such site.' });
+      // The removal is soft, so the route answers the record with `deletedAt` set.
+      return json(200, { ...servedSite(site), deletedAt: '2026-11-04T12:00:00.000Z' });
     }
 
-    if (/^\/sites\/[^/]+$/.test(pathname) && method === 'GET') {
+    if (one !== null && method === 'GET') {
       reads += 1;
       if (behaviour.unreachable === true) throw new TypeError('Failed to fetch');
       if (held !== null) await held;
@@ -154,19 +132,17 @@ export async function serveSite(behaviour: SiteBehaviour = {}): Promise<ServedSi
     release: () => {
       release();
     },
-    releaseCheck: () => {
-      releaseCheck();
+    releaseRemoval: () => {
+      releaseRemoval();
     },
     created: () => created,
-    checked: () => checked,
+    removed: () => removed,
   };
 }
 
-/** The site `#screen-site` is drawn with: unverified, and never checked. */
+/** The site `#screen-site` is drawn with, by the address the prototype gives it. */
 export const THE_SITE: SiteSeed = {
   id: 'site-beta',
   url: 'https://beta.clipforge.example/create',
+  createdAt: '2026-11-03T11:00:00.000Z',
 };
-
-/** The token every served site carries, which is the one in the lines to copy. */
-export const THE_TOKEN = 'pv_7f3c91a2d84e';

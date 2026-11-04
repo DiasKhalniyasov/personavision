@@ -1,17 +1,27 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../setup';
-import { createSite, listSites, readSite, SITES_PATH, sitePath } from '../../src/sites/store';
+import {
+  createSite,
+  listSites,
+  readSite,
+  removeSite,
+  SITES_PATH,
+  sitePath,
+} from '../../src/sites/store';
 import type { StoreResult } from '../../src/sites/store';
 import { clearSiteCache } from '../../src/sites/useSites';
 import { SERVED_CAPS, servedSite } from './fixture';
 
 /**
- * The one module in the app that speaks #221's site routes: list, read, create (#267).
+ * The one module in the app that speaks #221's site routes: list, read, create, remove.
  *
  * The screens are tested against the network; this is tested against the network too, but
- * one call at a time, because the module is the seam the Add-a-site screen (#269) adds its
- * verification call to and the shape of what it answers is a promise to that ticket.
+ * one call at a time, because the shape of what it answers is what every site screen reads.
+ *
+ * **There are four calls and no fifth.** A site is a URL that belongs to a workspace
+ * (`docs/FLOW.md` section 13, as the owner's input of 2026-11-04 settles it), so there is no
+ * call here that could say anything about who controls the address.
  *
  * What it must never do is throw. Every way a request can go wrong — a platform that is not
  * there, a refusal with a message per field, a site of another workspace, an answer this
@@ -106,11 +116,42 @@ describe('the routes it speaks', () => {
 
     expect(result.ok).toBe(true);
     expect(asked[0]?.method).toBe('POST');
-    // One field, because one field is read: the platform mints the token and states the
-    // unverified block, and nothing a submission says can verify a site.
+    // One field, because one field is read: a site record has nothing else on it for a
+    // submission to reach.
     expect(JSON.parse(asked[0]?.body ?? '{}')).toEqual({
       url: 'https://beta.clipforge.example/create',
     });
+  });
+
+  it('removes one with DELETE /sites/:siteId, and sends no body', async () => {
+    serving(() => answer(200, { ...A_SITE, deletedAt: '2026-11-04T12:00:00.000Z' }));
+
+    const result = await removeSite('site beta/1');
+
+    expect(result.ok).toBe(true);
+    expect(asked[0]?.method).toBe('DELETE');
+    expect(new URL(asked[0]?.url ?? '').pathname).toBe('/sites/site%20beta%2F1');
+    expect(asked[0]?.body).toBeNull();
+    // The removal is soft, so the route answers the record: the instant is on it.
+    expect(result.ok && result.value.deletedAt).toBe('2026-11-04T12:00:00.000Z');
+  });
+
+  it('reads a 404 from the removal as there being no such site', async () => {
+    serving(() => answer(404, { error: 'There is no such site.' }));
+
+    const result = await removeSite('a-site-of-another-workspace');
+
+    expect(kindOf(result)).toBe('not-found');
+    expect(problemOf(result)).toBe('There is no such site.');
+  });
+
+  it('names what could not be removed when the platform answers nothing it can say', async () => {
+    serving(() => answer(503, {}));
+
+    const result = await removeSite('site-beta');
+
+    // The sentence is about what the reader asked for, not about their sites.
+    expect(problemOf(result)).toBe('That site could not be removed. It answered 503.');
   });
 
   it('asks for JSON on both reads, because each shares its path with a screen', async () => {

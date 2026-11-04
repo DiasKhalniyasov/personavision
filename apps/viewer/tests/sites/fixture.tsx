@@ -32,19 +32,18 @@ export interface ServedCaps {
  */
 export const SERVED_CAPS: ServedCaps = { agents: 100, runs: 4, browsers: 10 };
 
-/** A site to serve. Everything but the URL has an answer a real site would have. */
+/**
+ * A site to serve. Everything but the URL has an answer a real site would have.
+ *
+ * There is nothing here about who controls the address, because there is nothing on a site
+ * record for it: a site is a URL that belongs to a workspace (`docs/FLOW.md` section 13, as
+ * the owner's input of 2026-11-04 settles it).
+ */
 export interface SiteSeed {
   readonly id?: string;
   readonly url: string;
-  /** How it was proved, and when. Absent is an unverified site. */
-  readonly verified?: { readonly method: string; readonly at: string };
-  /** The last check it was put through. Absent is a site nobody has checked. */
-  readonly lastCheck?: {
-    readonly passed: boolean;
-    readonly sentence: string;
-    readonly checkedAt: string;
-    readonly method?: string;
-  };
+  /** When it joined the workspace, which is the microlabel on its card. */
+  readonly createdAt?: string;
   /** The last launch that opened a run. `null`, or absent, is a site nothing has run against. */
   readonly lastTest?: { readonly runId: string; readonly at: string } | null;
   /** What binds this one, when a test is about the figures changing. */
@@ -80,46 +79,25 @@ const json = (status: number, body: unknown): Response =>
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 
-const UNVERIFIED = { state: 'unverified', method: null, verifiedAt: null } as const;
+/** When a site with no instant of its own joined the workspace. */
+const DEFAULT_CREATED_AT = '2026-11-01T09:00:00.000Z';
 
 /** One site, in the shape `packages/platform`'s site routes answer with. */
 export const servedSite = (seed: SiteSeed): Record<string, unknown> => {
   const caps = seed.caps ?? SERVED_CAPS;
-  const check = seed.lastCheck;
+  const createdAt = seed.createdAt ?? DEFAULT_CREATED_AT;
   return {
     id: seed.id ?? seed.url,
     url: seed.url,
-    token: 'pv_7f3c91a2d84e',
-    verification:
-      seed.verified === undefined
-        ? UNVERIFIED
-        : { state: 'verified', method: seed.verified.method, verifiedAt: seed.verified.at },
     // The field names are the API's; the values are the fixture's, by the names above.
     caps: {
       agentsPerRun: caps.agents,
       runsPerSitePerHour: caps.runs,
       concurrentSessionsPerSite: caps.browsers,
     },
-    lastCheck:
-      check === undefined
-        ? null
-        : {
-            method: check.method ?? 'dns-txt',
-            passed: check.passed,
-            lookedFor: 'personavision-site-verification=pv_7f3c91a2d84e',
-            lookedIn: [{ kind: 'domain', value: 'clipforge.example' }],
-            found: {
-              outcome: check.passed ? 'found' : 'nothing-published',
-              at: ['clipforge.example'],
-              values: [],
-              because: null,
-            },
-            sentence: check.sentence,
-            checkedAt: check.checkedAt,
-          },
     lastTest: seed.lastTest ?? null,
-    createdAt: '2026-11-01T09:00:00.000Z',
-    updatedAt: '2026-11-01T09:00:00.000Z',
+    createdAt,
+    updatedAt: createdAt,
     deletedAt: null,
   };
 };
@@ -188,14 +166,15 @@ export const FIXTURE_RUN_ID = '2026-10-24-1402-northwind-demo';
 export const FIXTURE_RUN_NAME = 'Buy the hiking boots and pay with the saved card.';
 
 /** The two sites of `#screen-sites`, by the addresses the prototype draws them with. */
-export const A_VERIFIED_SITE: SiteSeed = {
+export const A_TESTED_SITE: SiteSeed = {
   id: 'site-app',
   url: 'https://app.clipforge.example',
-  verified: { method: 'dns-txt', at: '2026-11-02T10:00:00.000Z' },
+  createdAt: '2026-11-02T10:00:00.000Z',
   lastTest: { runId: FIXTURE_RUN_ID, at: '2026-11-03T09:12:00.000Z' },
 };
 
-export const AN_UNVERIFIED_SITE: SiteSeed = {
+export const AN_UNTESTED_SITE: SiteSeed = {
   id: 'site-beta',
   url: 'https://beta.clipforge.example/create',
+  createdAt: '2026-11-03T11:00:00.000Z',
 };

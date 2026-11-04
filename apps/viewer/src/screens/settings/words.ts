@@ -19,15 +19,16 @@ export const CONNECT_PROMISE =
 export const CONNECT_REASON = `${CONNECT_CALL}${CONNECT_PROMISE}`;
 
 /**
- * What a connected repository is worth beyond path 2.
+ * What a connected repository is for, said without overstating it.
  *
- * `docs/FLOW.md` section 13 counts an installation as proof of control over the site that
- * repository deploys, and verification **gates scale rather than trying** (decision 71, and
- * `CONTEXT.md`): an unverified site is testable with 3 agents, a verified one with 100. The
- * screen states the numbers rather than the word "limited", as that section requires.
+ * `docs/FLOW.md` section 13: the installation is what **Improve my site** needs, and being
+ * able to install the app on the repository that deploys a site is the only proof of control
+ * this product asks for. It is **not permission to test** and it moves no figure — every site
+ * in a workspace is bound by the same caps, which protect the site being driven rather than
+ * the person who asked (decision 71, settled **2026-11-03** as _no gate on testing_).
  */
-export const COUNTS_AS_VERIFICATION =
-  'A connected repository also counts as proof that you control the site it deploys. That unlocks this path, and takes that site from 3 agents a run to the full 100.';
+export const NEEDED_FOR_IMPROVE =
+  'Improve my site needs this installation: the app has to be on the repository that deploys the site, because that is where the pull request goes. It changes no figure — every site in this workspace is allowed the same.';
 
 /** While the owner has not registered the GitHub App, this is the whole truth of it. */
 export const APP_NOT_REGISTERED =

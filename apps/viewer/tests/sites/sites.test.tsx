@@ -6,8 +6,8 @@ import { loadDesignTokens } from '../setup';
 import { axeViolations, describeViolations } from '../axe';
 import { forgetRuns, mountApp } from '../app';
 import {
-  A_VERIFIED_SITE,
-  AN_UNVERIFIED_SITE,
+  A_TESTED_SITE,
+  AN_UNTESTED_SITE,
   FIXTURE_RUN_ID,
   FIXTURE_RUN_NAME,
   SERVED_CAPS,
@@ -18,12 +18,12 @@ import { signOut } from '../../src/shell/useSession';
 import { clearSiteCache } from '../../src/sites/useSites';
 
 /**
- * `/sites` — which of my sites can I test, and which are proved mine? (#267)
+ * `/sites` — which of my sites can I test, and what is each allowed? (#267, #394)
  *
  * The screen contract is `#screen-sites` of `docs/design/prototype.html`, and what is
- * asserted here is what a reader sees: the figures that bind each site, where each card
- * goes, and that **no card states a smaller number for being unverified** — decision 71, as
- * the owner settled it on 2026-11-03.
+ * asserted here is what a reader sees: when each site was added, the figures that bind it,
+ * where each card goes, and that **no card carries a state** — a site is a URL and nothing
+ * more (`docs/FLOW.md` section 13, as the owner's input of 2026-11-04 settles it).
  *
  * Every figure comes from the fixture's served answer, which is deliberately not the
  * product's own: `packages/platform/src/caps.ts` is the only place the caps are defined, so
@@ -87,8 +87,8 @@ afterEach(() => {
 });
 
 describe('the sites of the workspace', () => {
-  it('lists each site with its address, how it stands and what binds it', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+  it('lists each site with its address, when it was added and what binds it', async () => {
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
 
     await waitFor(() => {
@@ -97,16 +97,21 @@ describe('the sites of the workspace', () => {
     expect(cardFor('beta.clipforge.example/create')).toBeTruthy();
   });
 
-  it('says how a verified site was verified and when', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+  it('says when each site was added, and nothing about proving it', async () => {
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
 
     const card = await waitFor(() => cardFor('app.clipforge.example'));
-    expect(within(card).getByText(/^Verified by DNS · [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
+    expect(within(card).getByText(/^Added [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
+    expect(within(cardFor('beta.clipforge.example/create')).getByText(/^Added /)).toBeTruthy();
+    // Not the word "proof": the footnote names the GitHub App installation as the proof
+    // that matters for Improve, which is the prototype's own wording. What is gone is every
+    // state, method and check a card used to carry.
+    expect(said()).not.toMatch(/verif|unverified|TXT record|meta tag|well-known/i);
   });
 
   it('names the test a site last ran, in the words that test was asked for', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE] });
     await open();
 
     const card = await waitFor(() => cardFor('app.clipforge.example'));
@@ -122,7 +127,7 @@ describe('the sites of the workspace', () => {
   });
 
   it('says nothing about tests for a site the platform has none on record for', async () => {
-    await serveSites({ sites: [AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [AN_UNTESTED_SITE] });
     await open();
 
     // Not "no test yet": the platform reads `lastTest` off a ledger trimmed to the last
@@ -133,13 +138,12 @@ describe('the sites of the workspace', () => {
     expect(factsOf(card)).toEqual([
       `${SERVED_CAPS.agents} agents per run allowed`,
       `${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`,
-      'Verify it to unlock Improve my site',
     ]);
   });
 
   it('marks the site the workspace’s most recent test ran against, and only that one', async () => {
     await serveSites({
-      sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE],
+      sites: [A_TESTED_SITE, AN_UNTESTED_SITE],
     });
     await open();
 
@@ -152,7 +156,7 @@ describe('the sites of the workspace', () => {
 
 describe('what each site is allowed', () => {
   it('states the agents, the runs an hour and the browsers at a time, from the platform', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE] });
     await open();
 
     const card = await waitFor(() => cardFor('app.clipforge.example'));
@@ -167,7 +171,7 @@ describe('what each site is allowed', () => {
     // Not the product's figures and not the fixture's default either: if these three
     // numbers reach the card, nothing on the screen is holding a number of its own.
     await serveSites({
-      sites: [{ ...A_VERIFIED_SITE, caps: { agents: 73, runs: 9, browsers: 2 } }],
+      sites: [{ ...A_TESTED_SITE, caps: { agents: 73, runs: 9, browsers: 2 } }],
     });
     await open();
 
@@ -179,7 +183,7 @@ describe('what each site is allowed', () => {
 
   it('says a cap of one as one, rather than pluralising a figure it was handed', async () => {
     await serveSites({
-      sites: [{ ...A_VERIFIED_SITE, caps: { agents: 1, runs: 1, browsers: 1 } }],
+      sites: [{ ...A_TESTED_SITE, caps: { agents: 1, runs: 1, browsers: 1 } }],
     });
     await open();
 
@@ -189,79 +193,36 @@ describe('what each site is allowed', () => {
     expect(facts[1]).toBe('1 run an hour · 1 browser at a time');
   });
 
-  it('reads the same figures on an unverified site as on a verified one', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+  it('reads the same figures on every site in the workspace', async () => {
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
 
     await waitFor(() => {
       expect(cardFor('app.clipforge.example')).toBeTruthy();
     });
-    const verified = factsOf(cardFor('app.clipforge.example'));
-    const unverified = factsOf(cardFor('beta.clipforge.example/create'));
+    const tested = factsOf(cardFor('app.clipforge.example'));
+    const untested = factsOf(cardFor('beta.clipforge.example/create'));
 
-    expect(unverified.slice(0, 2)).toEqual(verified.slice(0, 2));
+    // The caps protect the site being driven rather than the person who asked, so nothing
+    // about one site can make its figures differ from another's.
+    expect(untested.slice(0, 2)).toEqual(tested.slice(0, 2));
   });
 
-  it('offers verification for what it is worth, and never as permission to test', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+  it('holds no figure back, and offers nothing to prove', async () => {
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
 
-    const card = await waitFor(() => cardFor('beta.clipforge.example/create'));
-    expect(factsOf(card)).toContain('Verify it to unlock Improve my site');
-    // And nowhere on the screen is a figure held back for being unverified.
-    expect(said().toLowerCase()).not.toContain('until this site is verified');
+    await waitFor(() => {
+      expect(cardFor('beta.clipforge.example/create')).toBeTruthy();
+    });
+    expect(said()).not.toMatch(/verif|unverified|TXT record|meta tag|well-known/i);
     expect(said()).not.toContain(`of ${SERVED_CAPS.agents} agents`);
-  });
-
-  it('says both facts about a verified site whose last check now fails', async () => {
-    // Decision 89, settled as _it stays verified, and the card also says what the last
-    // check found_: a removed record never costs a site its caps, and the reader decides.
-    await serveSites({
-      sites: [
-        {
-          ...A_VERIFIED_SITE,
-          lastCheck: {
-            passed: false,
-            sentence: 'no TXT record found on clipforge.example',
-            checkedAt: '2026-11-04T09:04:00.000Z',
-          },
-        },
-      ],
-    });
-    await open();
-
-    const card = await waitFor(() => cardFor('app.clipforge.example'));
-    expect(within(card).getByText(/^Verified by DNS · /)).toBeTruthy();
-    expect(
-      within(card).getByText(
-        /^Last check: no TXT record found on clipforge\.example at \w{3} \d{1,2} \d{2}:\d{2}\.$/,
-      ),
-    ).toBeTruthy();
-  });
-
-  it('says nothing about a check that passed: the state above it already does', async () => {
-    await serveSites({
-      sites: [
-        {
-          ...A_VERIFIED_SITE,
-          lastCheck: {
-            passed: true,
-            sentence: 'the TXT record was there',
-            checkedAt: '2026-11-04T09:04:00.000Z',
-          },
-        },
-      ],
-    });
-    await open();
-
-    const card = await waitFor(() => cardFor('app.clipforge.example'));
-    expect(within(card).queryByText(/Last check/)).toBeNull();
   });
 });
 
 describe('where the cards go', () => {
   it('sends the add-a-site card to /sites/new', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE] });
     const { router } = await open();
 
     await userEvent.click(addCard());
@@ -269,20 +230,20 @@ describe('where the cards go', () => {
   });
 
   it('sends a site’s card to that site', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE] });
     const { router } = await open();
 
     await userEvent.click(await waitFor(() => cardFor('app.clipforge.example')));
-    expect(router.state.location.pathname).toBe(paths.site(A_VERIFIED_SITE.id as string));
+    expect(router.state.location.pathname).toBe(paths.site(A_TESTED_SITE.id as string));
   });
 
   it('builds both addresses through the route table rather than writing them', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE] });
     await open();
 
     await waitFor(() => {
       expect(cardFor('app.clipforge.example').getAttribute('href')).toBe(
-        paths.site(A_VERIFIED_SITE.id as string),
+        paths.site(A_TESTED_SITE.id as string),
       );
     });
     expect(addCard().getAttribute('href')).toBe(paths.newSite);
@@ -298,19 +259,20 @@ describe('a workspace with no sites', () => {
       expect(cards()).toHaveLength(1);
     });
     expect(addCard()).toBeTruthy();
-    expect(screen.getByText(/A site is a URL in this workspace\./)).toBeTruthy();
+    expect(screen.getByText(/^A site is a URL in this workspace —/)).toBeTruthy();
     // No grid around one card, and no count of what is not there.
     expect(container.querySelector('[class*="siteGrid"]')).toBeNull();
     expect(said()).not.toMatch(/\b0\b/);
   });
 
-  it('states the footnote whether or not the workspace has a site', async () => {
+  it('names the GitHub App as what Improve my site needs, with or without a site', async () => {
     await serveSites({ sites: [] });
     await open();
 
     expect(said()).toContain(
-      'Connecting a GitHub repository counts as verification for the site that repository' +
-        ' deploys, and is what unlocks Improve my site.',
+      'Improve my site needs the PersonaVision app installed on the repository that deploys a' +
+        ' site — being able to install it is the proof that matters there. Nothing else about a' +
+        ' site is proved.',
     );
   });
 });
@@ -321,7 +283,7 @@ describe('a site in one workspace is never listed in another', () => {
     // `GET /sites`, which `packages/platform` scopes to the session's own workspace
     // (`packages/platform/test/sites.test.ts` holds that end of it over HTTP). A card for a
     // site the route did not name could only come from the screen inventing one.
-    await serveSites({ sites: [AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [AN_UNTESTED_SITE] });
     await open();
 
     await waitFor(() => {
@@ -333,7 +295,7 @@ describe('a site in one workspace is never listed in another', () => {
   });
 
   it('asks for this workspace’s sites and nothing about another', async () => {
-    const served = await serveSites({ sites: [A_VERIFIED_SITE] });
+    const served = await serveSites({ sites: [A_TESTED_SITE] });
     await open();
 
     await waitFor(() => {
@@ -346,15 +308,15 @@ describe('a site in one workspace is never listed in another', () => {
 
 describe('the sites belong to the session that read them', () => {
   it('forgets them when the session changes hands, so the next one reads its own', async () => {
-    const served = await serveSites({ sites: [A_VERIFIED_SITE] });
+    const served = await serveSites({ sites: [A_TESTED_SITE] });
     await open();
     await waitFor(() => {
       expect(served.reads()).toBe(1);
     });
 
     // The list is read once while the app is open, which is the point of the cache — and
-    // the thing that would otherwise hand the next person at this browser the addresses,
-    // verification states and caps of the workspace that just left.
+    // the thing that would otherwise hand the next person at this browser the addresses and
+    // the tests of the workspace that just left.
     cleanup();
     await signOut();
     await open();
@@ -367,7 +329,7 @@ describe('the sites belong to the session that read them', () => {
 
 describe('while the platform is being read', () => {
   it('renders the frame and skeletons, and the add-a-site card is already there', async () => {
-    const served = await serveSites({ sites: [A_VERIFIED_SITE], hold: true });
+    const served = await serveSites({ sites: [A_TESTED_SITE], hold: true });
     const { container } = await open();
 
     expect(screen.getByRole('status').textContent).toBe('Reading your sites…');
@@ -381,7 +343,7 @@ describe('while the platform is being read', () => {
   });
 
   it('does not move the page when the sites arrive', async () => {
-    const served = await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE], hold: true });
+    const served = await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE], hold: true });
     const { container } = await open();
 
     const grid = container.querySelector('[class*="siteGrid"]') as HTMLElement;
@@ -402,7 +364,7 @@ describe('while the platform is being read', () => {
     expect(grid.children).toHaveLength(cells);
     expect(before).toContain('Your sites');
     expect(said().startsWith('Your sites')).toBe(true);
-    expect(said()).toContain('Connecting a GitHub repository counts as verification');
+    expect(said()).toContain('needs the PersonaVision app installed');
   });
 });
 
@@ -436,7 +398,7 @@ describe('a platform that cannot be read', () => {
 
 describe('the screen itself', () => {
   it('passes axe, with the sites listed', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     const { container } = await open();
     await waitFor(() => {
       expect(cardFor('app.clipforge.example')).toBeTruthy();
@@ -447,7 +409,7 @@ describe('the screen itself', () => {
   });
 
   it('passes axe while the platform is being read', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE], hold: true });
+    await serveSites({ sites: [A_TESTED_SITE], hold: true });
     const { container } = await open();
 
     expect(describeViolations(await axeViolations(container))).toBe('');
@@ -461,7 +423,7 @@ describe('the screen itself', () => {
   });
 
   it('is operable by keyboard: the cards take focus in the order they are drawn', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
     await waitFor(() => {
       expect(cardFor('app.clipforge.example')).toBeTruthy();
@@ -483,7 +445,7 @@ describe('the screen itself', () => {
   });
 
   it('puts one heading under the page’s own on each card, so the order does not skip', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
     await waitFor(() => {
       expect(cardFor('app.clipforge.example')).toBeTruthy();
@@ -498,7 +460,7 @@ describe('the screen itself', () => {
   });
 
   it('sets no inline style, so every value comes from the stylesheet and the tokens', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     const { container } = await open();
     await waitFor(() => {
       expect(cardFor('app.clipforge.example')).toBeTruthy();
@@ -508,7 +470,7 @@ describe('the screen itself', () => {
   });
 
   it('is complete and still for a reader who has asked for reduced motion', async () => {
-    await serveSites({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+    await serveSites({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     prefersReducedMotion();
     await open();
 
@@ -527,7 +489,7 @@ describe('the screen itself', () => {
     // One unusable entry costs the reader nothing: it addresses no run, so it is dropped,
     // and the listing either side of it is still what names a test on a card.
     await serveSites({
-      sites: [A_VERIFIED_SITE],
+      sites: [A_TESTED_SITE],
       files: {
         '/runs/index.json': JSON.stringify([
           { name: 'A test with no id', createdAt: '2026-11-04T00:00:00.000Z' },
@@ -546,8 +508,8 @@ describe('the screen itself', () => {
   it('reads the workspace’s run listing once, however many sites name a test', async () => {
     const served = await serveSites({
       sites: [
-        A_VERIFIED_SITE,
-        { ...AN_UNVERIFIED_SITE, lastTest: { runId: FIXTURE_RUN_ID, at: '2026-11-03T09:12:00Z' } },
+        A_TESTED_SITE,
+        { ...AN_UNTESTED_SITE, lastTest: { runId: FIXTURE_RUN_ID, at: '2026-11-03T09:12:00Z' } },
       ],
     });
     const data = await open();

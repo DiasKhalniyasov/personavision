@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { audienceFromSentence, readAudience, updateAudience } from '@/screens/audience/store';
-import { agentsNoun, siteName, verificationWords } from '@/screens/sites/words';
+import { capWords, siteName } from '@/screens/sites/words';
 import { newTestStep, paths } from '@/shell/paths';
 import { useAudiences } from '@/shell/useAudiences';
 import { useSites } from '@/sites/useSites';
@@ -94,7 +94,7 @@ export function AudienceStep() {
     sites.status === 'ready' ? (sites.sites.find((site) => site.id === siteId) ?? null) : null;
 
   // The workspace's first site, for a reader who arrives with none chosen: the field states
-  // what that site is proved as and what it allows, so the choice is read rather than hidden.
+  // which URL that is and what it allows, so the choice is read rather than hidden.
   useEffect(() => {
     if (siteId !== null || sites.status !== 'ready') return;
     const first = sites.sites[0];
@@ -231,11 +231,16 @@ export function AudienceStep() {
 }
 
 /**
- * The site this test is against, chosen among the workspace's own, with **what that site is
- * proved as and what it allows** under it.
+ * The site this test is against, chosen among the workspace's own, with **the URL it is and
+ * what it allows** under it.
  *
- * The figures are the platform's, on the site's answer; the words beside them are the Sites
- * screen's (`screens/sites/words`), so a site is described the same way wherever it is read.
+ * The chooser names each site short — the host and the path — so the whole address is stated
+ * under it: that is the URL a hundred browsers will be pointed at, and a reader about to
+ * launch is owed it in full. The figures beside it are the platform's, on the site's answer,
+ * and the words are the Sites screen's (`screens/sites/words`), so a site is described the
+ * same way wherever it is read. **Nothing here is about who controls the address**, because a
+ * site is a URL and nothing more (`docs/FLOW.md` section 13).
+ *
  * A workspace with no site is not offered an empty list: it is pointed at `/sites/new`,
  * because there is nothing to test until there is a site.
  */
@@ -303,7 +308,7 @@ function SiteField({
       <p className="footnote" id={footId}>
         {chosen === null
           ? 'Which of your sites the hundred people are put through.'
-          : `${verificationWords(chosen.verification)} · ${String(chosen.caps.agentsPerRun)} ${agentsNoun(chosen.caps.agentsPerRun)}.`}
+          : `${chosen.url} · ${capWords(chosen.caps)}.`}
       </p>
     </div>
   );

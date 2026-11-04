@@ -8,7 +8,7 @@ import type { SiteRecord } from './store';
  * One read of the list while the app is open, the way the audiences are read
  * (`screens/audience/useAudienceList.ts`): the Sites screen asks for it, and the screens
  * that come later — the launch step choosing a site among them — ask the same question.
- * Adding or verifying a site drops the entry with `refreshSites`, so the list a reader
+ * Adding or removing a site drops the entry with `refreshSites`, so the list a reader
  * returns to is the one they just changed and not a remembered copy of what it was before.
  *
  * Only a successful read is kept: a platform that could not be reached is asked again
@@ -47,7 +47,7 @@ const loadList = (): Promise<SiteListState> => {
   return pending;
 };
 
-/** Read the list again on the next render that asks for it: a site has been added or proved. */
+/** Read the list again on the next render that asks for it: a site has been added or removed. */
 export const refreshSites = (): void => {
   listed = null;
 };
@@ -73,7 +73,7 @@ export function useSites(): SiteListState {
   return state;
 }
 
-/** Reading one site, as the Add-a-site screen opens on it. */
+/** Reading one site, as its own page opens on it. */
 export type SiteState =
   | { readonly status: 'loading' }
   /** `/sites/new`: no site is being read, because there is not one yet. */
@@ -86,9 +86,9 @@ export type SiteState =
  * One site, by the id in the path — **read fresh every time**, and deliberately not cached.
  *
  * The list above is remembered because every screen asks the same question of it; a single
- * site is not, because this is the screen that *changes* the site it is showing. A reader
- * who proves a site, goes back to the list and opens it again must be shown the verified
- * record rather than the unverified copy that was true when they arrived.
+ * site is not, because this is the screen a reader opens to act on the site in front of
+ * them. What it shows has to be what is stored now, not the copy that was true when the
+ * workspace's list was last read.
  *
  * `/sites/new` and `/sites/:siteId` are one component on the route table, so a path naming
  * no site clears the answer rather than leaving the last site standing in the new form.

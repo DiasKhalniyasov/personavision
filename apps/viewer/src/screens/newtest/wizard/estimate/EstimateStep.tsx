@@ -51,8 +51,8 @@ import styles from './estimate.module.css';
  *   stated once against the draft) and is said beside the button;
  * - a **cap** refused the launch, which is the platform's answer and is rendered in the
  *   platform's own words with the figures it sent — the cap, its limit, and when a launch
- *   like this one next passes. Verification gates none of them (decision 71), so no refusal
- *   on this screen is ever about a site being unverified.
+ *   like this one next passes. Every site is bound by the same three figures, so no refusal
+ *   on this screen is ever about who controls the site (`docs/FLOW.md` section 13).
  *
  * A refusal leaves the step standing with everything the user chose still in it, and offers
  * what can be done instead. A launch goes to `/runs/:runId`, where the Running screen (#281)

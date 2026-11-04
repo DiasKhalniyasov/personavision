@@ -5,18 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../setup';
 import { axeViolations, describeViolations } from '../axe';
 import { forgetRuns, mountApp } from '../app';
-import { CREATED_SITE_ID, serveSite, THE_SITE, THE_TOKEN } from './fixture';
-import { SERVED_CAPS } from '../sites/fixture';
+import { CREATED_SITE_ID, serveSite, THE_SITE } from './fixture';
+import { FIXTURE_RUN_ID, SERVED_CAPS } from '../sites/fixture';
 import { paths } from '../../src/shell/paths';
 import { clearSiteCache } from '../../src/sites/useSites';
 
 /**
- * `/sites/new` and `/sites/:siteId` — what the URL is, and how I prove it is mine. (#269)
+ * `/sites/new` and `/sites/:siteId` — the URL, and the site it became. (#269, #394)
  *
- * The screen contract is `#screen-site` of `docs/design/prototype.html`, and what is
- * asserted here is what a reader sees: the four methods with the exact line to copy, a
- * check that is run **by the platform**, and a failed check that says what it looked for,
- * where, and what it found instead — never "something went wrong".
+ * The screen contract is `#screen-site` of `docs/design/prototype.html`, and what is asserted
+ * here is what a reader sees: the URL as the heading, the URL read-only with *Remove this
+ * site* beside it, the figures the site is bound by, and one line about what **Improve my
+ * site** needs.
+ *
+ * **Nothing on either screen asks a reader to prove anything about the address**, because a
+ * site is a URL and nothing more — `docs/FLOW.md` section 13, as the owner's input of
+ * 2026-11-04 settles it. The suite holds that end of it by reading the whole screen.
  *
  * Every figure comes from the fixture's served answer, which is deliberately not the
  * product's own: `packages/platform/src/caps.ts` is the only place the caps are defined, so
@@ -24,12 +28,11 @@ import { clearSiteCache } from '../../src/sites/useSites';
  * holds itself.
  */
 
-/**
- * The screen, by the question it is answering: `/sites/new` is still _Add a site_ — the
- * route table's own name for it, which `tests/routes.test.tsx` pins — and it becomes the
- * prototype's `.pagehead` the moment there is a site to prove.
- */
-const open = async (path: string, heading = 'Prove this site is yours') => {
+/** The heading of a site's own page: the site's address, as `siteName` writes it. */
+const THE_HEADING = 'beta.clipforge.example/create';
+
+/** The screen, by the heading it is drawn under. */
+const open = async (path: string, heading: string | RegExp = THE_HEADING) => {
   const mounted = mountApp(path);
   await screen.findByRole('heading', { level: 1, name: heading });
   return mounted;
@@ -37,35 +40,40 @@ const open = async (path: string, heading = 'Prove this site is yours') => {
 
 const openNew = async () => open(paths.newSite, 'Add a site');
 
-/** One method's block, by the heading `#screen-site` gives it. */
-const blockFor = (heading: string): HTMLElement => {
-  const title = screen.getByRole('heading', { level: 2, name: heading });
-  return title.closest('section') as HTMLElement;
+/** The site's own page, read to the point where the platform's answer is on it. */
+const openSite = async (behaviour: Parameters<typeof serveSite>[0] = { site: THE_SITE }) => {
+  const served = await serveSite(behaviour);
+  const mounted = await open(paths.site(THE_SITE.id as string), /./);
+  await waitFor(() => {
+    expect(urlField().value).toBe(THE_SITE.url);
+  });
+  return { ...served, ...mounted };
 };
-
-/** The exact line to copy inside a method's block, as a reader would copy it. */
-const lineIn = (heading: string): string =>
-  blockFor(heading).querySelector('code')?.textContent ?? '';
 
 /** Everything the screen says, as one string, for a sentence broken across elements. */
 const said = (): string => screen.getByRole('main').textContent ?? '';
 
-const HEADINGS = ['DNS TXT record', 'Meta tag', 'File', 'Connect the GitHub repository'];
-
 const urlField = (): HTMLInputElement =>
   screen.getByLabelText('The URL the feature starts on') as HTMLInputElement;
 
-const FAILED = {
-  passed: false,
-  sentence: 'no TXT record found on beta.clipforge.example or clipforge.example',
-  checkedAt: '2026-11-03T09:04:00.000Z',
-} as const;
+const removeButton = (): HTMLButtonElement =>
+  within(screen.getByRole('main')).getByRole('button', {
+    name: 'Remove this site',
+  }) as HTMLButtonElement;
 
-const PASSED = {
-  passed: true,
-  sentence: 'the TXT record on clipforge.example has this token',
-  checkedAt: '2026-11-03T09:11:00.000Z',
-} as const;
+/** The three figures the platform served, as one line. */
+const FIGURES = `${SERVED_CAPS.agents} agents per run allowed · ${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`;
+
+/**
+ * The vocabulary this product used to prove a site with, in one place.
+ *
+ * Not the words _prove_ and _proof_ themselves: the screen says there is nothing to prove
+ * about a site, and names the GitHub App installation as the only proof of control it asks
+ * for — which is the prototype's own wording. What may not survive anywhere is a state, a
+ * method, a token or a check.
+ */
+const PROOF_WORDS =
+  /verif|unverified|site-verification|TXT record|meta tag|well-known|check the (record|page|file|connection)/i;
 
 /** jsdom answers every media query `false`; this makes the motion one answer `true`. */
 const prefersReducedMotion = (): void => {
@@ -92,30 +100,36 @@ afterEach(() => {
 });
 
 describe('adding a site', () => {
-  it('asks for the URL alone, and offers the four methods only once the site exists', async () => {
+  it('asks for the URL alone, and nothing about proving it', async () => {
     await serveSite();
     await openNew();
 
     expect(urlField()).toBeTruthy();
-    for (const heading of HEADINGS) {
-      expect(screen.queryByRole('heading', { level: 2, name: heading })).toBeNull();
-    }
-    expect(said()).toContain('The four ways to prove it appear once the site is added.');
+    expect(said()).toMatch(/A site is a URL and nothing more/);
+    expect(said()).not.toMatch(PROOF_WORDS);
+    // The one button on the empty screen is the one that adds the site.
+    expect(
+      within(screen.getByRole('main'))
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Add the site']);
   });
 
-  it('creates the site and shows that site’s verification screen', async () => {
+  it('creates the site and lands on that site’s own page', async () => {
     const served = await serveSite({ site: { ...THE_SITE, id: CREATED_SITE_ID } });
-    await openNew();
+    const { router } = await openNew();
 
-    await userEvent.type(urlField(), 'https://beta.clipforge.example/create');
+    await userEvent.type(urlField(), THE_SITE.url);
     await userEvent.click(screen.getByRole('button', { name: 'Add the site' }));
 
-    expect(served.created()).toEqual(['https://beta.clipforge.example/create']);
-    // The created site's own screen: the four methods, with its token in the lines to copy.
+    expect(served.created()).toEqual([THE_SITE.url]);
     await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
+      expect(router.state.location.pathname).toBe(paths.site(CREATED_SITE_ID));
     });
-    expect(urlField().value).toBe('https://beta.clipforge.example/create');
+    // The created site's own page: its URL as the heading, and the figures it is bound by.
+    await screen.findByRole('heading', { level: 1, name: THE_HEADING });
+    expect(urlField().value).toBe(THE_SITE.url);
+    expect(said()).toContain(FIGURES);
   });
 
   it.each([
@@ -125,7 +139,7 @@ describe('adding a site', () => {
   ])('refuses %s against the field, and creates nothing', async (_what, typed) => {
     const refuse = `"${typed}" is not a site this workspace can add`;
     await serveSite({ create: { refuse } });
-    await openNew();
+    const { router } = await openNew();
 
     await userEvent.type(urlField(), typed);
     await userEvent.click(screen.getByRole('button', { name: 'Add the site' }));
@@ -136,7 +150,7 @@ describe('adding a site', () => {
     expect(urlField().getAttribute('aria-invalid')).toBe('true');
     // Nothing was created: the screen is still the one that asks for a URL, and what was
     // typed is still in the field.
-    expect(screen.queryByRole('heading', { level: 2, name: 'DNS TXT record' })).toBeNull();
+    expect(router.state.location.pathname).toBe(paths.newSite);
     expect(urlField().value).toBe(typed);
   });
 
@@ -161,7 +175,7 @@ describe('adding a site', () => {
     await serveSite({ create: { refuse: 'that workspace already holds the most sites it may' } });
     await openNew();
 
-    await userEvent.type(urlField(), 'https://beta.clipforge.example/create');
+    await userEvent.type(urlField(), THE_SITE.url);
     await userEvent.click(screen.getByRole('button', { name: 'Add the site' }));
 
     // The fixture refuses against `url`; a message the field cannot show would otherwise be
@@ -172,323 +186,238 @@ describe('adding a site', () => {
   });
 });
 
-describe('how the site stands, and what binds it', () => {
-  it('states the platform’s figures, and what verifying is worth', async () => {
-    await serveSite({ site: THE_SITE });
-    await open(paths.site(THE_SITE.id as string));
+describe('the site’s own page', () => {
+  it('heads the page with the URL, and states it read-only in the field', async () => {
+    await openSite();
 
-    await waitFor(() => {
-      expect(screen.getByText('Unverified')).toBeTruthy();
-    });
-    expect(said()).toContain(
-      `${SERVED_CAPS.agents} agents per run allowed · ${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`,
-    );
-    expect(said()).toContain('Testing is not held back · verifying unlocks Improve my site');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(THE_HEADING);
+    expect(urlField().readOnly).toBe(true);
+    expect(urlField().value).toBe(THE_SITE.url);
+    // No route updates a site's URL (#269), so the page says what to do instead.
+    expect(said()).toContain('To test a different URL, add another site.');
   });
 
-  it('states the same figures for a verified site: nothing on this screen is gated', async () => {
-    await serveSite({
-      site: { ...THE_SITE, verified: { method: 'dns-txt', at: '2026-11-02T10:00:00.000Z' } },
-    });
-    await open(paths.site(THE_SITE.id as string));
+  it('breadcrumbs back to the list it came from', async () => {
+    await openSite();
 
-    await waitFor(() => {
-      expect(screen.getByText(/^Verified by DNS · /)).toBeTruthy();
-    });
-    // Decision 71, as the owner settled it on 2026-11-03: the caps protect the site being
-    // driven, so they are the same three numbers a verified site states.
-    expect(said()).toContain(
-      `${SERVED_CAPS.agents} agents per run allowed · ${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`,
-    );
-    expect(said()).toContain('Improve my site is unlocked');
+    const back = within(screen.getByRole('main')).getByRole('link', { name: 'Sites' });
+    expect(back.getAttribute('href')).toBe(paths.sites);
   });
 
-  it('renders a site the platform now reports as unverified with the check that fails', async () => {
-    await serveSite({
-      site: { ...THE_SITE, lastCheck: { ...FAILED, method: 'dns-txt' } },
+  it('states when the site was added, and the test it last ran', async () => {
+    await openSite({
+      site: { ...THE_SITE, lastTest: { runId: FIXTURE_RUN_ID, at: '2026-11-03T09:12:00.000Z' } },
     });
-    await open(paths.site(THE_SITE.id as string));
 
-    await waitFor(() => {
-      expect(screen.getByText('Unverified')).toBeTruthy();
-    });
+    const instant = (at: string, withTime: boolean): string =>
+      new Intl.DateTimeFormat('en-US', {
+        day: 'numeric',
+        month: 'short',
+        ...(withTime
+          ? { hour: '2-digit' as const, minute: '2-digit' as const, hour12: false }
+          : {}),
+      }).format(new Date(at));
+
+    expect(said()).toContain(
+      `Added ${instant(THE_SITE.createdAt as string, false)} · last test ${instant('2026-11-03T09:12:00.000Z', true)}.`,
+    );
+  });
+
+  it('claims nothing about tests for a site the platform has none on record for', async () => {
+    // Not "no tests yet": the platform reads `lastTest` off a ledger trimmed to the last
+    // day, so an absent value is nothing on record rather than a site never tested.
+    await openSite();
+
+    expect(said()).not.toMatch(/no tests? yet/i);
+    expect(said()).not.toMatch(/never been tested/i);
+    expect(said()).toMatch(/^.*Added \w{3} \d{1,2}\. To test a different URL/s);
+  });
+
+  it('states the figures the platform served, and no figure of its own', async () => {
+    await openSite();
+
+    expect(said()).toContain(FIGURES);
+  });
+
+  it('prints whatever the platform answers, so no cap is written into this screen', async () => {
+    // Not the product's figures and not the fixture's default either: if these three
+    // numbers reach the page, nothing on it is holding a number of its own.
+    await openSite({ site: { ...THE_SITE, caps: { agents: 73, runs: 9, browsers: 2 } } });
+
+    expect(said()).toContain('73 agents per run allowed · 9 runs an hour · 2 browsers at a time');
+  });
+
+  it('says a cap of one as one, rather than pluralising a figure it was handed', async () => {
+    await openSite({ site: { ...THE_SITE, caps: { agents: 1, runs: 1, browsers: 1 } } });
+
+    expect(said()).toContain('1 agent per run allowed · 1 run an hour · 1 browser at a time');
+  });
+
+  it('points at the GitHub App as the one thing Improve my site needs', async () => {
+    await openSite();
+
+    const footnote = screen.getByText(/needs the PersonaVision app installed/);
+    expect(footnote.textContent).toContain('the only proof of control this product asks for');
     expect(
-      within(blockFor('DNS TXT record')).getByText(/^Last check: no TXT record found/),
-    ).toBeTruthy();
-    expect(said()).not.toMatch(/Verified by/);
+      within(footnote).getByRole('link', { name: 'Connect GitHub' }).getAttribute('href'),
+    ).toBe(paths.githubSettings);
+  });
+
+  it('offers nothing to prove, in any state of the screen', async () => {
+    await openSite();
+
+    expect(said()).not.toMatch(PROOF_WORDS);
+    // And no second heading: the page's own is the only one on it.
+    expect(screen.getAllByRole('heading').map((heading) => heading.tagName)).toEqual(['H1']);
   });
 });
 
-describe('the four ways to prove it', () => {
-  beforeEach(async () => {
-    await serveSite({ site: THE_SITE });
-    await open(paths.site(THE_SITE.id as string));
-    await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
-    });
-  });
+describe('removing the site', () => {
+  it('asks the platform to remove it, and goes back to the list', async () => {
+    const served = await openSite();
+    const { router } = served;
 
-  it('renders all four, in the order section 13 lists them', async () => {
-    const headings = screen
-      .getAllByRole('heading', { level: 2 })
-      .map((heading) => heading.textContent);
-    expect(headings).toEqual(HEADINGS);
-  });
-
-  it('prints the exact line to copy for each, with this site’s own token in it whole', () => {
-    expect(lineIn('DNS TXT record')).toBe(
-      `beta.clipforge.example.  TXT  "personavision-site-verification=${THE_TOKEN}"`,
-    );
-    expect(lineIn('Meta tag')).toBe(
-      `<meta name="personavision-site-verification" content="${THE_TOKEN}">`,
-    );
-    expect(lineIn('File')).toBe(
-      'https://beta.clipforge.example/.well-known/personavision-site-verification.txt',
-    );
-    // The token is a public proof of control, not a secret: nothing on this screen hides
-    // part of it, because a line with an elided token in it is a line that does not work.
-    expect(said()).not.toContain('…');
-    expect(said()).not.toContain('pv_7f3c…');
-  });
-
-  it('leaves every line selectable and reachable from the keyboard', () => {
-    for (const heading of ['DNS TXT record', 'Meta tag', 'File']) {
-      const line = blockFor(heading).querySelector('code') as HTMLElement;
-      expect(line.getAttribute('tabindex')).toBe('0');
-    }
-  });
-
-  it('sends the GitHub method to the GitHub connection screen', () => {
-    const connect = within(blockFor('Connect the GitHub repository')).getByRole('link', {
-      name: 'Connect GitHub',
-    });
-    expect(connect.getAttribute('href')).toBe(paths.githubSettings);
-  });
-});
-
-describe('a check', () => {
-  const openSite = async (behaviour: Parameters<typeof serveSite>[0]) => {
-    const served = await serveSite(behaviour);
-    await open(paths.site(THE_SITE.id as string));
-    await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
-    });
-    return served;
-  };
-
-  it('is run by the platform, for the method whose button was pressed', async () => {
-    const served = await openSite({ site: THE_SITE, checks: { 'meta-tag': FAILED } });
-
-    await userEvent.click(
-      within(blockFor('Meta tag')).getByRole('button', { name: 'Check the page' }),
-    );
+    await userEvent.click(removeButton());
 
     await waitFor(() => {
-      expect(served.checked()).toEqual(['meta-tag']);
+      expect(served.removed()).toEqual([THE_SITE.id]);
     });
-  });
-
-  it('renders what a failed check looked for, where, and what it found, with the time it ran', async () => {
-    await openSite({ site: THE_SITE, checks: { 'dns-txt': FAILED } });
-
-    await userEvent.click(
-      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
-    );
-
-    const block = blockFor('DNS TXT record');
     await waitFor(() => {
-      expect(
-        within(block).getByText(
-          `Last check: ${FAILED.sentence} at ${new Intl.DateTimeFormat('en-US', {
-            day: 'numeric',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          }).format(new Date(FAILED.checkedAt))}.`,
-        ),
-      ).toBeTruthy();
+      expect(router.state.location.pathname).toBe(paths.sites);
     });
-    // The failure is a result, not an error: the method says nothing generic about it, and
-    // the screen raises no alert over a check that simply did not find what it looked for.
-    expect(block.textContent ?? '').not.toMatch(
-      /something went wrong|unexpected error|try again later/i,
-    );
-    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('verifies the site in front of the reader when it passes, and names the method', async () => {
-    await openSite({ site: THE_SITE, checks: { 'dns-txt': PASSED } });
-    const figures = `${SERVED_CAPS.agents} agents per run allowed · ${SERVED_CAPS.runs} runs an hour · ${SERVED_CAPS.browsers} browsers at a time`;
-    expect(said()).toContain(figures);
+  it('takes no second press while the first is in flight', async () => {
+    const served = await openSite({ site: THE_SITE, removal: { hold: true } });
 
-    await userEvent.click(
-      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
-    );
-
+    await userEvent.click(removeButton());
     await waitFor(() => {
-      expect(screen.getByText(/^Verified by DNS · /)).toBeTruthy();
+      expect(removeButton().disabled).toBe(true);
     });
-    expect(said()).toContain('Improve my site is unlocked');
-    // No cap figure moves, because none of them depends on verification.
-    expect(said()).toContain(figures);
-  });
 
-  it('renders a GitHub connection as verification when the platform reports one', async () => {
-    await openSite({ site: THE_SITE, checks: { 'connected-repository': PASSED } });
-
-    await userEvent.click(
-      within(blockFor('Connect the GitHub repository')).getByRole('button', {
-        name: 'Check the connection',
-      }),
-    );
-
+    served.releaseRemoval();
     await waitFor(() => {
-      expect(screen.getByText(/^Verified by the GitHub repository · /)).toBeTruthy();
+      expect(served.router.state.location.pathname).toBe(paths.sites);
     });
-    expect(blockFor('Connect the GitHub repository').getAttribute('aria-current')).toBe('true');
+    expect(served.removed()).toEqual([THE_SITE.id]);
   });
 
-  it('pulses the method it is running on, and takes no second check while it runs', async () => {
+  it('keeps the page standing and says why when the platform refuses', async () => {
+    const refusal = 'That site is running a test right now.';
     const served = await openSite({
       site: THE_SITE,
-      checks: { 'dns-txt': { ...PASSED, hold: true } },
+      removal: { answers: { status: 409, body: { error: refusal } } },
     });
 
-    await userEvent.click(
-      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
-    );
-
-    const block = blockFor('DNS TXT record');
-    await waitFor(() => {
-      expect(block.getAttribute('aria-busy')).toBe('true');
-    });
-    // The product's one moving thing, which the tokens stop under `prefers-reduced-motion`.
-    expect(block.className).toContain('running');
-    for (const button of within(screen.getByRole('main')).getAllByRole('button')) {
-      expect((button as HTMLButtonElement).disabled).toBe(true);
-    }
-
-    served.releaseCheck();
-    await waitFor(() => {
-      expect(screen.getByText(/^Verified by DNS · /)).toBeTruthy();
-    });
-    expect(blockFor('DNS TXT record').getAttribute('aria-busy')).toBeNull();
-  });
-
-  it('says one sentence when the platform cannot be reached, and keeps the lines to copy', async () => {
-    await openSite({
-      site: THE_SITE,
-      checks: { 'dns-txt': { ...FAILED, unreachable: true } },
-    });
-
-    await userEvent.click(
-      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
-    );
-
-    const notice = await waitFor(() => screen.getByRole('alert'));
-    // The sentence is about the thing that was asked for, not about the reader's sites.
-    expect(notice.textContent).toContain('That check could not be run.');
-    expect(notice.textContent).toContain('check again when the platform is back');
-    expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
-    expect(lineIn('Meta tag')).toContain(THE_TOKEN);
-  });
-
-  it('prints a refusal the platform did answer without telling the reader to wait for it', async () => {
-    const refusal = '"dns-txt" is not a check this platform runs yet. Available today: meta-tag.';
-    await openSite({
-      site: THE_SITE,
-      checks: { 'dns-txt': { ...FAILED, answers: { status: 400, body: { error: refusal } } } },
-    });
-
-    await userEvent.click(
-      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
-    );
+    await userEvent.click(removeButton());
 
     const notice = await waitFor(() => screen.getByRole('alert'));
     expect(notice.textContent).toBe(refusal);
     // The platform answered, so nothing here says it is away or asks the reader to wait.
-    expect(notice.textContent).not.toContain('platform is back');
+    expect(notice.textContent).not.toContain('try again when it is back');
+    expect(served.router.state.location.pathname).toBe(paths.site(THE_SITE.id as string));
+    expect(urlField().value).toBe(THE_SITE.url);
+  });
+
+  it('says one sentence when the platform cannot be reached at all', async () => {
+    await openSite({ site: THE_SITE, removal: { unreachable: true } });
+
+    await userEvent.click(removeButton());
+
+    const notice = await waitFor(() => screen.getByRole('alert'));
+    expect(notice.textContent).toContain('That site could not be removed.');
+    expect(notice.textContent).toContain('Try again when it is back.');
+    expect(urlField().value).toBe(THE_SITE.url);
   });
 });
 
 describe('the states of the screen', () => {
-  it('renders the frame and the four methods with their buttons disabled while the site is read', async () => {
+  it('renders the frame and a disabled field while the site is read', async () => {
     const served = await serveSite({ site: THE_SITE, hold: true });
-    await open(paths.site(THE_SITE.id as string));
+    await open(paths.site(THE_SITE.id as string), 'Site');
 
-    for (const heading of HEADINGS) {
-      expect(screen.getByRole('heading', { level: 2, name: heading })).toBeTruthy();
-    }
-    // Scoped to the screen: the product chrome around it has buttons of its own.
-    for (const button of within(screen.getByRole('main')).getAllByRole('button')) {
-      expect((button as HTMLButtonElement).disabled).toBe(true);
-    }
+    // The frame: the breadcrumb, the heading, the lede, the form and the row of figures —
+    // with the field disabled, and no address invented in it.
+    expect(urlField().disabled).toBe(true);
+    expect(urlField().value).toBe('');
+    expect(removeButton().disabled).toBe(true);
+    expect(said()).toMatch(/A site is a URL and nothing more/);
 
     served.release();
     await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
+      expect(urlField().value).toBe(THE_SITE.url);
     });
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(THE_HEADING);
   });
 
   it('says so when the site cannot be read, rather than rendering an empty page', async () => {
     await serveSite({ site: THE_SITE, unreachable: true });
-    await open(paths.site(THE_SITE.id as string));
+    await open(paths.site(THE_SITE.id as string), 'Site');
 
     const notice = await waitFor(() => screen.getByRole('alert'));
     expect(notice.textContent).toBe(
       'That site could not be read. Failed to fetch Try again when it is back.',
     );
-    // Nothing was typed on this screen, and there is no line to copy on it yet: the
-    // sentence promises neither.
+    // Nothing was typed on this screen, so the sentence promises nothing about that.
     expect(notice.textContent).not.toContain('Nothing you typed');
-    expect(notice.textContent).not.toContain('lines to copy');
-    // The frame stands, with the four methods in it and nothing invented in their lines.
-    expect(screen.getByRole('heading', { level: 2, name: 'DNS TXT record' })).toBeTruthy();
-    expect(blockFor('DNS TXT record').querySelector('code')).toBeNull();
+    // The frame stands, with nothing invented in the field.
+    expect(urlField().value).toBe('');
+    expect(urlField().disabled).toBe(true);
   });
 
   it('says a path naming no site names none, and offers the way back', async () => {
     await serveSite({ site: null });
-    await open(paths.site('site-gone'));
+    await open(paths.site('site-gone'), 'No site with that id');
 
-    await waitFor(() => {
-      expect(said()).toContain('This workspace has no site at');
-    });
+    expect(said()).toContain('This workspace has no site at');
     expect(screen.getByRole('link', { name: 'Back to your sites' })).toBeTruthy();
   });
 
   it('is complete and still under prefers-reduced-motion: reduce', async () => {
     prefersReducedMotion();
-    await serveSite({ site: { ...THE_SITE, lastCheck: { ...FAILED, method: 'dns-txt' } } });
-    await open(paths.site(THE_SITE.id as string));
+    await openSite();
 
     // Nothing on this screen is an animated reveal, so everything a reader came for is
-    // there: the state line, the four methods, every line to copy, and the failed check.
-    await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
-    });
-    expect(said()).toContain('Unverified');
-    expect(said()).toContain(`Last check: ${FAILED.sentence}`);
-    for (const heading of HEADINGS) {
-      expect(screen.getByRole('heading', { level: 2, name: heading })).toBeTruthy();
-    }
-    for (const button of within(screen.getByRole('main')).getAllByRole('button')) {
-      expect((button as HTMLButtonElement).disabled).toBe(false);
-    }
+    // there: the URL, the figures, the footnote and the button that removes it.
+    expect(urlField().value).toBe(THE_SITE.url);
+    expect(said()).toContain(FIGURES);
+    expect(removeButton().disabled).toBe(false);
+    // And nothing is left pulsing on a page that has everything on it. The transitions the
+    // shadcn primitives carry are theirs, and `site.module.css` declares no animation at
+    // all — `stylesheet.test.ts` holds that end of it.
+    expect(screen.getByRole('main').innerHTML).not.toMatch(/\banimate-/);
   });
 
-  it('passes axe, on the empty screen and on a site with its four methods', async () => {
+  it('sets no inline style, so every value comes from the stylesheet and the tokens', async () => {
+    const { container } = await openSite();
+
+    expect([...container.querySelectorAll('[style]')]).toHaveLength(0);
+  });
+
+  it('is operable by keyboard: the field and the button are both reached', async () => {
+    await openSite();
+
+    for (let presses = 0; presses < 40 && document.activeElement !== urlField(); presses += 1) {
+      await userEvent.tab();
+    }
+    expect(document.activeElement).toBe(urlField());
+    await userEvent.tab();
+    expect(document.activeElement).toBe(removeButton());
+  });
+
+  it('passes axe, on the empty screen, while reading, and on a site', async () => {
     await serveSite();
     const { unmount } = await openNew();
     expect(describeViolations(await axeViolations(screen.getByRole('main')))).toBe('');
     unmount();
 
-    await serveSite({ site: { ...THE_SITE, lastCheck: { ...FAILED, method: 'dns-txt' } } });
-    await open(paths.site(THE_SITE.id as string));
-    await waitFor(() => {
-      expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
-    });
+    const held = await serveSite({ site: THE_SITE, hold: true });
+    const reading = await open(paths.site(THE_SITE.id as string), 'Site');
+    expect(describeViolations(await axeViolations(screen.getByRole('main')))).toBe('');
+    held.release();
+    reading.unmount();
+
+    await openSite();
     expect(describeViolations(await axeViolations(screen.getByRole('main')))).toBe('');
   });
 });

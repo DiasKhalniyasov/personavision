@@ -489,9 +489,10 @@ describe('a cap that refuses the launch', () => {
     expect(mainText()).not.toContain('Next allowed');
   });
 
-  it('is never about the site being unverified', async () => {
-    // Decision 71, settled as no gate on testing: the caps protect the site being driven,
-    // and this screen has no sentence about verification to print.
+  it('is never about who controls the site', async () => {
+    // Every site is bound by the same figures — they protect the site being driven rather
+    // than the person who asked — and there is nothing to prove about a site at all
+    // (`docs/FLOW.md` section 13), so this screen has no such sentence to print.
     await press({ run: hourly });
 
     expect(mainText().toLowerCase()).not.toContain('verif');

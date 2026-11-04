@@ -225,7 +225,10 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [paths.signUp, 'Create your workspace', { status: 'signed-out' }],
       [paths.sites, 'Your sites'],
       [paths.newSite, 'Add a site'],
-      [paths.site('site-clipforge'), 'Prove this site is yours'],
+      // A site's page is headed by the site's own URL, which the frame cannot know before
+      // the platform answers: a site that could not be read is headed with the noun, the
+      // way `/audiences/:audienceId` is while it reads. This mount serves no site routes.
+      [paths.site('site-clipforge'), 'Site'],
       [paths.githubSettings, 'Where would the pull request go?'],
       // `/new` is one route with a step in the query: no step is the path chooser, and the
       // two-URL A/B form is the variants step.

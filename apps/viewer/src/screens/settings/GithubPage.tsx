@@ -7,7 +7,7 @@ import {
   APP_NOT_REGISTERED_NEXT,
   CONNECT_REASON,
   CONNECTION_UNREADABLE,
-  COUNTS_AS_VERIFICATION,
+  NEEDED_FOR_IMPROVE,
 } from './words';
 import styles from './settings.module.css';
 
@@ -20,9 +20,10 @@ import styles from './settings.module.css';
  * deliberate addition rather than a departure.
  *
  * It is the **entry point and nothing more**. What connecting is, what the app would be
- * allowed to do, that it never merges, and what a connection is worth beyond this path — and
- * then where this workspace stands. The installation, the repository and the pull request
- * itself are path 2's own step.
+ * allowed to do, that it never merges, and what the installation is for — and then where this
+ * workspace stands. The installation, the repository and the pull request itself are path 2's
+ * own step. It says nothing about a site's standing, because a site is a URL and there is
+ * nothing to prove about it (`docs/FLOW.md` section 13).
  *
  * While the GitHub App is not registered the screen says exactly that and offers **no
  * button that leads nowhere**. That the App is not registered is the platform's answer, from
@@ -52,7 +53,7 @@ export function GithubPage() {
               <b>It never merges anything.</b> You merge.
             </li>
           </ul>
-          <p className="footnote">{COUNTS_AS_VERIFICATION}</p>
+          <p className="footnote">{NEEDED_FOR_IMPROVE}</p>
         </div>
       </div>
     </div>
@@ -83,8 +84,8 @@ function Standing({ connection }: { connection: GithubConnectionState }) {
         </span>
       ) : connection.status === 'connected' ? (
         <span>
-          Connected to <b>{connection.repository}</b>. Pull requests go there, and the site that
-          repository deploys counts as verified.
+          Connected to <b>{connection.repository}</b>. Pull requests go there, which is what{' '}
+          <b>Improve my site</b> needs.
         </span>
       ) : (
         <span>
