@@ -68,6 +68,14 @@ const DESKTOP: Device = {
 const BROWSER_TIMEOUT_MS = 60_000;
 
 /**
+ * How long `navigates.html` holds its main thread after asking to navigate, so that a read of
+ * it is in flight when the new document commits — the fixture's README says why a loopback
+ * destination needs that. A second rather than a moment, so that it holds on a machine
+ * running the whole suite at once.
+ */
+const HOLD_MS = 1_000;
+
+/**
  * The wall clock the redirect-loop session runs under. Small on purpose: a page that
  * replaces itself before it is parsed offers no document to settle on, so the session ends
  * on this cap, and the suite should not spend the default minute finding that out.
@@ -150,10 +158,13 @@ describeWithChromium('a navigation under a capture', () => {
     runDir = await mkdtemp(join(tmpdir(), 'personavision-capture-navigation-'));
   });
 
+  // Given a browser's worth of patience rather than the ten seconds a hook has by default:
+  // closing four Chromium sessions on a machine running the whole suite at once takes longer
+  // than that, and a teardown that runs out of time fails tests that have already passed.
   afterEach(async () => {
     await Promise.all(opened.splice(0).map((handle) => closeSession(handle)));
     await rm(runDir, { recursive: true, force: true });
-  });
+  }, BROWSER_TIMEOUT_MS);
 
   const open = async (path: string): Promise<PageHandle> => {
     const handle = await openSession({ id: 'A', url: `${site.url}${path}` }, DESKTOP);
@@ -191,13 +202,14 @@ describeWithChromium('a navigation under a capture', () => {
       const budget = new SessionBudget();
 
       // Scheduled from the page, to land on the capture's first read: see the fixture for
-      // why the page holds its main thread for a moment after asking to navigate.
-      await handle.page.evaluate(() => {
+      // why the page holds its main thread after asking to navigate. The hold travels as an
+      // argument, because only the function's own source reaches the page.
+      await handle.page.evaluate((holdMs) => {
         (window as unknown as { pvNavigateIn: (ms: number, holdMs: number) => void }).pvNavigateIn(
           0,
-          300,
+          holdMs,
         );
-      });
+      }, HOLD_MS);
       const captured = await capture(watched.handle, contextFor(), budget);
 
       // The destination, whole: its step, its picture, its elements, its hash.
