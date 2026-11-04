@@ -792,6 +792,28 @@ describe('the audience shape', () => {
     'viewport',
   ];
 
+  /**
+   * Where one of those words is a field of **another type** that happens to be named after
+   * the audience's, and not the audience being restated. One entry so far.
+   *
+   * `AudienceAskInput.generatorVersion` (`@personavision/provider`) is the generator a
+   * written audience is to be labelled with, and it is required: the provider generates
+   * nobody, so it cannot know it and the caller stamps it on. `POST
+   * /audiences/from-sentence` is that caller (#396), and filling a required field of a
+   * documented input type in is not a second declaration of the audience — the audience it
+   * gets back is still held to `audienceSchema` by `parseAudience`, like every other
+   * audience this package stores, and the version itself is read off
+   * `@personavision/personas`, which owns it.
+   *
+   * It is an allowance named file by file and field by field rather than a word dropped
+   * from the list above, so that the next file to use that name is still caught. Spelling
+   * the key some other way to keep this scan quiet would have hidden exactly what the scan
+   * is for.
+   */
+  const NOT_THE_AUDIENCE: ReadonlyMap<string, readonly string[]> = new Map([
+    ['server/routes/audiences.ts', ['generatorVersion']],
+  ]);
+
   it('is imported from the contract and restated nowhere in packages/platform', async () => {
     const src = fileURLToPath(new URL('../src', import.meta.url));
     const files = (await readdir(src, { recursive: true })).filter((file) => file.endsWith('.ts'));
@@ -800,7 +822,12 @@ describe('the audience shape', () => {
     const restated: string[] = [];
     for (const file of files) {
       const body = await readFile(join(src, file), 'utf8');
-      restated.push(...FIELDS.filter((field) => body.includes(field)).map((f) => `${file}: ${f}`));
+      const allowed = NOT_THE_AUDIENCE.get(file) ?? [];
+      restated.push(
+        ...FIELDS.filter((field) => body.includes(field) && !allowed.includes(field)).map(
+          (f) => `${file}: ${f}`,
+        ),
+      );
     }
 
     expect(restated).toStrictEqual([]);
