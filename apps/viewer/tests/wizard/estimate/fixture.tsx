@@ -60,6 +60,10 @@ export const filledDraft = (): WizardDraft => ({
     task: 'Generate a video from a text prompt, and wait until it is ready to watch.',
     success: 'A video preview is visible on the page.',
     author: 'model',
+    writtenAt: '2026-11-03T09:08:00.000Z',
+    // What the model was told: this draft's own site and sentence, so the goal step before
+    // this one would read the stored goal as current and ask for nothing (#276).
+    askedFor: { siteUrl: THE_SITE.url, feature: 'generating a video from a prompt' },
   },
 });
 

@@ -40,6 +40,12 @@ import type { WizardDraft } from '../../src/screens/newtest/wizard/draft';
 /** The step the URL names, as the router holds it after a render. */
 const stepInUrl = (search: string): string | null => new URLSearchParams(search).get(STEP_PARAM);
 
+/**
+ * The goal step's own `h1`, which is `#screen-newtest-goal`'s and not the crumb's label
+ * (#276). The crumb still reads `Goal`; the screen asks its own question.
+ */
+const GOAL_HEADING = 'This is what the hundred of them will try to do';
+
 /** The breadcrumb of the step on the screen. */
 const breadcrumb = (): HTMLElement => document.querySelector('.breadcrumb') as HTMLElement;
 
@@ -59,6 +65,13 @@ const filledDraft = (): WizardDraft => ({
     task: 'Generate a video from a text prompt on this page.',
     success: 'A video preview is visible on the page.',
     author: 'model',
+    writtenAt: '2026-11-03T09:08:00.000Z',
+    // What the model was told, which is this draft's own site and sentence — so the goal
+    // step reads the stored goal as this test's and asks for nothing (#276).
+    askedFor: {
+      siteUrl: 'https://app.clipforge.example/create',
+      feature: 'generating a video from a prompt',
+    },
   },
 });
 
@@ -79,7 +92,7 @@ describe('the step in the query', () => {
     for (const [step, name] of [
       ['path', 'What would you like us to do?'],
       ['audience', 'Audience & feature'],
-      ['goal', 'Goal'],
+      ['goal', GOAL_HEADING],
       // It names the run it is about rather than itself; its own suite asserts the heading
       // in full (`tests/wizard/estimate/`).
       ['estimate', /on app\.clipforge\.example$/],
@@ -149,12 +162,12 @@ describe('the step in the query', () => {
     writeWizardDraft(draft);
 
     const first = mountApp(newTestStep('goal'));
-    expect(await heading('Goal')).toBeTruthy();
+    expect(await heading(GOAL_HEADING)).toBeTruthy();
     first.unmount();
 
     // The reload: the app mounted again on the same address, with nothing in memory.
     const { router } = mountApp(newTestStep('goal'));
-    expect(await heading('Goal')).toBeTruthy();
+    expect(await heading(GOAL_HEADING)).toBeTruthy();
     expect(stepInUrl(router.state.location.search)).toBe('goal');
     expect(readWizardDraft()).toEqual(draft);
   });
@@ -172,7 +185,7 @@ describe('the breadcrumb', () => {
   it('marks the current step, and only that one', async () => {
     await serveRunData();
     mountApp(newTestStep('goal'));
-    await heading('Goal');
+    await heading(GOAL_HEADING);
 
     const marked = breadcrumb().querySelectorAll('b');
     expect([...marked].map((crumb) => crumb.textContent)).toEqual(['Goal']);
@@ -181,7 +194,7 @@ describe('the breadcrumb', () => {
   it('links the steps already passed, and leaves the steps ahead as plain text', async () => {
     await serveRunData();
     mountApp(newTestStep('goal'));
-    await heading('Goal');
+    await heading(GOAL_HEADING);
 
     const crumbs = within(breadcrumb());
     expect(crumbs.getByRole('link', { name: 'Path' }).getAttribute('href')).toBe(
@@ -236,7 +249,7 @@ describe('the draft', () => {
 
     expect(readWizardDraft()).toEqual(emptyWizardDraft());
     mountApp(newTestStep('goal'));
-    expect(await heading('Goal')).toBeTruthy();
+    expect(await heading(GOAL_HEADING)).toBeTruthy();
 
     vi.restoreAllMocks();
   });
@@ -439,7 +452,7 @@ describe('every screen this ticket mounts', () => {
   it('is operable by keyboard, with the app’s own focus ring', async () => {
     await serveRunData();
     mountApp(newTestStep('goal'));
-    await heading('Goal');
+    await heading(GOAL_HEADING);
 
     // The crumbs behind are the only controls this ticket adds, and they are links: reachable
     // by Tab, openable in a new window, and not a button pretending to be one.
@@ -459,7 +472,7 @@ describe('every screen this ticket mounts', () => {
   it('tells a screen reader which step is the current one', async () => {
     await serveRunData();
     mountApp(newTestStep('goal'));
-    await heading('Goal');
+    await heading(GOAL_HEADING);
 
     const marked = breadcrumb().querySelectorAll('[aria-current="step"]');
     expect([...marked].map((crumb) => crumb.textContent)).toEqual(['Goal']);

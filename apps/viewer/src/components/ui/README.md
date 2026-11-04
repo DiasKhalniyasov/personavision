@@ -1,8 +1,8 @@
 # The shadcn/ui registry
 
 Every control in the product is a primitive from here: button, input, label, select, tabs,
-table, dialog, dropdown-menu, tooltip, badge, skeleton, separator, toggle, toggle-group,
-slider, form. A screen ticket that needs one takes it and restyles nothing.
+table, dialog, dropdown-menu, tooltip, badge, skeleton, separator, textarea, toggle,
+toggle-group, slider, form. A screen ticket that needs one takes it and restyles nothing.
 
 Each file is **the registry's own**, written by
 
