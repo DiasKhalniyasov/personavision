@@ -1,18 +1,27 @@
 // @vitest-environment jsdom
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { runPaths } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { loadDesignTokens } from '../../../tests/setup';
 
 /**
- * `/runs/:runId/analysis` over the repository's own committed example run, which carries no
- * `recommendations.json`: the header of `#screen-analysis` and the stated card the owner's
- * decision put under it. The write-up itself is #277's.
+ * `/runs/:runId/analysis` over a run that carries no `recommendations.json`: the header of
+ * `#screen-analysis` and the stated card the owner's decision put under it. The write-up
+ * itself is #277's.
+ *
+ * The fixture directory on disk has carried a `recommendations.json` of its own since #262,
+ * so that one file is answered 404 here — what these tests are about is a test that did not
+ * record an analysis, and serving what is on disk would make the premise false the moment
+ * #277 reads the file.
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
+
+/** The one file of the run this suite's subject does not have. */
+const NO_ANALYSIS = { missing: [`/runs/${RUN_ID}/${runPaths('').recommendations}`] };
 const HEADING = 'What Muse Wonder makes of it';
 
 /** One element of the rendered screen, once the run has been read. */
@@ -30,7 +39,7 @@ afterEach(forgetRuns);
 
 describe('the analysis of a test that did not record one', () => {
   it('keeps the screen, states the absence, and offers the way on', async () => {
-    await serveRunData();
+    await serveRunData(NO_ANALYSIS);
     mountApp(paths.analysis(RUN_ID));
 
     expect(await screen.findByRole('heading', { level: 1, name: HEADING })).toBeTruthy();
@@ -45,7 +54,7 @@ describe('the analysis of a test that did not record one', () => {
   });
 
   it('shows no figure at all: not a zero, and not an empty write-up', async () => {
-    await serveRunData();
+    await serveRunData(NO_ANALYSIS);
     mountApp(paths.analysis(RUN_ID));
 
     const stated = await card();
@@ -54,7 +63,7 @@ describe('the analysis of a test that did not record one', () => {
   });
 
   it('ends with the simulated line, and claims no lift', async () => {
-    await serveRunData();
+    await serveRunData(NO_ANALYSIS);
     mountApp(paths.analysis(RUN_ID));
 
     const line = await settled('[data-shell="simulated-disclaimer"]');
@@ -63,7 +72,7 @@ describe('the analysis of a test that did not record one', () => {
   });
 
   it('leads a run it cannot read to the not-found screen, not to a write-up of its own', async () => {
-    await serveRunData();
+    await serveRunData(NO_ANALYSIS);
     mountApp(paths.analysis('2026-01-01-0000-no-such-test'));
 
     expect(await screen.findByRole('heading', { name: 'No test with that id' })).toBeTruthy();
@@ -71,7 +80,7 @@ describe('the analysis of a test that did not record one', () => {
   });
 
   it('holds the header while the run is read, and is clean under axe once it is', async () => {
-    await serveRunData();
+    await serveRunData(NO_ANALYSIS);
     mountApp(paths.analysis(RUN_ID));
 
     expect(screen.getByRole('heading', { level: 1, name: HEADING })).toBeTruthy();

@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 2,
+  "runId": "2026-10-24-1402-northwind-demo",
+  "sample": {
+    "read": 20,
+    "of": 23,
+    "strategy": "stratified by outcome, then segment",
+    "seed": 20261051
+  },
+  "recommendations": [
+    {
+      "id": "R-03",
+      "rank": 1,
+      "sentence": "Make the Payment step easier to get past, where 12 people of this run ran into trouble.",
+      "evidence": "It is one of the things the task needs somebody to use. 17% of the 12 people who got that far looked at it at all, and it held none of their attention across the step.",
+      "findingIds": [
+        "low-looked-at-share@A"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-08",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "A",
+          "step": "payment",
+          "aoiId": "a-payment-textbox-cvc-214-291-143x27"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "payment"
+        }
+      ],
+      "peopleAffected": 23,
+      "step": "payment"
+    },
+    {
+      "id": "R-01",
+      "rank": 2,
+      "sentence": "Change the Review step, where 9 people of this run ran into trouble.",
+      "evidence": "On the review step, “Confirm purchase · $147.95” sits below the fold. Of the 9 people who got that far, 0 looked at it. On variant A the same control was seen by 12 of 12, after 0.4 s.",
+      "findingIds": [
+        "never-fixated-primary-action@B"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-24",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-complete"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 21,
+      "step": "review"
+    },
+    {
+      "id": "R-02",
+      "rank": 3,
+      "sentence": "Change the Review step, where 5 people of this run ran into trouble.",
+      "evidence": "That is 56% of the people who got that far, and 5 of the 11 who gave up anywhere on variant B gave up here.",
+      "findingIds": [
+        "high-abandonment-at-step@B"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-15",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": null
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 21,
+      "step": "review"
+    },
+    {
+      "id": "R-04",
+      "rank": 4,
+      "sentence": "Change the Review step, where 9 people of this run ran into trouble.",
+      "evidence": "It is one of the things the task needs somebody to use. 0% of the 9 people who got that far looked at it at all, and it held none of their attention across the step.",
+      "findingIds": [
+        "low-looked-at-share@B"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-14",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-support"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 21,
+      "step": "review"
+    },
+    {
+      "id": "R-05",
+      "rank": 5,
+      "sentence": "Make the Review step easier to get past, where one person of this run ran into trouble.",
+      "evidence": "All 1 stopped on that step with the task unfinished and the product at fault — a failure, not someone choosing to leave. Each of them recorded the same reason: The session ended on the \"review\" step with the task not done. The primary action in \"A-review-complete\" was fixated 6 times, first 22.5 s in, but never clicked..",
+      "findingIds": [
+        "task-failure-at-step@A"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-04",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "A",
+          "step": "review",
+          "aoiId": "A-review-complete"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 21,
+      "step": "review"
+    }
+  ],
+  "writeUp": [
+    {
+      "heading": "It is one of the things the task needs somebody to use. 17% of the 12 people who got that far looked at it at all, and it held none of their attention across the step.",
+      "body": "23 of 23 simulated people — 100% of them — reached the payment step. 2 of them left it there. It is one of the things the task needs somebody to use. 17% of the 12 people who got that far looked at it at all, and it held none of their attention across the step. Make the Payment step easier to get past, where 12 people of this run ran into trouble.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "payment"
+        },
+        {
+          "kind": "session",
+          "sessionId": "S-08",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "A",
+          "step": "payment",
+          "aoiId": "a-payment-textbox-cvc-214-291-143x27"
+        }
+      ]
+    },
+    {
+      "heading": "On the review step, “Confirm purchase · $147.95” sits below the fold. Of the 9 people who got that far, 0 looked at it. On variant A the same control was seen by 12 of 12, after 0.4 s.",
+      "body": "21 of 23 simulated people — 91% of them — reached the review step. 6 of them left it there. It is where this run lost the most people, and most of them left for one reason: Gave up on the \"review\" step: 4 actions, 12.7 s of dwell and 38 revisits to areas of interest it had already seen, since it last got anywhere. On the review step, “Confirm purchase · $147.95” sits below the fold. Of the 9 people who got that far, 0 looked at it. On variant A the same control was seen by 12 of 12, after 0.4 s. Change the Review step, where 9 people of this run ran into trouble.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        },
+        {
+          "kind": "session",
+          "sessionId": "S-24",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-complete"
+        }
+      ]
+    },
+    {
+      "heading": "That is 56% of the people who got that far, and 5 of the 11 who gave up anywhere on variant B gave up here.",
+      "body": "21 of 23 simulated people — 91% of them — reached the review step. 6 of them left it there. It is where this run lost the most people, and most of them left for one reason: Gave up on the \"review\" step: 4 actions, 12.7 s of dwell and 38 revisits to areas of interest it had already seen, since it last got anywhere. That is 56% of the people who got that far, and 5 of the 11 who gave up anywhere on variant B gave up here. Change the Review step, where 5 people of this run ran into trouble.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        },
+        {
+          "kind": "session",
+          "sessionId": "S-15",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": null
+        }
+      ]
+    },
+    {
+      "heading": "It is one of the things the task needs somebody to use. 0% of the 9 people who got that far looked at it at all, and it held none of their attention across the step.",
+      "body": "21 of 23 simulated people — 91% of them — reached the review step. 6 of them left it there. It is where this run lost the most people, and most of them left for one reason: Gave up on the \"review\" step: 4 actions, 12.7 s of dwell and 38 revisits to areas of interest it had already seen, since it last got anywhere. It is one of the things the task needs somebody to use. 0% of the 9 people who got that far looked at it at all, and it held none of their attention across the step. Change the Review step, where 9 people of this run ran into trouble.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        },
+        {
+          "kind": "session",
+          "sessionId": "S-14",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-support"
+        }
+      ]
+    },
+    {
+      "heading": "All 1 stopped on that step with the task unfinished and the product at fault — a failure, not someone choosing to leave. Each of them recorded the same reason: The session ended on the \"review\" step with the task not done. The primary action in \"A-review-complete\" was fixated 6 times, first 22.5 s in, but never clicked..",
+      "body": "21 of 23 simulated people — 91% of them — reached the review step. 6 of them left it there. It is where this run lost the most people, and most of them left for one reason: Gave up on the \"review\" step: 4 actions, 12.7 s of dwell and 38 revisits to areas of interest it had already seen, since it last got anywhere. All 1 stopped on that step with the task unfinished and the product at fault — a failure, not someone choosing to leave. Each of them recorded the same reason: The session ended on the \"review\" step with the task not done. The primary action in \"A-review-complete\" was fixated 6 times, first 22.5 s in, but never clicked.. Make the Review step easier to get past, where one person of this run ran into trouble.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        },
+        {
+          "kind": "session",
+          "sessionId": "S-04",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "A",
+          "step": "review",
+          "aoiId": "A-review-complete"
+        }
+      ]
+    },
+    {
+      "heading": "What I did not find",
+      "body": "Nothing in what these people did pointed at a change on the cart step and the confirm step, and this write-up claims none. One finding this run stated is behind no claim above: no recommendation rests on it. This write-up rests on the aggregate of all 23 simulated sessions, with 20 of them read whole. Automation failures — 1 of the 24 — are excluded from every number above, and no claim rests on one. These are 4 simulated people generated from the audience you described, Outdoor-gear shoppers, and not your customers: nothing here says what real customers would do.",
+      "citations": [
+        {
+          "kind": "funnel",
+          "stepId": "cart"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "confirm"
+        }
+      ]
+    }
+  ]
+}

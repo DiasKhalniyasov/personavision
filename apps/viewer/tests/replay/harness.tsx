@@ -143,10 +143,14 @@ export async function serveRecordings(
   for (const [sessionId, file] of Object.entries(options.sessions ?? {})) {
     files[sessionPath(sessionId)] = JSON.stringify(file);
   }
+  // Since #262 the fixture directory on disk carries a `recommendations.json` of its own, so
+  // a test that asks for none has to be answered 404 rather than served what is there: the
+  // outcome card's "no recommendations" row is about a run that produced none.
+  const missing = options.recommendations === undefined ? [recommendationsPath()] : [];
   if (options.recommendations !== undefined) {
     files[recommendationsPath()] = JSON.stringify(options.recommendations);
   }
-  await serveRunData({ files });
+  await serveRunData({ files, missing });
 
   const served = globalThis.fetch;
   const requests: VideoRequest[] = [];
