@@ -6,5 +6,10 @@
     "declarationMap": false,
     "sourceMap": false
   },
+  // `tools/` is deliberately not here. The eye tracker under `tools/eyetrack/` is a
+  // standalone page that runs from a `file://` URL with no build step, so its scripts are
+  // classic browser scripts rather than modules this project compiles — and the 2.2 MB
+  // third-party build it vendors is not source at all. ESLint covers the tool's own files;
+  // `packages/calibration/test/eyetrack-sample.test.ts` covers what it writes.
   "include": ["tests", "scripts", "vitest.config.ts"]
 }

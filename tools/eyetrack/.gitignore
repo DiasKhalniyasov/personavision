@@ -1,6 +1,9 @@
 sessions/
 ptgaze/.venv/
-vendor/
+# `track.mjs` serves WebEyeTrack and MediaPipe out of `tools/eyetrack/vendor/`, which is
+# downloaded rather than committed. Anchored to this directory on purpose: `calibrate/vendor/`
+# is a *committed* library, because that page has to work with no network at all.
+/vendor/
 phone/
 telegram/
 participants/
