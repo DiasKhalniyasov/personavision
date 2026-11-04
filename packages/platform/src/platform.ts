@@ -50,8 +50,9 @@ export interface PlatformOptions {
    */
   githubApp?: GithubAppRegistration;
   /**
-   * How `POST /audiences/from-sentence` reaches Muse Wonder (#396). Absent — as it is in
-   * `personavision serve` — means the shipped selection over this process's environment:
+   * How `POST /audiences/from-sentence` and `POST /runs/goal` reach Muse Wonder (#396,
+   * #397). Absent — as it is in `personavision serve` — means the shipped selection over
+   * this process's environment:
    * the model where `MODEL_API_KEY` is set, and a refusal in words where it is not. A test
    * passes its own, so no suite reaches a model.
    */
@@ -134,7 +135,7 @@ export const createPlatform = async ({
       ...siteRoutes({ store, readSession }),
       ...githubRoutes({ store, readSession, app: githubApp }),
       ...estimateRoutes({ store, readSession, runsRoot: resolvedRunsRoot }),
-      ...runRoutes({ store, readSession, pipeline }),
+      ...runRoutes({ store, readSession, pipeline, wonder }),
     ],
     guard: sessionGuard({ readSession }),
     seeded,
