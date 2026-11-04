@@ -5,6 +5,7 @@ import {
   type DecidingPersona,
   type SessionOutcome,
   type SessionTrace,
+  type TraceCriterion,
 } from '../src/index.js';
 
 /**
@@ -365,6 +366,176 @@ describe('decideOutcome', () => {
     }
   });
 });
+
+/**
+ * The success criterion a run was given, and what a session made of it (#400).
+ *
+ * The reader that produces these is `criterion.ts` and is tested on its own: what is
+ * asserted below is what `decideOutcome` does with the answer.
+ */
+const CRITERION = 'The confirmation receipt is visible.';
+
+const OBSERVED: TraceCriterion = {
+  criterion: CRITERION,
+  observed: true,
+  unobservable: null,
+  missing: [],
+};
+
+const NEVER_OBSERVED: TraceCriterion = {
+  criterion: CRITERION,
+  observed: false,
+  unobservable: null,
+  missing: ['receipt'],
+};
+
+/** A criterion `readCriterion` refuses: nothing can look for it, so nothing can have done it. */
+const UNOBSERVABLE: TraceCriterion = {
+  criterion: 'The page feels trustworthy.',
+  observed: false,
+  unobservable:
+    '“The page feels trustworthy.” is a judgement and not something a session can see — “feels” asks for an opinion about the page.',
+  missing: [],
+};
+
+/** The agent arrived, looked, and operated nothing: one screen and no action at all. */
+const ARRIVED_AND_DID_NOTHING: SessionTrace = {
+  screens: [{ index: 0, step: 'page' }],
+  fixations: [fixation(0, 400, 'receipt'), fixation(0, 1_200, 'order-number')],
+  actions: [],
+  durationMs: 2_000,
+  taskCompleted: true,
+  primaryActionAoiId: null,
+};
+
+const withCriterion = (trace: SessionTrace, criterion: TraceCriterion): SessionTrace => ({
+  ...trace,
+  criterion,
+  taskCompleted: criterion.observed,
+});
+
+describe('a session succeeds only when its criterion was observed', () => {
+  it('completes the task on the criterion, naming it in the reason', () => {
+    const outcome = decideOutcome(withCriterion(TEDIOUS_CHECKOUT, OBSERVED), PERSISTENT);
+
+    expect(outcome.status).toBe('success');
+    expect(outcome.step).toBe('complete');
+    expect(outcome.reason).toContain(`the criterion “${CRITERION}” was observed`);
+    expect(outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+  });
+
+  it('fails a session that never observed it, naming the criterion, the words and the step', () => {
+    const outcome = decideOutcome(
+      withCriterion(PRIMARY_ACTION_NEVER_SEEN, NEVER_OBSERVED),
+      PERSISTENT,
+    );
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.step).toBe('review');
+    expect(outcome.reason).toContain(`the criterion “${CRITERION}” was never observed`);
+    expect(outcome.reason).toContain('nothing on the "review" step named “receipt”');
+    expect(outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+  });
+
+  it('fails a criterion nothing could evaluate, and never promotes it to a success', () => {
+    // The behaviour being removed: a criterion the reader refuses used to fall back to
+    // "reached the final declared step", which on a one-URL run is "the page loaded".
+    for (const walked of [TEDIOUS_CHECKOUT, READ_ON_AFTER_COMPLETING, PRIMARY_ACTION_NEVER_SEEN]) {
+      const outcome = decideOutcome(withCriterion(walked, UNOBSERVABLE), PERSISTENT);
+
+      expect(outcome.status).toBe('failed');
+      expect(outcome.status).not.toBe('success');
+      expect(outcome.reason).toContain('the criterion could not be observed');
+      expect(outcome.reason).toContain('is a judgement');
+    }
+  });
+
+  it('fails a criterion that was already true when the agent arrived and never acted on', () => {
+    const outcome = decideOutcome(withCriterion(ARRIVED_AND_DID_NOTHING, OBSERVED), PERSISTENT);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.status).not.toBe('success');
+    expect(outcome.step).toBe('page');
+    expect(outcome.reason).toContain('was already true when the agent arrived');
+    expect(outcome.reason).toContain('nothing was acted on');
+  });
+
+  it('needs an action of the agent’s even where no criterion was given', () => {
+    // An agent that never operated anything has looked at a product rather than used it,
+    // whichever rule says the task is done.
+    const outcome = decideOutcome(ARRIVED_AND_DID_NOTHING, PERSISTENT);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.reason).toContain('without the agent acting on anything');
+  });
+
+  it('keeps abandonment and our own breakage ahead of the criterion', () => {
+    // `docs/FLOW.md` section 8's order is the contract: our breakage first, then giving up,
+    // and only then whether the task was done. An observed criterion changes none of it.
+    const abandoned = decideOutcome(withCriterion(STATED_ABANDON, OBSERVED), PERSISTENT);
+    expect(abandoned.status).toBe('abandoned');
+    expect(abandoned.status).not.toBe('success');
+
+    const ours = decideOutcome(withCriterion(SELECTOR_TIMEOUT, OBSERVED), PERSISTENT);
+    expect(ours.status).toBe('automation_failure');
+    expect(ours).toMatchObject({ attribution: 'automation', excludedFromScores: true });
+
+    const capped = decideOutcome(withCriterion(PAST_THE_WALL_CLOCK, OBSERVED), PERSISTENT);
+    expect(capped.status).toBe('automation_failure');
+    expect(capped.excludedFromScores).toBe(true);
+  });
+
+  it('decides a run with no goal exactly as it did before', () => {
+    // Nothing on the trace but the criterion changes, so the two outcomes of the same walk
+    // are the one the step rule gives and the one the criterion gives.
+    expect(decideOutcome(TEDIOUS_CHECKOUT, PERSISTENT)).toStrictEqual({
+      status: 'success',
+      step: 'complete',
+      reason: `Completed the task on the "complete" step. The primary action in "${PRIMARY_ACTION_AOI}" was fixated 1 time, first 29.0 s in, and clicked.`,
+      attribution: 'product',
+      excludedFromScores: false,
+    });
+    expect(decideOutcome(PRIMARY_ACTION_NEVER_SEEN, PERSISTENT).reason).toBe(
+      `The session ended on the "review" step with the task not done. The primary action in "${PRIMARY_ACTION_AOI}" was never fixated.`,
+    );
+  });
+
+  it('attributes and shapes a criterion outcome like every other', () => {
+    const vocabulary = /fixat|dwell|area of interest|primary action|revisit|step|session|browsing/i;
+    const machinery = /error:|exception|undefined|\bnull\b|TypeError|\.ts:\d|stack/i;
+
+    for (const outcome of criterionOutcomes()) {
+      expect(Object.keys(outcome).sort()).toStrictEqual([
+        'attribution',
+        'excludedFromScores',
+        'reason',
+        'status',
+        'step',
+      ]);
+      expect(outcome.step.length).toBeGreaterThan(0);
+      expect(outcome.reason).toMatch(vocabulary);
+      expect(outcome.reason).not.toMatch(machinery);
+      expect(outcome.reason.endsWith('.')).toBe(true);
+      expect(outcome.excludedFromScores).toBe(outcome.attribution === 'automation');
+      expect(() =>
+        sessionSchema.parse(sessionWith(PRIMARY_ACTION_NEVER_SEEN, outcome)),
+      ).not.toThrow();
+    }
+  });
+});
+
+/** One outcome per way a criterion can decide a session. */
+function criterionOutcomes(): readonly SessionOutcome[] {
+  return [
+    decideOutcome(withCriterion(TEDIOUS_CHECKOUT, OBSERVED), PERSISTENT),
+    decideOutcome(withCriterion(PRIMARY_ACTION_NEVER_SEEN, NEVER_OBSERVED), PERSISTENT),
+    decideOutcome(withCriterion(PRIMARY_ACTION_NEVER_SEEN, UNOBSERVABLE), PERSISTENT),
+    decideOutcome(withCriterion(ARRIVED_AND_DID_NOTHING, OBSERVED), PERSISTENT),
+    decideOutcome(ARRIVED_AND_DID_NOTHING, PERSISTENT),
+    decideOutcome(withCriterion(STATED_ABANDON, OBSERVED), PERSISTENT),
+    decideOutcome(withCriterion(SELECTOR_TIMEOUT, OBSERVED), PERSISTENT),
+  ];
+}
 
 /** One outcome per status, plus the two ways our own browsing breaks. */
 function allOutcomes(): readonly SessionOutcome[] {

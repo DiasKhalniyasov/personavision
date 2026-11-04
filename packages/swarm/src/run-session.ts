@@ -30,8 +30,16 @@
  *
  * **Nothing here decides how the session ended.** The outcome, its step, its reason and its
  * attribution are `decideOutcome`'s (#35) and are stored exactly as it returns them. This
- * module hands it facts — the screens, the fixations, the actions, and whether our own
- * browsing broke — and reads nothing back out of them.
+ * module hands it facts — the screens, the fixations, the actions, what the run's success
+ * criterion was and whether this session saw it, and whether our own browsing broke — and
+ * reads nothing back out of them.
+ *
+ * **The walk ends where the task says it ends, and a goal says so differently.** A task
+ * carrying a `successCriterion` is done when that criterion is **observed** on a screen this
+ * session captured (`criterion.ts`, #400); a task carrying none is done at its last declared
+ * step. The difference matters because a one-URL run derives a single step that the page
+ * matches the moment it loads: under the step rule every such session was finished before it
+ * had done anything.
  *
  * **The session names its own recording, and where it is in it.** A session opens asking to
  * be recorded as `videos/S-NN.webm`, and the recording is what knows both clocks: this loop
@@ -69,6 +77,7 @@ import {
   saccadeDurationMsFor,
 } from '@personavision/engine';
 import { openTrajectoryFile, validateDecision } from '@personavision/provider';
+import { criterionToObserve, observeCriterion } from './criterion.js';
 import { decideOutcome } from './outcome.js';
 import type {
   ActResult,
@@ -101,6 +110,7 @@ import type {
   PastAction,
   ScreenElement,
 } from '@personavision/provider';
+import type { CriterionSighting } from './criterion.js';
 import type { AutomationFailure, OutcomePolicy, SessionTrace } from './outcome.js';
 
 /** The decision layer a session runs through. A record, so a later seam is a new field. */
@@ -439,6 +449,15 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   const maxScreens = input.maxScreens ?? SCREENS_PER_STEP * Math.max(1, task.steps.length);
   const finalStepId = task.steps.at(-1)?.id ?? null;
   /**
+   * What the run said counts as having done the task, read once before the walk — `null` on
+   * a run with no goal, where the final declared step is the end of the task (#400).
+   *
+   * A criterion is checked against what this session captures and nothing else, so reading
+   * it opens no browser and makes no call: the same rule holds live, on a replayed capture
+   * set and on the offline engine.
+   */
+  const criterion = criterionToObserve(task.successCriterion);
+  /**
    * What the agent is trying to do on the screen it is on: the step's own goal where the
    * task declares one, and the whole prompt where it does not.
    *
@@ -480,6 +499,16 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   let scrollY = 0;
   let clockMs = 0;
   let completed = false;
+  /**
+   * Where the session is, and what the last screen showed of the criterion.
+   *
+   * A capture records the page's elements and not its address, so the address is carried
+   * along the walk: the variant's URL to begin with, and whatever the driver reports the
+   * page became after each action. It is what a criterion `readCriterion` called a URL is
+   * read against.
+   */
+  let url = variant.url;
+  let lastSighting: CriterionSighting | null = null;
   let primaryActionAoiId: string | null = null;
   let failure: AutomationFailure | null = null;
   /** How far into the walk the session has got: what a back has behind it to return to. */
@@ -644,7 +673,16 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       // The control that advances the step the session is on: what a reader of the outcome
       // wants to know whether the agent ever looked at.
       primaryActionAoiId = aois.find((area) => area.isPrimaryAction)?.id ?? primaryActionAoiId;
-      completed = step === finalStepId;
+      // What the task said counts as having done it, asked of the screen the session is on.
+      // A run with a goal is completed by its criterion being **observed** and never by
+      // arriving somewhere: a one-URL run derives one step, which the page matches the
+      // moment it loads, so the step rule made every such session a success (#400). A run
+      // with no goal keeps that rule, because a declared task says where its end is.
+      if (criterion !== null) {
+        lastSighting = observeCriterion(criterion, { step, url, elements: capture.elements });
+      }
+      completed =
+        criterion === null ? step === finalStepId : completed || lastSighting?.observed === true;
 
       /** One look at an area, after the screen's last one: where the eye went and for how long. */
       const lookAt = (area: Aoi, durationMs: number): SampledFixation => {
@@ -788,6 +826,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
             depth = Math.max(0, depth + (kind === 'backtrack' ? -1 : 1));
           }
           scrollY = executed.scrollY;
+          // Where the page ended up, which the next screen's criterion is read against.
+          url = executed.url;
           record(kind, aoi, worked, kind === 'scroll' ? String(executed.scrollY) : null, actedAtMs);
           history.push({ ...attempted, ok: worked });
           // The driver reports a target it could not resolve rather than throwing one, so
@@ -840,6 +880,19 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
     })),
     durationMs,
     taskCompleted: completed,
+    // The criterion as this session read it, where the run had one: what it looked for,
+    // whether it saw it, and what the screen it ended on was missing. `decideOutcome` turns
+    // that into the status and the words a reader gets; nothing here decides either.
+    ...(criterion === null
+      ? {}
+      : {
+          criterion: {
+            criterion: criterion.criterion,
+            observed: completed,
+            unobservable: criterion.unobservable,
+            missing: lastSighting?.missing ?? criterion.terms,
+          },
+        }),
     primaryActionAoiId,
     automationFailure: failure,
     // Deliberately `null`. `durationMs` is the session's own clock — the time the agent

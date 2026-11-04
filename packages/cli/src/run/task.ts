@@ -102,8 +102,19 @@ const derivedStep = (request: RunRequest): TaskStep => ({
 });
 
 /**
- * The task the swarm is handed: the request's own sentence, and either the steps a file
- * declared or the one step derived from the URLs.
+ * The task the swarm is handed: the request's own sentence, either the steps a file declared
+ * or the one step derived from the URLs, and — where the request carries a goal — what the
+ * goal says counts as having done it.
+ *
+ * **The criterion rides on the task** because the task is what a session is run with: one
+ * object reaches `runSwarm`, `runSession` and, serialised whole, the far end of the runner
+ * seam, so the criterion needs no field of its own on any of the three. It is why a
+ * one-URL run's sessions can be decided by what they observed rather than by having
+ * arrived: the derived step below is matched the moment the page loads, and on a run with a
+ * goal that is no longer what finishes a session (#400).
+ *
+ * A request with no goal carries none, and such a run keeps the rule it has: the last
+ * declared step is the end of the task.
  */
 export const taskFor = (
   request: RunRequest,
@@ -112,6 +123,7 @@ export const taskFor = (
   id: taskIdFor(request.task.prompt),
   prompt: request.task.prompt,
   steps: declared === null ? [derivedStep(request)] : declared.map((step) => ({ ...step })),
+  ...(request.goal === undefined ? {} : { successCriterion: request.goal.successCriterion }),
 });
 
 /** The steps as `run.json` lists them: the id a screenshot is written under, and its label. */
