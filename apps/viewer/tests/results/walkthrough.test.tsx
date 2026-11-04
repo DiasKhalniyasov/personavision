@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HEATMAP_OVERLAYS } from '@personavision/contract';
-import type { Citation, Run } from '@personavision/contract';
+import type { Citation, Run, Session } from '@personavision/contract';
 import { loadDesignTokens } from '../setup';
 import { mountApp } from '../app';
 import { stage, stubVideoPlayback } from '../replay/harness';
@@ -11,13 +11,14 @@ import { citationLink } from '../../src/screens/summary/Citations';
 import { paths } from '../../src/shell/paths';
 import {
   forget,
-  hundred,
   prose,
   RECOMMENDATIONS,
   RUN_ID,
+  screenAt,
   screenNamed,
   SCREENS,
   serveHundred,
+  serveWhole,
 } from './fixture';
 
 /**
@@ -38,8 +39,12 @@ import {
  * serves a run.
  */
 
-/** How close the player has to be to the second a citation named. */
-const SECOND = 1;
+/**
+ * How close the player has to be to the second a citation named, as `toBeCloseTo`'s digits:
+ * one, so within a twentieth of a second. It is the tolerance `replay/video.test.tsx` holds
+ * the player's own seek to.
+ */
+const DIGITS = 1;
 
 /** The query of one link, parsed, so a landing is asserted against what the link asked for. */
 const askedFor = (href: string): { pathname: string; query: URLSearchParams } => {
@@ -62,8 +67,12 @@ const destinationOf = (href: string): 'replay' | 'heatmap' | 'funnel' => {
  * Three things together are what "paused on that second" means on this screen: the player's
  * own `currentTime`, the screen of the timeline that second falls in, and a Play button —
  * a replay that opened playing would be a reader chasing the frame they were sent to.
+ *
+ * The timeline screen is asserted **by index**, against the screen the cited session's own
+ * file puts that second in. One card is always the active one, so a test that only asked
+ * whether *some* card was active would pass at nought seconds and on any wrong second too.
  */
-const landedOnReplay = async (href: string): Promise<void> => {
+const landedOnReplay = async (href: string, sessions: readonly Session[]): Promise<void> => {
   const { pathname, query } = askedFor(href);
   await screenNamed('Session replay').settled();
 
@@ -71,15 +80,26 @@ const landedOnReplay = async (href: string): Promise<void> => {
   expect(Number.isFinite(seconds), `${href} carries no second`).toBe(true);
 
   await waitFor(() => {
-    expect(stage().currentTime).toBeCloseTo(seconds, SECOND);
+    expect(stage().currentTime).toBeCloseTo(seconds, DIGITS);
   });
-  // The timeline is on the screen that second falls in, and the recording is not running.
-  expect(document.querySelector('[data-screen-card][data-active="true"]')).not.toBeNull();
+
+  // It is this person's replay: the id the citation named heads the screen.
+  const sessionId = pathname.split('/').pop() ?? '';
+  expect(prose(document.querySelector('h1')?.textContent)).toContain(sessionId);
+
+  // And the timeline is on the screen that second falls in, that one and no other.
+  const person = sessions.find((candidate) => candidate.sessionId === sessionId);
+  expect(person, `${sessionId} is not of this run`).toBeDefined();
+  const wanted = screenAt(person as Session, seconds * 1000);
+  await waitFor(() => {
+    const active = [...document.querySelectorAll('[data-screen-card][data-active="true"]')].map(
+      (card) => Number(card.getAttribute('data-screen-card')),
+    );
+    expect(active, `${href} is showing screens ${active.join(', ')}`).toEqual([wanted]);
+  });
+
+  // The recording is not running.
   expect(screen.getByRole('button', { name: 'Play the recording' })).toBeTruthy();
-  // And it is this person's replay: the id the citation named heads the screen.
-  expect(prose(document.querySelector('h1')?.textContent)).toContain(
-    pathname.split('/').pop() ?? '',
-  );
 };
 
 /**
@@ -90,8 +110,22 @@ const landedOnReplay = async (href: string): Promise<void> => {
  * the isolated one, named under the stage in the reader's own words.
  */
 const landedOnHeatmap = async (href: string, run: Run): Promise<void> => {
-  const { query } = askedFor(href);
+  const { pathname, query } = askedFor(href);
   await screenNamed('Heatmaps').settled();
+
+  // The variant and the step are in the path, and the screen is on them: the filmstrip has
+  // the cited step pressed and every other step of the run unpressed. Asserted off the
+  // screen rather than off the link, because a route that ignored its own parameters would
+  // answer the link with the first step of the run and the URL would still read correctly.
+  const [variant, step] = pathname.split('/').slice(-2);
+  expect(run.variants.some((candidate) => candidate.id === variant)).toBe(true);
+  const strip = document.querySelector('[data-section="step-filmstrip"]');
+  expect(strip, 'the heatmap screen has no filmstrip').not.toBeNull();
+  expect(
+    [...(strip?.querySelectorAll('[data-step][aria-pressed="true"]') ?? [])].map((frame) =>
+      frame.getAttribute('data-step'),
+    ),
+  ).toEqual([step]);
 
   const overlay = query.get('overlay');
   expect(overlay, `${href} names no overlay`).not.toBeNull();
@@ -138,15 +172,21 @@ const landedOnFunnel = async (href: string, run: Run): Promise<void> => {
   });
 };
 
+/** The run as it was served, which is what every landing above is asserted against. */
+interface Served {
+  readonly run: Run;
+  readonly sessions: readonly Session[];
+}
+
 /** Wherever a link leads, the screen it led to is in the state the link asked for. */
-const landedOn = async (href: string, run: Run): Promise<void> => {
+const landedOn = async (href: string, served: Served): Promise<void> => {
   switch (destinationOf(href)) {
     case 'replay':
-      return await landedOnReplay(href);
+      return await landedOnReplay(href, served.sessions);
     case 'heatmap':
-      return await landedOnHeatmap(href, run);
+      return await landedOnHeatmap(href, served.run);
     case 'funnel':
-      return await landedOnFunnel(href, run);
+      return await landedOnFunnel(href, served.run);
   }
 };
 
@@ -161,7 +201,11 @@ const hrefsOn = (): string[] => chips().map((chip) => chip.getAttribute('href') 
  * One citation followed from one of the two screens that cite: the chip is clicked and the
  * screen it leads to is asserted, then the walk is closed so the next one starts clean.
  */
-const follow = async (from: 'Summary' | 'Analysis', href: string, run: Run): Promise<void> => {
+const follow = async (
+  from: 'Summary' | 'Analysis',
+  href: string,
+  served: Served,
+): Promise<void> => {
   const source = screenNamed(from);
   const mounted = mountApp(source.path(RUN_ID));
   await source.settled();
@@ -170,7 +214,7 @@ const follow = async (from: 'Summary' | 'Analysis', href: string, run: Run): Pro
   expect(chip, `no citation on the ${from} links to ${href}`).toBeDefined();
   await userEvent.click(chip as HTMLAnchorElement);
 
-  await landedOn(href, run);
+  await landedOn(href, served);
   expect(mounted.router.state.location.pathname + mounted.router.state.location.search).toBe(href);
   mounted.unmount();
 };
@@ -187,8 +231,7 @@ afterEach(forget);
 
 describe('the Summary cites what a reader can check', () => {
   it('renders one chip per citation, each the URL that citation’s own fields build', async () => {
-    const { run } = hundred();
-    await serveHundred();
+    const { run } = await serveHundred();
     mountApp(paths.run(RUN_ID));
     await screenNamed('Summary').settled();
 
@@ -201,17 +244,15 @@ describe('the Summary cites what a reader can check', () => {
 describe('every citation of the Summary resolves', () => {
   for (const [position, citation] of everyCitation().entries()) {
     it(`follows citation ${String(position + 1)} (${citation.kind}) onto its own screen`, async () => {
-      const { run } = hundred();
-      await serveHundred();
-      await follow('Summary', citationLink(run, citation).to, run);
+      const served = await serveHundred();
+      await follow('Summary', citationLink(served.run, citation).to, served);
     }, 40_000);
   }
 });
 
 describe('the same walk from the Analysis resolves identically', () => {
   it('cites only what the claims carry, and every chip is a citation’s own URL', async () => {
-    const { run, recommendations } = hundred();
-    await serveHundred();
+    const { run, recommendations } = await serveWhole();
     mountApp(paths.analysis(RUN_ID));
     await screenNamed('Analysis').settled();
 
@@ -225,8 +266,7 @@ describe('the same walk from the Analysis resolves identically', () => {
   }, 40_000);
 
   it('lands each of its citations on the same screen, second and filters', async () => {
-    const { run } = hundred();
-    await serveHundred();
+    const served = await serveHundred();
     const reading = mountApp(paths.analysis(RUN_ID));
     await screenNamed('Analysis').settled();
     const walk = [...new Set(hrefsOn())];
@@ -235,14 +275,14 @@ describe('the same walk from the Analysis resolves identically', () => {
     // is followed from a screen of its own rather than from a copy left behind.
     reading.unmount();
 
-    for (const href of walk) await follow('Analysis', href, run);
+    for (const href of walk) await follow('Analysis', href, served);
   }, 120_000);
 });
 
 describe('the run is read over the mount the app uses', () => {
   it('asks only for files of the run directory, and computes nothing on the server', async () => {
-    const { sessions } = hundred();
     const served = await serveHundred();
+    const { sessions } = served;
 
     // The whole walk, so every read any of the six makes is in the list.
     for (const one of SCREENS) {

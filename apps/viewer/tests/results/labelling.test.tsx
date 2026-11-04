@@ -8,8 +8,8 @@ import { stubVideoPlayback } from '../replay/harness';
 import { paths } from '../../src/shell/paths';
 import {
   CITED_STEP,
+  DRAWN,
   forget,
-  hundred,
   prose,
   RUN_ID,
   SCREENS,
@@ -82,8 +82,7 @@ afterEach(forget);
 describe('every one of the six says the numbers are simulated', () => {
   for (const one of SCREENS) {
     it(`carries the line and the badge on ${one.name}`, async () => {
-      const { run } = hundred();
-      await serveHundred();
+      const { run } = await serveHundred();
       const { container } = mountApp(one.path(RUN_ID));
       await one.settled();
 
@@ -143,8 +142,7 @@ describe('the tab bar is one bar', () => {
   }, 90_000);
 
   it('keeps the run as a reader moves across the five sections', async () => {
-    const { run } = hundred();
-    await serveHundred();
+    const { run } = await serveHundred();
     const mounted = mountApp(paths.run(RUN_ID));
     await screenNamed('Summary').settled();
 
@@ -216,7 +214,7 @@ describe('a run that recorded nothing', () => {
     });
 
   for (const one of SCREENS) {
-    it(`keeps all five tabs and draws no figure on ${one.name}`, async () => {
+    it(`keeps all five tabs on ${one.name}`, async () => {
       await nothingRecorded();
       const { container } = mountApp(one.path(RUN_ID));
       await waitFor(
@@ -247,7 +245,7 @@ describe('a run that recorded nothing', () => {
       // Settling here is the absence arriving, not the figures: every file this screen
       // reads has answered 404 and the screen has said so.
       await waitFor(() => {
-        expect(prose(mounted.container.textContent).length).toBeGreaterThan(200);
+        expect(prose(mounted.container.textContent).length).toBeGreaterThan(DRAWN);
       });
       stated[name] = prose(mounted.container.textContent);
 
@@ -287,7 +285,7 @@ describe('a run that recorded nothing', () => {
         setTimeout(resolve, 10);
       });
       const now = prose(container.textContent);
-      if (now === before && now.length > 200) return;
+      if (now === before && now.length > DRAWN) return;
       before = now;
     }
     throw new Error('the screen never stopped arriving');
@@ -357,7 +355,7 @@ describe('a run that recorded nothing', () => {
     // And those zeroes are the run's, one for one: an area of this step whose metrics say
     // its `lookedAtShare` was zero is an area nobody looked at, which is a finding and not
     // an absence. The screen prints as many as the run records and not one more.
-    const { run } = hundred();
+    const { run } = await nothingRecorded();
     const here = new Set(
       run.aois
         .filter((area) => area.variant === VARIANT && area.step === CITED_STEP)
@@ -368,7 +366,6 @@ describe('a run that recorded nothing', () => {
     );
     expect(never.length).toBeGreaterThan(0);
 
-    await nothingRecorded();
     const mounted = mountApp(screenOfTab('Attention').path(RUN_ID));
     await stopped(mounted.container);
 

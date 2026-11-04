@@ -43,13 +43,39 @@ const filesUnder = (directory: string): string[] =>
     return statSync(path).isDirectory() ? filesUnder(path) : [path];
   });
 
-/** Every stylesheet of the six screens, by path. */
-const screenStylesheets = (): string[] =>
+/** Every file of the six screens' own directories whose extension is one of these. */
+const screenFiles = (...kinds: string[]): string[] =>
   SCREEN_DIRS.flatMap((screenDir) =>
-    filesUnder(join(here, '../../src/screens', screenDir)).filter(
-      (path) => extname(path) === '.css',
+    filesUnder(join(here, '../../src/screens', screenDir)).filter((path) =>
+      kinds.includes(extname(path)),
     ),
   );
+
+/** Every stylesheet of the six screens, by path. */
+const screenStylesheets = (): string[] => screenFiles('.css');
+
+/** Every component of the six screens, where a Tailwind utility class would be written. */
+const screenComponents = (): string[] => screenFiles('.tsx', '.ts');
+
+/** What a `rem` is, so a length written in them can be compared with the phone's width. */
+const ROOT_FONT_PX = 16;
+
+/**
+ * The width the product calls a phone, **read out of `docs/design/tokens.css`** rather than
+ * written here: `--frame-ratio-mobile` is the mobile frame's own aspect ratio, `390 / 844`,
+ * and its first term is that width. The setup loads the committed tokens file into the
+ * document, so this is the same value the product renders with.
+ */
+const phoneWidth = (): number => {
+  const ratio = getComputedStyle(document.documentElement)
+    .getPropertyValue('--frame-ratio-mobile')
+    .trim();
+  const width = Number(/^(\d+(?:\.\d+)?)\s*\/\s*\d/u.exec(ratio)?.[1]);
+  if (!Number.isFinite(width)) {
+    throw new Error(`--frame-ratio-mobile does not name a width: ${JSON.stringify(ratio)}`);
+  }
+  return width;
+};
 
 /** A stylesheet with its comments taken out: a word in a comment is not a declaration. */
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//gu, '');
@@ -92,9 +118,7 @@ const unreachable = (container: HTMLElement): string[] =>
     .filter((control) => control.getAttribute('tabindex') === '-1')
     .filter(
       (control) =>
-        control.closest(
-          '[role="toolbar"], [role="tablist"], [role="radiogroup"], [role="group"]',
-        ) === null,
+        control.closest('[role="toolbar"], [role="tablist"], [role="radiogroup"]') === null,
     )
     .map((control) => control.outerHTML.slice(0, 120));
 
@@ -129,33 +153,39 @@ describe('all six are operable by keyboard', () => {
     }, 60_000);
   }
 
-  it('walks forward from one control to the next, and never sticks', async () => {
-    const user = userEvent.setup();
-    await serveHundred();
-    const one = SCREENS[0];
-    if (one === undefined) throw new Error('there are no results screens');
-    const { container } = mountApp(one.path(RUN_ID));
-    await one.settled();
+  /** How many stops of one screen's tab order are walked. */
+  const STOPS = 12;
 
-    const controls = controlsIn(container);
-    const first = controls[0];
-    if (first === undefined) throw new Error('the screen drew no control');
-    first.focus();
-    expect(document.activeElement).toBe(first);
+  for (const one of SCREENS) {
+    it(`walks forward from one control to the next on ${one.name}, and never sticks`, async () => {
+      const user = userEvent.setup();
+      await serveHundred();
+      const { container } = mountApp(one.path(RUN_ID));
+      await one.settled();
 
-    const stops: Element[] = [first];
-    for (let step = 0; step < Math.min(controls.length - 1, 12); step += 1) {
-      await user.tab();
-      const landed = document.activeElement as Element;
-      // Forward, and somewhere new: a tab that lands where it started is a trap.
-      expect(stops.includes(landed), landed.outerHTML.slice(0, 120)).toBe(false);
-      stops.push(landed);
-    }
-    expect(stops.length).toBeGreaterThan(1);
-  }, 60_000);
+      const controls = controlsIn(container);
+      const first = controls[0];
+      if (first === undefined) throw new Error(`${one.name} drew no control`);
+      first.focus();
+      expect(document.activeElement).toBe(first);
+
+      const stops: Element[] = [first];
+      for (let step = 0; step < Math.min(controls.length - 1, STOPS); step += 1) {
+        await user.tab();
+        const landed = document.activeElement as Element;
+        // Forward, and somewhere new: a tab that lands where it started is a trap.
+        expect(stops.includes(landed), landed.outerHTML.slice(0, 120)).toBe(false);
+        stops.push(landed);
+      }
+      // More than one, and as many as the screen had to give: a walk that stopped early
+      // because the screen ran out of controls is not a walk this test has judged.
+      expect(stops.length, one.name).toBe(Math.min(controls.length, STOPS + 1));
+    }, 60_000);
+  }
 
   it('never takes a focus ring away without putting one back', async () => {
     await serveHundred();
+    let judged = 0;
 
     for (const one of SCREENS) {
       const mounted = mountApp(one.path(RUN_ID));
@@ -166,9 +196,15 @@ describe('all six are operable by keyboard', () => {
         expect(classes, `${one.name}: ${control.outerHTML.slice(0, 120)}`).toMatch(
           /focus-visible:ring-/u,
         );
+        judged += 1;
       }
       mounted.unmount();
     }
+
+    // The registry's primitives do take the browser ring away and put their own back, so
+    // the six do have controls of this shape. A run that found none would mean the class
+    // the check looks for had been renamed, not that every control keeps its ring.
+    expect(judged, 'no control on any of the six takes its outline away').toBeGreaterThan(0);
   }, 90_000);
 
   it('reads the ring itself out of the tokens', () => {
@@ -218,13 +254,41 @@ describe('all six hold at 390 px', () => {
     expect(scrollers.length).toBeGreaterThan(0);
   });
 
+  it('asks for no width in a utility class either', () => {
+    // A stylesheet is not the only way to demand room: Tailwind's arbitrary values put the
+    // same declaration in a class name, where the CSSOM above cannot see it. So the six
+    // screens' own components are read for one too, by the shape the utility takes —
+    // `w-[600px]`, `min-w-[48rem]` — with `0px`, and the sub-`phone` lengths an icon or a
+    // control needs, allowed exactly as the stylesheet rule allows them.
+    const phone = phoneWidth();
+    const arbitrary = /\b(?:min-)?(?:w|inline-size)-\[(\d+(?:\.\d+)?)(px|rem)\]/gu;
+
+    // The six use none today, so unlike the two rules above this one has nothing of its own
+    // to count. What it can state is that it read the screens at all: a scan whose file
+    // list had gone empty — a directory renamed, a screen moved — would otherwise pass
+    // over any width at all.
+    const components = screenComponents();
+    expect(components.length, 'the six screens have no components to read').toBeGreaterThan(5);
+
+    for (const path of components) {
+      const body = withoutComments(readFileSync(path, 'utf8'));
+      for (const found of body.matchAll(arbitrary)) {
+        const [whole, length, unit] = found;
+        const pixels = unit === 'rem' ? Number(length) * ROOT_FONT_PX : Number(length);
+        expect(pixels, `${path}: ${whole}`).toBeLessThanOrEqual(phone);
+      }
+    }
+  });
+
   it('hard-sizes nothing it renders, either', async () => {
-    const phone = 390;
+    const phone = phoneWidth();
     await serveHundred();
+    let styled = 0;
 
     for (const one of SCREENS) {
       const mounted = mountApp(one.path(RUN_ID));
       await one.settled();
+      styled += mounted.container.querySelectorAll('[style]').length;
       for (const element of mounted.container.querySelectorAll<HTMLElement>('[style]')) {
         for (const property of ['width', 'minWidth'] as const) {
           const value = element.style[property];
@@ -238,6 +302,12 @@ describe('all six hold at 390 px', () => {
       }
       mounted.unmount();
     }
+
+    // Not every one of the six styles anything inline — the Summary styles nothing at all —
+    // but the heatmap stage's boxes and the funnel's bars do, so the walk has elements to
+    // judge. A run that found none would mean the screens had stopped drawing them, and
+    // this check had quietly become a check of nothing.
+    expect(styled, 'none of the six drew an inline style').toBeGreaterThan(0);
   }, 90_000);
 });
 

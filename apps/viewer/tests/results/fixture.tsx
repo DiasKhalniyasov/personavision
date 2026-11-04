@@ -514,6 +514,23 @@ export async function serveHundred(options: ServeOptions = {}) {
   return { ...served, run, sessions, aggregate, recommendations: recommended, videoRequests };
 }
 
+/**
+ * The fixture run served **whole**: the aggregate and the recommendations present, and both
+ * narrowed to themselves.
+ *
+ * `serveHundred` can be asked for a run that composed neither — that is the nothing-recorded
+ * state — so its result says they may be absent. A test about a run that recorded everything
+ * would otherwise have to re-state that at every figure it reads, which is noise around the
+ * assertion that matters; here it is stated once, and loudly, as the fixture's own failure.
+ */
+export async function serveWhole(options: ServeOptions = {}) {
+  const served = await serveHundred(options);
+  const { aggregate, recommendations } = served;
+  if (aggregate === null) throw new Error('this fixture run composed no aggregate');
+  if (recommendations === null) throw new Error('this fixture run produced no recommendations');
+  return { ...served, aggregate, recommendations };
+}
+
 /** Every file of this run that lands after `run.json`: what a slow read is made of. */
 export const laterFiles = (sessions: readonly Session[] = hundredSessions()): string[] => [
   url.aggregate,
@@ -658,3 +675,30 @@ export async function openAt(path: string, one: ResultScreen) {
 /** What one screen reads, as one line with its whitespace collapsed. */
 export const prose = (text: string | null | undefined): string =>
   (text ?? '').replace(/\s+/gu, ' ').trim();
+
+/**
+ * How many characters of prose mean a screen has finished drawing itself.
+ *
+ * It is the wait for a state that has no marker of its own — a run that recorded nothing,
+ * where three of the six never draw the block their `settled()` waits for. Every one of the
+ * six carries its heading, its standfirst and the simulated line, which is comfortably more
+ * than this; a screen that had only begun carries less. One constant rather than the number
+ * written at each of the places that waits.
+ */
+export const DRAWN = 200;
+
+/**
+ * Which screen of a session's recording a given moment falls in: the last one that had
+ * started by then, as the session file's own `screenOffsetsMs` records their starts.
+ *
+ * Computed here from the file rather than read off the screen, so that an assertion about
+ * where a citation landed is an assertion against the run and not against the component.
+ */
+export const screenAt = (session: Session, offsetMs: number): number => {
+  const recording = session.video;
+  const offsets: readonly (number | null)[] =
+    recording !== undefined && recording.state === 'recorded' ? recording.screenOffsetsMs : [];
+  // A screen whose start was never measured is not a screen this moment can fall in.
+  const started = offsets.filter((start) => start !== null && start <= offsetMs).length;
+  return Math.max(0, started - 1);
+};
