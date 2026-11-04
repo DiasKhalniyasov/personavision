@@ -61,6 +61,7 @@ export type { OfflineProviderOptions } from './offline.js';
 export {
   DEFAULT_MODEL_MODE,
   MODEL_API_KEY_ENV,
+  modelCredentialPresent,
   ModelModeUnavailableError,
   selectDecisionProvider,
   selectWonderProvider,
