@@ -62,20 +62,22 @@ If you record somebody else, ask them first, and tell them what the file holds.
 3. **Calibration.** Nine points. The participant looks at each and clicks it five times.
    Clicking is how the model learns: it pairs the image of the eyes with a place on screen
    that the eye is known to be on.
-4. **Accuracy check.** Five seconds looking at one point, and the distance from it is
-   measured. This is gaze the model was never fitted on, which is why it is a separate step
-   and not a summary of the calibration's own residuals. **Recording stays closed until this
-   has run** — a recording with no calibration behind it is not data.
+4. **Accuracy check.** Five seconds looking at one point, on an otherwise bare display, and
+   the distance from it is measured. This is gaze the model was never fitted on, which is why
+   it is a separate step and not a summary of the calibration's own residuals. **Recording
+   stays closed until this has run** — a recording with no calibration behind it is not data.
 5. **Recording.** A centre cross for a second, then one screenshot for its exposure, and on to
    the next. The display holds nothing but the screenshot: no preview, no face overlay, no
    gaze dot, because each of those is a bright moving thing and a bright moving thing is where
    the eye goes.
 6. **Save.** One JSON file, named for the participant and the time.
 
-Three things in `eyetrack.js` exist to protect the data, and each one fights the library's
+Four things in `eyetrack.js` exist to protect the data, and each one fights the library's
 defaults: WebGazer's mouse listeners are removed so no button press is mistaken for a glance,
 its stored model is cleared so the last participant's calibration cannot become this one's,
-and the display is stripped bare while recording.
+the display is stripped bare while checking and recording, and **the prediction dot is never
+shown** — it sits near where the eye already is, so a participant who glances at it is chasing
+their own gaze, which poisons a training pair and flatters the accuracy figure.
 
 ## The file
 

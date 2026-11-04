@@ -233,11 +233,25 @@
     }
   };
 
-  const setTrackerVisible = function (visible) {
-    window.webgazer.showVideo(visible);
-    window.webgazer.showFaceOverlay(visible);
-    window.webgazer.showFaceFeedbackBox(visible);
-    window.webgazer.showPredictionPoints(visible);
+  /**
+   * What the participant can see of the tracker itself.
+   *
+   * `chrome` is WebGazer's camera preview, its face mesh and its face box: the things that
+   * tell somebody they are being tracked and let them sit square to the camera. They are
+   * shown while positioning and calibrating, and gone for the accuracy check and the
+   * recording, where the only thing on the display should be the thing being looked at.
+   *
+   * **The prediction dot is never shown.** It looks like the tool working, and it is the one
+   * mark on the display guaranteed to sit near where the eye already is — so a participant
+   * who glances at it is chasing their own gaze. During calibration that poisons the pair
+   * being trained; during the accuracy check it flatters the very figure the check exists to
+   * measure. The figure afterwards is the honest feedback that it worked.
+   */
+  const setTrackerChrome = function (chrome) {
+    window.webgazer.showVideo(chrome);
+    window.webgazer.showFaceOverlay(chrome);
+    window.webgazer.showFaceFeedbackBox(chrome);
+    window.webgazer.showPredictionPoints(false);
   };
 
   /**
@@ -271,7 +285,7 @@
     // WebGazer adds mouse listeners that train the model on every click and movement. The
     // only training this tool allows is the nine points, recorded by hand.
     window.webgazer.removeMouseEventListeners();
-    setTrackerVisible(true);
+    setTrackerChrome(true);
   };
 
   /** Stop predicting and let go of the camera: the light goes out when it is no longer needed. */
@@ -461,7 +475,7 @@
       'Look at a dot and click it, five times.',
       'Keep your eyes on the dot you are clicking.',
     );
-    setTrackerVisible(true);
+    setTrackerChrome(true);
 
     return new Promise(function (resolve) {
       points.forEach(function (point) {
@@ -520,7 +534,9 @@
     nodes.targets.textContent = '';
     nodes.overlay.hidden = false;
     instruct('Now just look at the dot.', 'Hold still until it disappears.');
-    setTrackerVisible(true);
+    // Nothing on the display but the target: an error measured while the eye had somewhere
+    // else to go is not the error this tool has.
+    setTrackerChrome(false);
 
     const target = document.createElement('button');
     target.type = 'button';
@@ -720,8 +736,8 @@
 
     show('record');
     nodes.overlay.hidden = true;
-    // Nothing on the display but the screenshot: no preview, no overlay, no gaze dot.
-    setTrackerVisible(false);
+    // Nothing on the display but the screenshot: no preview, no overlay, nothing.
+    setTrackerChrome(false);
 
     const records = [];
     const next = function (position) {

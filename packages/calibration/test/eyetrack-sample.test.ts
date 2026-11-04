@@ -170,13 +170,21 @@ describe('the eye tracker’s file is this package’s raw-record shape', () => 
 
     for (const converted of sessions) {
       const record = sample.records.find((candidate) => candidate.id === converted.recordId);
-      expect(record, converted.recordId).toBeDefined();
+      // Thrown rather than asserted: `image` and `display` are nullable on the raw shape, so
+      // a soft assertion here would leave the three claims below comparing against a
+      // fallback — green, and checking nothing.
+      if (record === undefined) throw new Error(`no record for ${converted.recordId}`);
+      const { image, display } = record;
+      if (image === null || display === null) {
+        throw new Error(`record ${record.id} has no image or no display`);
+      }
+
       // A screenshot is shown shrunk to fit the display, so the scale is above one and the
       // viewport is narrower than the image. A record that recorded the image's size instead
       // would score a prediction at a resolution nobody was shown.
       expect(converted.display.scale).toBeGreaterThan(1);
-      expect(converted.display.viewport.width).toBeLessThan(record?.image.width ?? 0);
-      expect(converted.display.viewport.width).toBe(record?.display?.viewportWidth);
+      expect(converted.display.viewport.width).toBeLessThan(image.width);
+      expect(converted.display.viewport.width).toBe(display.viewportWidth);
     }
   });
 
