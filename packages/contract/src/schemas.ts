@@ -824,6 +824,62 @@ export const improveSchema = z.strictObject({
   holdout: holdoutSchema,
 });
 
+/**
+ * One area of interest the run measured, and the row of figures it carries.
+ *
+ * Named rather than written inline inside `runSchema` because the front page's slide data
+ * carries the very same rows (`landingSlidesSchema`), and a field of the artifact is
+ * declared exactly once: two copies of this shape in one file would drift independently,
+ * and a slide that is supposed to be a copy would stop being one without anything failing.
+ */
+const aoiSchema = z.strictObject({
+  id: name,
+  variant: name,
+  step: name,
+  label: name,
+  source: aoiSourceSchema,
+  role: z.string().nullable(),
+  bbox: z.strictObject({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
+  isPrimaryAction: z.boolean(),
+  belowFold: z.boolean(),
+});
+
+const aoiMetricsSchema = z.strictObject({
+  aoiId: name,
+  /** `null` when no fixation ever landed: a never-fixated area is a result, not a gap. */
+  timeToFirstFixationMs: milliseconds.nullable(),
+  firstFixationDurationMs: milliseconds.nullable(),
+  totalDwellMs: milliseconds,
+  fixationCount: count,
+  revisits: count,
+  lookedAtShare: unitInterval,
+  sessionCount: count,
+});
+
+/**
+ * One fixation and one saccade, named for the same reason as the two above: a slide carries
+ * the screen's own fixations and the saccades between them, and they are the session's rows
+ * rather than a shape of their own.
+ */
+const fixationSchema = z.strictObject({
+  index: count,
+  screenIndex: count,
+  tMs: milliseconds,
+  durationMs: milliseconds,
+  x: pixels,
+  y: pixels,
+  pageX: pixels,
+  pageY: pixels,
+  aoiId: name.nullable(),
+});
+
+const saccadeSchema = z.strictObject({
+  fromFixation: count,
+  toFixation: count,
+  amplitudePx: pixels,
+  durationMs: milliseconds,
+});
+
 export const runSchema = z
   .strictObject({
     schemaVersion,
@@ -980,32 +1036,8 @@ export const runSchema = z
         foldY: pixels,
       }),
     ),
-    aois: z.array(
-      z.strictObject({
-        id: name,
-        variant: name,
-        step: name,
-        label: name,
-        source: aoiSourceSchema,
-        role: z.string().nullable(),
-        bbox: z.strictObject({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
-        isPrimaryAction: z.boolean(),
-        belowFold: z.boolean(),
-      }),
-    ),
-    aoiMetrics: z.array(
-      z.strictObject({
-        aoiId: name,
-        /** `null` when no fixation ever landed: a never-fixated area is a result, not a gap. */
-        timeToFirstFixationMs: milliseconds.nullable(),
-        firstFixationDurationMs: milliseconds.nullable(),
-        totalDwellMs: milliseconds,
-        fixationCount: count,
-        revisits: count,
-        lookedAtShare: unitInterval,
-        sessionCount: count,
-      }),
-    ),
+    aois: z.array(aoiSchema),
+    aoiMetrics: z.array(aoiMetricsSchema),
     scores: z.array(scoreSchema),
     verdict: verdictSchema,
     /**
@@ -1520,27 +1552,8 @@ export const sessionSchema = z
         decidedAction: z.string(),
       }),
     ),
-    fixations: z.array(
-      z.strictObject({
-        index: count,
-        screenIndex: count,
-        tMs: milliseconds,
-        durationMs: milliseconds,
-        x: pixels,
-        y: pixels,
-        pageX: pixels,
-        pageY: pixels,
-        aoiId: name.nullable(),
-      }),
-    ),
-    saccades: z.array(
-      z.strictObject({
-        fromFixation: count,
-        toFixation: count,
-        amplitudePx: pixels,
-        durationMs: milliseconds,
-      }),
-    ),
+    fixations: z.array(fixationSchema),
+    saccades: z.array(saccadeSchema),
     actions: z.array(
       z.strictObject({
         tMs: milliseconds,
@@ -2503,6 +2516,231 @@ export const runRequestSchema = z
     }
   });
 
+/**
+ * One trait a slide shows, as `{ key, value }`: the key is one of `personaTraitsSchema`'s
+ * own six field names, read off that schema rather than written out again, so a slide
+ * cannot name a trait the persona does not carry. "Tech confidence" and "price
+ * sensitivity" — the words the owner's input used — are not among them: the first is
+ * `interfaceFamiliarity` under the name a reader knows it by, and the second is the
+ * **audience's** `priceSensitivity` and no person's, which is why it sits on the set and
+ * not on a slide (decision 178).
+ */
+const slideTraitSchema = z.strictObject({
+  key: personaTraitsSchema.keyof(),
+  value: unitInterval,
+});
+
+/** A sentence the agent wrote, and the fixation it is pinned beside. */
+const pinnedThoughtSchema = z.strictObject({
+  text: name,
+  /**
+   * A `fixations[]` entry's own `index` — the session's continuous index, not a position in
+   * this slide's list, so a thought and a fixation can be matched up by the number the
+   * session itself gave it.
+   */
+  fixationIndex: count,
+});
+
+/**
+ * One generated person on one screen of one session, with everything the front-page
+ * carousel draws for them.
+ *
+ * **Every field is a copy.** Nothing here is computed from the run and nothing is added to
+ * it: `scripts/bake-landing-slides.ts` reads a run through this package and moves values
+ * across. That is the whole point of baking a file rather than writing one — a slide can
+ * only ever say what the run said, and `apps/viewer/src/screens/landing/slides.test.ts`
+ * holds the committed set to it value by value.
+ */
+const landingSlideSchema = z.strictObject({
+  /** Where the slide came from, so a reader can be sent to the session itself. */
+  runId: name,
+  sessionId,
+  screenIndex: count,
+  person: z.strictObject({
+    /** `personas[]`'s own `name` and `segment`, copied. */
+    name,
+    segment: name,
+    /**
+     * The person's device — its `name`, the `viewport` it browsed at and whether it had
+     * `touch`, which is what decides whether the slide is drawn in a phone frame or a
+     * desktop one. `deviceScaleFactor` is left out: it is a capture setting and nothing a
+     * reader of the slide sees.
+     */
+    device: z.strictObject({ name, viewport: viewportSchema, touch: z.boolean() }),
+    /**
+     * The person's age in years, **only when their persona carries `profile.age`**, and
+     * absent otherwise. A generated persona has only its traits, so most carry none, and an
+     * absent age is a person the run never recorded one for rather than a placeholder for
+     * the slide to print.
+     */
+    ageYears: z.int().min(0).optional(),
+    /** The two or three traits this slide shows. */
+    traits: z.array(slideTraitSchema).min(2).max(3),
+  }),
+  /**
+   * The capture the slide draws on, as `run.json`'s `screenshots[]` row records it.
+   *
+   * `foldY` is left out, like the device's `deviceScaleFactor`: a slide shows one screen of
+   * one person and draws no fold line, and an area that was below the fold already says so
+   * on its own `belowFold`. Whoever draws one adds the field here.
+   */
+  screenshot: z.strictObject({
+    /** Run-directory-relative, as `runPaths('').screenshot(variant, step)` spells it. */
+    path: name,
+    viewport: viewportSchema,
+    pageHeight: pixels,
+  }),
+  /**
+   * This screen's fixations, its saccades and the clicks made on it, copied out of the
+   * session in the page coordinates the Attention stage's `overlayTransform` already draws
+   * against — `pageX`/`pageY` for a fixation, and, for a click, the `bbox` of the area it
+   * landed on, because `actions[]` carries no coordinates of its own.
+   */
+  fixations: z.array(fixationSchema).min(1),
+  saccades: z.array(saccadeSchema),
+  /**
+   * The clicks of this screen. `type` is gone because every row is one, and `aoiId` is
+   * **not** nullable here: a click that names no area has no position on the page and so is
+   * nothing the slide could draw, which is what "the clicks with a position" means.
+   */
+  clicks: z.array(
+    z.strictObject({
+      tMs: milliseconds,
+      target: z.string().nullable(),
+      aoiId: name,
+      value: z.string().nullable(),
+      ok: z.boolean(),
+    }),
+  ),
+  /**
+   * Every area of interest measured on this screen, each carrying the `aoiMetrics` row the
+   * run already computed for it. The slide draws the stored numbers and recomputes none.
+   */
+  areas: z.array(
+    aoiSchema.extend({
+      /**
+       * The row the run already measured for this area, minus its `aoiId`: the area it is
+       * nested inside carries that id, and a slide states nothing twice.
+       */
+      metrics: aoiMetricsSchema.omit({ aoiId: true }),
+    }),
+  ),
+  /**
+   * What the agent thought on this screen, under the contract's own two names, each pinned
+   * to a fixation. **The pinning rule lives in the baking script and is written down
+   * there**: the intent goes to the screen's first fixation and the decided action to its
+   * last, because those are the two moments the strings are about.
+   *
+   * Either is absent when the session recorded the string empty — a screen that wrote no
+   * sentence, rather than a sentence the slide may invent.
+   */
+  thoughts: z.strictObject({
+    intent: pinnedThoughtSchema.optional(),
+    decidedAction: pinnedThoughtSchema.optional(),
+  }),
+  /** How the session ended, copied from its `outcome`. */
+  outcome: z.strictObject({
+    status: outcomeStatusSchema,
+    step: name,
+    reason: z.string(),
+    excludedFromScores: z.boolean(),
+  }),
+});
+
+/**
+ * The slide data the front page's carousel reads: `apps/viewer/src/screens/landing/slides.json`
+ * and, once the example templates have runs of their own (#429), one set per template.
+ *
+ * It is **baked, never written**: `scripts/bake-landing-slides.ts` produces it from
+ * committed run directories, and the carousel is therefore a rendering of a real test
+ * rather than a page of prose about one. The parse is closed like every other object here,
+ * so a baked file that drifts from the contract fails to load rather than rendering
+ * something plausible.
+ *
+ * It carries **no `schemaVersion`**, and that is deliberate: a slide set is not an artifact
+ * file. It lives in `apps/viewer`'s own source, is rebuilt by one command from a run
+ * directory that does carry one, and is never read off a stranger's disk — so there is no
+ * old copy to identify, and a version nobody raises would be a field that says nothing.
+ * `runRequestSchema` above is in the same position. What stands in for it is the suite
+ * beside the committed file, which checks every value against the run it was baked from, so
+ * a set left behind by a changed fixture fails a test rather than rendering a stale page.
+ */
+export const landingSlidesSchema = z
+  .strictObject({
+    /**
+     * The runs these slides were baked from, in the order they were read. Plural because a
+     * curated set may contrast two sites; each slide names its own `runId` beside it.
+     */
+    runIds: z.array(name).min(1),
+    /**
+     * The task prompt the slides share — once rather than per slide, because what makes a
+     * set of slides readable is that the people on them were all asked the same thing.
+     */
+    task: name,
+    /**
+     * The audience the people were generated from: its name, and its `priceSensitivity`,
+     * which is an audience-level reading and not a person's (decision 178).
+     */
+    audience: z.strictObject({ name, priceSensitivity: unitInterval }),
+    slides: z.array(landingSlideSchema).min(1),
+  })
+  .superRefine((set, ctx) => {
+    set.slides.forEach((slide, position) => {
+      const fixationIndexes = new Set(slide.fixations.map((fixation) => fixation.index));
+      const areaIds = new Set(slide.areas.map((area) => area.id));
+
+      // Every index in a slide points into the slide's own lists. A baked file whose
+      // thought is pinned to a fixation it does not carry, or whose click names an area it
+      // does not carry, would draw the sentence or the press somewhere arbitrary, and
+      // nothing else in the file would contradict it.
+      for (const which of ['intent', 'decidedAction'] as const) {
+        const thought = slide.thoughts[which];
+        if (thought !== undefined && !fixationIndexes.has(thought.fixationIndex)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['slides', position, 'thoughts', which, 'fixationIndex'],
+            message: `fixation ${thought.fixationIndex} is not one of this slide's ${slide.fixations.length}: a thought is pinned beside a fixation the slide draws`,
+          });
+        }
+      }
+      slide.saccades.forEach((saccade, at) => {
+        for (const end of ['fromFixation', 'toFixation'] as const) {
+          if (!fixationIndexes.has(saccade[end])) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['slides', position, 'saccades', at, end],
+              message: `${end} ${saccade[end]} is not one of this slide's ${slide.fixations.length} fixations: a slide carries the saccades between the fixations it draws`,
+            });
+          }
+        }
+      });
+      slide.clicks.forEach((click, at) => {
+        if (!areaIds.has(click.aoiId)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['slides', position, 'clicks', at, 'aoiId'],
+            message: `"${click.aoiId}" is not one of this slide's ${slide.areas.length} areas: an area's \`bbox\` is the only position a click has`,
+          });
+        }
+      });
+
+      // The areas are the screen's, so the path the slide loads is the one the paths module
+      // spells for the variant and step they were measured on. A set whose areas and
+      // screenshot disagree is one screen's attention drawn over another screen's picture.
+      const area = slide.areas[0];
+      if (area !== undefined) {
+        const spelt = runPaths('').screenshot(area.variant, area.step);
+        if (slide.screenshot.path !== spelt) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['slides', position, 'screenshot', 'path'],
+            message: `"${slide.screenshot.path}" is not the capture these areas were measured on: ${area.variant} / ${area.step} is "${spelt}", as the paths module spells it`,
+          });
+        }
+      }
+    });
+  });
+
 export type ModelMode = z.infer<typeof modelModeSchema>;
 export type Audience = z.infer<typeof audienceSchema>;
 export type AudienceDevice = z.infer<typeof audienceDeviceSchema>;
@@ -2598,6 +2836,9 @@ export type WriteUpClaim = z.infer<typeof writeUpClaimSchema>;
 export type SampleProvenance = z.infer<typeof sampleProvenanceSchema>;
 export type RunRequest = z.infer<typeof runRequestSchema>;
 export type Aggregate = z.infer<typeof aggregateSchema>;
+export type LandingSlides = z.infer<typeof landingSlidesSchema>;
+export type LandingSlide = z.infer<typeof landingSlideSchema>;
+export type LandingSlideTrait = z.infer<typeof slideTraitSchema>;
 export type Distribution = z.infer<typeof distributionSchema>;
 export type FunnelSlice = z.infer<typeof funnelSliceSchema>;
 export type ScreenSlice = z.infer<typeof screenSliceSchema>;
