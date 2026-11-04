@@ -655,13 +655,14 @@ describe.skipIf(!CHROMIUM_INSTALLED)(
           ),
         );
         expect(boxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
-        expect(boxes.map((box) => Math.round(box.y))).toEqual([
-          Math.round(boxes[0].y),
-          Math.round(boxes[0].y),
-          Math.round(boxes[0].y),
-        ]);
-        expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
-        expect(boxes[2].x).toBeGreaterThan(boxes[1].x);
+        const top = Math.round(must(boxes[0], 'the first figure').y);
+        expect(boxes.map((box) => Math.round(box.y))).toEqual([top, top, top]);
+        expect(must(boxes[1], 'the second figure').x).toBeGreaterThan(
+          must(boxes[0], 'the first figure').x,
+        );
+        expect(must(boxes[2], 'the third figure').x).toBeGreaterThan(
+          must(boxes[1], 'the second figure').x,
+        );
 
         const notice = await words(page, '[data-section="holdout-verdict"]');
         expect(notice).toContain('Confirmed on the holdout.');
@@ -765,11 +766,11 @@ describe.skipIf(!CHROMIUM_INSTALLED)(
         // The three figures are still the three figures, and none of them is marked as the
         // one to ship: there is no win framing on this screen, whatever the holdout said.
         expect(await count(page, '[data-section="before-after"] .figure')).toBe(3);
-        const page_text = (await page.locator('[data-screen="improve"]').textContent())
+        const shown = (await page.locator('[data-screen="improve"]').textContent())
           ?.replace(/\s+/gu, ' ')
           .trim();
         for (const framing of ['the one to ship', 'Ship ', 'winner', 'lift']) {
-          expect(page_text, framing).not.toContain(framing);
+          expect(shown, framing).not.toContain(framing);
         }
         expect(await words(page, '[data-section="reasons"]')).toContain(
           'The holdout did not move with them, so the gain may be the swarm agreeing with itself rather than the change.',
