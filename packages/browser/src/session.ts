@@ -41,6 +41,35 @@ export interface OpenSessionOptions {
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 
 /**
+ * esbuild's `keepNames` helper, declared inside every document the session loads.
+ *
+ * Playwright serialises the function handed to `page.evaluate` and evaluates **its source**
+ * in the page, so a transpiler that rewrites that source sends its own helpers into the page
+ * along with it — and the page has never heard of them. Run from source under `tsx`, which
+ * is how `pnpm open`, `pnpm dev` and every `tsx --conditions=development …` invocation run,
+ * esbuild's `keepNames` wraps each named function in `__name(fn, "fn")` and declares `__name`
+ * at the top of the **module**: the call travels into the page, the declaration does not, and
+ * every one of this package's six `page.evaluate` call sites — `act.ts`, `geometry.ts`,
+ * `session.ts`, `capture.ts`, `steps.ts`, `extract/elements.ts` — failed with
+ * `ReferenceError: __name is not defined`. The built CLI never did: `tsc` emits no helper.
+ *
+ * Declaring the helper here, where the page is created, fixes all six at once. Nothing in the
+ * evaluated code is rewritten and every document the session ever loads can evaluate
+ * transpiled source, whatever transpiled it. The real helper gives the function a `name` and
+ * returns it; the names are for stack traces and nothing in this package reads one, so
+ * returning the function unchanged is the whole of it. A page that already has a global
+ * `__name` keeps its own.
+ *
+ * **The ceiling: this covers esbuild's `keepNames` helper and nothing else.** Another
+ * injected helper — a spread helper, a decorator helper, a coverage counter — would fail in
+ * exactly the same way and is not declared here. `test/tsx-session.test.ts` drives a real
+ * session through `tsx` so that such a helper is a failing test rather than a product that is
+ * unusable from source.
+ */
+const KEEP_NAMES_HELPER_SCRIPT =
+  'if (typeof globalThis.__name === "undefined") { globalThis.__name = (target) => target; }';
+
+/**
  * The browser a touch device runs. Sites choose their phone layout by the user agent as well
  * as by the width (higgsfield.ai serves phones an app-style home page), so a phone given only
  * a phone's viewport is shown the desktop site squeezed to fit.
@@ -111,7 +140,9 @@ export const openSession = async (
     // The recording's clock starts with the page, which is when the browser starts recording
     // it — before the opening navigation, so the first screen's offset is inside the video.
     const video = recording?.start(page);
-    // A string, not a function: a bundler's helpers would not exist inside the page.
+    // A string, not a function: a bundler's helpers would not exist inside the page — which
+    // is the same thing the helper above is there to survive.
+    await page.addInitScript(KEEP_NAMES_HELPER_SCRIPT);
     await page.addInitScript(
       "document.addEventListener('click', (e) => { const a = e.target instanceof Element && e.target.closest('a[target]'); if (a) a.target = '_self'; }, true);",
     );
