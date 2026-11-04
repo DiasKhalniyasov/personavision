@@ -7,7 +7,7 @@ Every ticket that touches a screen, a route, a number or a word the user reads b
 **Section numbers in this file are stable.** Tickets cite them (`section 3` for the routes, `section 5` for the
 friction score and its acceptance table, `section 6` for findings, `section 7` for the demo beats, `section 8` for the
 vocabulary, `section 9` for what is deferred, `section 11` for the two product paths, `section 12` for the audience and
-the generated goal, `section 13` for onboarding, the ownership verification and the caps, `section 14` for the results
+the generated goal, `section 13` for onboarding and the caps, `section 14` for the results
 page, `section 15` for the closed loop on a connected repository, `section 16` for what this revision fixes and
 `section 17` for what needs the owner). A revision adds sections at the end rather than renumbering.
 
@@ -494,7 +494,8 @@ describe. Nothing about the artifact, the routes or the vocabulary forks per pat
 
 ### What a path-1 test is made of
 
-1. **A site.** A URL added to the workspace, with **ownership verified** before it can be tested at scale (section 13).
+1. **A site.** A URL added to the workspace (section 13). Nothing is proved about it: a site is a URL and nothing
+   more.
 2. **The feature, in the user's words.** _"generating a video on this site"_, _"checking out with a promo code"_. One
    free-text field, and it is the user's sentence that is stored, not a normalised version of it.
 3. **The audience.** Section 12: structured, or free text turned into the same structured object. **100 participants by
@@ -566,8 +567,8 @@ see a **cost and time estimate** for N agents → launch → a live **Running** 
 | Screen             | The one question it answers                        | Route                                     |
 | ------------------ | -------------------------------------------------- | ----------------------------------------- |
 | Sign up            | —                                                  | `/signup`                                 |
-| Sites              | Which of my sites can I test, and which are proved mine? | `/sites`                            |
-| Add a site         | What is the URL, and how do I prove it is mine?    | `/sites/new`, `/sites/:siteId`            |
+| Sites              | Which of my sites can I test, and what is each allowed? | `/sites`                             |
+| Add a site         | What is the URL the feature starts on?             | `/sites/new`, `/sites/:siteId`            |
 | New test           | What do I want tested, for whom, and on which path?| `/new` (steps: `?step=audience\|feature\|goal\|estimate`) |
 | GitHub connection  | Where would the pull request go?                   | `/settings/github`                        |
 
@@ -575,27 +576,21 @@ The route family of section 3 is otherwise untouched: `/new` is the same screen 
 still where a test lands. The steps of `/new` are **one screen with a step in the query**, not five routes: a user who
 reloads, or who is sent a link, lands where they were.
 
-### Ownership verification
+### A site is a URL, and nothing more
 
-A site is **unverified** until one of these passes, and **the platform checks it itself** — a user ticking a box is not
-verification:
+**There is no ownership verification in this product.** The owner's input of **2026-11-04** removes it: no DNS TXT
+record, no meta tag, no well-known file and no repository check — not on the Sites screen, not on a site's own page, not
+in Add a site, not anywhere in the new-test flow. A site is a URL that belongs to a workspace, and the only thing a user
+does with one is add it, correct it or remove it. There is no verification token, no verified state and no check button.
 
-| Method                    | What the user does                                                                          | What the platform checks                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **DNS TXT record**        | adds `personavision-site-verification=<token>` as a TXT record on the site's domain          | resolves TXT for the domain and finds the token               |
-| **Meta tag**              | adds `<meta name="personavision-site-verification" content="<token>">` to the page's `<head>` | fetches the URL once and parses the tag                      |
-| **File**                  | serves `/.well-known/personavision-site-verification.txt` containing the token               | fetches that path and compares the contents                   |
-| **Connected repository**  | installs the GitHub App on the repository that deploys the site                               | the installation exists and the connection names this site    |
+Testing never needed it: the owner's answer of **2026-11-03** had already settled decision 71 as _no gate on testing_,
+and the per-site caps below are unchanged — they protect **the site being driven** rather than the person who asked, and
+a hundred browsers on a small site is a load test whoever owns it. The screens state the figures for every site: _100
+agents per run allowed_ and _4 runs an hour · 10 browsers at a time_.
 
-The token is per site, generated by the platform, and shown with the exact line to copy. A check that fails says **which
-check ran, what it found and what it expected**, and offers to run again; it never says "something went wrong".
-
-**Verification gates nothing about testing.** The owner's answer of **2026-11-03** settled decision 71 as _no gate on
-testing_: an unverified site runs under exactly the same caps as a verified one, because the caps protect **the site
-being driven** rather than the person who asked, and a hundred browsers on a small site is a load test whoever owns it.
-What verification unlocks is **Improve my site**, which writes to a repository and so does need proof of control. The
-screen states the numbers rather than the word, for every site: _100 agents per run allowed_ and _4 runs an hour · 10
-browsers at a time_, and an unverified site's card adds _Verify it to unlock **Improve my site**_.
+**Improve my site** is where control of a site still matters, and the **GitHub App installation** is the proof there:
+being able to install the App on the repository that deploys the site is what proves control, so nothing is proved twice
+(section 15). A site with no installation shows path 2 locked with that as the reason, which is what it already said.
 
 ### The caps, enforced by the platform
 
@@ -606,8 +601,9 @@ browsers at a time_, and an unverified site's card adds _Verify it to unlock **I
 | runs per site per hour                | **4**                              | a person exploring cannot accidentally hammer a site                     |
 | requests and actions per session       | the existing session budget        | unchanged (`SessionBudget`)                                              |
 
-**Verification is not among the inputs.** There is no smaller cap for an unverified site and no verification check on
-the launch path. A run records what was true of its site at launch (`site.verifiedAtLaunch`) and no cap reads it.
+**Ownership is not among the inputs, because there is nothing to prove.** Every site in a workspace is bound by the same
+three numbers, and no cap and no launch path reads anything about who controls the URL. A run records the site it ran
+against — its URL — and nothing else about it.
 
 These numbers live in **one place** in `packages/platform` and are stated on the screen that is bound by them. A refused
 launch names the cap that refused it, in words, and when it can be tried again. The caps apply to the offline engine too:
@@ -679,8 +675,9 @@ no screen implies a conversion lift (section 8).
 Everything in path 1, and then:
 
 1. **Connect GitHub.** Onboarding offers it; `/settings/github` is where it lives afterwards. A **GitHub App installed on
-   one repository**. Without it, path 2 is shown and locked with the reason (section 11). A connected repository also
-   counts as ownership verification for the site it deploys (section 13).
+   one repository**. Without it, path 2 is shown and locked with the reason (section 11). **The installation is the proof
+   of control this product asks for**, and the only one: being able to install the App on the repository that deploys the
+   site is what path 2 rests on (section 13).
 2. **Wonder decides one change.** After a path-1 run, Wonder picks **one targeted change** from its own recommendations —
    not a list, one — writes the code change, and **opens a pull request** on the connected repository. The pull request
    body states the recommendation it comes from, the evidence it cites, and that the numbers behind it are simulated.
@@ -728,7 +725,7 @@ Everything in path 1, and then:
   Anything that needs an account, a credential, a paid resource or a third-party app registration is a
   `stroika:needs-human` ticket (section 17) and blocks nothing else.
 - **The words.** Section 8's vocabulary is unchanged and gains these, which are the user's: a **site** (a URL in a
-  workspace, verified or not), **verification**, the **goal** (task plus success criterion), **participants** (how many
+  workspace), the **goal** (task plus success criterion), **participants** (how many
   simulated people), a **video**, a **recommendation**, the **funnel**, a **segment filter**, the **holdout**, the
   **preview** (the pull request's URL), and **baseline** and **change** for the two versions of a path-2 test.
   _Variant_ stays the internal word the artifact uses for both.

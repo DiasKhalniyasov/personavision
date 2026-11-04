@@ -634,24 +634,7 @@ input[aria-invalid="true"] { border-color: var(--sev-critical); background: var(
   background: var(--sev-info-bg); color: var(--sev-info); font-size: var(--text-sm);
 }
 
-/* Add a site: the four ways to prove it is yours, and the line to copy. */
-.verify { display: grid; gap: var(--space-3); margin-top: var(--space-5); }
-.verify-method {
-  display: grid; gap: var(--space-2);
-  padding: var(--space-5); border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-md); background: var(--color-surface);
-}
-.verify-method[aria-current="true"] { border-color: var(--color-accent-strong); background: var(--color-surface-raised); }
-.verify-method header { display: flex; align-items: center; gap: var(--space-3); }
-.verify-method h3 { font-size: var(--text-base); }
-.verify-method p { color: var(--color-text-muted); font-size: var(--text-sm); }
-.tokenline {
-  display: block; overflow-x: auto; padding: var(--space-3);
-  border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm);
-  background: var(--color-surface-sunken);
-  font: var(--weight-regular) var(--text-xs)/var(--leading-normal) var(--font-mono);
-  color: var(--color-text); white-space: pre;
-}
+/* A site: the URL, and what the site is allowed. */
 .sitestate { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
 
 /* The estimate, above the launch button. */
@@ -1635,7 +1618,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
             <input id="su-ws" type="text" value="ClipForge">
           </div>
           <button class="btn btn-primary btn-lg" data-go="sites">Create workspace</button>
-          <p class="footnote" style="margin-top: 0">No card. Next step is adding a site and proving it is yours.</p>
+          <p class="footnote" style="margin-top: 0">No card. Next step is adding a site &mdash; the URL the feature starts on.</p>
         </form>
       </div>
     </div>
@@ -1647,13 +1630,13 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
   <div class="strip strip-sm">
     <div class="wrap">
       <div class="pagehead"><h1>Your sites</h1></div>
-      <p class="lede">A site is a URL in this workspace. Before a hundred simulated people visit it, we ask you to prove
-        you control it &mdash; a hundred browsers against somebody else&rsquo;s site is abuse and load, not a test.</p>
+      <p class="lede">A site is a URL in this workspace &mdash; the page the feature starts on. Every site is bound by the
+        same figures, because they protect the site being driven rather than the person who asked.</p>
 
       <div class="section" style="margin-top: var(--space-10)">
         <div class="aud-grid">
           <button class="card aud-card" aria-current="true" data-go="site">
-            <span class="microlabel">Verified by DNS &middot; 2 Nov</span>
+            <span class="microlabel">Added 2 Nov</span>
             <h3>app.clipforge.example</h3>
             <div class="aud-facts">
               <span><b>100</b> agents per run allowed</span>
@@ -1662,12 +1645,12 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
             </div>
           </button>
           <button class="card aud-card" data-go="site">
-            <span class="microlabel">Unverified</span>
+            <span class="microlabel">Added 3 Nov</span>
             <h3>beta.clipforge.example</h3>
             <div class="aud-facts">
-              <span><b>3 of 100</b> agents until this site is verified</span>
-              <span><b>1</b> run an hour</span>
-              <span class="faint">Three ways to verify it &mdash; one of them takes a minute</span>
+              <span><b>100</b> agents per run allowed</span>
+              <span><b>4</b> runs an hour &middot; <b>10</b> browsers at a time</span>
+              <span class="faint">No tests yet</span>
             </div>
           </button>
           <button class="card aud-card" data-go="site">
@@ -1678,62 +1661,40 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
         </div>
       </div>
 
-      <p class="footnote">Connecting a GitHub repository counts as verification for the site that repository deploys, and
-        is what unlocks <b>Improve my site</b>.</p>
+      <p class="footnote"><b>Improve my site</b> needs the PersonaVision app installed on the repository that deploys a
+        site &mdash; being able to install it is the proof that matters there. Nothing else about a site is proved.</p>
     </div>
   </div>
 </section>
 
-<!-- ===================== 11c. add a site, and verify it ================ -->
+<!-- ===================== 11c. a site: the URL, and what it is allowed === -->
 <section class="screen" id="screen-site" hidden>
   <div class="strip strip-sm">
     <div class="wrap-narrow">
       <p class="breadcrumb"><a href="#" data-go="sites">Sites</a> / beta.clipforge.example</p>
-      <div class="pagehead"><h1>Prove this site is yours</h1></div>
-      <p class="lede">Any one of these four. We check it ourselves &mdash; there is no box to tick.</p>
+      <div class="pagehead"><h1>beta.clipforge.example</h1></div>
+      <p class="lede">A site is a URL and nothing more. Correct it here, or remove it &mdash; there is nothing to prove.</p>
 
       <form class="form card card-lg" style="margin-top: var(--space-6)" onsubmit="return false">
         <div class="field-group">
           <label for="site-url">The URL the feature starts on</label>
           <input id="site-url" type="url" value="https://beta.clipforge.example/create">
+          <p class="footnote">Added 3 Nov. No tests yet.</p>
+        </div>
+        <div class="formfoot">
+          <button class="btn btn-primary btn-sm" data-go="sites">Save the URL</button>
+          <button class="btn btn-sm" data-go="sites">Remove this site</button>
         </div>
       </form>
 
       <div class="sitestate">
-        <span class="tag tag-abandoned">Unverified</span>
-        <span class="faint">3 of 100 agents until this site is verified &middot; 1 run an hour</span>
+        <span class="faint"><b>100</b> agents per run allowed &middot; <b>4</b> runs an hour &middot; <b>10</b> browsers
+          at a time</span>
       </div>
 
-      <div class="verify">
-        <div class="verify-method" aria-current="true">
-          <header><h3>DNS TXT record</h3><span class="tag tag-success">Recommended</span></header>
-          <p>Add this record on <b>clipforge.example</b>. It covers every site on the domain, and it survives a deploy.</p>
-          <code class="tokenline">beta.clipforge.example.  TXT  "personavision-site-verification=pv_7f3c91a2d84e"</code>
-          <div class="formfoot"><button class="btn btn-primary btn-sm" data-go="sites">Check the record</button>
-            <span class="faint">Last check: no TXT record found on clipforge.example at 09:04.</span></div>
-        </div>
-        <div class="verify-method">
-          <header><h3>Meta tag</h3></header>
-          <p>Put this in the <code class="mono">&lt;head&gt;</code> of the page above. We fetch the page once and read it.</p>
-          <code class="tokenline">&lt;meta name="personavision-site-verification" content="pv_7f3c91a2d84e"&gt;</code>
-          <div class="formfoot"><button class="btn btn-sm" data-go="sites">Check the page</button></div>
-        </div>
-        <div class="verify-method">
-          <header><h3>File</h3></header>
-          <p>Serve this file with the token as its only contents.</p>
-          <code class="tokenline">https://beta.clipforge.example/.well-known/personavision-site-verification.txt</code>
-          <div class="formfoot"><button class="btn btn-sm" data-go="sites">Check the file</button></div>
-        </div>
-        <div class="verify-method">
-          <header><h3>Connect the GitHub repository</h3><span class="tag tag-info">Also unlocks Improve my site</span></header>
-          <p>Install the PersonaVision app on the repository that deploys this site. One repository, read and write to
-            pull requests, and it never merges anything.</p>
-          <div class="formfoot"><button class="btn btn-sm" data-go="improve">Connect GitHub</button></div>
-        </div>
-      </div>
-
-      <p class="footnote">A failed check says what it looked for, where, and what it found instead. Nothing here is
-        &ldquo;something went wrong&rdquo;.</p>
+      <p class="footnote" style="margin-top: var(--space-6)"><b>Improve my site</b> needs the PersonaVision app installed
+        on the repository that deploys this site, which is also the only proof of control this product asks for.
+        <a href="#" data-go="improve">Connect GitHub</a>.</p>
     </div>
   </div>
 </section>
@@ -1787,7 +1748,7 @@ variant A responded 200 in 38 ms &mdash; only B is unreachable</div>
         <div class="field-group">
           <label for="nt-site">Site</label>
           <input id="nt-site" type="url" value="https://app.clipforge.example/create">
-          <p class="footnote">Verified by DNS on 2 Nov &middot; up to 100 agents.</p>
+          <p class="footnote">Added 2 Nov &middot; up to 100 agents per run.</p>
         </div>
 
         <div class="field-group">

@@ -19,23 +19,19 @@ because section 8 predates them:
   counted against. A site is listed, read and removed only through the workspace that holds it, and a site of another
   workspace answers **404 and not 403** — that somebody else holds that URL is not disclosed. The same URL added by two
   workspaces is two sites. Removing one is a soft delete, so the site a finished test ran against stays readable.
-- A site's **verification token** is a short public string — `pv_` and hex — minted by the platform, one per site. It is
-  a **proof of control, not a secret**: the user publishes it themselves as a DNS record, a meta tag or a file, and the
-  platform answers it over the API and prints it on screen with the line to copy. Nothing hashes it, redacts it or
-  handles it as a credential. Two workspaces that add the same URL get two tokens, so one workspace's published token
-  is never another's proof.
-- A site's **verification state** is `unverified` or `verified`, with the method that proved it and the moment it was
-  proved. **Only a check the platform ran itself may move it** — never a submitted field, and never a box a user ticks.
-  It **gates nothing about testing**: the owner's answer of 2026-11-03 settled decision 71 as _no gate on testing_, so an
-  unverified site runs under exactly the same caps as a verified one. A run records what was true of its site at launch
-  (`site.verifiedAtLaunch`) and no cap reads it. What verification unlocks is **Improve my site**.
+- **A site is a URL and nothing more.** There is no ownership verification in this product (the owner's input of
+  2026-11-04): no verification token, no verified state, no DNS TXT record, no meta tag, no well-known file and no
+  repository check — and no run records anything about who controls a URL. Testing never needed it (decision 71, _no
+  gate on testing_), and the per-site caps are unchanged. Where control of a site does matter — **Improve my site**,
+  which writes to a repository — the **GitHub App installation** is the proof: being able to install the App on the
+  repository that deploys the site is what path 2 rests on.
 - A site's **launch ledger** is every run started against it — the run id and when — trimmed to the last 24 hours on
   write. The runs-per-site-per-hour cap counts the trailing hour off it, so the cap is a ledger rather than a counter
-  nothing resets. Starting a test is the only thing that writes it, and writing it cannot move the verification state.
+  nothing resets. Starting a test is the only thing that writes it.
 - The **caps** are three numbers in one module, `packages/platform/src/caps.ts`, and nothing else in the repository
   defines them: **100** agents a run (the audience's `size`, capped), **10** concurrent sessions per site, **4** runs per
-  site per hour. They protect the site being driven rather than the person who asked, so the verification state does not
-  enter them and the offline engine is bound by them exactly as a model run is. A launch a cap refuses is a
+  site per hour. They protect the site being driven rather than the person who asked, so nothing about who holds the
+  URL enters them and the offline engine is bound by them exactly as a model run is. A launch a cap refuses is a
   `CapRefusedError` carrying the cap, its limit, the observed value and when it next passes — answered as **429** with
   those as fields beside one sentence, so the screen, the API and the CLI say the same thing. A screen states a cap by
   asking the API for the number; a screen that prints a different one is wrong rather than a cap that moved.
@@ -61,8 +57,7 @@ and a results page for 100-agent runs. It adds **one** package, `@personavision/
 GitHub App client, the change Muse Wonder decides, the pull request it opens, the preview URL it is tested on and the
 comment it posts back. It depends on `@personavision/contract`, `@personavision/provider` and `@personavision/scoring`,
 and nothing depends on it. The step that owns path 2 is the only one permitted to add it to `pnpm-workspace.yaml`.
-Everything else that direction needs is filled into packages that already exist: the sites, their ownership
-verification and the per-site caps in `@personavision/platform`; CloakBrowser and session video in
+Everything else that direction needs is filled into packages that already exist: the sites and the per-site caps in `@personavision/platform`; CloakBrowser and session video in
 `@personavision/browser`, behind the interface it already publishes; Muse Wonder in `@personavision/provider`; the
 aggregate and the recommendations in `@personavision/scoring`; the new screens in `apps/viewer`.
 
