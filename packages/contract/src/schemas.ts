@@ -1404,21 +1404,35 @@ export const runSchema = z
   });
 
 /**
- * Which cap stopped a recording. The caps are the owner's decision on #220 — **30 seconds
- * a screen and 10 minutes a session** — and they are an enumeration rather than a number
- * the recorder writes, because two recordings truncated at two figures of their own could
- * not be compared and one stuck session could still fill a disk.
+ * Which cap stopped a recording. The caps are the owner's decision on #220, sized on #412
+ * for a session that waits on a model — **three minutes a screen and an hour a session** —
+ * and they are an enumeration rather than a number the recorder writes, because two
+ * recordings truncated at two figures of their own could not be compared and one stuck
+ * session could still fill a disk.
  */
 export const videoCapSchema = z.enum(['screen', 'session']);
 
 /**
  * What each cap is, in milliseconds. This is the only place the two figures are written: a
- * recorder enforces them from here and a screen that prints *"truncated at 10:00"* reads
+ * recorder enforces them from here and a screen that prints *"truncated at 60:00"* reads
  * them from here.
+ *
+ * Both are sized for a session that thinks rather than for one that only draws. A screen
+ * waits on a model decision before it acts — about fifteen seconds a decision in the owner's
+ * own run — so the **screen** cap is what one screen may spend deciding: three minutes, wide
+ * enough that no decision anybody would call healthy reaches it, and narrow enough that a
+ * page which really has hung cannot record for an hour. The **session** cap is the bound on a
+ * whole visit, and a one-URL session is forty screens (#222), which at that pace is ten
+ * minutes of wall clock and more: an hour, so that a run directory has a bound at all.
+ *
+ * A cap too small is far worse than one too large, which is what #412 measured: a screen that
+ * outlasts its cap takes the whole session's timeline with it, because every offset past the
+ * cut is `null` by the rule above. One slow decision then leaves a recording that nothing can
+ * line up with.
  */
 export const VIDEO_CAP_MS: Readonly<Record<z.infer<typeof videoCapSchema>, number>> = {
-  screen: 30_000,
-  session: 600_000,
+  screen: 180_000,
+  session: 3_600_000,
 };
 
 /**

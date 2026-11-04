@@ -596,7 +596,7 @@ describe('the outcome card over a recording', () => {
     await ready();
 
     await waitFor(() => {
-      expect(cardRow('Video')).toContain('0:38 · truncated at the per-session cap of 10:00');
+      expect(cardRow('Video')).toContain('0:38 · truncated at the per-session cap of 60:00');
     });
   });
 

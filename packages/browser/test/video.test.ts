@@ -8,10 +8,11 @@
  * file that is still being written: `walkTask` finishes the recording before it returns, and
  * finishing is what closes the context and saves the file.
  *
- * The caps are the contract's — 30 seconds a screen, 10 minutes a session — and the two cap
- * assertions replace them with figures a test can reach. What is asserted here is the
- * behaviour at a cap; the two figures themselves live in `@personavision/contract` and are
- * asserted there.
+ * The caps are the contract's, and the cap assertions replace them with figures a test can
+ * reach. What is asserted here is the behaviour at a cap — that a session long enough to have
+ * reached the old 30-second screen cap now carries a complete timeline, and that a session
+ * reporting a cut was really cut; the two figures themselves live in
+ * `@personavision/contract` and are asserted there.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -362,6 +363,42 @@ describeWithChromium('a recorded session', () => {
   );
 
   it(
+    'keeps a whole timeline for a session whose every screen outlasts half a minute',
+    async () => {
+      // The recorder's own clock, stubbed so that every mark lands three-quarters of a minute
+      // after the last: each screen of this walk then outlasts the 30 seconds a screen this
+      // package shipped with, which is the shape of the owner's run on #412 — one model
+      // decision slower than the cap, and every offset after the first was `null`.
+      let elapsedMs = 0;
+      const screensThatThink = (): number => (elapsedMs += 45_000);
+
+      const { walked } = await record(
+        { sessionId: 'S-07', now: screensThatThink },
+        { decide: dwellThenAdvance(100) },
+      );
+      if (walked.video?.state !== 'recorded') throw new Error('the session recorded nothing');
+
+      // Three-quarters of a minute a screen is well inside the contract's screen cap, so
+      // nothing was cut and the session's timeline is complete: every screen and every action
+      // has an offset, which is what the old cap took away.
+      expect(walked.video.truncated).toBeNull();
+      expect(walked.video.screenOffsetsMs).toHaveLength(walked.screens.length);
+      expect(walked.video.screenOffsetsMs).not.toContain(null);
+      expect(walked.video.actionOffsetsMs).not.toContain(null);
+      // Each one lands inside the recording. The stub clock runs ahead of the real file, so
+      // the offsets are clamped to its own duration; what is asserted here is that there is
+      // an offset at all, and that it is a frame the recording has.
+      for (const offset of [...walked.video.screenOffsetsMs, ...walked.video.actionOffsetsMs]) {
+        expect(offset).not.toBeNull();
+        expect(offset ?? -1).toBeLessThanOrEqual(walked.video.durationMs);
+      }
+
+      expect(() => sessionSchema.parse(sessionOf(walked, 'S-07'))).not.toThrow();
+    },
+    WALK_TIMEOUT_MS,
+  );
+
+  it(
     'stops at the per-screen cap, says so, and gives the screens it did not reach no offset',
     async () => {
       const capMs = 800;
@@ -403,7 +440,7 @@ describeWithChromium('a recorded session', () => {
     'stops at the per-session cap and names that one instead',
     async () => {
       const capMs = 1_500;
-      const { walked } = await record(
+      const { walked, runDir, wallClockMs } = await record(
         { sessionId: 'S-04', caps: { session: capMs } },
         { decide: dwellThenAdvance(1_200) },
       );
@@ -412,6 +449,17 @@ describeWithChromium('a recorded session', () => {
       expect(walked.video.truncated).toBe('session');
       expect(walked.video.durationMs).toBeGreaterThan(0);
       expect(walked.video.durationMs).toBeLessThanOrEqual(capMs);
+
+      // A session may not report a cut over a file of the full length (#412). The walk ran
+      // well past the cap, and the duration is read back off the bytes on disk rather than
+      // from what the session says — so a cutter that quietly stopped cutting fails here,
+      // instead of surfacing as a recording nothing can line up with.
+      expect(wallClockMs).toBeGreaterThan(capMs);
+      const measured = readRecording(readFileSync(join(runDir, walked.video.path)));
+      expect(measured?.durationMs).toBe(walked.video.durationMs);
+      expect(measured?.durationMs ?? 0).toBeLessThanOrEqual(capMs);
+      // Cut at the cap, not down to a single frame left behind.
+      expect(measured?.durationMs ?? 0).toBeGreaterThan(capMs - 500);
       // A cap is not a failure: the walk still reached the task's last step.
       expect(walked.completed).toBe(true);
       expect(walked.failure).toBeNull();

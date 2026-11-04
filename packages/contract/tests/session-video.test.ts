@@ -175,15 +175,18 @@ describe('a session that names its recording', () => {
 
 describe('a recording that hit a cap', () => {
   /**
-   * A session that ran twelve minutes against a recording the session cap stopped at ten:
-   * the first action is in the video and the second happened after it stopped.
+   * A session that ran seventy minutes against a recording the session cap stopped at an
+   * hour: the first action is in the video and the second happened after it stopped.
    */
   const pastTheCap = (): Session => {
     const session = validSession('S-01', 'A');
     return {
       ...session,
-      durationMs: 720_000,
-      actions: [session.actions[0], { ...session.actions[0], tMs: 700_000 }] as Session['actions'],
+      durationMs: 4_200_000,
+      actions: [
+        session.actions[0],
+        { ...session.actions[0], tMs: 4_100_000 },
+      ] as Session['actions'],
       video: {
         ...recordedVideo('S-01'),
         truncated: 'session',
@@ -196,10 +199,10 @@ describe('a recording that hit a cap', () => {
   it('states which cap stopped it and the duration it reached', () => {
     const session = accepted(pastTheCap());
 
-    expect(session.video).toMatchObject({ truncated: 'session', durationMs: 600_000 });
+    expect(session.video).toMatchObject({ truncated: 'session', durationMs: 3_600_000 });
     // The duration it reached is the recording's own, and is recorded once: the truncation
     // names the cap and nothing else.
-    expect(session.durationMs).toBe(720_000);
+    expect(session.durationMs).toBe(4_200_000);
   });
 
   it('gives the entries it stopped before no offset, rather than a frame they are not on', () => {
@@ -212,7 +215,7 @@ describe('a recording that hit a cap', () => {
 
   it('still refuses an offset past the end of a truncated recording', () => {
     const past = pastTheCap();
-    const video = { ...past.video, actionOffsetsMs: [2400, 700_000] } as Session['video'];
+    const video = { ...past.video, actionOffsetsMs: [2400, 4_100_000] } as Session['video'];
 
     expect(rejections(sessionSchema, { ...past, video }).paths).toEqual([
       'video/actionOffsetsMs/1',
@@ -221,7 +224,7 @@ describe('a recording that hit a cap', () => {
 
   it('names the caps the owner chose, and what each one is, in one place', () => {
     expect(videoCapSchema.options).toEqual(['screen', 'session']);
-    expect(VIDEO_CAP_MS).toEqual({ screen: 30_000, session: 600_000 });
+    expect(VIDEO_CAP_MS).toEqual({ screen: 180_000, session: 3_600_000 });
   });
 
   it('is a cap the contract declares, never one a recorder named for itself', () => {

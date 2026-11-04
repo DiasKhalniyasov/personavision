@@ -135,7 +135,9 @@ never becomes an entry of the session at all.
 1280 × 720 — a 390 × 844 phone records at 332 × 720 — so the cap is on the pixels while the
 aspect ratio stays the device's, rather than a tall strip in the middle of a landscape frame.
 
-**The caps are the contract's: 30 seconds a screen, 10 minutes a session.** Playwright cannot
+**The caps are the contract's `VIDEO_CAP_MS`, and are restated nowhere — here included.** They
+are sized for a session that waits on a model rather than one that only draws: minutes a screen,
+an hour a session. Playwright cannot
 stop recording a page it is still showing, so a cap is enforced on the file: the recording is cut
 at it as it is saved, `truncated` names the cap it hit, `durationMs` is the duration it reached,
 and the screens and actions that happened after it carry **no offset** rather than one pointing
@@ -178,21 +180,25 @@ disk. These are the figures #222's concurrency arithmetic and #230's Cloud Run t
 the 742–792 MB the dropped CloakBrowser spike measured against a patched build is not this
 number.
 
-| What                                       | Measured                                            |
-| ------------------------------------------ | --------------------------------------------------- |
-| Peak resident memory, Chromium's processes | **0.40 GB**                                         |
-| Peak resident memory, with the Node driver | **0.60 GB**                                         |
-| Wall clock, one recorded session           | **0.79 s** (0.77 s unrecorded: recording costs ~4%) |
-| One session's video                        | **71 KB** for a 1.4 s recording (≈ 25–45 KB/s)      |
-| A hundred of them                          | **≈ 7 MB** of these; **≈ 100 MB** at 30 s each      |
+| What                                       | Measured                                                       |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Peak resident memory, Chromium's processes | **0.40 GB**                                                    |
+| Peak resident memory, with the Node driver | **0.60 GB**                                                    |
+| Wall clock, one recorded session           | **0.79 s** (0.77 s unrecorded: recording costs ~4%)            |
+| One session's video                        | **71 KB** for a 1.4 s recording (≈ 25–45 KB/s)                 |
+| One that waits on a model                  | **570 KB** for 30.2 s, **753 KB** for 36.3 s (≈ 19–21 KB/s)    |
+| A hundred of them                          | **≈ 7 MB** of the short ones; **≈ 1.2 GB** at ten minutes each |
 
 Peak memory is the highest summed resident set size of the whole process tree, sampled ten times
 a second while the session ran. It is an upper bound: macOS counts shared framework pages once
 per Chromium process. The wall clock is a warm process against a fixture site on loopback, so it
 is the floor a real site is measured against rather than what a real session costs. Size scales
 with how much of the page moves rather than with how long the task is — a 10.5-second session of
-the same walk is 262 KB — so a hundred thirty-second sessions are around 100 MB on disk, which is
-why the caps exist and why the bucket in #228 has a lifecycle rule.
+the same walk is 262 KB. The waiting session is the two-step walk of the same site with
+thirty-five seconds dwelt on each screen, measured on #412: a page sitting still still costs
+about 20 KB a second, so the ten-minute visit a model-driven session of forty screens runs to is
+around 12 MB, a hundred of them around 1.2 GB, and the hour-long session cap bounds one recording
+at about 70 MB. Which is why the caps exist, and why the bucket in #228 has a lifecycle rule.
 
 ## The fold, and the space everything is in
 
