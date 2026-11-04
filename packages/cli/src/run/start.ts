@@ -20,7 +20,7 @@ import {
   openingLines,
   reportLine,
 } from './progress.js';
-import { taskFor } from './task.js';
+import { DERIVED_STEP_SCREENS, taskFor } from './task.js';
 import type { CaptureSource, TaskStep, Variant } from '@personavision/browser';
 import type { Audience, Persona, Run, RunFailure, RunRequest } from '@personavision/contract';
 import type { CreateModelProvider, SelectedEngine } from './engine.js';
@@ -417,6 +417,11 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
       source: options.source ?? createLiveSource(),
       providers: { decision: selected.provider },
       ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+      // A derived task's one step stands for the whole site, so its sessions get a visit's
+      // budget rather than one step's eight actions (#413). A task that declares its steps
+      // passes none and keeps the swarm's own eight per declared step, which is what the
+      // demo, the committed example run and `tests/acceptance/` walk.
+      ...((options.steps ?? null) === null ? { maxScreens: DERIVED_STEP_SCREENS } : {}),
       // Handed on for the swarm to write beside the engine block, before the first session.
       // Nothing here reads it: what site a run is against decides nothing about how it runs.
       ...(options.site === undefined ? {} : { site: options.site }),

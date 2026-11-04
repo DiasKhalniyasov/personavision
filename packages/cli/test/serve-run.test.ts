@@ -18,11 +18,11 @@ import { ONE_URL_VARIANT_ID, SESSION_COOKIE } from '@personavision/platform';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { serveCommand } from '../src/commands/serve.js';
 import { startRun } from '../src/run/start.js';
-import { DERIVED_STEP_ID } from '../src/run/task.js';
-import { audienceOf } from './run-swarm.js';
+import { DERIVED_STEP_ID, DERIVED_STEP_SCREENS } from '../src/run/task.js';
+import { alwaysScrollingProvider, audienceOf, STAND_IN_CREDENTIAL } from './run-swarm.js';
 import { temporaryWorkspace } from './workspace.js';
 import type { CaptureSource, Device } from '@personavision/browser';
-import type { Run } from '@personavision/contract';
+import type { Run, Session } from '@personavision/contract';
 import type { ServeResult } from '../src/commands/serve.js';
 import type { OpenedRun } from '../src/run/start.js';
 import type { TestWorkspace } from './workspace.js';
@@ -451,6 +451,77 @@ describe('startRun opens before it finishes', () => {
       await rm(captures, { recursive: true, force: true });
     }
   }, 90_000);
+});
+
+/**
+ * The budget a one-URL run's sessions walk under (#413).
+ *
+ * The one step a derived task declares stands for the **whole site**, so the swarm's default
+ * of eight screens per declared step made every session of every one-URL run eight actions
+ * long — a long landing page scrolled exactly eight times, the nav never reached. The run
+ * here is the platform's own shape: a site, a goal, and no step declaration at all.
+ */
+describe('a one-URL run gets a whole visit', () => {
+  it('walks to the derived task’s own budget, and says the budget stopped it', async () => {
+    const captures = await onePageCaptureSet();
+    const runsRoot = await mkdtemp(join(tmpdir(), 'personavision-visit-'));
+
+    try {
+      const started = await startRun({
+        runsRoot,
+        request: {
+          task: { prompt: 'Buy the canvas tote bag and place the order' },
+          variants: [{ id: ONE_URL_VARIANT_ID, name: 'fixture.test', url: SITE_URL }],
+          audienceId: 'fixture-shoppers',
+          repeats: 1,
+          seed: 11,
+          engineMode: 'model',
+          modelMode: 'contributor',
+          // The goal is what keeps a one-URL walk going: its one derived step is matched the
+          // moment the page loads, and the criterion — never true on this one captured page —
+          // is what the session is decided on (#400).
+          goal: {
+            task: 'Buy the canvas tote bag and place the order.',
+            // Observable and never true on the one captured page: an element the cart does
+            // not show. A criterion nothing could look for would be decided before the
+            // budget ever came up, which is a different rule.
+            successCriterion: 'A printed receipt is visible.',
+            lastWrittenBy: 'user',
+          },
+        },
+        audience: audienceOf(1),
+        source: createFixtureSource(captures),
+        // An agent that only ever reads further down: nothing it decides ends the walk, so
+        // what the session ends on is the budget and nothing else. It reaches no network.
+        env: { MODEL_API_KEY: STAND_IN_CREDENTIAL },
+        createModelProvider: ({ modelMode }) => alwaysScrollingProvider(modelMode),
+      });
+
+      const paths = runPaths(join(runsRoot, started.runId));
+      const session = JSON.parse(await readFile(paths.session('S-01'), 'utf8')) as Session;
+
+      // Spelled out rather than only imported: changing the budget has to be meant.
+      expect(DERIVED_STEP_SCREENS).toBe(40);
+      expect(session.screens).toHaveLength(DERIVED_STEP_SCREENS);
+      expect(new Set(session.screens.map((screen) => screen.step))).toEqual(
+        new Set([DERIVED_STEP_ID]),
+      );
+      // And the write-up of a session our own budget stopped says so, rather than recording
+      // the person as having given up on the site.
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('abandoned');
+      expect(session.outcome.reason).toContain(
+        `The session was stopped after its ${String(DERIVED_STEP_SCREENS)} actions on the "${DERIVED_STEP_ID}" step with the task not done`,
+      );
+      expect(session.outcome).toMatchObject({
+        attribution: 'product',
+        excludedFromScores: false,
+      });
+    } finally {
+      await rm(runsRoot, { recursive: true, force: true });
+      await rm(captures, { recursive: true, force: true });
+    }
+  }, 120_000);
 });
 
 /**

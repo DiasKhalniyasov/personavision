@@ -33,6 +33,24 @@ export const DERIVED_STEP_ID = 'page';
 export const DERIVED_STEP_LABEL = 'The page';
 
 /**
+ * How many screens a session of a **derived** task may capture: the whole visit's budget.
+ *
+ * A walk is capped in screens, and the swarm's own default is eight per step the task
+ * declares — a sensible budget for one declared step of a checkout, where a step is one
+ * screen of an errand and the next step is somewhere else to be. The one step a derived
+ * task declares is not that: it stands for the **whole site**, so eight actions made every
+ * session of every one-URL run eight actions long — a long landing page scrolled exactly
+ * eight times, never reaching the nav, never trying a link (#413).
+ *
+ * Forty is a visit: room to read a page down, follow something, come back and try another.
+ * It is the figure in this repository, passed as the swarm request's `maxScreens` by
+ * whoever builds a request from a derived task, so that the browser and the swarm keep one
+ * budget between them rather than two constants that can drift. A task that declares its
+ * own steps passes none and keeps the swarm's `8 × steps.length`.
+ */
+export const DERIVED_STEP_SCREENS = 40;
+
+/**
  * What a derived step takes as its required element. Every rendered page has one, which is
  * the point: a derived step is "this page", and a page that is on no step at all would make
  * every session an automation failure.

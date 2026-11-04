@@ -38,6 +38,14 @@ const PERSISTENT: DecidingPersona = {
 
 const PRIMARY_ACTION_AOI = 'place-order';
 
+/**
+ * The screens a one-URL visit may capture, as `packages/cli` sets it on a derived task
+ * (`DERIVED_STEP_SCREENS`). It is spelled here as the number a trace carries rather than
+ * imported: `decideOutcome` reads whatever budget the walk ran under and knows no figure of
+ * its own, which is the thing this suite asserts.
+ */
+const VISIT_SCREENS = 40;
+
 function fixation(screenIndex: number, tMs: number, aoiId: string | null) {
   return { screenIndex, tMs, durationMs: 250, aoiId };
 }
@@ -544,6 +552,83 @@ describe('a session succeeds only when its criterion was observed', () => {
         sessionSchema.parse(sessionWith(PRIMARY_ACTION_NEVER_SEEN, outcome)),
       ).not.toThrow();
     }
+  });
+});
+
+/**
+ * A one-URL visit our own action budget stopped: forty screens of the one step a derived
+ * task declares, a scroll on each of them, and nothing that got the agent anywhere — the
+ * shape of the owner's first browser-launched run, where the long landing page was scrolled
+ * to the cap and the nav was never reached (#413).
+ *
+ * The budget is the only thing that ended it: no failure, no end of the walk, no `abandon`.
+ */
+const STOPPED_ON_ITS_BUDGET: SessionTrace = {
+  screens: Array.from({ length: VISIT_SCREENS }, (_unused, index) => ({ index, step: 'page' })),
+  fixations: Array.from({ length: VISIT_SCREENS }, (_unused, index) =>
+    fixation(index, index * 1_500 + 500, 'hero-copy'),
+  ),
+  actions: Array.from({ length: VISIT_SCREENS }, (_unused, index) => ({
+    tMs: index * 1_500 + 1_000,
+    type: 'scroll' as const,
+    aoiId: null,
+    ok: true,
+  })),
+  durationMs: VISIT_SCREENS * 1_500,
+  taskCompleted: false,
+  stoppedOnBudget: VISIT_SCREENS,
+  primaryActionAoiId: 'nav-shop',
+};
+
+/** The same walk with nothing having stopped it: the trace a session ended on its own. */
+const WALKED_ITSELF_OUT: SessionTrace = { ...STOPPED_ON_ITS_BUDGET, stoppedOnBudget: null };
+
+describe('a walk our own action budget stopped says so', () => {
+  it('is failed and names the budget and the step, never abandoned', () => {
+    const outcome = decideOutcome(withCriterion(STOPPED_ON_ITS_BUDGET, NEVER_OBSERVED), IMPATIENT);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.status).not.toBe('abandoned');
+    expect(outcome.step).toBe('page');
+    expect(outcome.reason).toContain(
+      `The session was stopped after its ${String(VISIT_SCREENS)} actions on the "page" step with the task not done`,
+    );
+    expect(outcome.reason).toContain(`the criterion “${CRITERION}” was never observed`);
+    // A session our own cap stopped is still the product's answer and still counted: the
+    // task was not done, and nothing of ours broke.
+    expect(outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
+  });
+
+  it('says it on a run with no goal too, in the same sentence', () => {
+    const outcome = decideOutcome(STOPPED_ON_ITS_BUDGET, IMPATIENT);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.reason).toContain(
+      `The session was stopped after its ${String(VISIT_SCREENS)} actions on the "page" step with the task not done.`,
+    );
+    expect(outcome.reason).toContain('The primary action in "nav-shop" was never fixated.');
+  });
+
+  it('is the budget that decided it: the same trace, unstopped, is the person giving up', () => {
+    const stopped = decideOutcome(WALKED_ITSELF_OUT, IMPATIENT);
+
+    // Forty fruitless scrolls spend this persona's persistence long before the cap, and
+    // that is what the rule is precedence over: the scan still decides every walk the
+    // budget did not stop.
+    expect(stopped.status).toBe('abandoned');
+    expect(stopped.reason).toMatch(
+      /^(Gave up|Patience spent|Persistence spent) on the "page" step/,
+    );
+  });
+
+  it('leaves a stated abandon abandoned, whatever the budget was', () => {
+    // The flag is never set on a walk the agent's own `abandon` ended (`run-session.ts`),
+    // and the rule reads the flag and not the screen count: a trace carrying both is still
+    // the person leaving.
+    const outcome = decideOutcome(STATED_ABANDON, PERSISTENT);
+
+    expect(outcome.status).toBe('abandoned');
+    expect(outcome.reason).toContain('Gave up');
   });
 });
 

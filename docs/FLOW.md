@@ -331,7 +331,9 @@ full of tables.
 - **Wording.** The product's internal language is unchanged: fixation, saccade, dwell, area of interest, time to first
   fixation, revisit, scanpath, heatmap, persona, seed, session, variant, friction score, finding, attribution, simulated.
   A session is _abandoned_ when the person gave up, _failed_ when it ended with the task not done, and an _automation
-  failure_ when our own browsing broke. Those three are never merged.
+  failure_ when our own browsing broke. Those three are never merged. A session stopped by its own action budget is
+  _failed_ and says so — its reason names the budget and the step it was on — never _abandoned_: the agent had more to
+  try and we stopped it.
   **Two words are new and are the user's:** an **audience** is what the user describes and personas are generated from,
   and a **test** is what the user calls a run. On the Verdict screen the words are the user's; one click deeper the
   product may use its own.

@@ -528,6 +528,12 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
   let lastSighting: CriterionSighting | null = null;
   let primaryActionAoiId: string | null = null;
   let failure: AutomationFailure | null = null;
+  /**
+   * Whether our own action budget is what ended the walk: set on the last screen it allows,
+   * and never on a failure, the end of the walk or the agent's own `abandon`, each of which
+   * leaves the loop before it. `decideOutcome` reads it off the trace below (#413).
+   */
+  let stoppedOnBudget = false;
   /** How far into the walk the session has got: what a back has behind it to return to. */
   let depth = 0;
   /** Targets the driver reported it could not resolve, which it answers with rather than throws. */
@@ -869,6 +875,11 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
 
       input.onScreen?.({ index: screenIndex, step, capture, aois, decision, executed });
       if (failure !== null || endOfWalk || kind === 'abandon') break;
+      // Nothing of the session's own has ended it, so the only thing that can is the cap on
+      // the next turn of this loop. On the last screen it allows, this is a walk *we*
+      // stopped, and the write-up has to say so rather than read a give-up off its last
+      // screens (#413).
+      stoppedOnBudget = screenIndex + 1 >= maxScreens;
     }
   } finally {
     await decider.close().catch(() => undefined);
@@ -919,6 +930,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
             missing: lastSighting?.missing ?? criterion.terms,
           },
         }),
+    // Present only where the budget is what ended the walk, and it is the figure the walk
+    // ran under: a session stopped at its last allowed screen is not the person giving up,
+    // and `decideOutcome` names the budget instead of calling it an abandonment (#413).
+    ...(stoppedOnBudget ? { stoppedOnBudget: maxScreens } : {}),
     primaryActionAoiId,
     automationFailure: failure,
     // Deliberately `null`. `durationMs` is the session's own clock — the time the agent

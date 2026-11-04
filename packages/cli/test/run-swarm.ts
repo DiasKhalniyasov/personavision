@@ -127,6 +127,33 @@ export const runFixture = async ({ size = 2 } = {}): Promise<RunFixture> => {
 };
 
 /**
+ * A model provider that only ever reads further down the page.
+ *
+ * Nothing it decides can end a walk: no `abandon`, and no click that could satisfy a
+ * criterion. So a session through it runs until the screen budget stops it, which is what
+ * makes the budget itself observable from the artifact — and the offline policy, whose own
+ * abandon budget ends a session in character, cannot be used to measure a cap.
+ */
+export const alwaysScrollingProvider = (modelMode: ModelMode): DecisionProvider => {
+  const modelId = MODEL_ID_BY_MODE[modelMode];
+  const decide = async (): Promise<Decision> => ({
+    intent: 'Reading further down before I decide.',
+    action: { kind: 'scroll', targetElementId: null },
+    usage: FREE_USAGE,
+    model: { modelId, mode: modelMode },
+  });
+  return {
+    name: 'always-scrolling',
+    mode: 'model',
+    readsImages: false,
+    modelId,
+    decide,
+    beginSession: ({ personaId, seed }): DecisionSession =>
+      createDecisionSession({ personaId, seed, decide }),
+  };
+};
+
+/**
  * A model provider that answers every screen the same way, at a known cost.
  *
  * It names the model id the mode it was built for maps to, because the selection refuses a
