@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../../setup';
 import { axeViolations, describeViolations } from '../../axe';
 import { forgetRuns, mountApp } from '../../app';
+import { ruleIn, rulesOf } from '../../cssom';
 import { newTestStep, paths, STEP_PARAM } from '../../../src/shell/paths';
 import {
   forgetWizardDraft,
@@ -206,6 +210,16 @@ describe('what the estimate is made of', () => {
 
     const cited = [...document.querySelectorAll('dd .mono')].map((node) => node.textContent);
     expect(cited).toEqual(['docs/meta-model-api.md']);
+  });
+
+  it('sits in a card under the prototype’s own label', async () => {
+    await openStep();
+    await waitFor(() => {
+      expect(figureIn('cost')).not.toBe('');
+    });
+
+    const card = (document.querySelector('dl') as HTMLElement).closest('.card') as HTMLElement;
+    expect(card.querySelector('.microlabel')?.textContent).toBe('What the estimate is made of');
   });
 
   it('says a storage figure nobody has measured is not measured yet, and quotes none', async () => {
@@ -577,7 +591,7 @@ describe('the step itself', () => {
     expect([...main.querySelectorAll('[style]')]).toHaveLength(0);
   });
 
-  it('is operable by keyboard, and the launch button is a button', async () => {
+  it('is operable by keyboard, with the app’s own focus ring', async () => {
     await openStep();
     const button = await launchButton();
     await waitFor(() => {
@@ -586,7 +600,15 @@ describe('the step itself', () => {
 
     button.focus();
     expect(document.activeElement).toBe(button);
+    // A real button, at the prototype's large size, and not a div that listens for a click.
     expect(button.tagName).toBe('BUTTON');
+    expect(button.getAttribute('data-size')).toBe('lg');
+
+    // The ring itself is the app's one `:focus-visible` rule, in the tokens' own values —
+    // jsdom paints nothing, so it is read off the stylesheet the app ships.
+    const appCss = join(dirname(fileURLToPath(import.meta.url)), '../../../src/app.css');
+    const ring = ruleIn(rulesOf(readFileSync(appCss, 'utf8')))(':focus-visible');
+    expect(ring.outline).toBe('var(--border-width-strong) solid var(--color-focus)');
   });
 
   it('is complete and still under prefers-reduced-motion: reduce', async () => {
