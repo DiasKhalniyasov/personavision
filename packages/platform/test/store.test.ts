@@ -152,15 +152,8 @@ describe('the file-backed store', () => {
   });
 
   describe('sites', () => {
-    /**
-     * A token the caller mints. The store is handed one rather than minting it, so a second
-     * implementation of the interface inherits the shape rather than reinventing it; what
-     * mints one for real is `mintSiteToken`, asserted in `sites.test.ts`.
-     */
-    const aSite = (url = 'https://app.clipforge.example/create', token = 'pv_7f3c91a2d84e') => ({
-      url,
-      token,
-    });
+    /** A URL, which is the whole of what the store is handed to open a site. */
+    const aSite = (url = 'https://app.clipforge.example/create') => ({ url });
 
     it('round-trips a site and lists it for its own workspace only', async () => {
       const mine = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
@@ -168,18 +161,26 @@ describe('the file-backed store', () => {
       const saved = await store.sites.create(mine.id, aSite());
 
       expect(saved.url).toBe('https://app.clipforge.example/create');
-      expect(saved.token).toBe('pv_7f3c91a2d84e');
       expect(await store.sites.byId(mine.id, saved.id)).toEqual(saved);
       expect(await store.sites.list(mine.id)).toEqual([saved]);
       expect(await store.sites.list(theirs.id)).toEqual([]);
       expect(await store.sites.byId(theirs.id, saved.id)).toBeNull();
     });
 
-    it('opens every site unverified, with no method and no moment', async () => {
+    it('opens a site as its id, its URL, its workspace and an empty ledger', async () => {
       const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
       const saved = await store.sites.create(workspace.id, aSite());
 
-      expect(saved.verification).toEqual({ state: 'unverified', method: null, verifiedAt: null });
+      expect(Object.keys(saved).sort()).toEqual([
+        'createdAt',
+        'deletedAt',
+        'id',
+        'launches',
+        'updatedAt',
+        'url',
+        'workspaceId',
+      ]);
+      expect(saved.launches).toEqual([]);
     });
 
     it('stores the URL as it was given, port, credentials and all', async () => {
@@ -190,21 +191,22 @@ describe('the file-backed store', () => {
       expect(saved.url).toBe(url);
     });
 
-    it('has no path through it that reads a site back as verified', async () => {
-      // The one thing that may verify a site is a passing check, which is a later ticket of
-      // #221: this interface publishes no writer for the block, so there is no path through
-      // the store by which a site could be read back as anything else. Removing one does not
-      // verify it either — the state and the removal are different facts.
+    it('publishes no writer but the ledger, so a record cannot gain a state', async () => {
+      // A site is a URL and nothing more (`docs/FLOW.md` section 13): the interface offers
+      // `create`, `softDelete` and `recordLaunch` and no fourth method, so there is nothing
+      // on a record for the store to move and no path by which one could gain a field.
       const workspace = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
-      const unverified = { state: 'unverified', method: null, verifiedAt: null };
 
+      expect(Object.keys(store.sites).sort()).toEqual([
+        'byId',
+        'create',
+        'list',
+        'recordLaunch',
+        'softDelete',
+      ]);
       const created = await store.sites.create(workspace.id, aSite());
-      expect(created.verification).toEqual(unverified);
-      expect((await store.sites.byId(workspace.id, created.id))?.verification).toEqual(unverified);
-      expect((await store.sites.list(workspace.id))[0]?.verification).toEqual(unverified);
-      expect((await store.sites.softDelete(workspace.id, created.id)).verification).toEqual(
-        unverified,
-      );
+      const removed = await store.sites.softDelete(workspace.id, created.id);
+      expect(Object.keys(removed).sort()).toEqual(Object.keys(created).sort());
     });
 
     it('keeps a soft-deleted site readable and leaves it out of the list', async () => {
@@ -240,8 +242,8 @@ describe('the file-backed store', () => {
       const mine = await store.workspaces.create({ name: 'Mine', memberAccountIds: [] });
       const theirs = await store.workspaces.create({ name: 'Theirs', memberAccountIds: [] });
       const url = 'https://app.clipforge.example/create';
-      const ours = await store.sites.create(mine.id, aSite(url, 'pv_aaaaaaaaaaaa'));
-      const them = await store.sites.create(theirs.id, aSite(url, 'pv_bbbbbbbbbbbb'));
+      const ours = await store.sites.create(mine.id, aSite(url));
+      const them = await store.sites.create(theirs.id, aSite(url));
 
       expect(ours.id).not.toBe(them.id);
       expect(await store.sites.list(mine.id)).toEqual([ours]);

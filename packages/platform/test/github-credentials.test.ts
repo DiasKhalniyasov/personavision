@@ -32,7 +32,6 @@ import {
 } from '../src/github/token.js';
 import type { GithubTokenAnswer, GithubTokenRequest } from '../src/github/token.js';
 import { DEMO_ACCOUNT_EMAIL } from '../src/seed.js';
-import { mintSiteToken } from '../src/site/index.js';
 import { GITHUB_APP_NOT_REGISTERED, GITHUB_APP_TICKET } from '../src/server/routes/github.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
@@ -998,7 +997,6 @@ describe('the key never leaves the closure it is read in', () => {
       const workspaceId = served.platform.seeded?.workspaceId ?? '';
       const site = await served.platform.store.sites.create(workspaceId, {
         url: 'https://app.clipforge.example/create',
-        token: mintSiteToken(),
       });
       await served.platform.store.githubInstallations.connect(workspaceId, {
         installationId: AN_INSTALLATION,

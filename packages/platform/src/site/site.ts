@@ -1,15 +1,12 @@
-import { mintSiteToken } from './token.js';
 import type { SiteRecord, SiteStore } from '../store/types.js';
 
 /**
  * Adding a site to a workspace: the URL that is accepted, and the record that is opened.
  *
- * A site is a URL that belongs to a workspace (`docs/FLOW.md` section 13). This module is the
- * whole of what it takes to open one, and it takes **a URL and nothing else** — the token is
- * minted here and the verification block is the store's, so there is no argument through
- * which a submitted `token`, `id` or `verification` could reach a record. That is the
- * structural half of section 13's rule that only a passing check may verify a site; the
- * checks themselves are the later tickets of #221.
+ * A site is a URL that belongs to a workspace, and nothing more (`docs/FLOW.md` section 13).
+ * This module is the whole of what it takes to open one, and it takes **a URL and nothing
+ * else** — there is no argument through which a submitted `id` could reach a record, and
+ * there is nothing else on a record for one to reach.
  */
 
 /** A URL that cannot be saved, and where it is wrong. The shape `AudienceIssue` already has. */
@@ -52,7 +49,7 @@ const refuse = (message: string): never => {
  * Absolute `http:` or `https:`, and that is the whole rule. A URL carrying credentials, or a
  * non-default port on a host that is not `localhost`, is **accepted as given**: normalising
  * somebody's address is not this ticket's business, and the URL stored is the one they typed,
- * because that is the address they will prove they control.
+ * because that is the address a swarm will be pointed at.
  *
  * Nothing is assumed on their behalf either — `app.example.com` with no scheme is refused and
  * told so, rather than silently becoming `https://app.example.com`. A swarm of a hundred
@@ -67,9 +64,9 @@ export const parseSiteUrl = (value: unknown): string => {
   // Before `new URL`, because `new URL` would hide it: the URL parser strips tabs, carriage
   // returns and newlines as a cleanup step and parses what is left, so a pasted address with
   // a line break through it passes every check below. The string stored is the one that was
-  // typed, so that one would be stored with the break still in it — handed on to the checks
-  // that fetch it, to the browser that drives it and to whatever logs it. An address no
-  // client would request is not the address somebody controls.
+  // typed, so that one would be stored with the break still in it — handed on to the browser
+  // that drives it and to whatever logs it. An address no client would request is not an
+  // address a swarm can be pointed at.
   if (/[\s\u0000-\u001f\u007f]/.test(url)) {
     return refuse(
       `a web address has no spaces or line breaks in it — check what was pasted, and give it like ${EXAMPLE}`,
@@ -102,10 +99,10 @@ export const parseSiteUrl = (value: unknown): string => {
 };
 
 /**
- * A new site in this workspace: unverified, with a token of its own.
+ * A new site in this workspace: the URL, and the record the store opens around it.
  *
- * The token is minted per site rather than per workspace or per URL, so the same URL added by
- * two workspaces is two records with two tokens and neither verifies the other.
+ * The same URL added by two workspaces is two records, each its own workspace's, because a
+ * site is a row of a workspace rather than a claim on an address.
  */
 export const addSite = async ({
   sites,
@@ -116,5 +113,4 @@ export const addSite = async ({
   workspaceId: string;
   /** Whatever was submitted. Parsed here, so no caller can skip the check. */
   url: unknown;
-}): Promise<SiteRecord> =>
-  sites.create(workspaceId, { url: parseSiteUrl(url), token: mintSiteToken() });
+}): Promise<SiteRecord> => sites.create(workspaceId, { url: parseSiteUrl(url) });

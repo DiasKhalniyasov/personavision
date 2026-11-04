@@ -67,9 +67,9 @@ const SITE_URL = 'https://app.clipforge.example/create';
  * A workspace in `modelMode`, with one audience and one site of its own a test can be
  * started for.
  *
- * The site is **unverified**, which is the state `create` opens one in, and every test below
- * passes on it: the caps do not read a verification state, so a suite about the model mode
- * has nothing to verify (decision 71, settled 2026-11-03).
+ * The site is a URL and nothing more, which is all `create` opens one with: the caps read
+ * nothing else about it, so a suite about the model mode has nothing to set up (decision 71,
+ * settled 2026-11-03).
  */
 const workspaceIn = async (store: PlatformStore, modelMode: ModelMode): Promise<Workspace> => {
   const workspace = await store.workspaces.create({
@@ -78,7 +78,7 @@ const workspaceIn = async (store: PlatformStore, modelMode: ModelMode): Promise<
     modelMode,
   });
   const audience = await store.audiences.create(workspace.id, validRun().audience);
-  const site = await store.sites.create(workspace.id, { url: SITE_URL, token: 'pv_modelmode' });
+  const site = await store.sites.create(workspace.id, { url: SITE_URL });
   return {
     workspaces: store.workspaces,
     audiences: store.audiences,
@@ -206,7 +206,6 @@ describe('the workspace decides which model its tests run on', () => {
       const audience = await store.audiences.create(workspace?.id ?? '', validRun().audience);
       const site = await store.sites.create(workspace?.id ?? '', {
         url: SITE_URL,
-        token: 'pv_olderworkspace',
       });
       await expect(
         startTest({

@@ -2,9 +2,10 @@
  * The connected repository, as the workspace remembers it.
  *
  * `docs/FLOW.md` section 15's first point is a **GitHub App installed on one repository**,
- * and section 13 counts that installation as ownership verification for the site the
- * repository deploys. This file is the record behind both: which repository, which site of
- * this workspace it deploys, which installation it is, and when it was connected.
+ * which is what **Improve my site** rests on: the installation is the one proof of control
+ * this product asks for, and the record of where a pull request goes. This file is that
+ * record: which repository, which site of this workspace it deploys, which installation it
+ * is, and when it was connected.
  *
  * **One connected repository per workspace to begin with**, and that is structural rather
  * than a rule a caller has to remember: the record is filed under the workspace's own id, so
@@ -35,13 +36,13 @@ export interface NewGithubInstallation {
    */
   readonly installationId: string;
   /**
-   * The repository by name, as GitHub writes it and as `#screen-sites` prints it beside the
-   * verification method: `clipforge/web`.
+   * The repository by name, as GitHub writes it and as `#screen-sites` prints it:
+   * `clipforge/web`.
    */
   readonly repository: string;
   /**
    * The site this repository deploys — the id of a site of the same workspace, which is what
-   * makes the connection verify that site and no other (`docs/FLOW.md` section 13).
+   * makes the connection about that site and no other (`docs/FLOW.md` section 15).
    */
   readonly siteId: string;
 }
@@ -65,10 +66,9 @@ export interface GithubInstallationRecord {
 /**
  * The workspace's connected repository: write one, read it back, or read that there is none.
  *
- * There is no method that takes a verification state, a method or a timestamp — a connection
- * verifies a site by being **asked for** through the `connected-repository` check, which
- * calls `SiteStore.verify`, the one writer of that block (`site/verify.ts`). Connecting a
- * repository writes this record and nothing on a site.
+ * Connecting a repository writes this record and **nothing on a site**: a site is a URL and
+ * nothing more, so there is no state on one for a connection to move, and a reader that wants
+ * the repository for a site asks here (`site/connections.ts`, #299).
  */
 export interface GithubInstallationStore {
   /**

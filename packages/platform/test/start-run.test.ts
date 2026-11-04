@@ -14,7 +14,6 @@ import {
 } from '../../contract/tests/fixtures.js';
 import { hashPassword } from '../src/store/password.js';
 import { startSiteTest } from '../src/run/start.js';
-import { foundTheLine, siteCheckResult, siteVerificationPair } from '../src/site/index.js';
 import type { SiteAtLaunch, StartedTest, TestPipeline } from '../src/run/start.js';
 import { cookieOf, startTestServer } from './http.js';
 import type { TestServer } from './http.js';
@@ -92,11 +91,8 @@ describe('starting a test over HTTP', () => {
     expect(seeded).not.toBeNull();
     cookie = await signIn(seeded?.email ?? '', seeded?.password ?? '');
     audienceId = seeded?.audienceId ?? '';
-    // Unverified, as `create` opens one: nothing below verifies it, because no cap reads a
-    // verification state (#239, decision 71).
     const site = await served.platform.store.sites.create(seeded?.workspaceId ?? '', {
       url: 'https://app.clipforge.example/create',
-      token: 'pv_startrun',
     });
     siteId = site.id;
   });
@@ -199,7 +195,6 @@ describe('starting a test over HTTP', () => {
       theirSiteId = (
         await served.platform.store.sites.create(workspace.id, {
           url: 'https://shop.another.example/checkout',
-          token: 'pv_anothershop',
         })
       ).id;
       theirCookie = await signIn('owner@another.example', 'another-shops-password');
@@ -377,7 +372,6 @@ describe('starting a one-URL test over HTTP', () => {
     audienceId = seeded?.audienceId ?? '';
     const site = await served.platform.store.sites.create(seeded?.workspaceId ?? '', {
       url: SITE,
-      token: 'pv_oneurl',
     });
     siteId = site.id;
   });
@@ -708,7 +702,6 @@ describe('the site a platform-started run records', () => {
   let handed: { site: SiteAtLaunch | undefined; runId: string }[];
 
   const SITE_URL = 'https://app.clipforge.example/create';
-  const SITE_TOKEN = 'pv_siteonrecord';
 
   /** Where the pipeline wrote a given run, as the platform's runs root holds it. */
   const runDirOf = (runId: string): string => join(served.directories.runsRoot, runId);
@@ -734,22 +727,6 @@ describe('the site a platform-started run records', () => {
       engineMode: 'offline',
     });
 
-  /** The one way the store lets a site reach the verified state: a check that passed. */
-  const verifyTheSite = async (): Promise<void> => {
-    await served.platform.store.sites.verify(
-      workspaceId,
-      siteId,
-      siteCheckResult({
-        method: 'dns-txt',
-        subject: { one: 'TXT record', many: 'TXT records' },
-        lookedFor: siteVerificationPair(SITE_TOKEN),
-        lookedIn: [{ kind: 'domain', value: 'app.clipforge.example' }],
-        found: foundTheLine(['app.clipforge.example']),
-        at: new Date('2026-11-03T09:00:00.000Z'),
-      }),
-    );
-  };
-
   beforeEach(async () => {
     handed = [];
     served = await startTestServer({
@@ -758,9 +735,14 @@ describe('the site a platform-started run records', () => {
       runs: [{ stamp: '2026-10-24T14:02:00.000Z', name: 'northwind-demo' }],
       /**
        * A pipeline that writes the run it was asked for, the way the shipped one does: the
-       * artifact's `site` block is the URL and the verification state it was handed, and the
-       * `SiteAtLaunch.id` beside them is deliberately left behind — it addresses a row in the
-       * platform's store, and nothing inside a run directory names one.
+       * artifact's `site` block is the URL it was handed, and the `SiteAtLaunch.id` beside it
+       * is deliberately left behind — it addresses a row in the platform's store, and nothing
+       * inside a run directory names one.
+       *
+       * `verifiedAtLaunch` is written as `false` because `@personavision/contract` still
+       * declares it required inside the block, and an artifact without it would not parse.
+       * The platform hands over nothing to fill it with any more: the field goes with #393,
+       * which this ticket unblocks.
        */
       pipeline: async (_request, _audience, site) => {
         const runId = `2026-11-03-1000-clipforge-${String(handed.length + 1)}`;
@@ -769,9 +751,7 @@ describe('the site a platform-started run records', () => {
           ...artifact.run,
           runId,
           createdAt: '2026-11-03T10:00:00.000Z',
-          ...(site === undefined
-            ? {}
-            : { site: { url: site.url, verifiedAtLaunch: site.verifiedAtLaunch } }),
+          ...(site === undefined ? {} : { site: { url: site.url, verifiedAtLaunch: false } }),
         };
         artifact.findings = { ...artifact.findings, runId };
         await writeRun(join(served.directories.runsRoot, runId), artifact);
@@ -789,63 +769,30 @@ describe('the site a platform-started run records', () => {
     audienceId = seeded?.audienceId ?? '';
     workspaceId = seeded?.workspaceId ?? '';
     accountId = seeded?.accountId ?? '';
-    // Unverified, as `create` opens every site: the first launch below is on an unverified
-    // one, which is a launch the caps allow exactly as they allow a verified one's.
-    siteId = (
-      await served.platform.store.sites.create(workspaceId, { url: SITE_URL, token: SITE_TOKEN })
-    ).id;
+    siteId = (await served.platform.store.sites.create(workspaceId, { url: SITE_URL })).id;
   });
 
   afterEach(async () => {
     await served.close();
   });
 
-  it('carries the URL it ran against and that it was not verified', async () => {
+  it('carries the URL it ran against', async () => {
     const response = await launch();
     expect(response.status).toBe(201);
 
     const run = await recordedRun(handed[0]?.runId ?? '');
 
-    expect(run.site).toStrictEqual({ url: SITE_URL, verifiedAtLaunch: false });
+    expect(run.site?.url).toBe(SITE_URL);
   });
 
-  it('records a verified site as verified', async () => {
-    await verifyTheSite();
-
-    const response = await launch();
-    expect(response.status).toBe(201);
-
-    expect((await recordedRun(handed[0]?.runId ?? '')).site).toStrictEqual({
-      url: SITE_URL,
-      verifiedAtLaunch: true,
-    });
-  });
-
-  it('leaves a run launched before the site was verified reading false, for ever', async () => {
-    expect((await launch()).status).toBe(201);
-    const before = handed[0]?.runId ?? '';
-
-    await verifyTheSite();
-    expect((await launch()).status).toBe(201);
-    const after = handed[1]?.runId ?? '';
-
-    // Two runs against one site, and the record of each says what was true when it started:
-    // verifying a site is not a way to make yesterday's figures come from a verified one.
-    expect((await recordedRun(before)).site?.verifiedAtLaunch).toBe(false);
-    expect((await recordedRun(after)).site?.verifiedAtLaunch).toBe(true);
-    expect((await recordedRun(before)).site?.url).toBe((await recordedRun(after)).site?.url);
-  });
-
-  it('names the site by URL alone: no site id, and nothing else in the block', async () => {
+  it('hands the pipeline the record’s id and URL, and nothing about who controls it', async () => {
     expect((await launch()).status).toBe(201);
 
-    // The platform had the stored record's id in hand and handed it over …
-    expect(handed[0]?.site?.id).toBe(siteId);
-    // … and the artifact names only the two fields the contract declares.
-    expect(Object.keys((await recordedRun(handed[0]?.runId ?? '')).site ?? {}).sort()).toEqual([
-      'url',
-      'verifiedAtLaunch',
-    ]);
+    // The whole of what a launch knows about a site, asserted exactly: a site is a URL and
+    // nothing more, so there is no third field here and nothing on the record to fill one.
+    expect(handed[0]?.site).toStrictEqual({ id: siteId, url: SITE_URL });
+    // And the id stops at the pipeline: a run directory names no row of anybody's store.
+    expect((await recordedRun(handed[0]?.runId ?? '')).site).not.toHaveProperty('id');
   });
 
   it('holds no account identifier and no workspace identifier anywhere in the directory', async () => {
@@ -865,7 +812,6 @@ describe('the site a platform-started run records', () => {
       'the workspace id': workspaceId,
       'the account id': accountId,
       'the site id': siteId,
-      'the site token': SITE_TOKEN,
       'the account email': seeded?.email ?? '',
       'the account password': seeded?.password ?? '',
       'the session cookie': cookie,

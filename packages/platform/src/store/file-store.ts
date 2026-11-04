@@ -262,12 +262,6 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         id: randomUUID(),
         workspaceId,
         url: site.url,
-        token: site.token,
-        // Unverified, stated here rather than taken from an argument: a created site has
-        // passed no check, and the only writer of this block refuses a check that did not pass.
-        verification: { state: 'unverified', method: null, verifiedAt: null },
-        // Never checked, which is the empty state `#screen-site` draws per method.
-        lastCheck: null,
         // Nothing has launched against it yet, which is what the caps read.
         launches: [],
         createdAt: now(),
@@ -291,37 +285,6 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
       if (record.deletedAt !== null) return record;
       return collection.put({ ...record, deletedAt: now(), updatedAt: now() });
     },
-    verify: async (workspaceId, siteId, result) => {
-      // The invariant, enforced before the record is even read: a site is verified by a
-      // check that passed and by nothing else. A caller handing this a failed result has a
-      // bug — storing it as a verification would make the state a matter of who called what.
-      if (!result.passed) {
-        throw new Error(
-          `A site is verified only by a check that passed, and this ${result.method} check did not: ${result.sentence}.`,
-        );
-      }
-      const record = await owned(workspaceId, siteId);
-      return collection.put({
-        ...record,
-        verification: {
-          state: 'verified',
-          method: result.method,
-          // The check's own clock, so the moment stored is the moment it was proved.
-          verifiedAt: result.checkedAt,
-        },
-        lastCheck: result,
-        updatedAt: now(),
-      });
-    },
-    recordCheck: async (workspaceId, siteId, result) =>
-      // `verification` is not in the spread's overrides and cannot be: this writes what the
-      // last check found and leaves the state where it was, for a passing result as much as
-      // for a failed one.
-      collection.put({
-        ...(await owned(workspaceId, siteId)),
-        lastCheck: result,
-        updatedAt: now(),
-      }),
     // Queued, not merely awaited. Every other writer here reads a record and writes it back,
     // and two of those racing lose one of the two changes — which for most of them means a
     // field written twice with the same value. For the ledger it means a **lost launch**,
@@ -335,9 +298,8 @@ const fileSiteStore = (collection: JsonCollection<SiteRecord>): SiteStore => {
         return collection.put({
           ...record,
           // Written by the same function the cap reads with, so the ledger the cap counts
-          // and the ledger the store keeps can never be two different rules. Like
-          // `recordCheck`, `verification` is not among the overrides: a launch reads that
-          // block and never writes it.
+          // and the ledger the store keeps can never be two different rules. It is the only
+          // override: nothing else on a site record changes after it is created.
           launches: withLaunchRecorded(record.launches ?? [], launch, new Date(now())),
           updatedAt: now(),
         });
@@ -358,9 +320,8 @@ const fileGithubInstallationStore = (
 ): GithubInstallationStore => ({
   connect: async (workspaceId, installation: NewGithubInstallation) => {
     // The site has to be **this workspace's**, checked at the one writer rather than trusted
-    // of every caller: the record is ownership proof for the site it names, so a connection
-    // naming a site of another workspace would put a foreign site id into this workspace's
-    // check result — and name it back to them in a sentence.
+    // of every caller: a connection naming a site of another workspace would put a foreign
+    // site id into this workspace's answer — and name it back to them in a sentence.
     if ((await sites.byId(workspaceId, installation.siteId)) === null) {
       throw missing('site', installation.siteId);
     }
@@ -378,8 +339,8 @@ const fileGithubInstallationStore = (
   forWorkspace: async (workspaceId) => {
     const record = await collection.get(workspaceId);
     // The id is the workspace, so this comparison can only fail on a record written by hand
-    // into the file — and then it fails closed: another workspace's connection verifies
-    // nothing here.
+    // into the file — and then it fails closed: another workspace's connection is not
+    // answered here.
     return record !== null && record.workspaceId === workspaceId ? record : null;
   },
 });

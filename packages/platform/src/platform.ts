@@ -10,8 +10,6 @@ import type { GithubAppRegistration } from './server/routes/github.js';
 import { runRoutes } from './server/routes/runs.js';
 import { siteRoutes } from './server/routes/sites.js';
 import type { TestPipeline } from './run/start.js';
-import { storedSiteConnections } from './site/index.js';
-import type { SiteCheckDeps, SiteConnections } from './site/index.js';
 import { authRoutes } from './server/routes/auth.js';
 import type { Middleware, Route } from './server/routes/types.js';
 import { readSessionId, sessionCookieHeader, signSessionId } from './server/session.js';
@@ -43,22 +41,6 @@ export interface PlatformOptions {
    * as though it started something.
    */
   pipeline?: TestPipeline;
-  /**
-   * What the ownership checks resolve and read the clock with (#236). Absent — as it is in
-   * `personavision serve` — means Node's own resolver and the real clock; a test passes its
-   * own, so no suite reaches DNS.
-   */
-  siteChecks?: SiteCheckDeps;
-  /**
-   * Whether a GitHub repository is connected to a site, which the `connected-repository`
-   * check asks rather than looks for (#238). Absent means **the store's own answer**: the
-   * repository this workspace connected, or nothing where it has connected none (#299).
-   *
-   * It stays an option because that is the seam a test replaces — a check's lookup can then
-   * answer whatever a case needs without a record on disk — and because #227 may put its
-   * installation lookup here. It is no longer the thing that makes a connection real.
-   */
-  siteConnections?: SiteConnections;
   /**
    * Whether a GitHub App is registered, and where a user installs it (#231). Absent — as it
    * is until the owner registers one — means **not registered**, which is what
@@ -103,8 +85,6 @@ export const createPlatform = async ({
   dataDir,
   runsRoot,
   pipeline,
-  siteChecks,
-  siteConnections,
   githubApp,
 }: PlatformOptions): Promise<Platform> => {
   const resolvedDataDir = resolve(dataDir);
@@ -142,23 +122,7 @@ export const createPlatform = async ({
         lifetimeSeconds: SESSION_LIFETIME_SECONDS,
       }),
       ...audienceRoutes({ store, readSession }),
-      ...siteRoutes({
-        store,
-        readSession,
-        siteChecks,
-        // The real lookup unless a caller passes its own: the `connected-repository` check
-        // reads the workspace's connected repository out of the store, which is the one path
-        // to a site verified that way (#299).
-        //
-        // The precedence is stated here rather than left to `siteRoutes`, which only folds
-        // this option in when it is given: `siteConnections` wins, then a lookup inside
-        // `siteChecks`, then the store. Without the second of those, a caller passing its
-        // deps with a lookup in them and no `siteConnections` would have it ignored.
-        siteConnections:
-          siteConnections ??
-          siteChecks?.connections ??
-          storedSiteConnections(store.githubInstallations),
-      }),
+      ...siteRoutes({ store, readSession }),
       ...githubRoutes({ store, readSession, app: githubApp }),
       ...estimateRoutes({ store, readSession, runsRoot: resolvedRunsRoot }),
       ...runRoutes({ store, readSession, pipeline }),

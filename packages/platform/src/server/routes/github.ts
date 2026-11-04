@@ -7,18 +7,19 @@ import type { Route } from './types.js';
  * The GitHub connection: `GET /github/connection` and `POST /github/connect`.
  *
  * What a screen reads here is one question — _where would the pull request go?_
- * (`docs/FLOW.md` section 13) — answered in two parts: the repository this workspace has
+ * (`docs/FLOW.md` section 15) — answered in two parts: the repository this workspace has
  * connected, or its absence, and whether there is a GitHub App to connect to at all. Both are
  * what `/new`'s locked path-2 card and `/settings/github` render from (#271), which read this
  * state and never decide it for themselves.
  *
  * **Nothing a request submits can create a connection**, and that is why there is no route
- * that writes one. A connection counts as ownership verification for the site the repository
- * deploys (section 13), so a body that could file one would be a user ticking a box to verify
- * their own site — the one thing section 13 rules out. The record is written by the
- * installation itself, through `GithubInstallationStore`, when the GitHub App of #227 hands
- * back an installation; `POST /github/connect` is where a user **starts** that, and until the
- * App exists (#231) it is also the route that says so.
+ * that writes one. The installation is what **Improve my site** rests on — the one proof of
+ * control this product asks for, and the record that says which repository deploys a site —
+ * so a body that could file one would let a user hand themselves write access to a repository
+ * by naming it. The record is written by the installation itself, through
+ * `GithubInstallationStore`, when the GitHub App of #227 hands back an installation;
+ * `POST /github/connect` is where a user **starts** that, and until the App exists (#231) it
+ * is also the route that says so.
  *
  * **No credential is read or answered here.** Whether the App is registered arrives through
  * the `app` seam, which #319 fills from the environment in the one module that reads it; this
