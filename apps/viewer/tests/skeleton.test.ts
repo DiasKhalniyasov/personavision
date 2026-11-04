@@ -204,7 +204,9 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
     // which the locked path-2 card and `/settings/github` both render; and the sign-up
     // screen's `signup` (#265) creates the account and the workspace over
     // `POST /auth/signup` — it reads no session out of the answer, because `useSession` is
-    // still the only module that asks who is signed in. Each parses what comes back with
+    // still the only module that asks who is signed in; and the wizard's `goal` (#276) asks
+    // Muse Wonder for the goal of a draft over `POST /runs/goal`, which is the one question
+    // the goal step has and the one place it is asked. Each parses what comes back with
     // the contract's schemas, and together they are the whole of this app's network.
     const asking = appSource()
       .filter((path) => /\bfetch\s*\(/.test(read(path).replace(/\/\*[\s\S]*?\*\//g, '')))
@@ -214,6 +216,7 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
     expect(asking).toEqual([
       join('src', 'screens', 'audience', 'store.ts'),
       join('src', 'screens', 'newtest', 'start.ts'),
+      join('src', 'screens', 'newtest', 'wizard', 'goal', 'goal.ts'),
       join('src', 'screens', 'settings', 'connection.ts'),
       join('src', 'screens', 'signup', 'signup.ts'),
       join('src', 'shell', 'useRun.ts'),
