@@ -1,7 +1,8 @@
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { Aggregate, FunnelSlice, Run } from '@personavision/contract';
 import { NothingRecorded } from '@/shell/NothingRecorded';
-import { RESULT_LINK_PARAMS, paths } from '@/shell/paths';
+import { funnelLink, paths } from '@/shell/paths';
+import type { FunnelNarrowing } from '@/shell/paths';
 import { RunNotFound } from '@/shell/RunNotFound';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useAggregate, useRun } from '@/shell/useRun';
@@ -9,7 +10,7 @@ import { FunnelChart } from './FunnelChart';
 import { SegmentFilter } from './SegmentFilter';
 import { SlowestSessions } from './SlowestSessions';
 import { TimingTable } from './TimingTable';
-import { noSuchSegment, showingLine } from './funnelWords';
+import { noSuchSegment, nothingScored, showingLine } from './funnelWords';
 import styles from './funnel.module.css';
 
 /**
@@ -42,10 +43,16 @@ import styles from './funnel.module.css';
  */
 
 /**
- * The two parameters this screen honours, taken from the builder that writes them, so the
- * screen reads exactly what a link can carry and neither side restates a string.
+ * The two parameters this screen honours.
+ *
+ * They are held to the keys `funnelLink` writes — `satisfies` fails here if the builder
+ * stops taking one of them — and **named** rather than taken by position out of that
+ * builder's list, whose order is the order the query is written in and may change for that
+ * reason alone.
  */
-const [SEGMENT_PARAM, STEP_PARAM] = RESULT_LINK_PARAMS.funnel;
+type FunnelParam = keyof FunnelNarrowing;
+const SEGMENT_PARAM = 'segment' satisfies FunnelParam;
+const STEP_PARAM = 'step' satisfies FunnelParam;
 
 /** A parameter nobody asked for: absent, or the empty string a cleared filter leaves. */
 const asked = (value: string | null): string | null =>
@@ -121,7 +128,7 @@ function Body({
   const slices: readonly FunnelSlice[] =
     aggregate === null ? [] : aggregate.funnelSlices.filter((slice) => slice.variant === null);
 
-  if (aggregate === null || slices.length === 0) {
+  if (aggregate === null) {
     return (
       <NothingRecorded heading="This test did not record a funnel." section="no-funnel">
         It ran before PersonaVision measured where people dropped out, so there is no funnel and no
@@ -130,8 +137,25 @@ function Body({
       </NothingRecorded>
     );
   }
+  // An aggregate of no scored sessions stores no slice at all, by the contract's own rule.
+  // That is a different fact from a run with no aggregate and reads as one: this test ran and
+  // was aggregated, and what it produced is outside every figure.
+  if (slices.length === 0) {
+    return (
+      <NothingRecorded heading="This test scored nobody." section="scored-nobody">
+        {nothingScored(aggregate)}
+      </NothingRecorded>
+    );
+  }
 
   const slice = slices.find((candidate) => candidate.segment === segment) ?? null;
+  // A `?step=` naming no row of this slice — a step renamed since a recommendation was
+  // written, or a step of another test — marks nothing, so the screen falls back to the step
+  // it is about by default rather than going blank, as the replay clamps a stale `?t=`.
+  const marked =
+    step !== null && slice !== null && slice.funnel.some((row) => row.step === step)
+      ? step
+      : (slice?.biggestDrop?.step ?? null);
 
   return (
     <>
@@ -146,7 +170,9 @@ function Body({
         <div className="card card-lg">
           <p data-funnel="no-segment">{noSuchSegment(segment ?? '')}</p>
           <p className="footnote">
-            <Link to={paths.funnel(run.runId)}>Show every segment</Link>
+            {/* The step a citation landed on travels with the way out, as it travels with
+                every other segment switch. */}
+            <Link to={funnelLink(run.runId, { step: step ?? undefined })}>Show every segment</Link>
           </p>
         </div>
       ) : (
@@ -154,16 +180,8 @@ function Body({
           <p className="microlabel" data-funnel="showing">
             {showingLine(slice, aggregate)}
           </p>
-          <FunnelChart
-            run={run}
-            slice={slice}
-            markedStep={step ?? slice.biggestDrop?.step ?? null}
-          />
-          <TimingTable
-            run={run}
-            slice={slice}
-            markedStep={step ?? slice.biggestDrop?.step ?? null}
-          />
+          <FunnelChart run={run} slice={slice} markedStep={marked} />
+          <TimingTable run={run} slice={slice} markedStep={marked} />
           <SlowestSessions run={run} slice={slice} />
         </>
       )}

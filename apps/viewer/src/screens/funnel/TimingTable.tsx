@@ -142,7 +142,7 @@ function Spread({ distribution }: { distribution: Distribution }) {
           // The bins are a list of numbers and nothing addresses one of them but its place.
           key={index}
           data-median={index === distribution.medianBin ? '' : undefined}
-          style={{ height: `${height}%` }}
+          style={{ height }}
         />
       ))}
     </span>

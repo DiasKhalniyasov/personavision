@@ -57,20 +57,30 @@ describe('the funnel of a test that did not record one', () => {
     expect(document.querySelector('[data-funnel="filter"]')).toBeNull();
   });
 
-  it('states the same absence for an aggregate that scored nobody', async () => {
+  it('does not say an aggregated test never measured anything', async () => {
     const aggregate = fixtureAggregate();
     await openFunnel({
       aggregate: {
         ...aggregate,
         scoredSessionCount: 0,
-        excludedAutomationFailures: 0,
+        excludedAutomationFailures: 4,
         funnelSlices: [],
         screenSlices: [],
       },
     });
 
-    expect((await card()).textContent).toContain('did not record a funnel');
+    // A run whose every session our automation broke computed an aggregate and scored
+    // nobody, which is not the same fact as a run that recorded no funnel — and the sentence
+    // for it names the reason the screen is empty rather than claiming the test is old.
+    const stated = within(await settled('[data-section="scored-nobody"]'));
+    expect(stated.getByRole('heading', { name: 'This test scored nobody.' })).toBeTruthy();
+    expect(stated.getByText(/broken by our own automation/)).toBeTruthy();
+    expect(stated.getByText(/4 sessions/)).toBeTruthy();
+    expect(document.querySelector('[data-section="no-funnel"]')).toBeNull();
     expect(document.querySelector('[data-funnel="rows"]')).toBeNull();
+    expect(
+      stated.getByRole('link', { name: 'Run this test again' }).getAttribute('href'),
+    ).toBeTruthy();
   });
 
   it('is clean under axe', async () => {

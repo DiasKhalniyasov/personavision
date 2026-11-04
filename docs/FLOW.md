@@ -640,7 +640,7 @@ variants, because a run with one has nothing to compare.
 | **Sessions**          | What happened to each person, and can I watch them?    | `/runs/:runId/sessions?variant=&outcome=&aoi=&segment=&step=`            |
 | **Session replay**    | What did this one person see, think and do?            | `/runs/:runId/sessions/:sessionId?fix=&t=`                              |
 | **Heatmaps**          | Where did they look, click and scroll on this screen?  | `/runs/:runId/attention/:variant/:step?aoi=&overlay=&segment=&outcome=` |
-| **Funnel and timing** | Where did they drop out, and what took them so long?   | `/runs/:runId/funnel?segment=`                                          |
+| **Funnel and timing** | Where did they drop out, and what took them so long?   | `/runs/:runId/funnel?segment=&step=`                                    |
 | **Analysis**          | What does the model make of all of it?                 | `/runs/:runId/analysis`                                                 |
 
 1. **Summary — the lead.** Wonder's **top recommendations** and the headline numbers: completion rate, median time to

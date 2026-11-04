@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import type { FunnelSlice, Run } from '@personavision/contract';
 import { heatmapLink } from '@/shell/paths';
-import { biggestDropSentence, outcomeNote, reachedNote, stepLabel } from './funnelWords';
+import { barWidth, biggestDropSentence, outcomeNote, reachedNote, stepLabel } from './funnelWords';
 import styles from './funnel.module.css';
 
 /**
@@ -53,7 +53,7 @@ export function FunnelChart({
             <div className={styles.funnelBar} aria-hidden="true">
               <i
                 data-drop={drop !== null && drop.step === row.step ? '' : undefined}
-                style={{ width: `${row.reachedShare * 100}%` }}
+                style={{ width: barWidth(row) }}
               />
             </div>
             <span className={`${styles.funnelNote} faint num`}>

@@ -143,10 +143,42 @@ export const noSlowestSessions = (): string =>
 /** The figure a cell prints, as a clock: `0:41`. */
 export const clock = (ms: number): string => timeLabel(ms);
 
+/**
+ * A length as a CSS percentage, to two places.
+ *
+ * A stored share times a hundred is a binary float — `0.8182` becomes
+ * `81.82000000000001` — and that noise would reach the shipped DOM as the width of a bar.
+ * Two places is finer than a pixel on any bar this screen draws, and the trailing zeroes
+ * go, so `0.5` is `50%` rather than `50.00%`.
+ */
+export const percentage = (value: number): string =>
+  `${String(Number.parseFloat((value * 100).toFixed(2)))}%`;
+
+/** The width of one funnel bar: the stored `reachedShare`, and nothing else. */
+export const barWidth = (row: FunnelStep): string => percentage(row.reachedShare);
+
 /** The height of one bar of a `.dist`, as a share of the tallest bar of the same spread. */
-export function barHeights(distribution: Distribution): readonly number[] {
+export function barHeights(distribution: Distribution): readonly string[] {
   // Not a figure: the tallest bar of a drawing is how tall the drawing is. Every *number* a
   // reader reads comes from `distributionAlternative` and the row's four cells.
   const tallest = Math.max(...distribution.bins, 1);
-  return distribution.bins.map((count) => (count / tallest) * 100);
+  return distribution.bins.map((count) => percentage(count / tallest));
+}
+
+/**
+ * A run that computed an aggregate and scored nobody.
+ *
+ * This is **not** the same absence as a run with no aggregate at all, and must not read like
+ * it: the test ran, the pipeline aggregated it, and every session it produced is outside
+ * every figure — which for this screen means our own automation broke all of them
+ * (`docs/FLOW.md` section 8). So the sentence says that, and states the count it is about
+ * rather than printing a funnel of zeroes.
+ */
+export function nothingScored(aggregate: Aggregate): string {
+  const broken = aggregate.excludedAutomationFailures;
+  const whose =
+    broken === 0
+      ? 'It recorded no session this screen could read'
+      : `The ${whole.format(broken)} ${plural(broken, 'session', 'sessions')} it ran ${plural(broken, 'was', 'were')} broken by our own automation, and an automation failure is outside every figure`;
+  return `${whose}, so there is no funnel and no timing for it — not a zero, and not an empty chart. Run the test again and both will be here.`;
 }

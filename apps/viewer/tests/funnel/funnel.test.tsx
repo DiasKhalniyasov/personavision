@@ -77,6 +77,12 @@ describe('the funnel by screen and step', () => {
     const confirm = await funnelRow('confirm');
     // The stored `reachedShare` of the last step is 0.5, and the bar is that and nothing else.
     expect(confirm.querySelector<HTMLElement>('i')?.style.width).toBe('50%');
+    // A stored share times a hundred is a binary float, and that noise does not reach the
+    // DOM: `0.8182` is `81.82%`, not `81.82000000000001%`.
+    expect((await funnelRow('review')).querySelector<HTMLElement>('i')?.style.width).toBe('81.82%');
+    for (const bar of document.querySelectorAll<HTMLElement>('[data-funnel="spread"] i')) {
+      expect(bar.style.height).toMatch(/^\d+(\.\d{1,2})?%$/);
+    }
     expect((await funnelRows()).filter((row) => row.querySelector('i[data-drop]')).length).toBe(1);
   });
 
@@ -370,6 +376,26 @@ describe('the step a citation opens on', () => {
     await openFunnel();
 
     expect((await funnelRow('review')).getAttribute('aria-current')).toBe('step');
+  });
+
+  it('falls back to the stored drop when the URL names a step this slice has not', async () => {
+    await openFunnel({ narrowing: { step: 'a-step-renamed-since' } });
+
+    // A stale citation marks nothing of its own, and must not cost the screen the step it is
+    // about by default.
+    expect((await funnelRow('review')).getAttribute('aria-current')).toBe('step');
+    expect(
+      [...(await funnelRows())].filter((row) => row.getAttribute('aria-current') === 'step').length,
+    ).toBe(1);
+  });
+
+  it('carries the step out of a segment that matches nobody', async () => {
+    await openFunnel({ narrowing: { segment: 'nobody at all', step: 'payment' } });
+
+    await settled('[data-funnel="no-segment"]');
+    expect(screen.getByRole('link', { name: 'Show every segment' }).getAttribute('href')).toBe(
+      funnelLink(RUN_ID, { step: 'payment' }),
+    );
   });
 
   it('keeps the step when the reader changes segment', async () => {
