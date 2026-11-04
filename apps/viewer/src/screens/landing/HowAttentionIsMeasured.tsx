@@ -11,6 +11,11 @@ import styles from './landing.module.css';
  * Two of those claims are load-bearing and easy to inflate, so they are pinned by
  * `HowAttentionIsMeasured.test.tsx` rather than by care:
  *
+ * 0. **Stage 1 claims only what it records.** `tools/eyetrack` holds two tools, and the
+ *    second of them drives a live site, so a sentence denying that anything there touches
+ *    a live page would be contradicted by the directory the link lands on. The stage says
+ *    what the recordings behind this product are — gaze over screenshots, one at a time,
+ *    in the shape `packages/calibration` reads — and promises nothing about live pages.
  * 1. **No model fitted on human gaze ships today.** `packages/calibration` is where the
  *    comparison against human eye tracking lives, and it can fit the engine's
  *    configuration — hence *can be used to fit*, which is the owner's own phrase and is
@@ -168,9 +173,10 @@ const STAGES: readonly Stage[] = [
     body: (
       <>
         A webcam eye tracker you run on your own machine records where real people look at
-        screenshots of a site, on a desktop or a phone. It does not instrument somebody else&rsquo;s
-        live page, and nothing leaves your computer.{' '}
-        <a className={styles.stageLink} href={EYETRACKER_URL} rel="noreferrer">
+        screenshots of a site, on a desktop or a phone &mdash; one screenshot at a time, in the
+        shape <code className={styles.stagePath}>packages/calibration</code> reads. Nothing leaves
+        your computer.{' '}
+        <a className={styles.stageLink} href={EYETRACKER_URL} target="_blank" rel="noreferrer">
           Try the eye tracker
         </a>
       </>

@@ -155,8 +155,33 @@ describe('the eye tracker stage 1 links', () => {
     );
   });
 
-  it('points at a path this repository has', () => {
+  it('points at a path this repository has, and leaves the page it opened from', () => {
     expect(read('tools/eyetrack/calibrate/index.html').length).toBeGreaterThan(0);
+
+    mount();
+    const link = screen.getByRole('link', { name: 'Try the eye tracker' });
+    // The one outbound link on the front page, so it opens beside the page rather than
+    // taking a reader who has not signed up yet off it.
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noreferrer');
+  });
+
+  it('promises no instrumentation of a live page', () => {
+    const { container } = mount();
+    const text = sectionText(container);
+
+    // `tools/eyetrack` holds a second tool that drives a live site, so this section may
+    // neither promise that nor deny it: stage 1 is about what the recordings behind this
+    // product are, which is gaze over screenshots.
+    expect(text).toContain('screenshots of a site');
+    for (const promise of [
+      /\blive (?:site|page|website)\b/i,
+      /\binstrument(?:s|ing|ed)?\b/i,
+      /\bany (?:page|site|website)\b/i,
+      /\breal (?:traffic|visitors) on your site\b/i,
+    ]) {
+      expect(text, String(promise)).not.toMatch(promise);
+    }
   });
 });
 

@@ -173,7 +173,12 @@
    ------------------------------------------------------------------------ */
 
 .measuredBand {
-  background: var(--color-surface-sunken);
+  /* Not `--color-surface-sunken`: in dark mode it is the same value as
+     `--color-canvas-dark`, and this band sits directly above the closing dark
+     band, so the two would merge into one block carrying two text colours.
+     `--color-accent-soft` is the same soft panel on light and stays its own
+     surface on dark. */
+  background: var(--color-accent-soft);
 }
 
 .measuredLede {
