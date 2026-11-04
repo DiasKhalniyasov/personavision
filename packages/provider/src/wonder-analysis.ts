@@ -202,9 +202,14 @@ const declaredBy = (input: AnalysisAskInput): Declared => ({
  * recording it cites.
  *
  * The three kinds are checked against the same declarations `@personavision/contract`'s
- * reference check holds a written `recommendations.json` to, so a reply refused here is
- * exactly a file that would have been refused on the way to disk — reported at the call,
- * where there is still somebody to tell, instead of after the run directory is written.
+ * citation validator holds a written `recommendations.json` to, and this gate is the
+ * **stricter** of the two on purpose: it refuses any citation of an excluded session where
+ * the contract refuses a claim whose every cited session is one, and it checks the cited
+ * timestamp, which the contract does not yet (#256). It also sees no aggregate, so a funnel
+ * step is checked against `run.steps` here and against the aggregate's own funnel there. So
+ * a reply refused here is not always a file the contract would have refused on the way to
+ * disk; it is refused at the call, where there is still somebody to tell, instead of after
+ * the run directory is written.
  */
 const checkCitation = (
   citation: Citation,
