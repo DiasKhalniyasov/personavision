@@ -57,5 +57,6 @@ All of them serve or read the one run-data interface `CONTEXT.md` publishes: `GE
 
 - **`CONTEXT.md`** — the module map, the one place artifact field names are declared, and the two interfaces this repository publishes to every other step.
 - **`docs/FLOW.md`** — the flow contract. Section 8 is the product's vocabulary; nothing restates it.
+- **`docs/demo.md`** — path 2 walked beat by beat from a cold start: what to run, what to see, and what each screen says. `demo/README.md` is the shop both paths run against.
 - **`docs/design/prototype.html`** and **`docs/design/tokens.css`** — the visual contract. The app imports the tokens; it never copies them.
 - **`docs/adr/`** — the decisions, with the alternatives that were rejected.
