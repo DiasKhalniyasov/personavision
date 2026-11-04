@@ -117,7 +117,13 @@ export function ThisStepPanel({ step, screen, areas }: ThisStepPanelProps) {
           ) : clicks === null ? (
             <span className="faint">no clicks recorded for it</span>
           ) : (
-            `${clicks} of ${sessionCount ?? figures.reached} people`
+            // Clicks, not people: `clicksByAoi[].clicks` counts **presses**, and
+            // `screenFiguresSchema` bounds the scroll bins and `leftHere` by `reached` but
+            // not this — a screen people pressed twice has more clicks than it had people.
+            // Printing it over a population would read `6 of 1 people`, which is the
+            // mistakable figure `docs/FLOW.md` section 8 forbids. Whose presses they are is
+            // stated once, in the line above the stage.
+            `${clicks} ${clicks === 1 ? 'click' : 'clicks'}`
           )}
         </Figure>
       </dd>

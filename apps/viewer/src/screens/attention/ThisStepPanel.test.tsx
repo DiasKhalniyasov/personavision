@@ -70,7 +70,9 @@ describe('the five readings of one screen', () => {
     expect(reading('Left here')).toBe('7 of 9');
     expect(reading('Median time on it')).toBe('10.8 s');
     expect(reading('Scrolled past the fold')).toBe('9 of 9');
-    expect(reading(clicksTerm())).toBe('2 of 22 people');
+    // Clicks, not people: a press count over a population would read `6 of 1 people` on a
+    // screen one person pressed six times.
+    expect(reading(clicksTerm())).toBe('2 clicks');
   });
 
   it('names the clicks row for what is stored, not for a repeat press', () => {

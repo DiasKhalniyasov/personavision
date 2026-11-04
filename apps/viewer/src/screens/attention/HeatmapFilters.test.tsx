@@ -296,6 +296,48 @@ describe('the clicks and scroll-depth layers read the aggregate’s own rows', (
     expect(document.querySelector('[data-clicks-key]')).toBeNull();
   });
 
+  it('says where the clicks went when they landed on areas this step does not list', async () => {
+    // The aggregate records a click's area faithfully, and a run can carry one this version
+    // of this step does not declare — `io.ts` reports it as a dangling area of interest.
+    // There is nothing on the page to draw it over, and saying it landed on empty space
+    // would be a claim about the page rather than about the artifact.
+    await serveAggregate((aggregate) =>
+      mapSlice(
+        aggregate,
+        (slice) => slice.segment === null && slice.outcome === null,
+        (slice) =>
+          mapScreen(slice, 'B', 'payment', (row) => ({
+            ...row,
+            clicksByAoi: [{ aoiId: 'B-payment-a-control-this-test-forgot', clicks: 7 }],
+          })),
+      ),
+    );
+    const { container } = heatmaps('B', 'payment', '?overlay=clicks');
+    await settled();
+    decoded(container);
+
+    await waitFor(() => {
+      expect(layerIn(container, 'clicks')).toBeNull();
+    });
+    expect(whyFor(toggleFor('clicks'))).toBe(
+      '7 of the 7 clicks on this screen landed on areas this test does not list for this version of this step, so there is nothing here to draw them over.',
+    );
+  });
+
+  it('isolates its key to the area the layer is isolated to', async () => {
+    await serveRunData();
+    // An area nobody pressed: the layer draws nothing, so its legend must list nothing.
+    const { container } = heatmaps('B', 'payment', '?overlay=clicks&aoi=B-payment-email');
+    await settled();
+    decoded(container);
+
+    await waitFor(() => {
+      expect(layerIn(container, 'clicks')).toBeNull();
+    });
+    expect(document.querySelector('[data-clicks-count="B-payment-primary"]')).toBeNull();
+    expect(document.querySelector('[data-clicks-count="nowhere"]')).toBeNull();
+  });
+
   it('offers both bin layers and says what is absent when neither was recorded', async () => {
     // Decision 74: the overlays are offered and name what is missing, rather than vanishing.
     // Here the file is there and says, honestly, that nothing was pressed and nobody's depth
@@ -488,7 +530,7 @@ describe('the two filters', () => {
     expect(row.textContent).toContain('never');
     expect(row.textContent).toContain('0%');
     expect(
-      screen.getByText(/Clicks are the people these filters leave; the gaze figures are medians/),
+      screen.getByText(/The clicks column counts presses by the people these filters leave/),
     ).toBeDefined();
 
     // And unfiltered it is the whole test's two.
@@ -599,6 +641,31 @@ describe('the URL carries the overlay, the segment and the outcome', () => {
     await settled();
     decoded(reopened.container);
     expect(reopened.container.querySelector('[data-overlay-layer]')).toBeNull();
+  });
+
+  it('keeps an area’s clicks through a fault in its gaze figures', async () => {
+    // The two are different readings from different files: `aoiMetrics` saying nothing about
+    // whether anybody looked at an area is no reason to withhold how many times they
+    // pressed it, which the aggregate recorded separately.
+    const run = JSON.parse(JSON.stringify(readRunFile(RUN_ID))) as {
+      aoiMetrics: { aoiId: string }[];
+    };
+    await serveRunData({
+      files: {
+        [`/runs/${RUN_ID}/run.json`]: JSON.stringify({
+          ...run,
+          aoiMetrics: run.aoiMetrics.filter((metric) => metric.aoiId !== 'B-payment-primary'),
+        }),
+      },
+    });
+    const { container } = heatmaps('B', 'payment');
+    await settled();
+
+    const row = container.querySelector('tr[data-aoi-row="B-payment-primary"]') as HTMLElement;
+    expect(row.getAttribute('data-area-fault')).toBe('no-figures');
+    expect(row.textContent).toContain('recorded no figures for B-payment-primary');
+    // And the clicks the aggregate does carry are still printed.
+    expect(clicksCellFor(container, 'B-payment-primary')).toBe('9');
   });
 
   it('clears both filters in one write when the stated line offers it', async () => {

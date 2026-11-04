@@ -97,8 +97,16 @@ const nothingToShow = (props: OverlayLayerProps): string | null => {
     return 'Not one of these people pressed anything on this screen. That is the reading, not a gap: there is no click to draw.';
   }
   if (clickedAreas(props.areas, screen.figures).length === 0) {
+    const total = totalClicks(screen.figures);
     const nowhere = clicksNowhere(screen.figures);
-    return `Every click on this screen — ${nowhere} of them — landed on empty space the page does not explain, so there is no area to draw them over.`;
+    if (nowhere === total) {
+      return `Every click on this screen — ${nowhere} of them — landed on empty space the page does not explain, so there is no area to draw them over.`;
+    }
+    // The rest landed on areas this version's step does not declare, which the aggregate
+    // records faithfully and `io.ts` reports as a dangling area of interest. Saying they
+    // landed on empty space would be a claim about the page; saying nothing would hide a
+    // fault in the artifact behind a switch that simply looks off.
+    return `${total - nowhere} of the ${total} clicks on this screen landed on areas this test does not list for this version of this step, so there is nothing here to draw them over.`;
   }
   return null;
 };
@@ -159,8 +167,12 @@ export function ClicksLayer(props: OverlayLayerProps) {
  */
 export function ClicksKey(props: OverlayLayerProps) {
   const { screen } = props;
-  const drawn = clickedAreas(props.areas, screen.figures);
-  const nowhere = clicksNowhere(screen.figures);
+  // Isolated to the same area the layer is. A legend naming marks that are not on the page
+  // is a text alternative for a drawing of nothing — and with an area isolated the layer
+  // draws one rectangle or none, so the list has to say the same.
+  const drawn = isolate(clickedAreas(props.areas, screen.figures), props.isolatedAoiId);
+  // The clicks that landed on nothing belong to no area, so isolating one leaves them out.
+  const nowhere = props.isolatedAoiId === null ? clicksNowhere(screen.figures) : 0;
 
   return (
     <div data-clicks-key="ramp">

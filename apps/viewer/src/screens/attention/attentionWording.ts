@@ -324,5 +324,6 @@ export function clicksFootnote({ busiest, nowhere, total }: ClicksFootnote): str
 /** The areas table's footnote on this screen, in `#screen-heatmaps`' own words. */
 export const areasOnThisScreenCaveat = (): string =>
   'A row that reads never and 0% is a result, not missing data: there was nothing there to look at. ' +
-  'Clicks are the people these filters leave; the gaze figures are medians across everybody whose session was scored. ' +
+  'The clicks column counts presses by the people these filters leave, so an area pressed twice by one person reads 2; ' +
+  'the gaze figures are medians across everybody whose session was scored. ' +
   'Every number here is simulated for this audience.';

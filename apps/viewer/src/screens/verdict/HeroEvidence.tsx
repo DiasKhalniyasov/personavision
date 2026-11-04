@@ -308,7 +308,14 @@ export function HeroEvidence({ run }: { run: Run }) {
   const href =
     hero === null
       ? null
-      : heatmapLink(run.runId, hero.variant, hero.step, { aoi: hero.aoiId ?? undefined });
+      : heatmapLink(run.runId, hero.variant, hero.step, {
+          aoi: hero.aoiId ?? undefined,
+          // The overlay this block is a picture of. The Heatmaps screen opens on its own
+          // default — the clicks — for a link that names none, which would land a reader on
+          // a page with the attention layer switched off, one click after a caption about
+          // where their audience looked (#272).
+          overlay: 'attention',
+        });
 
   /**
    * What the frame says over the page when pixels cannot say it.

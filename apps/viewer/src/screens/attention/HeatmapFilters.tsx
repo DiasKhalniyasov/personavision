@@ -13,9 +13,11 @@ import styles from './attentionPage.module.css';
  * strip, and the `.microlabel` line stating which people are being shown.
  *
  * **Three strips and one sentence**, and the sentence is the important half. The strips say
- * what was pressed; the line says what the composition amounts to — *"Clicks of the 41
- * people who gave up · phone · the 7 our automation broke are excluded"* — because a reader
- * looking at a heatmap has to be able to tell, without working it out, whose heatmap it is.
+ * what was pressed; the line says what the composition amounts to — the prototype writes it
+ * *"Clicks of the 41 people who gave up · phone · the 7 our automation broke are excluded"*,
+ * and this one reads *"Clicks of 8 people · Abandoned · mobile · in a hurry · the 2 our
+ * automation broke are excluded"* over the committed run. Either way a reader looking at a
+ * heatmap can tell, without working it out, whose heatmap it is.
  * That the automation failures are not among them is part of the same sentence and not a
  * footnote: a figure that quietly averaged our own broken sessions would be the one
  * dishonest thing this screen could do (`docs/FLOW.md` section 11).
