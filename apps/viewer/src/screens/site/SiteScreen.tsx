@@ -36,6 +36,27 @@ import type { SiteIssue, SiteRecord } from '@/sites/store';
 /** The prototype's `.pagehead`, which is the heading from the moment a site exists. */
 const PROVE_IT = 'Prove this site is yours';
 
+/** The one sentence above the methods, and whether what it says is the platform being away. */
+interface Trouble {
+  readonly sentence: string;
+  /** `true` only for a platform that could not be reached — never for an answer it gave. */
+  readonly outage: boolean;
+}
+
+/**
+ * What is added to an outage's sentence: what is still here, and so what to do next.
+ *
+ * Only ever one of these, and only for an outage. A refusal the platform answered gets the
+ * platform's own sentence and nothing of ours after it.
+ */
+const outageSuffix = (isNew: boolean, hasSite: boolean): string => {
+  // `/sites/new`, where the reader has typed something and it is still in the field.
+  if (isNew) return ' Nothing you typed has been lost — try again when it is back.';
+  // The site itself could not be read, so there is nothing on the page to promise about.
+  if (!hasSite) return ' Try again when it is back.';
+  return ' The lines to copy below are this site’s own — put one in place and check again when the platform is back.';
+};
+
 export function SiteScreen({ siteId }: { siteId: string | null }) {
   const state = useSite(siteId);
   const navigate = useNavigate();
@@ -52,20 +73,36 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
   const [issues, setIssues] = useState<readonly SiteIssue[]>([]);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState<MethodId | null>(null);
-  /** The one sentence for a platform that could not be reached. Never a check's own result. */
-  const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * The one sentence above the methods, and whether it is an outage.
+   *
+   * Never a check's own result — a check that did not find what it looked for is printed
+   * beside its method. What lands here is a platform that could not be reached, and a
+   * refusal the platform did answer: _"dns-txt is not a check this platform runs yet"_ is
+   * not an outage, and telling a reader to wait for the platform to come back when the
+   * platform just answered them would be the generic wording this screen promises against.
+   */
+  const [trouble, setTrouble] = useState<Trouble | null>(null);
 
   useEffect(() => {
-    if (state.status !== 'ready') return;
-    setSite(state.site);
-    setUrl(state.site.url);
+    if (state.status === 'ready') {
+      setSite(state.site);
+      setUrl(state.site.url);
+      return;
+    }
+    // A different site in the path, or one that could not be read: whatever is held here is
+    // the *previous* site, and its token, its lines to copy and — worse — its id, which the
+    // check below would post against. It goes, and the frame is drawn without it.
+    setSite(null);
+    setUrl('');
   }, [state]);
 
   const isNew = siteId === null;
   const field = issues.find((issue) => issue.path === 'url')?.message;
-  // One sentence, whichever call could not be reached: the read of the site, a check, or
-  // the save on `/sites/new`. A check that *failed* is not one of them — it is a result.
-  const unreachable = problem ?? (state.status === 'unreadable' ? state.problem : null);
+  // One sentence, whichever call it came from: the read of the site, a check, or the save
+  // on `/sites/new`.
+  const said: Trouble | null =
+    trouble ?? (state.status === 'unreadable' ? { sentence: state.problem, outage: true } : null);
 
   if (!isNew && state.status === 'not-found') {
     return (
@@ -84,27 +121,37 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
 
   /** Add the site, and go to its own screen — which is this screen, with the methods on it. */
   const add = async (): Promise<void> => {
-    setProblem(null);
+    setTrouble(null);
+    setIssues([]);
     setSaving(true);
     const answer = await createSite(url);
     setSaving(false);
     if (answer.ok) {
-      setIssues([]);
       refreshSites();
       await navigate(paths.site(answer.value.id));
       return;
     }
     if (answer.kind === 'refused') {
       setIssues(answer.issues);
+      // A refusal the URL field cannot show is a refusal with nowhere to go, and a button
+      // that does nothing when it is pressed. The platform names the `url` field today; a
+      // message about anything else is said above the form rather than swallowed.
+      const unplaced = answer.issues.filter((issue) => issue.path !== 'url');
+      if (unplaced.length > 0) {
+        setTrouble({ sentence: unplaced.map((issue) => issue.message).join(' '), outage: false });
+      }
       return;
     }
-    setProblem(answer.problem);
+    setTrouble({
+      sentence: answer.problem,
+      outage: answer.kind === 'unreachable' && answer.answered !== true,
+    });
   };
 
   /** Ask the platform to run one of the four checks, and render what it found. */
   const check = async (method: MethodId): Promise<void> => {
     if (site === null) return;
-    setProblem(null);
+    setTrouble(null);
     setRunning(method);
     const answer = await verifySite(site.id, method);
     setRunning(null);
@@ -114,11 +161,16 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
       refreshSites();
       return;
     }
-    setProblem(
-      answer.kind === 'refused'
-        ? (answer.issues[0]?.message ?? 'That check could not be run.')
-        : answer.problem,
-    );
+    setTrouble({
+      sentence:
+        answer.kind === 'refused'
+          ? (answer.issues[0]?.message ?? 'That check could not be run.')
+          : answer.problem,
+      // A site that has been removed answers 404, and a method this platform does not run
+      // yet answers 400 with its own sentence naming the ones it does. Both are answers, so
+      // neither is a platform the reader is asked to wait for.
+      outage: answer.kind === 'unreachable' && answer.answered !== true,
+    });
   };
 
   // Which block is marked as the current one: the method that proved this site, then the one
@@ -140,12 +192,10 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
           : 'Any one of these four. We check it ourselves — there is no box to tick.'}
       </p>
 
-      {unreachable === null ? null : (
+      {said === null ? null : (
         <p className="notice" role="alert">
-          {unreachable}
-          {site === null
-            ? ' Nothing you typed has been lost — try again when it is back.'
-            : ' The lines to copy below are this site’s own — put one in place and check again when the platform is back.'}
+          {said.sentence}
+          {said.outage ? outageSuffix(isNew, site !== null) : ''}
         </p>
       )}
 
@@ -166,7 +216,12 @@ export function SiteScreen({ siteId }: { siteId: string | null }) {
             readOnly={!isNew}
             aria-invalid={field !== undefined}
             aria-describedby={isNew ? hintId : undefined}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              // The refusal was about what was in the field; it is not about what is in it
+              // now, and a red line under a URL being retyped is a line that is not true.
+              if (issues.length > 0) setIssues([]);
+            }}
           />
           {field === undefined ? null : (
             <span className={styles.err} role="alert">

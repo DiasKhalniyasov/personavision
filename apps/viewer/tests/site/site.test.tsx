@@ -139,6 +139,37 @@ describe('adding a site', () => {
     expect(screen.queryByRole('heading', { level: 2, name: 'DNS TXT record' })).toBeNull();
     expect(urlField().value).toBe(typed);
   });
+
+  it('takes the refusal off the field as the reader retypes the URL', async () => {
+    const refuse = '"app.clipforge.example" is not a whole web address';
+    await serveSite({ create: { refuse } });
+    await openNew();
+
+    await userEvent.type(urlField(), 'app.clipforge.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Add the site' }));
+    await waitFor(() => {
+      expect(screen.getByText(refuse)).toBeTruthy();
+    });
+
+    await userEvent.type(urlField(), '/create');
+
+    expect(screen.queryByText(refuse)).toBeNull();
+    expect(urlField().getAttribute('aria-invalid')).toBe('false');
+  });
+
+  it('says a refusal that names no field above the form, rather than nowhere', async () => {
+    await serveSite({ create: { refuse: 'that workspace already holds the most sites it may' } });
+    await openNew();
+
+    await userEvent.type(urlField(), 'https://beta.clipforge.example/create');
+    await userEvent.click(screen.getByRole('button', { name: 'Add the site' }));
+
+    // The fixture refuses against `url`; a message the field cannot show would otherwise be
+    // a button that does nothing when it is pressed.
+    await waitFor(() => {
+      expect(screen.getByText('that workspace already holds the most sites it may')).toBeTruthy();
+    });
+  });
 });
 
 describe('how the site stands, and what binds it', () => {
@@ -172,7 +203,7 @@ describe('how the site stands, and what binds it', () => {
     expect(said()).toContain('Improve my site is unlocked');
   });
 
-  it('renders a site that was verified and no longer is as unverified, with the check that now fails', async () => {
+  it('renders a site the platform now reports as unverified with the check that fails', async () => {
     await serveSite({
       site: { ...THE_SITE, lastCheck: { ...FAILED, method: 'dns-txt' } },
     });
@@ -356,9 +387,28 @@ describe('a check', () => {
     );
 
     const notice = await waitFor(() => screen.getByRole('alert'));
-    expect(notice.textContent).toContain('could not be read');
+    // The sentence is about the thing that was asked for, not about the reader's sites.
+    expect(notice.textContent).toContain('That check could not be run.');
+    expect(notice.textContent).toContain('check again when the platform is back');
     expect(lineIn('DNS TXT record')).toContain(THE_TOKEN);
     expect(lineIn('Meta tag')).toContain(THE_TOKEN);
+  });
+
+  it('prints a refusal the platform did answer without telling the reader to wait for it', async () => {
+    const refusal = '"dns-txt" is not a check this platform runs yet. Available today: meta-tag.';
+    await openSite({
+      site: THE_SITE,
+      checks: { 'dns-txt': { ...FAILED, answers: { status: 400, body: { error: refusal } } } },
+    });
+
+    await userEvent.click(
+      within(blockFor('DNS TXT record')).getByRole('button', { name: 'Check the record' }),
+    );
+
+    const notice = await waitFor(() => screen.getByRole('alert'));
+    expect(notice.textContent).toBe(refusal);
+    // The platform answered, so nothing here says it is away or asks the reader to wait.
+    expect(notice.textContent).not.toContain('platform is back');
   });
 });
 
@@ -386,8 +436,16 @@ describe('the states of the screen', () => {
     await open(paths.site(THE_SITE.id as string));
 
     const notice = await waitFor(() => screen.getByRole('alert'));
-    expect(notice.textContent).toContain('could not be read');
+    expect(notice.textContent).toBe(
+      'That site could not be read. Failed to fetch Try again when it is back.',
+    );
+    // Nothing was typed on this screen, and there is no line to copy on it yet: the
+    // sentence promises neither.
+    expect(notice.textContent).not.toContain('Nothing you typed');
+    expect(notice.textContent).not.toContain('lines to copy');
+    // The frame stands, with the four methods in it and nothing invented in their lines.
     expect(screen.getByRole('heading', { level: 2, name: 'DNS TXT record' })).toBeTruthy();
+    expect(blockFor('DNS TXT record').querySelector('code')).toBeNull();
   });
 
   it('says a path naming no site names none, and offers the way back', async () => {
