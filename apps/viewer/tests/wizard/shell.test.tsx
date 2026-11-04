@@ -71,12 +71,18 @@ afterEach(() => {
 describe('the step in the query', () => {
   it('renders the step the query names', async () => {
     await serveRunData();
+    // The launch step is a step **about a draft**: with nothing chosen it sends the user back
+    // to the step that is missing rather than estimating nothing (#279), so this loop mounts
+    // it with the draft a user would arrive there with.
+    writeWizardDraft(filledDraft());
 
     for (const [step, name] of [
       ['path', 'What would you like us to do?'],
       ['audience', 'Audience & feature'],
       ['goal', 'Goal'],
-      ['estimate', 'Launch'],
+      // It names the run it is about rather than itself; its own suite asserts the heading
+      // in full (`tests/wizard/estimate/`).
+      ['estimate', /on app\.clipforge\.example$/],
     ] as const) {
       const { unmount } = mountApp(newTestStep(step));
       expect(await heading(name), step).toBeTruthy();
@@ -133,7 +139,7 @@ describe('the step in the query', () => {
     writeWizardDraft(filledDraft());
     const { router } = mountApp(newTestStep('estimate'));
 
-    expect(await heading('Launch')).toBeTruthy();
+    expect(await heading(/on app\.clipforge\.example$/)).toBeTruthy();
     expect(stepInUrl(router.state.location.search)).toBe('estimate');
   });
 
@@ -371,6 +377,8 @@ describe('every screen this ticket mounts', () => {
 
   it('passes axe cleanly', async () => {
     await serveRunData();
+    // As above: the launch step draws itself only for a draft that could be launched.
+    writeWizardDraft(filledDraft());
 
     for (const address of addresses) {
       const { container, unmount } = mountApp(address);
@@ -385,6 +393,7 @@ describe('every screen this ticket mounts', () => {
 
   it('is complete and still on first paint under prefers-reduced-motion: reduce', async () => {
     await serveRunData();
+    writeWizardDraft(filledDraft());
     vi.stubGlobal(
       'matchMedia',
       (query: string): MediaQueryList =>
@@ -411,6 +420,7 @@ describe('every screen this ticket mounts', () => {
 
   it('lays itself out in a shared responsive column, and restates no value by hand', async () => {
     await serveRunData();
+    writeWizardDraft(filledDraft());
 
     for (const address of addresses) {
       const { unmount } = mountApp(address);
