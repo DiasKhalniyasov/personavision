@@ -376,19 +376,25 @@ export const readResponse = (body: unknown): ResponseReading => {
 
   const status = typeof body.status === 'string' ? body.status : undefined;
   const output = Array.isArray(body.output) ? body.output : [];
-  const texts: string[] = [];
+  // One entry per assistant message. On a longer task the model can send a short preamble
+  // ("Fixing your landing page...") as its own message before the structured reply; joining
+  // the two made the JSON unparseable, so the reply is the last message's text.
+  const messages: string[] = [];
   const refusals: string[] = [];
 
   for (const item of output) {
     if (!isObject(item)) continue;
     if (item.type === 'refusal' && typeof item.refusal === 'string') refusals.push(item.refusal);
     if (item.type !== 'message') continue;
+    let text = '';
     for (const part of Array.isArray(item.content) ? item.content : []) {
       if (!isObject(part)) continue;
-      if (part.type === 'output_text' && typeof part.text === 'string') texts.push(part.text);
+      if (part.type === 'output_text' && typeof part.text === 'string') text += part.text;
       if (part.type === 'refusal' && typeof part.refusal === 'string') refusals.push(part.refusal);
     }
+    if (text !== '') messages.push(text);
   }
+  const texts = messages.slice(-1);
 
   if (refusals.length > 0) return faulty('refusal', `the model refused: ${refusals.join(' ')}`);
   if (status === 'incomplete') {

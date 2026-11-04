@@ -22,6 +22,7 @@
     "dev": "pnpm -r --parallel --if-present dev",
     "seed:example-run": "tsx --conditions=development scripts/seed-example-run.ts",
     "recommend:run": "tsx --conditions=development scripts/recommendations.ts",
+    "improve:local": "tsx --conditions=development scripts/improve-local.ts",
     "open": "tsx --conditions=development packages/cli/src/cli.ts open",
     "demo:run": "pnpm -r build && tsx scripts/generate-demo-run.ts",
     "bake:landing-slides": "tsx --conditions=development scripts/bake-landing-slides.ts"

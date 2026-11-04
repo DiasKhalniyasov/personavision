@@ -276,6 +276,23 @@ export interface MetaWonderProviderOptions {
   readonly timeoutMs?: number;
 }
 
+/**
+ * The schema as the strict structured-reply mode takes it. `z.toJSONSchema` writes a
+ * discriminated union as `oneOf`, which that mode refuses with a `400` ("'oneOf' is not
+ * permitted"); every union a use declares has branches of different shapes, so `anyOf` says
+ * the same thing, and `parse` still holds the reply to the use's own schema.
+ */
+export const strictSubset = (schema: unknown): unknown => {
+  if (Array.isArray(schema)) return schema.map(strictSubset);
+  if (typeof schema !== 'object' || schema === null) return schema;
+  return Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key === 'oneOf' ? 'anyOf' : key,
+      strictSubset(value),
+    ]),
+  );
+};
+
 /** The request one ask becomes: the document, the schema, the effort, and nothing else. */
 const buildWonderRequest = (ask: WonderAsk<unknown>): WonderRequestBody => ({
   model: WONDER_MODEL_ID,
@@ -286,7 +303,7 @@ const buildWonderRequest = (ask: WonderAsk<unknown>): WonderRequestBody => ({
     format: {
       type: 'json_schema',
       name: ask.replySchema.name,
-      schema: ask.replySchema.schema,
+      schema: strictSubset(ask.replySchema.schema) as Readonly<Record<string, unknown>>,
       strict: true,
     },
   },
