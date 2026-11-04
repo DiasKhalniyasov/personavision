@@ -178,6 +178,21 @@ describe('the site routes', () => {
     const launch = (siteId: string, id: string, runId: string | null, at: string) =>
       served.platform.store.sites.recordLaunch(workspaceId, siteId, { id, runId, at });
 
+    /**
+     * An instant **inside the ledger's own window**, named by how long ago it was.
+     *
+     * The ledger is trimmed to `LAUNCH_LEDGER_HOURS` on every write, so a launch written at
+     * a fixed instant on a fixed day falls out of it the day after — and these tests are
+     * about what the ledger reports while a launch is still in it. Hence an offset from now
+     * rather than a date: the one thing that must not move under them is the window.
+     */
+    const hoursAgo = (hours: number): string =>
+      new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    const EARLIER = hoursAgo(5);
+    const LATER = hoursAgo(2);
+    const LATEST = hoursAgo(1);
+
     it('is null where the ledger has no launch that opened a run', async () => {
       expect((await add()).lastTest).toBeNull();
       expect((await listed())[0]?.lastTest).toBeNull();
@@ -185,30 +200,30 @@ describe('the site routes', () => {
 
     it('is the newest launch that opened a run, by its own instant', async () => {
       const site = await add();
-      await launch(site.id, 'l-1', 'run-older', '2026-11-03T09:12:00.000Z');
-      await launch(site.id, 'l-2', 'run-newer', '2026-11-03T11:40:00.000Z');
+      await launch(site.id, 'l-1', 'run-older', EARLIER);
+      await launch(site.id, 'l-2', 'run-newer', LATER);
 
       expect((await listed())[0]?.lastTest).toEqual({
         runId: 'run-newer',
-        at: '2026-11-03T11:40:00.000Z',
+        at: LATER,
       });
     });
 
     it('passes over a launch that opened no run, so no card names a run nobody can open', async () => {
       const site = await add();
-      await launch(site.id, 'l-1', 'run-that-opened', '2026-11-03T09:12:00.000Z');
+      await launch(site.id, 'l-1', 'run-that-opened', EARLIER);
       // Reserved and never annotated: the pipeline has not reported a directory, or crashed.
-      await launch(site.id, 'l-2', null, '2026-11-03T11:40:00.000Z');
+      await launch(site.id, 'l-2', null, LATER);
 
       expect((await listed())[0]?.lastTest).toEqual({
         runId: 'run-that-opened',
-        at: '2026-11-03T09:12:00.000Z',
+        at: EARLIER,
       });
     });
 
     it('is the same on GET /sites/:siteId as in the list', async () => {
       const site = await add();
-      await launch(site.id, 'l-1', 'run-one', '2026-11-03T09:12:00.000Z');
+      await launch(site.id, 'l-1', 'run-one', EARLIER);
 
       const read = await bodyOf(await send(`/sites/${site.id}`, 'GET'));
       expect(read.lastTest).toEqual((await listed())[0]?.lastTest);
@@ -220,11 +235,11 @@ describe('the site routes', () => {
         url: ANOTHER_URL,
         token: mintSiteToken(),
       });
-      await launch(mine.id, 'l-1', 'my-run', '2026-11-03T09:12:00.000Z');
+      await launch(mine.id, 'l-1', 'my-run', EARLIER);
       await served.platform.store.sites.recordLaunch(theirWorkspaceId, theirs.id, {
         id: 'l-2',
         runId: 'their-run',
-        at: '2026-11-03T23:00:00.000Z',
+        at: LATEST,
       });
 
       expect((await listed())[0]?.lastTest?.runId).toBe('my-run');
