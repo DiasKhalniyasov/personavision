@@ -10,6 +10,7 @@ import type { Aggregate, ScreenSlice } from '@personavision/contract';
 import { heatmapLink, paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
+import { ruleIn, rulesOf } from '../../../tests/cssom';
 import { loadDesignTokens } from '../../../tests/setup';
 import { noAggregate } from './attentionWording';
 import { screenFiguresFrom } from './useScreenFigures';
@@ -710,6 +711,22 @@ describe('accessibility and the shape of it', () => {
     await waitFor(() => {
       expect(outcome.getAttribute('aria-pressed')).toBe('true');
     });
+  });
+
+  it('draws the focus ring inside the option, where the strip’s own clip cannot cut it', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const rule = ruleIn(rulesOf(readFileSync(join(here, 'attentionPage.module.css'), 'utf8')));
+
+    // The strip is a pill that clips to its radius, which otherwise cuts three sides off
+    // the ring of every option in it — a keyboard reader gets a sliver down one edge. Inset
+    // by its own width, the ring is the whole rectangle of the option it is on.
+    expect(rule('.seg')['overflow']).toBe('hidden');
+    expect(rule('.seg button:focus-visible')['outline']).toBe(
+      'var(--border-width-strong) solid var(--color-focus)',
+    );
+    expect(rule('.seg button:focus-visible')['outline-offset']).toBe(
+      'calc(-1 * var(--border-width-strong))',
+    );
   });
 
   it('lays the control row and the stage out so a narrow window has no sideways scroll', () => {

@@ -61,6 +61,16 @@
   border-right: 0;
 }
 
+/* The pill clips to its own radius so the options inside it take its rounded ends, and that
+   same clip cuts three sides off the focus ring of every option in it: a keyboard reader
+   gets a sliver down one edge instead of a ring. Drawn **inset**, the ring is the whole
+   rectangle of the option it is on and there is nothing left to clip. The width and the
+   colour are the ones every focus ring in this product is drawn at. */
+.seg button:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--border-width-strong));
+}
+
 .seg button[aria-pressed='true'] {
   background: var(--color-accent);
   color: var(--color-on-accent);
