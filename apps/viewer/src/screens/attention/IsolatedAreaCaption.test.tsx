@@ -33,7 +33,7 @@ import type { AttentionStepSessions } from './useAttentionStepSessions';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 const layout = runPaths('');
 
 /** The area nobody on the redesign ever fixated, and the one a third of the looks went to. */
@@ -116,9 +116,15 @@ const boxFor = (container: HTMLElement, aoiId: string): SVGRectElement =>
 const settled = async () => {
   await screen.findByRole('heading', { level: 1, name: HEADING });
   await waitFor(() => {
-    expect(screen.getByText('Reached this step').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    // The `This screen` panel's first reading, settled: every figure on this screen comes
+    // from the aggregate, so "settled" is that file having arrived.
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
+  });
+  // And the areas, which are a read of their own: this suite is about the row and the
+  // caption an isolated area produces, and both come from that read rather than from the
+  // aggregate the panel above waits for.
+  await waitFor(() => {
+    expect(document.querySelector('[data-aoi-row]')).not.toBeNull();
   });
 };
 

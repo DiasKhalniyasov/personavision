@@ -1,16 +1,26 @@
 import { useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { HEATMAP_OVERLAYS } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
-import { AOI_PARAM } from '@/screens/sessions/filters';
+import { AOI_PARAM, OUTCOME_PARAM, SEGMENT_PARAM } from '@/screens/sessions/filters';
 import { paths } from '@/shell/paths';
 import { useCurrentRunId, useOptionalRun } from '@/shell/useRun';
 
 /**
  * What the Attention screen is looking at: **the URL, and nothing else**.
  *
- * `/runs/:runId/attention/:variant/:step?aoi=` carries the whole selection, so the screen
- * holds no state a reload would lose, a view is a link, and a finding that names a version,
- * a step and an area hands the designer exactly that view (`docs/FLOW.md` section 3).
+ * `/runs/:runId/attention/:variant/:step?aoi=&overlay=&segment=&outcome=` carries the whole
+ * selection, so the screen holds no state a reload would lose, a view is a link, and a
+ * recommendation that names a version, a step, an area, an overlay and the people it is
+ * about hands the designer exactly that view (`docs/FLOW.md` sections 3 and 14.4).
+ *
+ * **Which overlays are drawn is part of it** (decision 134). On the Attention screen this
+ * replaces, the overlay switches were the one piece of state kept out of the URL; here the
+ * overlay is a thing a citation names — *"heatmap · waiting · progress area"* — so the strip
+ * above the stage and the switches in the Overlays panel are two renderings of one state and
+ * that state is `?overlay=`, written once per overlay drawn. Writing it **replaces** the
+ * history entry rather than pushing one, so a reader flicking between overlays does not have
+ * to walk back through the flicks to leave the screen.
  * Every part of this screen — the version switch, the filmstrip, the stage, the areas
  * table, the isolate caption — reads and writes the selection through here, so there is one
  * answer to "what is on screen" and one place that changes it.
@@ -26,9 +36,73 @@ import { useCurrentRunId, useOptionalRun } from '@/shell/useRun';
 /** One area of interest, as `run.json`'s `aois` records it. */
 type Aoi = Run['aois'][number];
 
+/** Which of the three overlays, as the contract's own closed list spells them. */
+export type HeatmapOverlay = (typeof HEATMAP_OVERLAYS)[number];
+
+/**
+ * `?overlay=`, repeated once per overlay drawn.
+ *
+ * The name is the contract's (`EVIDENCE_LINK_PARAMS`), and `heatmapLink` writes exactly one
+ * of them for a citation — which opens the screen on that overlay and no other. The screen
+ * writes as many as the reader has on.
+ */
+export const OVERLAY_PARAM = 'overlay';
+
+/**
+ * What the screen opens on when the URL names **no** overlay at all: the clicks, which is
+ * the overlay `#screen-heatmaps` draws pressed and the one the screen's own question is
+ * about — *where did the people who failed click?*
+ *
+ * It is the default for an **absent** parameter, not for an empty one. `?overlay=` with no
+ * value is a reader who switched the last overlay off, which is a view they are entitled to
+ * — the page as the audience saw it, undimmed — and falling back to the clicks there would
+ * make that switch do nothing at all. A control whose off looks exactly like its on is the
+ * one thing this screen's switches must never be.
+ *
+ * Nothing can write the empty form but this screen: `heatmapLink` drops a parameter with no
+ * value, so no citation can carry it.
+ */
+export const DEFAULT_OVERLAYS: readonly HeatmapOverlay[] = ['clicks'];
+
+/** `?overlay=` with no value: the reader turned them all off, and means it. */
+const NO_OVERLAY = '';
+
+/** Whether a word is one of the three overlays, and not a fourth somebody invented. */
+const isOverlay = (value: string): value is HeatmapOverlay =>
+  (HEATMAP_OVERLAYS as readonly string[]).includes(value);
+
+/**
+ * The overlays a URL asks for, in the registry's own order and each at most once.
+ *
+ * The order is **not** the order they were written in the query: two links that draw the
+ * same overlays are the same view, and the order the layers stack in is the registry's
+ * business rather than a reader's. Anything that is not one of the three is dropped, and
+ * dropping all of them leaves the default rather than a page with nothing on it — a URL
+ * asking for an overlay this product does not have is a bad link, not an instruction to
+ * show nothing.
+ */
+export function resolveOverlays(asked: readonly string[]): {
+  readonly overlays: readonly HeatmapOverlay[];
+  readonly unknown: readonly string[];
+} {
+  // The empty value is this screen's own way of saying "none", not a name it failed to
+  // recognise, so it is neither drawn nor complained about.
+  const named = asked.filter((value) => value !== NO_OVERLAY);
+  const wanted = new Set(named.filter(isOverlay));
+  const askedForNone = asked.length > 0 && named.length === 0;
+  return {
+    overlays: askedForNone
+      ? []
+      : wanted.size === 0
+        ? DEFAULT_OVERLAYS
+        : HEATMAP_OVERLAYS.filter((one) => wanted.has(one)),
+    unknown: named.filter((value) => !isOverlay(value)),
+  };
+}
+
 export interface AttentionFallback {
   /** Which part of the selection could not be used as asked. */
-  readonly what: 'variant' | 'step' | 'aoi';
+  readonly what: 'variant' | 'step' | 'aoi' | 'overlay';
   /** What the URL asked for. */
   readonly given: string;
   /** What is shown instead; `null` when nothing is — an area that is simply dropped. */
@@ -43,12 +117,36 @@ export interface AttentionSelection {
   readonly step: string;
   /** The area of interest the screen isolates, or `null` for all of them. */
   readonly aoi: string | null;
+  /** The overlays drawn, in the registry's order. Never empty. */
+  readonly overlays: readonly HeatmapOverlay[];
+  /** The audience segment the figures are narrowed to, or `null` for every segment. */
+  readonly segment: string | null;
+  /** The outcome the figures are narrowed to, or `null` for every outcome. */
+  readonly outcome: string | null;
   /** Move to another version, keeping the step and the isolated area. */
   setVariant(variant: string): void;
   /** Move to another step. An isolated area belongs to a step, so this clears it. */
   setStep(step: string): void;
   /** Isolate one area of interest, or `null` to show all of them. */
   setAoi(aoi: string | null): void;
+  /**
+   * Draw exactly these overlays. Replaces the history entry rather than pushing one, so
+   * that flicking between overlays does not fill the reader's Back button (decision 134).
+   */
+  setOverlays(overlays: readonly HeatmapOverlay[]): void;
+  /** Narrow to one audience segment, or `null` for every segment. */
+  setSegment(segment: string | null): void;
+  /** Narrow to one outcome, or `null` for every outcome. */
+  setOutcome(outcome: string | null): void;
+  /**
+   * Clear both filters at once.
+   *
+   * It exists because calling `setSegment(null)` and `setOutcome(null)` in one handler does
+   * **not** clear both: each builds its query from the same render's `query`, so the second
+   * write is of a URL that never had the first's change in it and silently undoes it. One
+   * write, both parameters.
+   */
+  clearFilters(): void;
   /** What could not be used as the URL asked, and what is shown instead. */
   readonly fallback: AttentionFallback | null;
 }
@@ -58,9 +156,12 @@ export interface AskedSelection {
   readonly variant: string;
   readonly step: string;
   readonly aoi: string | null;
+  /** Every `?overlay=` the URL carries, in the order it carries them. */
+  readonly overlays?: readonly string[];
 }
 
-export interface ResolvedSelection extends AskedSelection {
+export interface ResolvedSelection extends Omit<AskedSelection, 'overlays'> {
+  readonly overlays: readonly HeatmapOverlay[];
   readonly fallback: AttentionFallback | null;
 }
 
@@ -102,9 +203,25 @@ const stepLabel = (run: Run, step: string): string =>
  * version is the part that changes the most about what the reader is looking at.
  */
 export function resolveSelection(run: Run | null, asked: AskedSelection): ResolvedSelection {
-  if (run === null) return { ...asked, fallback: null };
+  // The overlays are checked against the contract's own list and not against the run, so
+  // they resolve whether or not the run has arrived: a link naming a fourth overlay is a bad
+  // link at any time.
+  const asking = resolveOverlays(asked.overlays ?? []);
+  const overlayFallback: AttentionFallback | null =
+    asking.unknown.length === 0
+      ? null
+      : {
+          what: 'overlay',
+          given: asking.unknown.join(', '),
+          used: asking.overlays.join(', '),
+          sentence: `This screen has no overlay ${asking.unknown.map((one) => `“${one}”`).join(' or ')}. Showing ${asking.overlays.join(' and ')}.`,
+        };
 
-  let fallback: AttentionFallback | null = null;
+  if (run === null) {
+    return { ...asked, overlays: asking.overlays, fallback: overlayFallback };
+  }
+
+  let fallback: AttentionFallback | null = overlayFallback;
 
   // `runSchema` holds `variants` and `steps` to at least one entry each, so both defaults
   // exist for every run that parsed.
@@ -114,6 +231,8 @@ export function resolveSelection(run: Run | null, asked: AskedSelection): Resolv
   let variant = asked.variant;
   if (!run.variants.some((candidate) => candidate.id === variant)) {
     variant = firstVariant.id;
+    // The version is the part that changes the most about what the reader is looking at, so
+    // it is the one stated even when the overlay was also wrong.
     fallback = {
       what: 'variant',
       given: asked.variant,
@@ -169,7 +288,7 @@ export function resolveSelection(run: Run | null, asked: AskedSelection): Resolv
     }
   }
 
-  return { variant, step, aoi, fallback };
+  return { variant, step, aoi, overlays: asking.overlays, fallback };
 }
 
 /**
@@ -187,14 +306,34 @@ export function useAttentionSelection(): AttentionSelection {
   const run = state?.status === 'ready' ? state.run : null;
 
   const runId = params.runId ?? '';
-  // The three the selection is made of, taken one by one rather than as an object, so that
-  // a render which changed none of them resolves to the result it resolved to before.
+  // The parts the selection is made of, taken one by one rather than as an object, so that
+  // a render which changed none of them resolves to the result it resolved to before. The
+  // overlays are joined into one string for the same reason: `getAll` answers a fresh array
+  // every render, which as a dependency would re-resolve on every one of them.
   const askedVariant = params.variant ?? '';
   const askedStep = params.step ?? '';
   const askedAoi = query.get(AOI_PARAM);
-  const { variant, step, aoi, fallback } = useMemo(
-    () => resolveSelection(run, { variant: askedVariant, step: askedStep, aoi: askedAoi }),
-    [run, askedVariant, askedStep, askedAoi],
+  // Joined so that a render which changed nothing resolves to what it resolved to before:
+  // `getAll` answers a fresh array every time. `null` is the key being absent, which is
+  // different from it being present and empty.
+  const askedOverlayList = query.getAll(OVERLAY_PARAM);
+  const askedOverlays = askedOverlayList.length === 0 ? null : askedOverlayList.join('\u0000');
+  // The two filters are narrowings and not names the run can check: which segments and
+  // outcomes a figure exists for is the aggregate's business, and a composition it holds no
+  // slice for is stated on the screen rather than silently replaced here (criterion:
+  // "a filter composition no session satisfies renders a stated line"). An absent parameter
+  // and an empty one are both "every": `?segment=` narrows nothing, which is not a filter.
+  const segment = query.get(SEGMENT_PARAM) ?? '';
+  const outcome = query.get(OUTCOME_PARAM) ?? '';
+  const { variant, step, aoi, overlays, fallback } = useMemo(
+    () =>
+      resolveSelection(run, {
+        variant: askedVariant,
+        step: askedStep,
+        aoi: askedAoi,
+        overlays: askedOverlays === null ? [] : askedOverlays.split('\u0000'),
+      }),
+    [run, askedVariant, askedStep, askedAoi, askedOverlays],
   );
 
   const setVariant = useCallback(
@@ -227,5 +366,71 @@ export function useAttentionSelection(): AttentionSelection {
     [query, setQuery],
   );
 
-  return { runId, variant, step, aoi, setVariant, setStep, setAoi, fallback };
+  const setOverlays = useCallback(
+    (next: readonly HeatmapOverlay[]) => {
+      const written = new URLSearchParams(query);
+      written.delete(OVERLAY_PARAM);
+      // In the registry's order, so that two readers who turned the same overlays on are at
+      // the same URL however they got there. None of them writes the empty form, which is
+      // what tells "the reader switched the last one off" from "this link named none".
+      for (const one of HEATMAP_OVERLAYS) {
+        if (next.includes(one)) written.append(OVERLAY_PARAM, one);
+      }
+      if (next.length === 0) written.append(OVERLAY_PARAM, NO_OVERLAY);
+      // Replace, not push: see decision 134. Flicking between overlays is reading, and
+      // Back should leave the screen rather than retrace the flicks.
+      setQuery(written, { replace: true });
+    },
+    [query, setQuery],
+  );
+
+  /** One filter written or cleared. Absent is "every", so clearing deletes the parameter. */
+  const setFilter = useCallback(
+    (param: string, next: string | null) => {
+      const written = new URLSearchParams(query);
+      if (next === null || next === '') written.delete(param);
+      else written.set(param, next);
+      setQuery(written);
+    },
+    [query, setQuery],
+  );
+
+  const setSegment = useCallback(
+    (next: string | null) => {
+      setFilter(SEGMENT_PARAM, next);
+    },
+    [setFilter],
+  );
+
+  const setOutcome = useCallback(
+    (next: string | null) => {
+      setFilter(OUTCOME_PARAM, next);
+    },
+    [setFilter],
+  );
+
+  const clearFilters = useCallback(() => {
+    const written = new URLSearchParams(query);
+    written.delete(SEGMENT_PARAM);
+    written.delete(OUTCOME_PARAM);
+    setQuery(written);
+  }, [query, setQuery]);
+
+  return {
+    runId,
+    variant,
+    step,
+    aoi,
+    overlays,
+    segment: segment === '' ? null : segment,
+    outcome: outcome === '' ? null : outcome,
+    setVariant,
+    setStep,
+    setAoi,
+    setOverlays,
+    setSegment,
+    setOutcome,
+    clearFilters,
+    fallback,
+  };
 }

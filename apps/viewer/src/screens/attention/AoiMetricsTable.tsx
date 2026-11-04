@@ -12,16 +12,18 @@ import {
 import { sessionsWithArea } from '@/shell/paths';
 import {
   areaSource,
+  areasOnThisScreenCaveat,
   elapsedSeconds,
   firstFixationDuration,
   lookedAtShare,
-  medianCaveat,
   neverFixatedLabel,
   neverFixatedProblem,
   noFiguresRecorded,
   notPresentInVariant,
   unknownAreaProblem,
 } from './attentionWording';
+import { clicksOnArea } from './screenSlices';
+import type { ScreenFiguresView } from './useScreenFigures';
 import type { Aoi, AttentionArea, AttentionAreas } from './useAttentionAreas';
 import { useAttentionSelection } from './useAttentionSelection';
 import styles from './aoiMetricsTable.module.css';
@@ -63,10 +65,19 @@ import isolate from './isolatedArea.module.css';
  * is waiting for one, and nothing on it moves when an unrelated read settles.
  */
 
-/** The nine columns, in the order the prototype's `thead` draws them. */
+/**
+ * The ten columns, in the order `#screen-heatmaps` draws them: `Clicks` after `Source`,
+ * before the gaze figures.
+ *
+ * It is the Attention screen's own nine with clicks inserted, not the prototype's
+ * abbreviated six (decision 133): `docs/FLOW.md` section 14.4 says the area-of-interest
+ * table of section 3 *stays* beneath, and section 3's table names all six gaze figures —
+ * this is the only place in the product any of them is shown.
+ */
 const COLUMNS = [
   'Area of interest',
   'Source',
+  'Clicks',
   'Time to first fixation',
   'First fixation',
   'Total dwell',
@@ -78,11 +89,19 @@ const COLUMNS = [
 /** Every column a reader compares down its own column, which is the six metrics. */
 const FIGURES: ReadonlySet<string> = new Set(COLUMNS.slice(2));
 
-/** Nine: the eight named columns and the unnamed one the link sits in. */
+/** Ten: the nine named columns and the unnamed one the link sits in. */
 const ALL_COLUMNS = COLUMNS.length + 1;
 
-/** How many columns a stated fault spans when the area's own two cells still stand. */
-const AFTER_THE_AREA = ALL_COLUMNS - 2;
+/**
+ * How many columns a stated fault spans: everything after the area, its source and its
+ * clicks.
+ *
+ * The clicks cell stands through a gaze fault, because the two are different readings from
+ * different files. `aoiMetrics` saying nothing — or contradicting itself — about whether
+ * anybody *looked* at an area is no reason to withhold how many times they *pressed* it,
+ * which the aggregate recorded separately and this screen has in hand.
+ */
+const AFTER_THE_AREA = ALL_COLUMNS - 3;
 
 export interface AoiMetricsTableProps {
   readonly runId: string;
@@ -90,9 +109,20 @@ export interface AoiMetricsTableProps {
   readonly variant: string;
   /** The areas of this version's step, joined to their figures by `useAttentionAreas`. */
   readonly areas: AttentionAreas;
+  /**
+   * The aggregate's figures for this screen and the filters the reader chose.
+   *
+   * **This is the only column that obeys the filters**, and it is the only one that can:
+   * clicks are stored per slice, so *where did the people who failed click* is a different
+   * row of `aggregate.json`. The gaze figures are `run.json`'s own `aoiMetrics`, computed
+   * once over everybody whose session was scored, and there are no sliced gaze figures to
+   * read — so the footnote says which column is which population rather than letting a
+   * reader assume both narrowed.
+   */
+  readonly screen: ScreenFiguresView;
 }
 
-export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps) {
+export function AoiMetricsTable({ runId, variant, areas, screen }: AoiMetricsTableProps) {
   const { aoi: isolatedAoiId, setAoi } = useAttentionSelection();
   // Clicking the area already isolated clears the isolation: the row is a switch, and the
   // way back to every area is the row the reader has their pointer on.
@@ -111,7 +141,7 @@ export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps)
 
   return (
     <div className="section" data-section="areas-of-interest">
-      <h2>Areas of interest</h2>
+      <h2>Areas of interest on this screen</h2>
       <p className="lede">
         One row per area of the page. Click a row to isolate it, or open the people who looked at
         it. Boundaries come from the page&rsquo;s own markup where it has any, and from image
@@ -165,6 +195,7 @@ export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps)
                   key={area.aoi.id}
                   runId={runId}
                   area={area}
+                  clicks={clicksOnArea(screen.figures, area.aoi.id)}
                   selected={area.aoi.id === isolatedAoiId}
                   onIsolate={toggle}
                 />
@@ -180,7 +211,7 @@ export function AoiMetricsTable({ runId, variant, areas }: AoiMetricsTableProps)
         </div>
       )}
 
-      <p className="footnote">{medianCaveat()}</p>
+      <p className="footnote">{areasOnThisScreenCaveat()}</p>
     </div>
   );
 }
@@ -197,21 +228,30 @@ interface Isolating {
 function AreaRow({
   runId,
   area,
+  clicks,
   selected,
   onIsolate,
-}: { runId: string; area: AttentionArea } & Isolating) {
+}: { runId: string; area: AttentionArea; clicks: number | null } & Isolating) {
   const { aoi, metric } = area;
   const isolating = { selected, onIsolate };
 
   if (metric === null) {
     return (
-      <AreaFault aoi={aoi} problem={noFiguresRecorded(aoi.id)} kind="no-figures" {...isolating} />
+      <AreaFault
+        aoi={aoi}
+        clicks={clicks}
+        problem={noFiguresRecorded(aoi.id)}
+        kind="no-figures"
+        {...isolating}
+      />
     );
   }
 
   const problem = neverFixatedProblem(metric);
   if (problem !== null) {
-    return <AreaFault aoi={aoi} problem={problem} kind="inconsistent" {...isolating} />;
+    return (
+      <AreaFault aoi={aoi} clicks={clicks} problem={problem} kind="inconsistent" {...isolating} />
+    );
   }
 
   // Narrowed here rather than through `isNeverFixated`, which a type cannot see through:
@@ -223,6 +263,7 @@ function AreaRow({
   return (
     <IsolatingRow aoi={aoi} selected={selected} onIsolate={onIsolate}>
       <TableCell className="faint">{areaSource(aoi)}</TableCell>
+      <ClicksCell aoiId={aoi.id} clicks={clicks} />
       <TableCell className={styles.figure}>
         {firstFixationAt === null ? (
           <span className={styles.never}>{neverFixatedLabel()}</span>
@@ -302,14 +343,16 @@ function IsolatingRow({
  */
 function AreaFault({
   aoi,
+  clicks,
   problem,
   kind,
   selected,
   onIsolate,
-}: { aoi: Aoi; problem: string; kind: string } & Isolating) {
+}: { aoi: Aoi; clicks: number | null; problem: string; kind: string } & Isolating) {
   return (
     <IsolatingRow aoi={aoi} selected={selected} onIsolate={onIsolate} fault={kind}>
       <TableCell className="faint">{areaSource(aoi)}</TableCell>
+      <ClicksCell aoiId={aoi.id} clicks={clicks} />
       <Stated span={AFTER_THE_AREA}>{problem}</Stated>
     </IsolatingRow>
   );
@@ -321,6 +364,9 @@ function NotHereRow({ aoi, variant }: { aoi: Aoi; variant: string }) {
     <TableRow data-aoi-row={aoi.id} data-not-present={variant}>
       <TableCell>{aoi.label}</TableCell>
       <TableCell className="faint">{areaSource(aoi)}</TableCell>
+      {/* An area this version does not have was not pressed on it either: there is no
+          figure to withhold, and a dash is what no row at all reads as. */}
+      <ClicksCell aoiId={aoi.id} clicks={null} />
       <Stated span={AFTER_THE_AREA}>{notPresentInVariant(variant)}</Stated>
     </TableRow>
   );
@@ -332,6 +378,28 @@ function UnknownAreaRow({ aoiId }: { aoiId: string }) {
     <TableRow data-area-fault="unknown-area">
       <Stated span={ALL_COLUMNS}>{unknownAreaProblem(aoiId)}</Stated>
     </TableRow>
+  );
+}
+
+/**
+ * How many times this area was pressed, by the people the filters leave.
+ *
+ * Nought clicks and no figure are different answers and are printed differently: a nought
+ * is nobody pressing it, and no row at all is an area these figures are not about. A
+ * never-pressed area reads in the `never` treatment the gaze columns use, because that is
+ * what it is — a result rather than missing data.
+ */
+function ClicksCell({ aoiId, clicks }: { aoiId: string; clicks: number | null }) {
+  return (
+    <TableCell className={styles.figure} data-clicks-cell={aoiId}>
+      {clicks === null ? (
+        <span className="faint">&mdash;</span>
+      ) : clicks === 0 ? (
+        <span className={styles.never}>0</span>
+      ) : (
+        clicks
+      )}
+    </TableCell>
   );
 }
 

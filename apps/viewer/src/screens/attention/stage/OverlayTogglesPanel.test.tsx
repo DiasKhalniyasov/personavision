@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSchema } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../../tests/app';
+import { DEFAULT_OVERLAYS } from '../useAttentionSelection';
+import { NO_AGGREGATE } from '../useScreenFigures';
 import { AOI_OUTLINE_LAYER } from './AoiOutlineLayer';
 import { OVERLAY_LAYERS } from './overlayLayers';
 import type { OverlayLayer, OverlayLayerProps, StageLayer } from './overlayLayers';
@@ -23,7 +25,7 @@ import { loadDesignTokens } from '../../../../tests/setup';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
@@ -74,7 +76,13 @@ describe('the panel on the screen', () => {
       expect(control, layer.id).not.toBeNull();
       expect(control.textContent).toContain(layer.label);
       if (layer.hint !== undefined) expect(control.textContent).toContain(layer.hint);
-      expect(control.getAttribute('aria-pressed')).toBe(String(layer.defaultOn));
+      // What a switch says is what the screen is showing, and for the three named overlays
+      // that is the URL rather than the registry's own default (decision 134): this link
+      // named none, so the screen opens on `DEFAULT_OVERLAYS`. A layer with no overlay name
+      // — the outlines — is still the registry's to default.
+      const on =
+        layer.overlay === undefined ? layer.defaultOn : DEFAULT_OVERLAYS.includes(layer.overlay);
+      expect(control.getAttribute('aria-pressed'), layer.id).toBe(String(on));
     }
   });
 
@@ -165,9 +173,13 @@ describe('a step with no areas of interest', () => {
     attention('B', 'payment');
     await ready();
 
-    expect(
-      screen.getByRole('button', { name: /Areas of interest/ }).getAttribute('aria-disabled'),
-    ).toBeNull();
+    // The areas reach this panel through the screen's own read of the run, which settles a
+    // microtask after the heading appears: what is asserted is the settled switch.
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Areas of interest/ }).getAttribute('aria-disabled'),
+      ).toBeNull();
+    });
     expect(screen.queryByText(/nothing to outline/)).toBeNull();
   });
 });
@@ -282,6 +294,8 @@ const noData: OverlayLayerProps = {
   saccades: [],
   areas: [],
   isolatedAoiId: null,
+  // This layer reads no aggregate; the constant says there is none to read.
+  screen: NO_AGGREGATE,
   transform: { pageWidth: 390, pageHeight: 1540 },
 };
 

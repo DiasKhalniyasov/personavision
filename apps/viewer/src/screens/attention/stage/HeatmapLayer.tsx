@@ -141,10 +141,18 @@ export function HeatKey() {
   );
 }
 
-/** The registry entry, in the prototype's words (`#t-heat`, "dwell-weighted"). */
+/**
+ * The registry entry, in `#screen-heatmaps`' words (`Attention`, "dwell-weighted").
+ *
+ * `id` stays `heat`, which it has been since #71: it is what `data-overlay-layer` carries
+ * and what the Verdict screen looks this layer up by. `overlay` is the word the **contract**
+ * spells for the same thing, which is what a citation names and what `?overlay=` carries —
+ * so the two live side by side rather than one being renamed into the other.
+ */
 export const HEATMAP_LAYER: OverlayLayer = {
   id: 'heat',
-  label: 'Attention heatmap',
+  overlay: 'attention',
+  label: 'Attention',
   hint: 'dwell-weighted',
   defaultOn: true,
   unavailable: (props) =>

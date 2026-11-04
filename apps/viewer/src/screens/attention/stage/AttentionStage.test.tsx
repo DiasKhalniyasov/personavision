@@ -24,7 +24,7 @@ import { loadDesignTokens } from '../../../../tests/setup';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 

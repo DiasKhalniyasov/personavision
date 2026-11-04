@@ -486,8 +486,10 @@ describe('the caption, and the one click to beat 5', () => {
     await shown();
 
     const link = captionOf(container).querySelector('a') as HTMLAnchorElement;
+    // The area, and the overlay this block is a picture of: the Heatmaps screen opens on
+    // the clicks for a link that names no overlay, which is not what this caption is about.
     expect(link.getAttribute('href')).toBe(
-      `${paths.attention(RUN_ID, HERO.variant, HERO.step)}?aoi=${COMPLETE}`,
+      `${paths.attention(RUN_ID, HERO.variant, HERO.step)}?aoi=${COMPLETE}&overlay=attention`,
     );
   });
 
@@ -497,7 +499,12 @@ describe('the caption, and the one click to beat 5', () => {
     await shown();
 
     const link = captionOf(container).querySelector('a') as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe(paths.attention(RUN_ID, HERO.variant, HERO.step));
+    // With the overlay this block is a picture of. The Heatmaps screen opens on its own
+    // default — the clicks — for a link that names none, and this caption is about where
+    // the audience looked (#272).
+    expect(link.getAttribute('href')).toBe(
+      `${paths.attention(RUN_ID, HERO.variant, HERO.step)}?overlay=attention`,
+    );
   });
 
   it('lands on Attention showing that version, step and isolated area', async () => {
@@ -507,12 +514,27 @@ describe('the caption, and the one click to beat 5', () => {
 
     await userEvent.click(captionOf(container).querySelector('a') as HTMLAnchorElement);
 
-    await screen.findByRole('heading', { level: 1, name: HEADING });
+    // The Attention tab is the Heatmaps section of `docs/FLOW.md` section 14 (#272), and
+    // this caption's link is what opens it.
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Where they looked, clicked and stopped scrolling',
+    });
     expect(router.state.location.pathname).toBe(paths.attention(RUN_ID, HERO.variant, HERO.step));
-    expect(router.state.location.search).toBe(`?aoi=${COMPLETE}`);
-    // The screen says which area it is isolated to, so the link really arrived there.
-    const isolated = await screen.findByText('Isolated');
-    expect(isolated.nextElementSibling?.textContent).toContain('Confirm purchase');
+    expect(router.state.location.search).toBe(`?aoi=${COMPLETE}&overlay=attention`);
+    // And the layer the caption is about is the one that is on.
+    expect(
+      (document.querySelector('[data-overlay-toggle="heat"]') as HTMLElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true');
+    // The screen says which area it is isolated to, so the link really arrived there. It is
+    // said under the stage, by the isolate caption: that screen's own `This screen` panel
+    // carries five figures and no `Isolated` row. This area is the one no fixation ever
+    // landed in, so the caption is that finding, named.
+    await waitFor(() => {
+      expect(document.querySelector('#att-caption')?.textContent).toContain('Confirm purchase');
+    });
   });
 });
 

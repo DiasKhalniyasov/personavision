@@ -8,7 +8,7 @@ import { paths, sessionsWithArea } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { loadDesignTokens } from '../../../tests/setup';
-import { lookedAtShare, medianCaveat, notPresentInVariant } from './attentionWording';
+import { areasOnThisScreenCaveat, lookedAtShare, notPresentInVariant } from './attentionWording';
 
 /**
  * The "Areas of interest" table of `#screen-attention`, over the repository's own committed
@@ -23,12 +23,19 @@ import { lookedAtShare, medianCaveat, notPresentInVariant } from './attentionWor
 const RUN_ID = '2026-10-24-1402-northwind-demo';
 const runFile = `/runs/${RUN_ID}/run.json`;
 
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 
-/** The eight columns the prototype names, in its order. */
+/**
+ * The nine columns `#screen-heatmaps` names, in its order: `Clicks` after `Source`.
+ *
+ * It is the Attention screen's own eight with clicks inserted, not the prototype's
+ * abbreviated five (decision 133) — `docs/FLOW.md` section 14.4 keeps the section-3 table
+ * beneath the stage, and this is the only place any of its gaze figures is shown.
+ */
 const COLUMNS = [
   'Area of interest',
   'Source',
+  'Clicks',
   'Time to first fixation',
   'First fixation',
   'Total dwell',
@@ -65,9 +72,9 @@ const attention = (variant: string, step: string, query = '') =>
 const settled = async () => {
   await screen.findByRole('heading', { level: 1, name: HEADING });
   await waitFor(() => {
-    expect(screen.getByText('Reached this step').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    // The `This screen` panel's first reading, settled: every figure on this screen comes
+    // from the aggregate, so "settled" is that file having arrived.
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
   });
 };
 
@@ -89,8 +96,21 @@ const cellsOf = (row: HTMLElement): string[] =>
     .getAllByRole('cell')
     .map((cell) => cell.textContent?.trim() ?? '');
 
-/** What each of the six metric columns may say, in the order the table draws them. */
+/** Where a column sits, by name, so an index is never written out by hand. */
+const COLUMN = Object.fromEntries(COLUMNS.map((name, index) => [name, index])) as Record<
+  (typeof COLUMNS)[number],
+  number
+>;
+
+/**
+ * What each figure column may say, in the order the table draws them.
+ *
+ * `Clicks` is first, and it is a whole number or an em dash: a nought is nobody pressing
+ * the area, and a dash is an area these filtered figures carry no row for at all. It is
+ * never a time, which is what the column after it is.
+ */
 const FIGURE_SHAPES = [
+  /^(—|\d+(,\d+)*)$/,
   /^(never|\d+(,\d+)*\.\d s)$/,
   /^(—|\d+(,\d+)* ms)$/,
   /^\d+(,\d+)*\.\d s$/,
@@ -109,7 +129,7 @@ describe('the section the figures are in', () => {
     await settled();
 
     expect(within(section(container)).getByRole('heading', { level: 2 }).textContent).toBe(
-      'Areas of interest',
+      'Areas of interest on this screen',
     );
     expect(within(section(container)).getByText(/One row per area of the page/)).toBeDefined();
     const headers = within(screen.getByRole('table'))
@@ -118,12 +138,12 @@ describe('the section the figures are in', () => {
     expect(headers).toEqual([...COLUMNS, 'The people who looked at it']);
   });
 
-  it('states in its footnote that the figures are medians, and what “looked at it” means', async () => {
+  it('states in its footnote which column is which population, and what never means', async () => {
     await serveRunData();
     const { container } = attention('B', 'review');
     await settled();
 
-    expect(within(section(container)).getByText(medianCaveat())).toBeDefined();
+    expect(within(section(container)).getByText(areasOnThisScreenCaveat())).toBeDefined();
   });
 
   it('ties the table to the overlays as their accessible equivalent', async () => {
@@ -160,7 +180,7 @@ describe('one row per area, with all six metrics', () => {
       expect(cells[0], aoi.id).toBe(aoi.label);
       expect(cells[1], aoi.id).not.toBe('');
       FIGURE_SHAPES.forEach((shape, index) => {
-        expect(cells[index + 2], `${aoi.id} column ${index + 3}`).toMatch(shape);
+        expect(cells[index + 2], `${aoi.id} ${COLUMNS[index + 2]}`).toMatch(shape);
       });
     }
   });
@@ -202,8 +222,12 @@ describe('the area nobody in the audience ever looked at', () => {
     await settled();
 
     const cells = cellsOf(rowFor(container, 'B-review-complete'));
-    expect(cells[2]).toBe('never');
-    expect(cells[7]).toBe('0%');
+    expect(cells[COLUMN['Time to first fixation']]).toBe('never');
+    expect(cells[COLUMN['Looked at it']]).toBe('0%');
+    // And its clicks, which are the slice's own — and which say something the gaze columns
+    // cannot: two people **pressed** the redesign's completing action without a fixation
+    // ever landing in it. `never` is about looking, and the clicks column is about pressing.
+    expect(cells[COLUMN['Clicks']]).toBe('2');
   });
 
   it('reads an em dash for the first fixation, and never a zero or a blank', async () => {
@@ -212,7 +236,7 @@ describe('the area nobody in the audience ever looked at', () => {
     await settled();
 
     const cells = cellsOf(rowFor(container, 'B-review-complete'));
-    expect(cells[3]).toBe('—');
+    expect(cells[COLUMN['First fixation']]).toBe('—');
     expect(cells.slice(2, 8)).not.toContain('0 ms');
     expect(cells.slice(2, 8)).not.toContain('');
   });
@@ -223,8 +247,8 @@ describe('the area nobody in the audience ever looked at', () => {
     await settled();
 
     const cells = cellsOf(rowFor(container, 'A-review-complete'));
-    expect(cells[2]).toMatch(/^\d+(,\d+)*\.\d s$/);
-    expect(cells[2]).not.toBe('never');
+    expect(cells[COLUMN['Time to first fixation']]).toMatch(/^\d+(,\d+)*\.\d s$/);
+    expect(cells[COLUMN['Time to first fixation']]).not.toBe('never');
   });
 });
 
@@ -355,7 +379,7 @@ describe('a run artifact that disagrees with itself', () => {
     await settled();
 
     const summary = cellsOf(rowFor(container, 'B-review-summary'));
-    expect(summary[7]).toBe(lookedAtShare(1));
+    expect(summary[COLUMN['Looked at it']]).toBe(lookedAtShare(1));
   });
 });
 

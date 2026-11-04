@@ -159,3 +159,171 @@ export const noFiguresRecorded = (aoiId: string): string =>
 /** Figures attached to no area at all: a fault in the artifact, stated rather than dropped. */
 export const unknownAreaProblem = (aoiId: string): string =>
   `These figures name ${aoiId}, which is not an area of this test. They are shown as a fault rather than dropped, because a figure attached to nothing is wrong somewhere upstream.`;
+
+/* ===========================================================================
+   The Heatmaps screen's own words (#272).
+
+   Everything above is about one area of interest. What follows is about the
+   people a figure is of — which the Heatmaps screen has to say out loud,
+   because it composes two filters over a pre-sliced aggregate and the reader
+   cannot be asked to work out whose heatmap they are looking at.
+   ======================================================================== */
+
+export interface PeopleShown {
+  /** What is drawn, in the overlays' own labels — `Clicks`, `Attention`. */
+  readonly overlays: readonly string[];
+  /**
+   * How the outcome filter reads in a sentence, or `null` for every outcome.
+   *
+   * The product's own word for the status — `Abandoned`, not `Gave up 8`: a strip's button
+   * carries its count because a reader choosing between buttons wants it, and this sentence
+   * states the count once, of the composition, so carrying it again here would say 8 twice
+   * about two different things.
+   */
+  readonly outcome: string | null;
+  /** The segment, in the audience's own words, or `null` for every segment. */
+  readonly segment: string | null;
+  /** How many people the composition narrows to, as the slice states it. */
+  readonly sessionCount: number | null;
+  /** How many the run scored in all. */
+  readonly scoredSessionCount: number | null;
+  /** How many our own automation broke, which no figure here is about. */
+  readonly excludedAutomationFailures: number | null;
+}
+
+/**
+ * The line above the stage: what is drawn, who it is of, and who is not among them.
+ *
+ * It is one sentence because it is one fact. The prototype writes it as *"Clicks of the 41
+ * people who gave up · phone · the 7 our automation broke are excluded"*, and the last
+ * clause is the half that is not decoration: every figure on this screen is of the scored
+ * sessions, and a reader who is not told so could reasonably assume a heatmap of "everybody"
+ * includes the people whose session our own browsing broke. `docs/FLOW.md` section 11 says
+ * those are shown and marked, never silently folded in — and this is where this screen
+ * marks them.
+ *
+ * Nothing here is counted. Every number is the aggregate's own, and a figure the screen does
+ * not have yet is left out of the sentence rather than printed as a zero.
+ */
+export function peopleShown({
+  overlays,
+  outcome,
+  segment,
+  sessionCount,
+  scoredSessionCount,
+  excludedAutomationFailures,
+}: PeopleShown): string {
+  // `Clicks, Attention and Scroll depth` — a list, not `and` three times.
+  const drawn =
+    overlays.length === 0
+      ? 'No overlay'
+      : overlays.length === 1
+        ? (overlays[0] as string)
+        : `${overlays.slice(0, -1).join(', ')} and ${overlays[overlays.length - 1] as string}`;
+  const narrowed = [outcome, segment].filter((part) => part !== null);
+
+  // Who they are. With no filter at all the people are the run's own scored sessions, and
+  // the count beside them is the run's; with a filter they are the slice's.
+  const count = narrowed.length === 0 ? scoredSessionCount : sessionCount;
+  const people = (of: number): string => `${of} ${of === 1 ? 'person' : 'people'}`;
+  const who =
+    count === null
+      ? narrowed.length === 0
+        ? 'your audience'
+        : narrowed.join(' · ')
+      : narrowed.length === 0
+        ? `all ${people(count)}`
+        : `${people(count)} · ${narrowed.join(' · ')}`;
+
+  const excluded =
+    excludedAutomationFailures === null
+      ? null
+      : excludedAutomationFailures === 0
+        ? 'our automation broke on nobody'
+        : `the ${excludedAutomationFailures} our automation broke ${excludedAutomationFailures === 1 ? 'is' : 'are'} excluded`;
+
+  return [`${drawn} of ${who}`, excluded].filter((part) => part !== null).join(' · ');
+}
+
+/**
+ * A composition of filters no session satisfies, said in words rather than drawn as an
+ * empty frame.
+ *
+ * `aggregate.json` stores **no row for a filter nobody falls in**, which is the rule that
+ * makes every share on this screen have a denominator. So the absence of a slice is a
+ * reading about the audience — nobody is both of these things — and it is stated as one.
+ * Two filters are named apart from one, because *nobody gave up on a phone* and *this test
+ * has no phone segment* are different facts and the reader can only tell them apart if the
+ * sentence does.
+ */
+export const noPeopleMatch = (outcome: string | null, segment: string | null): string => {
+  if (outcome !== null && segment !== null) {
+    return `Nobody in “${segment}” ended as “${outcome}”. The two filters compose, and no session in this test satisfies both, so there are no figures to show rather than an empty page.`;
+  }
+  if (segment !== null) {
+    return `This test scored nobody in “${segment}”, so there are no figures for them.`;
+  }
+  if (outcome !== null) {
+    return `No session in this test ended as “${outcome}”, so there are no figures for them.`;
+  }
+  return 'This test scored nobody, so there are no figures to show for anybody.';
+};
+
+/**
+ * A step these people reached but nobody of them stood on, with the filters named.
+ *
+ * It is not the same sentence as *nobody reached this step*: these people exist and this
+ * screen is about a narrower set of them, so the way out is to widen the filters rather
+ * than to look somewhere else.
+ */
+export const noneOfThemReached = (stepLabel: string): string =>
+  `None of the people these filters leave reached the ${stepLabel} screen, so there is nothing of theirs to draw on it. Widening either filter is the way to the people who did.`;
+
+/** This run computed no aggregate, so two of the three overlays have nothing to read. */
+export const noAggregate = (): string =>
+  'This test computed no click or scroll-depth figures — it ran before either was measured — so those two overlays have nothing to draw. The attention overlay reads the sessions themselves and still works.';
+
+/** The aggregate is there and will not parse: named, with the problem, never swallowed. */
+export const unreadableAggregate = (problem: string): string =>
+  `This test’s figures could not be read: ${problem}. No figure on this screen is shown rather than one being guessed at.`;
+
+/**
+ * The footnote under the stage: what the clicks on this screen amount to.
+ *
+ * The prototype's own — *"26 of the 41 clicks on this screen landed on Generate a second
+ * time, and 9 landed on empty space where a progress indicator would be"* — read from the
+ * slice's `clicksByAoi` rather than written. The empty-space clause is the one that carries
+ * a finding: a press that landed on nothing the page explains is a person reaching for a
+ * control that is not there.
+ */
+export interface ClicksFootnote {
+  /** The busiest area and its count, or `null` when no area was pressed. */
+  readonly busiest: { readonly label: string; readonly clicks: number } | null;
+  /** How many clicks landed on nothing the page explains. */
+  readonly nowhere: number;
+  /** Every click on this screen, areas and empty space alike. */
+  readonly total: number;
+}
+
+export function clicksFootnote({ busiest, nowhere, total }: ClicksFootnote): string | null {
+  if (total === 0) return null;
+  const parts: string[] = [];
+  if (busiest !== null) {
+    parts.push(
+      `${busiest.clicks} of the ${total} clicks on this screen landed on ${busiest.label}`,
+    );
+  }
+  if (nowhere > 0) {
+    parts.push(
+      `${nowhere} landed on empty space the page does not explain${busiest === null ? ` — every one of the ${total} clicks on this screen` : ''}`,
+    );
+  }
+  return parts.length === 0 ? null : `${parts.join(', and ')}.`;
+}
+
+/** The areas table's footnote on this screen, in `#screen-heatmaps`' own words. */
+export const areasOnThisScreenCaveat = (): string =>
+  'A row that reads never and 0% is a result, not missing data: there was nothing there to look at. ' +
+  'The clicks column counts presses by the people these filters leave, so an area pressed twice by one person reads 2; ' +
+  'the gaze figures are medians across everybody whose session was scored. ' +
+  'Every number here is simulated for this audience.';

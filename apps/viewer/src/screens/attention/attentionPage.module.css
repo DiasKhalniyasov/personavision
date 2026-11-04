@@ -31,6 +31,13 @@
 
 .seg {
   display: inline-flex;
+  /* It wraps. The prototype's strips carry two or three short words — `Phone 67` — and this
+     screen's carry the audience's own segment names, which are as long as the audience made
+     them: `Mobile · price-sensitive 5`. Five of those in one unwrapping strip are wider than
+     a phone, and a strip that overflows takes the whole page sideways with it. Wrapped, the
+     pill keeps its outline and every option stays reachable without a scroll region. */
+  flex-wrap: wrap;
+  max-width: 100%;
   overflow: hidden;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-full);
@@ -52,6 +59,16 @@
 
 .seg button:last-child {
   border-right: 0;
+}
+
+/* The pill clips to its own radius so the options inside it take its rounded ends, and that
+   same clip cuts three sides off the focus ring of every option in it: a keyboard reader
+   gets a sliver down one edge instead of a ring. Drawn **inset**, the ring is the whole
+   rectangle of the option it is on and there is nothing left to clip. The width and the
+   colour are the ones every focus ring in this product is drawn at. */
+.seg button:focus-visible {
+  outline: var(--border-width-strong) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--border-width-strong));
 }
 
 .seg button[aria-pressed='true'] {

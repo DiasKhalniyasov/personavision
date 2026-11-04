@@ -5,7 +5,14 @@ import { runDataBase } from '@/shell/useRun';
 import type { AttentionArea } from '../useAttentionAreas';
 import type { AttentionStepSessions } from '../useAttentionStepSessions';
 import { useOverlayLayers } from './overlayLayers';
-import type { OverlayLayerProps, OverlayLayerState, StageLayer } from './overlayLayers';
+import type {
+  OverlayLayerProps,
+  OverlayLayerState,
+  OverlaySelection,
+  StageLayer,
+} from './overlayLayers';
+import { NO_AGGREGATE } from '../useScreenFigures';
+import type { ScreenFiguresView } from '../useScreenFigures';
 import {
   DEFAULT_ZOOM,
   ZOOM_LEVELS,
@@ -88,6 +95,8 @@ export function useAttentionStage({
   aoi,
   sessions,
   areas,
+  screen = NO_AGGREGATE,
+  overlays,
 }: {
   run: Run;
   variant: string;
@@ -96,6 +105,18 @@ export function useAttentionStage({
   aoi: string | null;
   sessions: AttentionStepSessions;
   areas: readonly AttentionArea[];
+  /**
+   * The aggregate's figures for this screen and these filters, which the clicks and
+   * scroll-depth layers are drawn from (`useScreenFigures`).
+   *
+   * Optional, because the Verdict screen builds this stage to mount the attention layer
+   * alone (#125) and has no filters and no aggregate read of its own. `NO_AGGREGATE` says
+   * so in the one way that is honest about it: no file, which is what those two layers then
+   * state under their switches.
+   */
+  screen?: ScreenFiguresView;
+  /** Where the three named overlays' state lives. Absent on the Verdict screen. */
+  overlays?: OverlaySelection;
 }): AttentionStageView {
   const capture = useMemo(
     () => run.screenshots.find((shot) => shot.variant === variant && shot.step === step) ?? null,
@@ -125,13 +146,14 @@ export function useAttentionStage({
       areas,
       isolatedAoiId: aoi,
       transform,
+      screen,
       // Every layer that aggregates the sessions has to know they are still arriving (#71).
       loading: sessions.status === 'loading',
     }),
-    [sessions.fixations, sessions.saccades, sessions.status, areas, aoi, transform],
+    [sessions.fixations, sessions.saccades, sessions.status, areas, aoi, transform, screen],
   );
 
-  const { layers, setShown }: OverlayLayerState = useOverlayLayers(layerProps);
+  const { layers, setShown }: OverlayLayerState = useOverlayLayers(layerProps, overlays);
 
   return {
     layers,

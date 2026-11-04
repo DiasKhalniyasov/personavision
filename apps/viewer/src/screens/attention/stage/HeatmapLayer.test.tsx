@@ -16,6 +16,7 @@ import type { Fixation } from '../useAttentionStepSessions';
 import { HEAT_DRAWN_STEPS, HEAT_STEPS, accumulateHeat } from './heatAccumulation';
 import { HEATMAP_LAYER, HeatKey, HeatmapLayer } from './HeatmapLayer';
 import { OVERLAY_LAYERS } from './overlayLayers';
+import { NO_AGGREGATE } from '../useScreenFigures';
 import type { OverlayLayerProps } from './overlayLayers';
 import { pageToOverlay } from './overlayTransform';
 import type { Transform } from './overlayTransform';
@@ -31,11 +32,18 @@ import type { Transform } from './overlayTransform';
  */
 
 const RUN_ID = '2026-10-24-1402-northwind-demo';
-const HEADING = 'Where your audience looked';
+const HEADING = 'Where they looked, clicked and stopped scrolling';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
-const attention = (variant = 'B', step = 'review', query = '') =>
+/**
+ * The screen with the attention overlay on it.
+ *
+ * `#screen-heatmaps` opens on the **clicks** overlay, so this suite asks for its own
+ * (`?overlay=attention`) rather than relying on a default that is now another layer's. Which
+ * overlays are drawn is the URL (decision 134), which is exactly why one can be asked for.
+ */
+const attention = (variant = 'B', step = 'review', query = '?overlay=attention') =>
   mountApp(`${paths.attention(RUN_ID, variant, step)}${query}`);
 
 const ready = () => screen.findByRole('heading', { level: 1, name: HEADING });
@@ -45,12 +53,21 @@ const decoded = (container: HTMLElement) => {
   fireEvent.load(container.querySelector('#att-page img') as HTMLImageElement);
 };
 
-const heatToggle = () => screen.getByRole('button', { name: /Attention heatmap/ });
-const outlineToggle = () => screen.getByRole('button', { name: /Areas of interest/ });
+/**
+ * The Overlays panel's own switches.
+ *
+ * Named by the panel's attribute rather than by their words, because the control row above
+ * the stage carries a strip with the same three names on it — two renderings of one state
+ * (decision 134) — and this suite is about the panel's switch.
+ */
+const toggleFor = (id: string) =>
+  document.querySelector(`[data-overlay-toggle="${id}"]`) as HTMLElement;
+const heatToggle = () => toggleFor('heat');
+const outlineToggle = () => toggleFor('aoi');
 
 const layerIn = (container: HTMLElement) => container.querySelector('[data-overlay-layer="heat"]');
 const keyIn = (container: HTMLElement) => container.querySelector('[data-heat-key]');
-// This layer's own blobs: the scanpath (#72) draws its numbered fixations as circles over
+// This layer's own blobs: the scroll-depth layer (#72) draws its numbered fixations as circles over
 // the same page, and what this suite is about is the heat.
 const blobsIn = (container: HTMLElement) => [
   ...container.querySelectorAll('[data-overlay-layer="heat"] circle'),
@@ -107,6 +124,8 @@ const given = (over: Partial<OverlayLayerProps> = {}): OverlayLayerProps => ({
   saccades: [],
   areas: [],
   isolatedAoiId: null,
+  // This layer reads no aggregate; the constant says there is none to read.
+  screen: NO_AGGREGATE,
   transform: PAGE,
   ...over,
 });
@@ -115,19 +134,22 @@ beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
 
 describe('the registry entry', () => {
-  it('is the prototype’s own switch: on by default, in its words', () => {
+  it('is the prototype’s own switch, in its words, and is the contract’s `attention`', () => {
     expect(HEATMAP_LAYER.id).toBe('heat');
-    expect(HEATMAP_LAYER.label).toBe('Attention heatmap');
+    expect(HEATMAP_LAYER.label).toBe('Attention');
     expect(HEATMAP_LAYER.hint).toBe('dwell-weighted');
-    expect(HEATMAP_LAYER.defaultOn).toBe(true);
+    // The id is this layer's own and `overlay` is the word the contract spells for the same
+    // thing — what a citation names and what `?overlay=` carries.
+    expect(HEATMAP_LAYER.overlay).toBe('attention');
     expect(OVERLAY_LAYERS).toContain(HEATMAP_LAYER);
-    // First in the list, because the heatmap is the ground the rest are read over.
-    expect(OVERLAY_LAYERS[0]).toBe(HEATMAP_LAYER);
+    // Second, after the clicks: `#screen-heatmaps` lists them clicks, attention, scroll
+    // depth, areas of interest, which is also back to front on the page.
+    expect(OVERLAY_LAYERS[1]).toBe(HEATMAP_LAYER);
   });
 });
 
 describe('on the screen', () => {
-  it('is drawn over the page without being asked for, with its heat key beside the switch', async () => {
+  it('is drawn over the page when the link asks for it, with its heat key beside the switch', async () => {
     await serveRunData();
     const { container } = attention();
     await ready();
@@ -177,7 +199,7 @@ describe('on the screen', () => {
     const everywhere = blobsIn(whole.container).length;
     whole.unmount();
 
-    const { container } = attention('B', 'review', '?aoi=B-review-fee-row');
+    const { container } = attention('B', 'review', '?overlay=attention&aoi=B-review-fee-row');
     await ready();
     decoded(container);
 
@@ -200,7 +222,7 @@ describe('on the screen', () => {
     expect(keyIn(container)).toBeNull();
     // The reason is tied to the switch it is about, which stays reachable and announces
     // itself unavailable rather than being made unreachable.
-    const control = screen.getByRole('button', { name: /Attention heatmap/ });
+    const control = heatToggle();
     expect(control.getAttribute('aria-disabled')).toBe('true');
     expect(
       document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent,
@@ -213,10 +235,8 @@ describe('on the screen', () => {
     await ready();
     decoded(container);
     await screen.findByText(/No fixation landed anywhere on this version of this step/);
-    // The scanpath (#72) is drawn from the run's own medians rather than from the sessions
-    // this test emptied, so it is still on the page: the claim below is about a stage with
-    // nothing drawn over it at all.
-    await userEvent.click(screen.getByRole('button', { name: /Scanpath/ }));
+    // This link asked for the attention overlay alone, so it is the only layer that could
+    // have drawn anything: the claim below is about a stage with nothing over it at all.
 
     // The scrim is there so that what is drawn over the screenshot reads on top of it. A
     // page washed out for a layer that drew nothing is a treatment with nothing to serve.

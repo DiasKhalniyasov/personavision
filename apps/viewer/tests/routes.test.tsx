@@ -232,7 +232,7 @@ describe('every screen of docs/FLOW.md sections 3 and 13 has a route', () => {
       [paths.newTest, 'What would you like us to do?'],
       [newTestStep('variants'), 'New test'],
       [paths.breakdown(runId), 'How sure is this, and what drove it'],
-      [paths.attention(runId, 'B', 'review'), 'Where your audience looked'],
+      [paths.attention(runId, 'B', 'review'), 'Where they looked, clicked and stopped scrolling'],
       // Sessions opens on the grid of video thumbnails, whose heading is the people and
       // the recordings; the rows of `#screen-sessions` are `?view=rows` (#268).
       [paths.sessions(runId), /^\d+ (person|people)/],

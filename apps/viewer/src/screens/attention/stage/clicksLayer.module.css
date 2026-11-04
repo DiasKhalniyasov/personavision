@@ -1,0 +1,76 @@
+/* ---- The clicks overlay -------------------------------------------------
+   The clicks layer of `#screen-heatmaps` (`.layer` over `.page`), and the
+   `.heatkey` / `.scale-legend` ramp beside its switch.
+
+   Clicks are counted per area of interest, not per pixel — that is the
+   aggregate's shape, stated in `aggregateSchema` — so the mark is the area's
+   own box filled in one step of the heat ramp, rather than a blob at a point
+   nothing recorded.
+
+   Every colour is one of the `--heat-*` tokens and the layer's strength is
+   `--heat-opacity`, so this layer and the attention layer are read against one
+   key. Nothing here declares a value of its own; the only numbers the layer
+   has are the artifact's, set on the elements by the component.
+
+   No transition and no animation: a pure renderer, complete and still on
+   mount, which is also what `prefers-reduced-motion` asks of it. */
+
+.clicks {
+  opacity: var(--heat-opacity);
+}
+
+/* The area's own box. A hairline of the same colour keeps a small control's
+   patch visible when its fill is the coolest step of the ramp. */
+.patch {
+  stroke-width: var(--border-width);
+}
+
+.step1 {
+  fill: var(--heat-2);
+  stroke: var(--heat-2);
+}
+
+.step2 {
+  fill: var(--heat-3);
+  stroke: var(--heat-3);
+}
+
+.step3 {
+  fill: var(--heat-4);
+  stroke: var(--heat-4);
+}
+
+.step4 {
+  fill: var(--heat-5);
+  stroke: var(--heat-5);
+}
+
+/* ---- The key ------------------------------------------------------------
+   `.heatkey` and `.scale-legend`, in the prototype's own words for this layer:
+   "one click" to "many". */
+
+.ramp {
+  height: var(--space-2);
+  margin-block: var(--space-2) var(--space-1);
+  border-radius: var(--radius-full);
+  background: linear-gradient(to right, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5));
+}
+
+.scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* What the colours amount to, in words: the overlay's text alternative, which
+   a ramp cannot be. */
+.counts {
+  display: grid;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  gap: var(--space-1);
+  list-style: none;
+}
