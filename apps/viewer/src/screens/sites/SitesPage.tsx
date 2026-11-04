@@ -7,11 +7,15 @@ import { SiteCard } from './SiteCard';
 import styles from './sites.module.css';
 
 /**
- * `/sites` — which of my sites can I test, and which are proved mine?
+ * `/sites` — which of my sites can I test, and what is each allowed?
  *
  * `#screen-sites` of `docs/design/prototype.html`: the workspace's sites as cards, each
  * reading its own figures rather than the word "limited", and a card for adding one. The
  * screen a new workspace lands on, and the only way in to `/sites/new`.
+ *
+ * **There is nothing to prove about a site** (`docs/FLOW.md` section 13, as the owner's input
+ * of **2026-11-04** settles it): no card carries a state, because a site is a URL that
+ * belongs to a workspace and every one of them is bound by the same figures.
  *
  * **It states no cap of its own.** The three figures on a card are `caps` on the platform's
  * answer, composed in `packages/platform/src/caps.ts` and served per site. A screen holding
@@ -59,9 +63,9 @@ export function SitesPage() {
           <h1>Your sites</h1>
         </div>
         <p className="lede">
-          A site is a URL in this workspace. Before a hundred simulated people visit it, we ask you
-          to prove you control it — a hundred browsers against somebody else’s site is abuse and
-          load, not a test.
+          A site is a URL in this workspace — the page the feature starts on. Every site is bound by
+          the same figures, because they protect the site being driven rather than the person who
+          asked.
         </p>
 
         {list.status === 'unreadable' ? (
@@ -98,8 +102,9 @@ export function SitesPage() {
         </div>
 
         <p className="footnote">
-          Connecting a GitHub repository counts as verification for the site that repository
-          deploys, and is what unlocks <b>Improve my site</b>.
+          <b>Improve my site</b> needs the PersonaVision app installed on the repository that
+          deploys a site — being able to install it is the proof that matters there. Nothing else
+          about a site is proved.
         </p>
       </div>
     </div>
@@ -109,11 +114,16 @@ export function SitesPage() {
 /**
  * The space two cards will take, while the platform is being read.
  *
- * The grid must not move once the answer arrives, so the placeholders are the shape of the
- * cards they stand in for — a microlabel, the address, and the lines of figures under it —
- * and they are the grid's **only** other children: the card for adding a site is already
- * there, and the line that says a read is in flight is announced rather than drawn, so the
- * grid holds the same number of cells before and after.
+ * The grid must not move once the answer arrives, so the placeholders are the shape of a
+ * card: the microlabel, the address, the two lines of figures, and the test it last ran.
+ * They are the grid's **only** other children — the card for adding a site is already
+ * there, and the line that says a read is in flight is announced rather than drawn — so
+ * the grid holds the same number of cells before and after.
+ *
+ * A site the platform has no last test on record for says nothing about tests, so its card
+ * arrives one line shorter than this. Five is the taller of the two on purpose: a grid that
+ * settles upward leaves the page where the reader found it, where one that grows pushes the
+ * footnote down under them.
  */
 function LoadingCards() {
   return (

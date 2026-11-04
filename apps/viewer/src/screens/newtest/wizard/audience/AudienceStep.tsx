@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { audienceFromSentence, readAudience, updateAudience } from '@/screens/audience/store';
-import { agentsNoun, siteName, verificationWords } from '@/screens/sites/words';
+import { capWords, siteName } from '@/screens/sites/words';
 import { newTestStep, paths } from '@/shell/paths';
 import { useAudiences } from '@/shell/useAudiences';
 import { useSites } from '@/sites/useSites';
@@ -93,10 +93,14 @@ export function AudienceStep() {
   const chosen =
     sites.status === 'ready' ? (sites.sites.find((site) => site.id === siteId) ?? null) : null;
 
-  // The workspace's first site, for a reader who arrives with none chosen: the field states
-  // what that site is proved as and what it allows, so the choice is read rather than hidden.
+  // The workspace's first site, for a reader who arrives with none chosen — and for one
+  // whose draft names a site that is no longer in the workspace, since a site can be
+  // removed on `/sites/:siteId` while a draft naming it is still in this browser. Without
+  // the second case the chooser shows its "Reading your sites…" placeholder over a list
+  // that is read, and the launch below goes out against an id nobody can see.
   useEffect(() => {
-    if (siteId !== null || sites.status !== 'ready') return;
+    if (sites.status !== 'ready') return;
+    if (siteId !== null && sites.sites.some((site) => site.id === siteId)) return;
     const first = sites.sites[0];
     if (first !== undefined) update({ site: { id: first.id, url: first.url } });
   }, [siteId, sites, update]);
@@ -231,11 +235,17 @@ export function AudienceStep() {
 }
 
 /**
- * The site this test is against, chosen among the workspace's own, with **what that site is
- * proved as and what it allows** under it.
+ * The site this test is against, chosen among the workspace's own, with **the URL it is and
+ * what it allows** under it.
  *
- * The figures are the platform's, on the site's answer; the words beside them are the Sites
- * screen's (`screens/sites/words`), so a site is described the same way wherever it is read.
+ * The address is written the way every other screen writes it, through `siteName` — which
+ * drops the scheme and **any user and password in the URL**, because a step a reader is
+ * about to launch from is read over a shoulder and a screenshot keeps what is on it
+ * (`screens/sites/words`). The platform stores a URL carrying credentials as given, so the
+ * raw `url` is not what a screen prints. The figures beside it are the platform's, on the
+ * site's answer. **Nothing here is about who controls the address**, because a site is a URL
+ * and nothing more (`docs/FLOW.md` section 13).
+ *
  * A workspace with no site is not offered an empty list: it is pointed at `/sites/new`,
  * because there is nothing to test until there is a site.
  */
@@ -303,7 +313,7 @@ function SiteField({
       <p className="footnote" id={footId}>
         {chosen === null
           ? 'Which of your sites the hundred people are put through.'
-          : `${verificationWords(chosen.verification)} · ${String(chosen.caps.agentsPerRun)} ${agentsNoun(chosen.caps.agentsPerRun)}.`}
+          : `${siteName(chosen.url)} · ${capWords(chosen.caps)}.`}
       </p>
     </div>
   );

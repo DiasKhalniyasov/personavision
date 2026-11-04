@@ -197,8 +197,8 @@ describe('the shell publishes one file per screen, so screen tickets do not coll
     // paths; `useSession` (#103) asks who is signed in, over the three routes
     // `packages/platform` mounts; the audience screens' `store` (#109) reads and writes
     // the **audience store**, over #102's four routes; `sites/store` (#267) reads and
-    // writes this workspace's **sites**, over #221's site routes, which is where the caps
-    // a card states come from and where the Add-a-site screen's verification call joins;
+    // writes this workspace's **sites**, over #221's four site routes — the list, one site,
+    // a new one and the removal — which is where the caps a card states come from;
     // the New test screen's `start` (#110) hands a `RunRequest` to the platform; the
     // settings screens' `connection` (#271) reads this workspace's GitHub connection,
     // which the locked path-2 card and `/settings/github` both render; and the sign-up

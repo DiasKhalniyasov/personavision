@@ -9,13 +9,12 @@ import { ruleIn, rulesOf } from '../cssom';
 import type { Rule } from '../cssom';
 
 /**
- * `#screen-site`'s own layout: the URL field, the state line, the four methods and the
- * exact line to copy inside each of them.
+ * `#screen-site`'s own layout: the URL field, the footer that carries *Remove this site*,
+ * and the row of figures the site is bound by.
  *
- * The prototype draws these with its shared `Forms` block and its own `.verify` rules; what
- * is asserted here is that this screen takes the same values — the same gaps, the same type
- * roles, the same muted colour — out of `docs/design/tokens.css`, rather than that it shares
- * another screen's stylesheet.
+ * The prototype draws these with its shared `Forms` block; what is asserted here is that this
+ * screen takes the same values — the same gaps, the same type roles, the same muted colour —
+ * out of `docs/design/tokens.css`, rather than that it shares another screen's stylesheet.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +26,14 @@ let rule: (selectors: string | string[], condition?: string) => Record<string, s
 beforeEach(() => {
   const rules: Rule[] = rulesOf(readFileSync(stylesheet, 'utf8'));
   rule = ruleIn(rules);
+});
+
+describe('the site’s address, which heads the page', () => {
+  it('wraps the heading and the breadcrumb inside the page rather than widening it', () => {
+    // A URL is one unbroken word to a line-breaker. Measured in a real browser: without
+    // these the site's page scrolls sideways by 76px at 390px wide.
+    expect(rule(['.heading', '.crumb'])['overflow-wrap']).toBe('anywhere');
+  });
 });
 
 describe('the URL field', () => {
@@ -48,8 +55,8 @@ describe('the URL field', () => {
   });
 });
 
-describe('how the site stands', () => {
-  it('lays the tag and the figures out in one wrapping row, as the prototype does', () => {
+describe('what binds the site', () => {
+  it('lays the figures out in one wrapping row, as the prototype does', () => {
     expect(rule('.sitestate')['display']).toBe('flex');
     expect(rule('.sitestate')['flex-wrap']).toBe('wrap');
     expect(rule('.sitestate')['gap']).toBe('var(--space-3)');
@@ -61,70 +68,13 @@ describe('how the site stands', () => {
   });
 });
 
-describe('the four methods', () => {
-  it('stacks them a step apart under the state line', () => {
-    expect(rule('.verify')['display']).toBe('grid');
-    expect(rule('.verify')['gap']).toBe('var(--space-3)');
-    expect(rule('.verify')['margin-top']).toBe('var(--space-5)');
-    expect(rule('.verify')['grid-template-columns']).toBe('minmax(0, 1fr)');
-  });
-
-  it('draws each as the prototype’s bordered block on the surface', () => {
-    expect(rule('.method')['padding']).toBe('var(--space-5)');
-    expect(rule('.method')['border']).toBe('var(--border-width) solid var(--color-border)');
-    expect(rule('.method')['border-radius']).toBe('var(--radius-md)');
-    expect(rule('.method')['background']).toBe('var(--color-surface)');
-    expect(rule('.method')['gap']).toBe('var(--space-2)');
-    // The block must be allowed to be narrower than the line it holds, or the line's own
-    // scrollbar never appears and the page widens instead.
-    // jsdom prints the computed `0` with its unit; the stylesheet states it without one.
-    expect(rule('.method')['min-width']).toBe('0px');
-  });
-
-  it('marks the current method with the accent border and the raised surface', () => {
-    expect(rule(".method[aria-current='true']")['border-color']).toBe('var(--color-accent-strong)');
-    expect(rule(".method[aria-current='true']")['background']).toBe('var(--color-surface-raised)');
-  });
-
-  it('sets the heading row and the explanation at the prototype’s roles', () => {
-    expect(rule('.method header')['display']).toBe('flex');
-    expect(rule('.method header')['gap']).toBe('var(--space-3)');
-    expect(rule('.method h2')['font-size']).toBe('var(--text-base)');
-    expect(rule('.method p')['color']).toBe('var(--color-text-muted)');
-    expect(rule('.method p')['font-size']).toBe('var(--text-sm)');
-  });
-});
-
-describe('the line to copy', () => {
-  it('is the prototype’s sunken monospace block', () => {
-    expect(rule('.tokenline')['display']).toBe('block');
-    expect(rule('.tokenline')['padding']).toBe('var(--space-3)');
-    expect(rule('.tokenline')['background']).toBe('var(--color-surface-sunken)');
-    expect(rule('.tokenline')['border-radius']).toBe('var(--radius-sm)');
-    expect(rule('.tokenline')['font']).toBe(
-      'var(--weight-regular) var(--text-xs) / var(--leading-normal) var(--font-mono)',
-    );
-  });
-
-  it('scrolls inside its own box rather than widening the page, and is never broken up', () => {
-    // A record, a meta tag and a URL are each one unbroken line: broken across lines they
-    // are a line that does not work when it is pasted, so the box scrolls instead.
-    expect(rule('.tokenline')['white-space']).toBe('pre');
-    expect(rule('.tokenline')['overflow-x']).toBe('auto');
-  });
-});
-
-describe('the check under each method', () => {
+describe('adding it, and removing it', () => {
   it('is the prototype’s form footer: a rule above it, and a wrapping row', () => {
     expect(rule('.formfoot')['display']).toBe('flex');
     expect(rule('.formfoot')['flex-wrap']).toBe('wrap');
     expect(rule('.formfoot')['gap']).toBe('var(--space-4)');
     expect(rule('.formfoot')['border-top']).toBe('var(--border-width) solid var(--color-border)');
     expect(rule('.formfoot')['padding-top']).toBe('var(--space-6)');
-  });
-
-  it('wraps the platform’s own sentence, which quotes a host back', () => {
-    expect(rule('.formfoot > span')['overflow-wrap']).toBe('anywhere');
   });
 });
 
@@ -135,17 +85,15 @@ describe('the stylesheet itself', () => {
     );
   });
 
-  it('moves one thing and only while a check is running: the tokens’ own pulse', () => {
-    const source = readFileSync(stylesheet, 'utf8');
-    expect(rule('.running')['animation']).toBe(
-      'pv-pulse var(--pulse-duration) var(--ease) infinite',
-    );
-    // No second animation, no keyframes of its own, and no transition: the pulse is the
-    // product's one moving thing, and `docs/design/tokens.css` flattens it to a still frame
-    // under `prefers-reduced-motion: reduce`, so this screen is complete without it.
-    expect(source.match(/\banimation\b/g)).toHaveLength(1);
-    expect(source).not.toMatch(/@keyframes/);
-    expect(source).not.toMatch(/\btransition\b/);
+  it('moves nothing at all: the screen contract gives it no animation of its own', () => {
+    // The declarations, not the prose about them: the comment at the top of the file says
+    // this screen declares no animation, and the scan is of what it declares.
+    const body = readFileSync(stylesheet, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Nothing to flatten under `prefers-reduced-motion: reduce`, which is why this screen is
+    // complete and still there without a rule about it.
+    expect(body).not.toMatch(/\banimation\b/);
+    expect(body).not.toMatch(/@keyframes/);
+    expect(body).not.toMatch(/\btransition\b/);
   });
 
   it('restates no visual value: every colour and every length is a token', () => {

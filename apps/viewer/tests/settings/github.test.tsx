@@ -69,15 +69,18 @@ describe('what the screen states', () => {
     ]);
   });
 
-  it('says the connection counts as verification for the site the repository deploys', async () => {
+  it('says the installation is what Improve my site needs, and that it moves no figure', async () => {
     await serveConnection();
     await open();
 
     expect(
       screen.getByText(
-        'A connected repository also counts as proof that you control the site it deploys. That unlocks this path, and takes that site from 3 agents a run to the full 100.',
+        'Improve my site needs this installation: the app has to be on the repository that deploys the site, because that is where the pull request goes. It changes no figure — every site in this workspace is allowed the same.',
       ),
     ).toBeTruthy();
+    // Nothing on this screen is about a site's standing: there is nothing to prove about a
+    // site (`docs/FLOW.md` section 13, as the owner's input of 2026-11-04 settles it).
+    expect(screen.getByRole('main').textContent ?? '').not.toMatch(/verif|prove you control/i);
   });
 });
 
@@ -146,7 +149,7 @@ describe('the other states the platform can answer', () => {
 
     await waitFor(() => {
       expect(standing().textContent).toBe(
-        `Connected to ${CONNECTED_REPOSITORY}. Pull requests go there, and the site that repository deploys counts as verified.`,
+        `Connected to ${CONNECTED_REPOSITORY}. Pull requests go there, which is what Improve my site needs.`,
       );
     });
   });

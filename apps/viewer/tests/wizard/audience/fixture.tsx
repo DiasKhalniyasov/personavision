@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { demoAudienceRecord, serveRunData } from '../../app';
-import { A_VERIFIED_SITE, servedSite } from '../../sites/fixture';
+import { A_TESTED_SITE, servedSite } from '../../sites/fixture';
 import { clearSiteCache } from '../../../src/sites/useSites';
 import { FROM_SENTENCE } from '../../../src/screens/audience/store';
 import type { Audience } from '@personavision/contract';
@@ -94,7 +94,7 @@ export const refusal = (
 ): Response => json(400, { error, issues });
 
 export interface StepBehaviour {
-  /** The workspace's sites. The default is the one verified site of `#screen-sites`. */
+  /** The workspace's sites. The default is the tested site of `#screen-sites`. */
   readonly sites?: readonly SiteSeed[];
   /** The workspace's saved audiences, for the picker and for a reload. */
   readonly records?: readonly AudienceRecord[];
@@ -136,7 +136,7 @@ export async function serveStep(behaviour: StepBehaviour = {}): Promise<ServedSt
     const method = init?.method ?? 'GET';
 
     if (pathname === '/sites' && method === 'GET') {
-      const sites = behaviour.sites ?? [A_VERIFIED_SITE];
+      const sites = behaviour.sites ?? [A_TESTED_SITE];
       return json(200, { sites: sites.map(servedSite) });
     }
 
@@ -174,4 +174,4 @@ export const savedAudienceRecord = (): AudienceRecord => {
   return { ...demo, id: 'aud-outdoor-gear', audience: { ...demo.audience, size: 100 } };
 };
 
-export { A_VERIFIED_SITE, AN_UNVERIFIED_SITE } from '../../sites/fixture';
+export { A_TESTED_SITE, AN_UNTESTED_SITE } from '../../sites/fixture';

@@ -9,7 +9,6 @@ import { loadDesignTokens } from '../../setup';
 import { axeViolations, describeViolations } from '../../axe';
 import { forgetRuns, mountApp } from '../../app';
 import { newTestStep, paths } from '../../../src/shell/paths';
-import { verificationWords } from '../../../src/screens/sites/words';
 import {
   canLaunch,
   forgetWizardDraft,
@@ -17,8 +16,8 @@ import {
   writeWizardDraft,
 } from '../../../src/screens/newtest/wizard/draft';
 import {
-  A_VERIFIED_SITE,
-  AN_UNVERIFIED_SITE,
+  A_TESTED_SITE,
+  AN_UNTESTED_SITE,
   CREATORS_RECORD_ID,
   creatorsRecord,
   FIRST_TIME_CREATORS,
@@ -46,13 +45,6 @@ import {
  * being replaced by one the product does not ship.
  */
 const act = () => userEvent.setup({ pointerEventsCheck: 0 });
-
-/** The verified site of `#screen-sites`, as its own verification state. */
-const A_VERIFIED_SITE_STATE = {
-  state: 'verified' as const,
-  method: 'dns-txt',
-  verifiedAt: '2026-11-02T10:00:00.000Z',
-};
 
 beforeEach(() => {
   loadDesignTokens();
@@ -116,8 +108,8 @@ describe('the form', () => {
     expect(screen.getByRole('button', { name: 'Turn this into an audience' })).toBeTruthy();
   });
 
-  it('offers the workspace’s sites, and states what the chosen one is proved as and allows', async () => {
-    await serveStep({ sites: [A_VERIFIED_SITE, AN_UNVERIFIED_SITE] });
+  it('offers the workspace’s sites, and states the chosen one’s URL and what it allows', async () => {
+    await serveStep({ sites: [A_TESTED_SITE, AN_UNTESTED_SITE] });
     await open();
     const user = act();
 
@@ -126,19 +118,63 @@ describe('the form', () => {
     });
     // The figures are the fixture's and the words are the Sites screen's: what this asserts
     // is that the field prints the platform's answer rather than a number of its own. The
-    // instant is the reader's own clock, so the date is read through the same helper.
+    // address is written as every other screen writes it, which is what a reader is about
+    // to point a hundred browsers at.
     expect(document.body.textContent).toContain(
-      `${verificationWords(A_VERIFIED_SITE_STATE)} · 100 agents per run allowed`,
+      'app.clipforge.example · 100 agents per run allowed · 4 runs an hour · 10 browsers at a time.',
     );
 
     await user.click(picker('Site'));
     await user.click(await screen.findByRole('option', { name: 'beta.clipforge.example/create' }));
 
-    expect(document.body.textContent).toContain('Unverified · 100 agents per run allowed');
+    expect(document.body.textContent).toContain(
+      'beta.clipforge.example/create · 100 agents per run allowed',
+    );
+    // Nothing in the step is about who controls the site (`docs/FLOW.md` section 13).
+    expect(screen.getByRole('main').textContent ?? '').not.toMatch(/verif|unverified|prove/i);
     expect(readWizardDraft().site).toEqual({
       id: 'site-beta',
       url: 'https://beta.clipforge.example/create',
     });
+  });
+
+  it('states a site’s address without the password somebody put in the URL', async () => {
+    // The platform stores a URL carrying credentials exactly as it was typed, and this
+    // step is read over a shoulder on the way to a launch. The card and the option already
+    // drop them; the line under the chooser is the third place the address is printed.
+    await serveStep({
+      sites: [{ ...A_TESTED_SITE, url: 'https://ops:hunter2@staging.clipforge.example/create' }],
+    });
+    await open();
+
+    await waitFor(() => {
+      expect(picker('Site').textContent).toContain('staging.clipforge.example');
+    });
+    expect(document.body.textContent).not.toContain('hunter2');
+    expect(document.body.textContent).toContain(
+      'staging.clipforge.example/create · 100 agents per run allowed',
+    );
+  });
+
+  it('falls back to a site that is there when the draft names one that has been removed', async () => {
+    // A site can be removed on `/sites/:siteId` while a draft naming it is still in this
+    // browser. Without this the chooser shows "Reading your sites…" over a list that has
+    // been read, and the launch goes out against an id nobody can see.
+    writeWizardDraft({
+      ...readWizardDraft(),
+      site: { id: 'site-removed', url: 'https://gone.clipforge.example' },
+    });
+    await serveStep({ sites: [A_TESTED_SITE] });
+    await open();
+
+    await waitFor(() => {
+      expect(readWizardDraft().site).toEqual({
+        id: A_TESTED_SITE.id,
+        url: A_TESTED_SITE.url,
+      });
+    });
+    expect(picker('Site').textContent).toContain('app.clipforge.example');
+    expect(document.body.textContent).not.toContain('gone.clipforge.example');
   });
 
   it('points a workspace with no site at the screen that adds one', async () => {

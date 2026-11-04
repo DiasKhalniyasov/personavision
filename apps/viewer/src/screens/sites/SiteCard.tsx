@@ -1,31 +1,22 @@
 import { Link } from 'react-router';
 import { paths } from '@/shell/paths';
-import {
-  agentsNoun,
-  browsersNoun,
-  lastCheckWords,
-  lastTestWords,
-  runsNoun,
-  siteName,
-  verificationWords,
-} from './words';
+import { addedWords, agentsNoun, browsersNoun, lastTestWords, runsNoun, siteName } from './words';
 import styles from './sites.module.css';
 import type { SiteRecord } from '@/sites/store';
 
 /**
- * One site, as `#screen-sites` draws it: how it stands, its address, what binds it, and the
- * test it last ran.
+ * One site, as `#screen-sites` draws it: when it was added, its address, what binds it, and
+ * the test it last ran.
  *
- * **Every figure is the platform's.** `caps` arrives on the site and is printed; nothing
- * here composes, scales or defaults a number, and there is no branch anywhere in this file
- * on `verification.state` that reaches a figure. That is decision 71 as the owner settled it
- * on **2026-11-03** — _no gate on testing_ — expressed as code rather than as a comment: an
- * unverified site's card reads the same three numbers as a verified one, because the caps
- * protect the site being driven rather than the person who asked.
+ * **Every figure is the platform's.** `caps` arrives on the site and is printed; nothing here
+ * composes, scales or defaults a number. Every site in a workspace reads the same three
+ * figures, because the caps protect the site being driven rather than the person who asked —
+ * decision 71, settled by the owner on **2026-11-03** as _no gate on testing_.
  *
- * What verification does change is one line. An unverified card adds _"Verify it to unlock
- * **Improve my site**"_, which is the thing proof of control really buys (`docs/FLOW.md`
- * section 13) — and the whole card is the way in to proving it.
+ * **There is no state on a card.** A site is a URL that belongs to a workspace and nothing
+ * more (`docs/FLOW.md` section 13, as the owner's input of **2026-11-04** settles it), so a
+ * card has nothing to say about who controls the address — and the whole card is the way in
+ * to the site's own page.
  */
 export function SiteCard({
   site,
@@ -42,7 +33,7 @@ export function SiteCard({
   ranTheLatestTest: boolean;
 }) {
   const { caps } = site;
-  const failedCheck = lastCheckWords(site.lastCheck);
+  const added = addedWords(site.createdAt);
   const lastTest = lastTestWords(site.lastTest, lastTestName);
 
   return (
@@ -51,7 +42,7 @@ export function SiteCard({
       className={`card ${styles.siteCard}`}
       {...(ranTheLatestTest ? { 'aria-current': true as const } : {})}
     >
-      <span className="microlabel">{verificationWords(site.verification)}</span>
+      {added === null ? null : <span className="microlabel">{added}</span>}
       <h2 className={styles.siteName}>{siteName(site.url)}</h2>
       <div className={styles.siteFacts}>
         <span>
@@ -62,12 +53,6 @@ export function SiteCard({
           {' · '}
           <b>{caps.concurrentSessionsPerSite}</b> {browsersNoun(caps.concurrentSessionsPerSite)}
         </span>
-        {site.verification.state === 'verified' ? null : (
-          <span>
-            Verify it to unlock <b>Improve my site</b>
-          </span>
-        )}
-        {failedCheck === null ? null : <span>{failedCheck}</span>}
         {lastTest === null ? null : <span className="faint">{lastTest}</span>}
       </div>
     </Link>

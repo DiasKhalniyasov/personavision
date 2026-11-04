@@ -1,7 +1,10 @@
-import type { SiteCheck, SiteLastTest, SiteVerification } from '@/sites/store';
+import type { SiteCaps, SiteLastTest } from '@/sites/store';
 
 /**
- * How a site's card reads: the one place the Sites screen's sentences are composed.
+ * How a site reads, wherever it is read: the one place these sentences are composed.
+ *
+ * The Sites screen's cards, the site's own page and the audience step of `/new` all describe
+ * the same record, so they describe it in the same words.
  *
  * **No number in here is a cap.** Every figure the card states arrives on the platform's
  * answer (`caps` on a site); what these helpers decide is the *noun* beside it, because
@@ -19,8 +22,15 @@ const time = new Intl.DateTimeFormat('en-US', {
   hour12: false,
 });
 
-/** An instant as a reader reads it, or `null` for one that is not an instant at all. */
-const whenWords = (at: string): string | null => {
+/**
+ * An instant as a reader reads it — `Nov 3 09:12` — or `null` for one that is not an
+ * instant at all.
+ *
+ * Exported because a site's own page states the same `lastTest.at` the card does, and a
+ * second formatter beside this one spelled the same instant two ways (`Nov 3 09:12` here
+ * and `Nov 3, 09:12` there) on two screens about one site.
+ */
+export const whenWords = (at: string): string | null => {
   const parsed = new Date(at);
   return Number.isNaN(parsed.getTime()) ? null : `${day.format(parsed)} ${time.format(parsed)}`;
 };
@@ -51,29 +61,16 @@ export const siteName = (url: string): string => {
   return written.endsWith('/') ? written.slice(0, -1) : written;
 };
 
-/** The four ways a site can be proved, in the words a reader of the card gets. */
-const METHOD_WORDS: Readonly<Record<string, string>> = {
-  'dns-txt': 'DNS',
-  'meta-tag': 'a meta tag',
-  'well-known-file': 'a file',
-  'connected-repository': 'the GitHub repository',
-};
-
 /**
- * The card's microlabel: `Verified by DNS · 2 Nov`, or `Unverified`.
+ * The card's microlabel: `Added 2 Nov` — when this site joined the workspace.
  *
- * Both halves can be missing from a verified site and neither is invented: a state with no
- * method reads `Verified`, and one with no instant leaves the date off. A method this build
- * does not know is named as the platform spells it rather than dropped, because "verified by
- * something" is less use to a reader than the platform's own word for it.
+ * `null` for an instant that is not one, and the card then draws no microlabel: the day a
+ * site was added is a fact about it, and a reader is better served by the line being absent
+ * than by the word "Added" over nothing.
  */
-export const verificationWords = (verification: SiteVerification): string => {
-  if (verification.state !== 'verified') return 'Unverified';
-  const { method, verifiedAt } = verification;
-  const by = method === null ? '' : ` by ${METHOD_WORDS[method] ?? method}`;
-  const at = verifiedAt === null ? null : new Date(verifiedAt);
-  const on = at === null || Number.isNaN(at.getTime()) ? '' : ` · ${day.format(at)}`;
-  return `Verified${by}${on}`;
+export const addedWords = (createdAt: string): string | null => {
+  const at = new Date(createdAt);
+  return Number.isNaN(at.getTime()) ? null : `Added ${day.format(at)}`;
 };
 
 /** `agents per run allowed`, said for one agent as well as for a hundred. */
@@ -114,28 +111,15 @@ export const lastTestWords = (
 };
 
 /**
- * What the last check found, for a check that did not find it: _"Last check: no TXT record
- * found on clipforge.example at 09:04."_
+ * The three figures that bind this site, as one line: the platform's numbers, our nouns.
  *
- * A verified site can carry a failed check — the record was removed, a name server timed
- * out — and the card says both rather than choosing between them: a passing check is the one
- * thing that moves a site to verified and nothing moves it back (decision 89, settled as
- * _it stays verified, and the card also says what the last check found_). So the reader is
- * given the two facts and decides.
- *
- * The sentence is the platform's, written once there so that this card, the Add-a-site
- * screen and the CLI say the same words. What is added here is the punctuation and the
- * reader's own clock, which is what the platform deliberately leaves off — with the **day**
- * beside the time, because a check that failed at 09:04 last Tuesday reads as this morning
- * without it, and the card is the one place a reader meets it out of context.
- *
- * `null` for a site nobody has checked and for a check that passed: a check that found what
- * it looked for is already said by the microlabel above it.
+ * Here rather than on either screen, because the site's own page and the audience step of
+ * `/new` state the same three caps about the same site, and _"1 run an hour"_ and _"4 runs
+ * an hour"_ are the same cap said correctly in both places.
  */
-export const lastCheckWords = (lastCheck: SiteCheck | null): string | null => {
-  if (lastCheck === null || lastCheck.passed) return null;
-  const at = whenWords(lastCheck.checkedAt);
-  return at === null
-    ? `Last check: ${lastCheck.sentence}.`
-    : `Last check: ${lastCheck.sentence} at ${at}.`;
-};
+export const capWords = (caps: SiteCaps): string =>
+  [
+    `${String(caps.agentsPerRun)} ${agentsNoun(caps.agentsPerRun)}`,
+    `${String(caps.runsPerSitePerHour)} ${runsNoun(caps.runsPerSitePerHour)}`,
+    `${String(caps.concurrentSessionsPerSite)} ${browsersNoun(caps.concurrentSessionsPerSite)}`,
+  ].join(' · ');

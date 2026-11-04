@@ -8,7 +8,7 @@ import type { SiteRecord } from './store';
  * One read of the list while the app is open, the way the audiences are read
  * (`screens/audience/useAudienceList.ts`): the Sites screen asks for it, and the screens
  * that come later — the launch step choosing a site among them — ask the same question.
- * Adding or verifying a site drops the entry with `refreshSites`, so the list a reader
+ * Adding or removing a site drops the entry with `refreshSites`, so the list a reader
  * returns to is the one they just changed and not a remembered copy of what it was before.
  *
  * Only a successful read is kept: a platform that could not be reached is asked again
@@ -47,7 +47,7 @@ const loadList = (): Promise<SiteListState> => {
   return pending;
 };
 
-/** Read the list again on the next render that asks for it: a site has been added or proved. */
+/** Read the list again on the next render that asks for it: a site has been added or removed. */
 export const refreshSites = (): void => {
   listed = null;
 };
@@ -73,7 +73,7 @@ export function useSites(): SiteListState {
   return state;
 }
 
-/** Reading one site, as the Add-a-site screen opens on it. */
+/** Reading one site, as its own page opens on it. */
 export type SiteState =
   | { readonly status: 'loading' }
   /** `/sites/new`: no site is being read, because there is not one yet. */
@@ -86,45 +86,56 @@ export type SiteState =
  * One site, by the id in the path — **read fresh every time**, and deliberately not cached.
  *
  * The list above is remembered because every screen asks the same question of it; a single
- * site is not, because this is the screen that *changes* the site it is showing. A reader
- * who proves a site, goes back to the list and opens it again must be shown the verified
- * record rather than the unverified copy that was true when they arrived.
+ * site is not, because this is the screen a reader opens to act on the site in front of
+ * them. What it shows has to be what is stored now, not the copy that was true when the
+ * workspace's list was last read.
  *
  * `/sites/new` and `/sites/:siteId` are one component on the route table, so a path naming
  * no site clears the answer rather than leaving the last site standing in the new form.
  */
 export function useSite(siteId: string | null): SiteState {
-  const [state, setState] = useState<SiteState>({ status: 'loading' });
+  /**
+   * The answer, **and the site it is an answer about**.
+   *
+   * The id is held beside the state because the effect below runs after the render that
+   * changed it: a reader going from `/sites/A` to `/sites/B` stays on one mounted
+   * component, so without this the first painted frame of B would carry A's URL as the
+   * heading, A's figures, and a *Remove this site* bound to A. Comparing the two during
+   * the render closes that window — the frame is `loading`, which is what it is.
+   */
+  const [answered, setAnswered] = useState<{
+    readonly siteId: string | null;
+    readonly state: SiteState;
+  }>({ siteId: null, state: { status: 'none' } });
 
   useEffect(() => {
     if (siteId === null) {
-      setState({ status: 'none' });
+      setAnswered({ siteId: null, state: { status: 'none' } });
       return;
     }
     let live = true;
-    setState({ status: 'loading' });
     void readSite(siteId).then((answer) => {
       if (!live) return;
-      if (answer.ok) {
-        setState({ status: 'ready', site: answer.value });
-        return;
-      }
-      setState(
-        answer.kind === 'not-found'
-          ? { status: 'not-found', siteId }
-          : {
-              status: 'unreadable',
-              problem:
-                answer.kind === 'unreachable'
-                  ? answer.problem
-                  : (answer.issues[0]?.message ?? 'That site could not be read.'),
-            },
-      );
+      setAnswered({
+        siteId,
+        state: answer.ok
+          ? { status: 'ready', site: answer.value }
+          : answer.kind === 'not-found'
+            ? { status: 'not-found', siteId }
+            : {
+                status: 'unreadable',
+                problem:
+                  answer.kind === 'unreachable'
+                    ? answer.problem
+                    : (answer.issues[0]?.message ?? 'That site could not be read.'),
+              },
+      });
     });
     return () => {
       live = false;
     };
   }, [siteId]);
 
-  return state;
+  if (answered.siteId === siteId) return answered.state;
+  return siteId === null ? { status: 'none' } : { status: 'loading' };
 }
