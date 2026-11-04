@@ -35,6 +35,24 @@ That sequence is a test rather than a claim. `tests/cold-start.test.ts` builds t
 | `pnpm dev`                  | Starts the dev server of every app that has one.                                            |
 | `pnpm seed:example-run`     | Generates the committed seed example run under `runs/`.                                     |
 | `pnpm open`                 | `personavision open` — the local web app on the most recent run.                            |
+| `pnpm bake:landing-slides`  | Bakes the front page carousel's slide data out of committed run directories.                |
+
+### The front page's slide data
+
+`apps/viewer/src/screens/landing/slides.json` is **generated, not edited**: one slide is one
+generated person on one screen of one session, and every value on it is a copy of something a
+committed run directory already holds. The command that produced the committed file, so it can
+be rebuilt rather than edited:
+
+```
+pnpm bake:landing-slides runs apps/viewer/src/screens/landing/slides.json 2026-10-24-1402-northwind-demo:S-03:2 2026-10-24-1402-northwind-demo:S-09:1 2026-10-24-1402-northwind-demo:S-04:24 2026-10-24-1402-northwind-demo:S-13:4 2026-10-24-1402-northwind-demo:S-24:3
+```
+
+The arguments are a runs root, where to write the set, and one `runId:sessionId:screenIndex`
+triple per slide. `apps/viewer/src/screens/landing/slides.test.ts` runs that very line — read
+out of this file — into a temporary directory and compares it with the committed bytes, so the
+three cannot drift apart. Nothing is written inside a run directory, and a triple naming a
+session, a screen or a capture the run does not hold is refused by name with nothing written.
 
 ## The command line
 
