@@ -137,7 +137,7 @@ describe('the doors to the detail', () => {
     expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
-  it('keeps the doors beside the findings, under the same strip', async () => {
+  it('keeps the doors in the findings’ own strip, below them', async () => {
     await serveRunData();
     const { container } = mountApp(paths.run(SEED));
     // The findings are fetched after the run resolves, so their link is awaited rather
@@ -147,6 +147,10 @@ describe('the doors to the detail', () => {
     const sections = [...container.querySelectorAll('[data-section]')].map((section) =>
       section.getAttribute('data-section'),
     );
-    expect(sections.indexOf('detail-doors')).toBe(sections.indexOf('headline-findings') + 1);
+    // Below the findings, not in a strip of its own. What sits between them on this route is
+    // the Summary's recommendations (#266), which are part of the same lead.
+    expect(sections.indexOf('detail-doors')).toBeGreaterThan(sections.indexOf('headline-findings'));
+    const strip = doorsOf(container).closest('.strip');
+    expect(strip?.querySelector('[data-section="headline-findings"]')).not.toBeNull();
   });
 });

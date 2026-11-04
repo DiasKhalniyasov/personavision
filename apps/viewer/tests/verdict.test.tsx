@@ -9,6 +9,11 @@ import { paths } from '../src/shell/paths';
  * The Verdict's composition. The sections themselves are #14's, #15's, #16's and #108's;
  * what this ticket owns is that they are all there, in the prototype's order, each in its
  * own file — so that filling one does not touch another.
+ *
+ * It is also the **two-version lead of the Summary screen** (#266): a run with two versions
+ * is a path-2 test and leads with this composition, mounted whole, with the ranked
+ * recommendations under its findings (`docs/FLOW.md` section 14.1). That block is in the
+ * list below for the same reason the others are — the composition is what this suite owns.
  */
 
 const SEED = '2026-10-24-1402-northwind-demo';
@@ -17,7 +22,7 @@ beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
 
 describe('the Verdict screen', () => {
-  it('composes its nine sections in the order #screen-verdict draws them', async () => {
+  it('composes its sections in the order #screen-verdict draws them', async () => {
     await serveRunData();
     const { container } = mountApp(paths.run(SEED));
 
@@ -41,6 +46,7 @@ describe('the Verdict screen', () => {
       'reasons',
       'hero-evidence',
       'headline-findings',
+      'recommendations',
       'detail-doors',
       'simulated-disclaimer',
     ]);

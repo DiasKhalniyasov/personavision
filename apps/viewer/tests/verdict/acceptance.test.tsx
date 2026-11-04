@@ -538,10 +538,11 @@ describe('offline, against the committed run only', () => {
     const { requests } = await openVerdict();
 
     // `docs/adr/0001-run-data-over-http-as-static-files.md`'s paths, and nothing else: the
-    // index, the run, its findings, and one file per person — the heat is an aggregate over
-    // the sessions, so the one heatmap is what reads them.
+    // index, the run, its findings, its two optional files — the aggregate and the
+    // recommendations the Summary's lead reads (#266) — and one file per person, because the
+    // heat is an aggregate over the sessions and the one heatmap is what reads them.
     const documented = new RegExp(
-      `^(?:/runs/index\\.json|/runs/${SEED}/(?:run|findings)\\.json|/runs/${SEED}/sessions/[^/]+\\.json|/audiences(?:/[^/]+)?)$`,
+      `^(?:/runs/index\\.json|/runs/${SEED}/(?:run|findings|aggregate|recommendations)\\.json|/runs/${SEED}/sessions/[^/]+\\.json|/audiences(?:/[^/]+)?)$`,
       'u',
     );
     const unexpected = [...new Set(requests)].filter((path) => !documented.test(path));

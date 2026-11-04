@@ -1,0 +1,114 @@
+/* =============================================================================
+   The Summary screen's own layout — the `.recs`, `.rec`, `.rank` and `.cites` of
+   `#screen-results` in `docs/design/prototype.html`, and the height the figure
+   row holds while the aggregate is read.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies: no colour, size, spacing step or duration is
+   restated here. The only motion on this screen is the base transition and
+   `pv-pulse` on a loading state, both of which that file stops under
+   `prefers-reduced-motion`.
+
+   What is deliberately **not** here: the audience bar, the hero, the figures and
+   the doors. Those are `screens/verdict/verdict.css` and
+   `screens/verdict/doors.module.css`, which this screen imports rather than
+   forking — the two shapes of this one route must not drift into two designs.
+   ========================================================================== */
+
+/* ---- What to change, in order ------------------------------------------- */
+
+.recs {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.rec {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  /* The accent edge is the prototype's: a recommendation is the one thing on this
+     screen the reader is being asked to act on. */
+  border-left: var(--border-width-strong) solid var(--color-accent-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  gap: var(--space-4);
+}
+
+.rec h3 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.rank {
+  color: var(--color-text-faint);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-extrabold);
+  line-height: var(--leading-snug);
+}
+
+/* The one-sentence explanation under a recommendation: the prose measure, a step
+   down from the body size, as the prototype sets it. */
+.why {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* ---- The evidence, as chips -------------------------------------------- */
+
+.cites {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+  gap: var(--space-2);
+}
+
+.cites a,
+.cites span {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  color: var(--color-link);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* The closing chip is the word *simulated*, not a destination: it keeps the chip's
+   shape and gives up the link colour, so a reader does not try to click it. */
+.cites span {
+  color: var(--color-text-faint);
+}
+
+/* ---- Holding the page still while the files arrive --------------------- */
+
+/* The figure row's own height, held while the aggregate is read: three figures
+   land at once, so three placeholders hold the row the prototype gives them. */
+.figureLoading {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.figureLoadingValue {
+  /* The figure's own line box, so the reservation follows `--text-figure` at every
+     breakpoint rather than restating a size. */
+  width: var(--space-24);
+  height: 1lh;
+  font-size: var(--text-figure);
+  line-height: var(--leading-tight);
+}
+
+.figureLoadingLabel {
+  width: var(--space-24);
+  height: 1lh;
+  font-size: var(--text-md);
+}
+
+/* The recommendations block, while its file is read: the height of the heading,
+   the lede and the first recommendation, so the doors below do not move up and
+   then back down. */
+.recsLoading {
+  min-height: var(--space-24);
+  border-radius: var(--radius-lg);
+}
