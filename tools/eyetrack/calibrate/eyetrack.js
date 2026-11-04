@@ -142,6 +142,22 @@
     });
   };
 
+  /**
+   * Resolve once the browser has put a frame on the screen.
+   *
+   * Two frames, because the first callback runs *before* the paint it belongs to. It is what
+   * the recording clock waits for: start it when `src` is assigned and the first sample or two
+   * are gaze over a stage the screenshot had not reached yet, which is a measurement of the
+   * wrong thing.
+   */
+  const painted = function () {
+    return new Promise(function (resolve) {
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(resolve);
+      });
+    });
+  };
+
   // ------------------------------------------------------------------- statistics
 
   const quantile = function (sorted, fraction) {
@@ -654,9 +670,12 @@
         nodes.shot.alt = 'Screenshot being viewed: ' + shot.name;
         nodes.shot.hidden = false;
 
-        // The rect is read after the image is laid out, so both the mapping below and the
-        // `display` recorded afterwards describe where the screenshot actually was on the
-        // display — not where it was meant to be.
+        return painted();
+      })
+      .then(function () {
+        // The rect is read once the screenshot is on the screen, so both the mapping below
+        // and the `display` recorded afterwards describe where it actually was — not where it
+        // was meant to be. The clock starts here, at the first moment it could be seen.
         const rect = nodes.shot.getBoundingClientRect();
         geometry = rect;
         const perCssPixel = shot.image.naturalWidth / rect.width;
