@@ -215,8 +215,15 @@ export interface ImproveRequest {
  * wrote rather than opening a directory beside it. It is also what names the branch, so the
  * branch of a run is the same branch on every attempt and the repository can answer whether
  * the change was already opened.
+ *
+ * The suffix is a **suffix** and not a prefix because a run directory's name is the run's id
+ * and a run id begins with the date and time the run was asked for — `listRunDirs` in
+ * `@personavision/contract` recognises a run directory by exactly that, and the server mounts
+ * what it lists. `improve-2026-…` is not a name this product can list, serve or open, which
+ * `tests/path2-cold-start.test.ts` is where we found out: with it, `personavision open` said
+ * there was no test under `./runs` and the Improve screen of a real path-2 run was a 404.
  */
-export const improveRunId = (sourceRunId: string): string => `improve-${sourceRunId}`;
+export const improveRunId = (sourceRunId: string): string => `${sourceRunId}-improve`;
 
 /**
  * The two versions a path-2 run declares, in the user's own words (`docs/FLOW.md` section
@@ -230,6 +237,14 @@ export const improveRunId = (sourceRunId: string): string => `improve-${sourceRu
  */
 const BASELINE_VARIANT = { id: 'A', name: 'Baseline' } as const;
 const CHANGE_VARIANT = { id: 'B', name: 'The change' } as const;
+
+/** The states the artifact records of a pull request. GitHub's `draft` is not one of them. */
+type RecordedState = NonNullable<Improve['pullRequest']['state']>;
+
+const RECORDED_STATES: readonly RecordedState[] = ['open', 'closed', 'merged'];
+
+const recordedState = (state: string): RecordedState | undefined =>
+  RECORDED_STATES.find((recorded) => recorded === state);
 
 /** The one mapping from a recorded verdict back to the boolean the artifact stores. */
 const confirmedOf = (verdict: HoldoutVerdict | undefined): boolean | null => {
@@ -654,12 +669,31 @@ export const runImproveLoop = async (request: ImproveRequest): Promise<ImproveRe
   const changeVariant: ComparisonVariant = { ...CHANGE_VARIANT, url: resolution.url };
   const underWay: ChangeUnderWay = {
     recommendationId: recommendation.id,
+    // The two fields the Improve screen prints beside the pull request's title: the
+    // recommendation in the pipeline's own words, and the diff itself. Both are in hand
+    // here — the recommendation this change answers and the patch Wonder decided — and
+    // **decision 116 option A** is what the screen was built against: the run carries the
+    // patch, the pull request's state and the recommendation's own sentence, and the screen
+    // prints the diff rather than sending the reader to GitHub to find out what was written
+    // in their repository (#227, user story 4). Until #307 drove that screen against a run
+    // this loop had actually written, none of the three was ever recorded. A resumed loop
+    // records the same: the pull request it reuses is the one this change opened, asserted
+    // on its title just above.
+    recommendationSentence: recommendation.sentence,
+    patch: change.patch,
     changedFile,
     pullRequest: {
       repository: pullRequest.repository,
       number: pullRequest.number,
       url: pullRequest.url,
       title: pullRequest.title,
+      // The state the screen prints beside the repository and the number. The contract
+      // records `open`, `closed` or `merged` and no fourth: a **draft** is how a pull
+      // request was opened rather than where it stands, so a draft records no state and
+      // the tag carries the repository and the number alone.
+      ...(recordedState(pullRequest.state) === undefined
+        ? {}
+        : { state: recordedState(pullRequest.state) }),
     },
     preview: previewRecordOf(resolution),
     baselineVariant: baselineVariant.id,

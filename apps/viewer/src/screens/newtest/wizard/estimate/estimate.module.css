@@ -1,0 +1,144 @@
+/* =============================================================================
+   `/new?step=estimate` — the estimate, and the button that starts a hundred
+   browsers.
+
+   `#screen-newtest-estimate` of `docs/design/prototype.html`, rule for rule: the
+   `.estimate` row of three figures, the card of arithmetic under it and the
+   `.formfoot` the launch button sits in. Every value is a custom property from
+   `docs/design/tokens.css`, which the app imports and never copies; the one
+   number here is the prototype's own breakpoint, which a media query cannot read
+   from a token.
+
+   The rules are scoped to this module rather than written as the prototype's
+   global class names, because its `.kv` and `.formfoot` blocks are shared with
+   screens other tickets own — the layout they draw is reproduced, not the
+   selector they draw it with. The primitives these blocks sit inside
+   (`.wrap-narrow`, `.pagehead`, `.lede`, `.card`, `.microlabel`, `.num`,
+   `.faint`, `.mono`, `.notice`, `.footnote`) are the app's own, in
+   `src/styles/base.css`.
+
+   The prototype's three inline `style="margin-top: …"` rules are declared here
+   instead: `tests/wizard/shell.test.tsx` holds every screen of this wizard to
+   carrying no inline style, because a value in an attribute is a value outside
+   the stylesheet this file's rule is about.
+
+   Nothing here animates. The loading state's skeletons are the app's own
+   `Skeleton` primitive, and they stand in boxes the size of the figures they are
+   waiting for, so the layout does not move when the estimate arrives.
+   ========================================================================== */
+
+/* ---- The three figures -------------------------------------------------- */
+
+.estimate {
+  display: grid;
+  margin-top: var(--space-6);
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.cell {
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+/* The label, the figure and the line under it are each their own line, whatever
+   the element: the prototype's cell is three spans and a `<b>` with the `<b>`
+   made a block, and a figure that could not be computed is a word rather than a
+   number. */
+.label,
+.line {
+  display: block;
+}
+
+.figure {
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* A figure on its way, in the box the figure will fill: the height is the type
+   role's own, so the cell is the same height before and after it arrives. */
+.figureWaiting {
+  width: 60%;
+  height: calc(var(--text-xl) * var(--leading-normal));
+  margin-top: var(--space-2);
+}
+
+.lineWaiting {
+  width: 90%;
+  height: calc(var(--text-base) * var(--leading-normal));
+}
+
+/* ---- What the estimate is made of -------------------------------------- */
+
+.made {
+  margin-top: var(--space-5);
+}
+
+.kv {
+  display: grid;
+  margin-top: var(--space-4);
+  gap: var(--space-2) var(--space-5);
+  grid-template-columns: auto 1fr;
+  font-size: var(--text-sm);
+}
+
+.kv dt {
+  color: var(--color-text-muted);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+/* ---- The launch, and what a refusal says ------------------------------- */
+
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  gap: var(--space-4);
+}
+
+/* A refusal keeps the step standing and sits above the button that was pressed.
+   It is the app's own `.notice` in its refused colours, with the figures the
+   platform sent under its sentence. */
+.refusal {
+  display: grid;
+  margin-top: var(--space-6);
+  gap: var(--space-2);
+}
+
+.refusalFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.refused {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  list-style: disc;
+}
+
+/* The reason the button is refusing, beside the button rather than in a tooltip:
+   a reason that only appears on hover is invisible on a phone. */
+.why {
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 860px) {
+  .estimate {
+    grid-template-columns: 1fr;
+  }
+}

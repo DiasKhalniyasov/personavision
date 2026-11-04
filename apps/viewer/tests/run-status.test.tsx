@@ -43,10 +43,12 @@ describe('the screen a test is', () => {
     mountApp(paths.run(SEED));
 
     await waitFor(() => {
-      // `#screen-running`'s heading names the test beside the state, the way the chrome
-      // names it (#18); what this suite is about is which screen the status chose.
-      expect(screen.getByRole('heading', { level: 1, name: /^Running · / })).toBeTruthy();
+      // `#screen-running-swarm` is the one section the shell finds it by, and the committed
+      // run carries no progress block, so its heading says the test is starting (#281);
+      // what this suite is about is which screen the status chose.
+      expect(document.querySelector('[data-section="run-progress"]')).not.toBeNull();
     });
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('This test is starting');
     // The chrome above it is the chrome of any other test: a run being read is named
     // whatever state it is in.
     expect(screen.getByText('Northwind Outdoors')).toBeTruthy();
