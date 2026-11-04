@@ -42,7 +42,7 @@ import styles from './landing.module.css';
 export const EXAMPLE_RUN_ID = '2026-10-24-1402-northwind-demo';
 
 /** The one thing the page promises, in the reader's own words. It is the page's one `h1`. */
-const HEADLINE = 'Know which version your customers can actually use';
+const HEADLINE = 'Find out if people get what your product is for';
 
 /** The three steps, as `docs/FLOW.md` sections 1 and 2 walk them. */
 const STEPS: readonly { readonly name: string; readonly body: string }[] = [
@@ -52,22 +52,25 @@ const STEPS: readonly { readonly name: string; readonly body: string }[] = [
   },
   {
     name: 'Point at two versions and a task',
-    body: 'The page you have and the redesign somebody has proposed, and the one thing a customer came to get done.',
+    body: 'Your own landing page \u2014 or two versions of it \u2014 and what to check: a task to complete, or no directed task at all, just \u201csay what this product is for\u201d so you learn whether new visitors understand it.',
   },
   {
     name: 'Read the verdict',
-    body: 'One sentence naming the version your audience completes, the share of them who finished on each, and the moment the answer turns on.',
+    body: 'For a task, the version your audience completes; for a clarity test, their own-word explanations of what your product is for, the misunderstandings, and where they looked or gave up.',
   },
 ];
 
-/** *See the demo* and *Sign in*: the page's only two actions, wherever they appear. */
+/** *Try it on your project*, *See the demo* and *Sign in*, wherever they appear. */
 function Actions() {
   return (
     <div className={styles.actions}>
       <Button size="lg" asChild>
-        <Link to={paths.demo}>See the demo</Link>
+        <Link to="/signup">Sign up to try it on your project</Link>
       </Button>
       <Button size="lg" variant="outline" asChild>
+        <Link to={paths.demo}>See the demo</Link>
+      </Button>
+      <Button size="lg" variant="ghost" asChild>
         <Link to={paths.signIn}>Sign in</Link>
       </Button>
     </div>
@@ -87,8 +90,11 @@ function Bar() {
           <Button variant="ghost" asChild>
             <Link to={paths.demo}>See the demo</Link>
           </Button>
-          <Button asChild>
+          <Button variant="ghost" asChild>
             <Link to={paths.signIn}>Sign in</Link>
+          </Button>
+          <Button asChild>
+            <Link to="/signup">Sign up to try it on your project</Link>
           </Button>
         </div>
       </div>
@@ -146,10 +152,12 @@ export function LandingPage() {
             <div className={styles.heroText}>
               <h1 className={styles.headline}>{HEADLINE}</h1>
               <p className="lede">
-                Two versions of a page, one audience you describe, and the answer before the
-                meeting. PersonaVision simulates your customers on both, watches where they look and
-                where they give up, and names the version they finish &mdash; without a week of real
-                traffic and real customers.
+                Yes &mdash; including with no task at all. Give PersonaVision your landing page
+                and simulated first-time visitors (founders, indie hackers and engineers like the
+                people you want). It watches where they look, then asks what they think your
+                product is for, who it is for and what they would do next &mdash; in their own
+                words. If they cannot say, you have a clarity problem, not a button problem:
+                it names the misunderstanding before you build more or wait a week for real traffic.
               </p>
               <Actions />
               {unreadable ? <Unavailable /> : null}
@@ -173,6 +181,48 @@ export function LandingPage() {
             </div>
           </div>
         )}
+
+        <div className="strip">
+          <div className="wrap">
+            <h2 className={styles.howHeading}>Can it tell you if people understand what your product is for?</h2>
+            <p className={styles.stepBody}>
+              Yes. Task completion alone would not tell you that &mdash; the checkout example
+              above is only one kind of test. For a clarity test, simulated first-time visitors land on
+              your page with no directed task, look around as real visitors would, and then answer
+              in their own words:
+            </p>
+            <ol className={styles.steps}>
+              <li>
+                <p className={styles.stepName}>What is this product for?</p>
+                <p className={styles.stepBody}>What they think you do, who they think it is for, and what they would do next &mdash; quoted, not just scored.</p>
+              </li>
+              <li>
+                <p className={styles.stepName}>Where did that impression come from?</p>
+                <p className={styles.stepBody}>Where they looked, what they never saw, and the headline or section that gave them the wrong idea.</p>
+              </li>
+              <li>
+                <p className={styles.stepName}>Did they get it &mdash; or give up?</p>
+                <p className={styles.stepBody}>How many can explain your product back to you, how many misread it, and how many leave without understanding it at all.</p>
+              </li>
+            </ol>
+            <h2 className={styles.howHeading}>How you would try it on your project</h2>
+            <ol className={styles.steps}>
+              <li>
+                <p className={styles.stepName}>Sign up &mdash; no real traffic needed</p>
+                <p className={styles.stepBody}>Create an account, then describe your audience: for example engineers at startups, indie hackers with a pet project, or founders building an MVP, aged 18&ndash;30.</p>
+              </li>
+              <li>
+                <p className={styles.stepName}>Point it at your own page</p>
+                <p className={styles.stepBody}>Paste your landing-page URL &mdash; or two versions of it &mdash; and set the test to &ldquo;Say what this product is for&rdquo; instead of a checkout-style task.</p>
+              </li>
+              <li>
+                <p className={styles.stepName}>Read whether they got it</p>
+                <p className={styles.stepBody}>Get their explanations, the misunderstandings, and where they looked or gave up &mdash; then fix the wording before you build more.</p>
+              </li>
+            </ol>
+            <Actions />
+          </div>
+        </div>
 
         <div className="strip">
           <div className="wrap">
