@@ -25,7 +25,8 @@
     "improve:local": "tsx --conditions=development scripts/improve-local.ts",
     "open": "tsx --conditions=development packages/cli/src/cli.ts open",
     "demo:run": "pnpm -r build && tsx scripts/generate-demo-run.ts",
-    "bake:landing-slides": "tsx --conditions=development scripts/bake-landing-slides.ts"
+    "bake:landing-slides": "tsx --conditions=development scripts/bake-landing-slides.ts",
+    "acceptance:templates": "tsx --conditions=development scripts/template-acceptance.ts"
   },
   "devDependencies": {
     "@personavision/browser": "workspace:*",
