@@ -8,6 +8,7 @@ import type {
   Violation,
 } from '../src/index.js';
 import {
+  aggregateSchema,
   readRun,
   recommendationsSchema,
   runPaths,
@@ -588,6 +589,32 @@ describe('every citation against the run it belongs to', () => {
       expect(validateRecommendations(cited())).toEqual([]);
     });
 
+    it('is held to the task’s own steps when the aggregate carries no funnel at all', () => {
+      // `aggregateSchema` forbids a slice on an aggregate of no scored sessions, so a run
+      // whose every session our automation broke has a readable aggregate with no funnel to
+      // anchor in. Holding a citation to an empty funnel would refuse every one of them.
+      const nothingScored = aggregateSchema.parse({
+        ...validAggregate(),
+        scoredSessionCount: 0,
+        excludedAutomationFailures: 2,
+        funnelSlices: [],
+        screenSlices: [],
+      });
+
+      expect(
+        validateRecommendations(
+          cited({
+            aggregate: nothingScored,
+            recommendations: topRecommendation(validRecommendations(), {
+              citations: [{ kind: 'funnel', stepId: CONFIRM }],
+              // Nobody was scored, so the claim is about nobody either.
+              peopleAffected: 0,
+            }),
+          }),
+        ),
+      ).toEqual([]);
+    });
+
     it('is held to the task’s own steps on a run that computed no aggregate', () => {
       const [complaint] = complaints(
         cited({
@@ -652,6 +679,27 @@ describe('every citation against the run it belongs to', () => {
           }),
         })[0],
       ).toContain('fewer than its own evidence');
+    });
+
+    it('leaves a cited session whose file is not in hand to the reader that reports it', () => {
+      const artifact = brokenSessionArtifact();
+
+      // The run lists S-03 and the directory has no such file. Whether that session was one
+      // our automation broke is readable only off the file, so counting it either way here
+      // would be a second complaint about the one gap the reader already names.
+      expect(
+        validateRecommendations({
+          ...artifact,
+          sessions: artifact.sessions.filter((session) => session.sessionId !== 'S-03'),
+          recommendations: topRecommendation(validRecommendations(), {
+            citations: [
+              { kind: 'session', sessionId: 'S-01', offsetMs: 0 },
+              { kind: 'session', sessionId: 'S-03', offsetMs: 0 },
+            ],
+            peopleAffected: 1,
+          }),
+        }),
+      ).toEqual([]);
     });
 
     it('holds a write-up claim to the same rule', () => {
@@ -771,6 +819,34 @@ describe('validate on a run directory reports the run-level rules too', () => {
 
     expect(offenders(violations)).toEqual([`${label.recommendations}/recommendations/0/citations`]);
     expect(violations[0].message).toContain('automation failure');
+  });
+
+  it('reports a missing session file once, and not again as a citation into it', async () => {
+    const artifact = brokenSessionArtifact();
+    const document = validRecommendations();
+    await writeRun(dir, artifact);
+    await rm(runPaths(dir).session('S-03'));
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [
+              { kind: 'session', sessionId: 'S-01', offsetMs: 0 },
+              { kind: 'session', sessionId: 'S-03', offsetMs: 0 },
+            ],
+            peopleAffected: 1,
+          },
+        ],
+      }),
+    );
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toEqual([`${label.run}/sessionIds/2`]);
+    expect(violations[0].message).toMatch(/there is no sessions\/S-03.json/);
   });
 
   it('refuses to write a peopleAffected the aggregate did not measure', async () => {

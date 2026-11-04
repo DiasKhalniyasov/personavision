@@ -19,6 +19,14 @@
  * whose every cited session is our own automation failing is a claim about our harness, and
  * the product does not publish it as advice about somebody's site.
  *
+ * **One thing it does not resolve**: a session citation's `offsetMs` against the length of
+ * that session's recording. The session video block carries the duration and this module
+ * has the sessions in hand, so the check belongs here — it is #256, deliberately left out
+ * of #254 so that neither waited on the other. Until it lands, a citation resolving here
+ * means its session, region, step and finding exist, not that its timestamp is inside the
+ * recording. `@personavision/provider`'s own gate on a model reply does check the offset,
+ * so the two are not the same check and neither subsumes the other.
+ *
  * Pure, and reaching no file system: the reader in `io.ts` calls it with what it parsed,
  * and a caller holding a run artifact in memory calls it with that.
  */
@@ -99,17 +107,37 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
   const declaredSteps = new Set(run.steps.map((step) => step.id));
   const declaredAois = new Set(run.aois.map((aoi) => aoi.id));
   const declaredFindings = new Set(findings?.findings.map((finding) => finding.id) ?? []);
-  const excludedSessions = new Set(sessions.filter(isExcluded).map((session) => session.sessionId));
+  /**
+   * The sessions in hand, by id. Whether a session is one our automation broke is readable
+   * only off the session itself, so every rule below that counts people counts these and
+   * not `run.sessionIds`: a run listing a session whose file is missing or unparseable is
+   * already a violation the reader reports, and a second complaint derived from the same
+   * gap would be one mistake reported twice.
+   */
+  const inHand = new Map(sessions.map((session) => [session.sessionId, session]));
+  /** Whether the sessions in hand account for every session the run lists. */
+  const wholeRunInHand = run.sessionIds.every((sessionId) => inHand.has(sessionId));
 
   /**
-   * The steps a funnel citation can anchor. The Funnel and timing screen draws its rows
-   * from `aggregate.json`, so when the run has an aggregate that file is what a funnel
-   * anchor has to be found in — a step the run declares but nobody walked is a row that
-   * screen does not render. A run with no aggregate has no funnel to carry a step either,
-   * and the most the contract can hold a citation to there is the task's own steps.
+   * The steps a funnel citation can anchor, or `undefined` when there is no funnel to
+   * anchor in and the task's own steps are the most the contract can hold a citation to.
+   *
+   * The Funnel and timing screen draws its rows from `aggregate.json`, so where the run has
+   * a funnel, that funnel is where an anchor has to be found. Today's composer emits one
+   * row per step `run.json` declares, `reached: 0` included
+   * (`packages/scoring/src/aggregate/funnel.ts`), so for an aggregate this repository
+   * produces the two sets agree — what this holds is any **other** aggregate the schema
+   * admits, one computed over a different set of steps, which is a file whose funnel the
+   * screen would render without the row a citation points at.
+   *
+   * A run with **no slices** has no funnel at all rather than an empty one: `aggregateSchema`
+   * forbids a slice on an aggregate of no scored sessions, so a run whose every session our
+   * automation broke has a readable aggregate carrying nothing to anchor in. Holding a
+   * citation to an empty set there would refuse every funnel citation in the document and
+   * leave the directory unwritable.
    */
   const funnelSteps =
-    aggregate === undefined
+    aggregate === undefined || aggregate.funnelSlices.length === 0
       ? undefined
       : new Set(aggregate.funnelSlices.flatMap((slice) => slice.funnel.map((row) => row.step)));
 
@@ -176,23 +204,22 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
   };
 
   /**
-   * The people a claim cites, as the run knows them: distinct session ids the run holds,
-   * split into the ones a figure may rest on and the ones our own automation broke. A
-   * citation into a session the run does not hold is left out — it is already a violation of
-   * its own, and counting it here would report one mistake twice.
+   * The people a claim cites, as the run knows them: the distinct sessions it cites that are
+   * **in hand**, split into the ones a figure may rest on and the ones our own automation
+   * broke. A citation naming a session the run does not list, or one whose file could not be
+   * read, is left out of both — each is already a violation of its own, and counting it here
+   * would report one mistake twice.
    */
   const citedPeople = (citations: ReadonlyArray<Citation>): CitedPeople => {
-    const ids = new Set(
-      citations.flatMap((citation) =>
-        citation.kind === 'session' && declaredSessions.has(citation.sessionId)
-          ? [citation.sessionId]
-          : [],
-      ),
-    );
     const counted: string[] = [];
     const excluded: string[] = [];
-    for (const sessionId of ids) {
-      (excludedSessions.has(sessionId) ? excluded : counted).push(sessionId);
+    const seen = new Set<string>();
+    for (const citation of citations) {
+      if (citation.kind !== 'session' || seen.has(citation.sessionId)) continue;
+      seen.add(citation.sessionId);
+      const session = inHand.get(citation.sessionId);
+      if (session === undefined) continue;
+      (isExcluded(session) ? excluded : counted).push(citation.sessionId);
     }
     return { counted, excluded };
   };
@@ -211,23 +238,30 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
   };
 
   /**
-   * How many people the run measured at all, which is the most a change can reach. The
-   * aggregate's own count is it where there is one, and the sessions our automation did not
-   * break where there is not — either way a number somebody counted, and never a bound this
-   * module invents.
+   * How many people the run measured at all, which is the most a change can reach — the
+   * aggregate's own count where there is one, and the sessions our automation did not break
+   * where there is not. Either way a number somebody counted, and never a bound this module
+   * invents.
+   *
+   * `undefined` is "there is no such number here": a run with no aggregate whose sessions on
+   * disk do not account for the sessions it lists has nothing trustworthy to count, and the
+   * reader is already reporting the files that are missing. The aggregate's own count is a
+   * stored figure and stands whatever the directory is missing.
    */
   const measured =
-    aggregate === undefined
+    aggregate !== undefined
       ? {
-          count: run.sessionIds.filter((sessionId) => !excludedSessions.has(sessionId)).length,
-          source: 'the run holds',
-          of: 'sessions our own automation did not break',
-        }
-      : {
           count: aggregate.scoredSessionCount,
           source: `${relative.aggregate} is of`,
           of: 'scored sessions',
-        };
+        }
+      : wholeRunInHand
+        ? {
+            count: [...inHand.values()].filter((session) => !isExcluded(session)).length,
+            source: 'the run holds',
+            of: 'sessions our own automation did not break',
+          }
+        : undefined;
 
   recommendations.recommendations.forEach((recommendation, index) => {
     checkCitations('recommendations', index, recommendation.citations);
@@ -257,7 +291,7 @@ export const validateRecommendations = (cited: CitedRun): Violation[] => {
         `peopleAffected is the people a change would reach, and this recommendation cites ${people.counted.length} of them by session: ${recommendation.peopleAffected} is fewer than its own evidence`,
       );
     }
-    if (recommendation.peopleAffected > measured.count) {
+    if (measured !== undefined && recommendation.peopleAffected > measured.count) {
       inFile(
         where,
         `peopleAffected is the ranking key, and it cannot be a number nobody measured: this says ${recommendation.peopleAffected}, and ${measured.source} ${measured.count} ${measured.of}`,
