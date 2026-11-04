@@ -1,0 +1,68 @@
+/* ---- The scroll-depth overlay -------------------------------------------
+   The scroll-depth layer of `#screen-heatmaps`, and the `.heatkey` /
+   `.scale-legend` ramp beside its switch.
+
+   A band is a horizontal strip of the page's own box — decision 128's equal
+   bands from the top of the page — so it is laid out as a block at a
+   percentage of the page rather than drawn in an SVG: a percentage of the same
+   box the screenshot fills cannot come out of register with it, which is the
+   rule the whole stage is built on.
+
+   Every colour is one of the `--heat-*` tokens and the layer's strength is
+   `--heat-opacity`, so all three overlays are read against one key. The only
+   numbers this layer has are the artifact's, set on the elements themselves.
+
+   No transition and no animation: complete and still on mount. */
+
+.depth {
+  opacity: var(--heat-opacity);
+}
+
+.band {
+  position: absolute;
+  right: 0;
+  left: 0;
+}
+
+.step1 {
+  background: var(--heat-2);
+}
+
+.step2 {
+  background: var(--heat-3);
+}
+
+.step3 {
+  background: var(--heat-4);
+}
+
+.step4 {
+  background: var(--heat-5);
+}
+
+/* ---- The key ------------------------------------------------------------ */
+
+.ramp {
+  height: var(--space-2);
+  margin-block: var(--space-2) var(--space-1);
+  border-radius: var(--radius-full);
+  background: linear-gradient(to right, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5));
+}
+
+.scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+/* What the shading amounts to, in words: the overlay's text alternative. */
+.counts {
+  display: grid;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  gap: var(--space-1);
+  list-style: none;
+}

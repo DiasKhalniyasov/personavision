@@ -16,6 +16,7 @@ import type { Fixation } from '../useAttentionStepSessions';
 import { HEAT_DRAWN_STEPS, HEAT_STEPS, accumulateHeat } from './heatAccumulation';
 import { HEATMAP_LAYER, HeatKey, HeatmapLayer } from './HeatmapLayer';
 import { OVERLAY_LAYERS } from './overlayLayers';
+import { NO_AGGREGATE } from '../useScreenFigures';
 import type { OverlayLayerProps } from './overlayLayers';
 import { pageToOverlay } from './overlayTransform';
 import type { Transform } from './overlayTransform';
@@ -107,6 +108,8 @@ const given = (over: Partial<OverlayLayerProps> = {}): OverlayLayerProps => ({
   saccades: [],
   areas: [],
   isolatedAoiId: null,
+  // This layer reads no aggregate; the constant says there is none to read.
+  screen: NO_AGGREGATE,
   transform: PAGE,
   ...over,
 });

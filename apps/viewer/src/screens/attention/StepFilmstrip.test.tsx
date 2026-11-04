@@ -206,9 +206,17 @@ const selectionFor = (step: string, setStep = vi.fn()): AttentionSelection => ({
   variant: 'B',
   step,
   aoi: null,
+  // The filmstrip reads none of the three the Heatmaps screen added: the overlays are the
+  // stage's, and the two filters reach it as the figures it is handed.
+  overlays: ['clicks'],
+  segment: null,
+  outcome: null,
   setVariant: vi.fn(),
   setStep,
   setAoi: vi.fn(),
+  setOverlays: vi.fn(),
+  setSegment: vi.fn(),
+  setOutcome: vi.fn(),
   fallback: null,
 });
 

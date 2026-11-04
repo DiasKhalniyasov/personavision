@@ -14,6 +14,7 @@ import { loadDesignTokens } from '../../../../tests/setup';
 import type { AttentionArea } from '../useAttentionAreas';
 import { medianScanpath } from './medianScanpath';
 import { OVERLAY_LAYERS } from './overlayLayers';
+import { NO_AGGREGATE } from '../useScreenFigures';
 import type { OverlayLayerProps } from './overlayLayers';
 import { boxToOverlay } from './overlayTransform';
 import type { Transform } from './overlayTransform';
@@ -130,6 +131,8 @@ const given = (over: Partial<OverlayLayerProps> = {}): OverlayLayerProps => ({
   saccades: [],
   areas: [],
   isolatedAoiId: null,
+  // This layer reads no aggregate; the constant says there is none to read.
+  screen: NO_AGGREGATE,
   transform: PAGE,
   ...over,
 });

@@ -6,6 +6,7 @@ import { runSchema } from '@personavision/contract';
 import type { Run } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../../tests/app';
+import { NO_AGGREGATE } from '../useScreenFigures';
 import { AOI_OUTLINE_LAYER } from './AoiOutlineLayer';
 import { OVERLAY_LAYERS } from './overlayLayers';
 import type { OverlayLayer, OverlayLayerProps, StageLayer } from './overlayLayers';
@@ -282,6 +283,8 @@ const noData: OverlayLayerProps = {
   saccades: [],
   areas: [],
   isolatedAoiId: null,
+  // This layer reads no aggregate; the constant says there is none to read.
+  screen: NO_AGGREGATE,
   transform: { pageWidth: 390, pageHeight: 1540 },
 };
 
