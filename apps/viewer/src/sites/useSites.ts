@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listSites } from './store';
+import { listSites, readSite } from './store';
 import type { SiteRecord } from './store';
 
 /**
@@ -69,6 +69,62 @@ export function useSites(): SiteListState {
       live = false;
     };
   }, []);
+
+  return state;
+}
+
+/** Reading one site, as the Add-a-site screen opens on it. */
+export type SiteState =
+  | { readonly status: 'loading' }
+  /** `/sites/new`: no site is being read, because there is not one yet. */
+  | { readonly status: 'none' }
+  | { readonly status: 'ready'; readonly site: SiteRecord }
+  | { readonly status: 'not-found'; readonly siteId: string }
+  | { readonly status: 'unreadable'; readonly problem: string };
+
+/**
+ * One site, by the id in the path — **read fresh every time**, and deliberately not cached.
+ *
+ * The list above is remembered because every screen asks the same question of it; a single
+ * site is not, because this is the screen that *changes* the site it is showing. A reader
+ * who proves a site, goes back to the list and opens it again must be shown the verified
+ * record rather than the unverified copy that was true when they arrived.
+ *
+ * `/sites/new` and `/sites/:siteId` are one component on the route table, so a path naming
+ * no site clears the answer rather than leaving the last site standing in the new form.
+ */
+export function useSite(siteId: string | null): SiteState {
+  const [state, setState] = useState<SiteState>({ status: 'loading' });
+
+  useEffect(() => {
+    if (siteId === null) {
+      setState({ status: 'none' });
+      return;
+    }
+    let live = true;
+    setState({ status: 'loading' });
+    void readSite(siteId).then((answer) => {
+      if (!live) return;
+      if (answer.ok) {
+        setState({ status: 'ready', site: answer.value });
+        return;
+      }
+      setState(
+        answer.kind === 'not-found'
+          ? { status: 'not-found', siteId }
+          : {
+              status: 'unreadable',
+              problem:
+                answer.kind === 'unreachable'
+                  ? answer.problem
+                  : (answer.issues[0]?.message ?? 'That site could not be read.'),
+            },
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [siteId]);
 
   return state;
 }

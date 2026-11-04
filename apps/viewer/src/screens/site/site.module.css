@@ -1,0 +1,155 @@
+/* =============================================================================
+   `#screen-site` of `docs/design/prototype.html`: adding a site, and proving it is
+   yours — the URL field, the state line, the four methods with the line to copy,
+   and the check under each of them.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies: no colour, length, radius, weight or duration is
+   restated here. The one thing that moves on this screen is the soft pulse on a
+   method whose check is running, which is the tokens' own `pv-pulse` — and the
+   tokens stop it under `prefers-reduced-motion`, so the screen is complete and
+   still there without a rule of its own.
+
+   The rules are scoped to this module rather than written as the prototype's own
+   global class names, because the prototype's `Forms` block — `.form`,
+   `.field-group`, `.formfoot` — is shared with screens other tickets own. What is
+   reproduced is the layout it draws, not the selector it draws it with; the shared
+   primitives these blocks sit inside (`.strip`, `.wrap-narrow`, `.card`, `.lede`,
+   `.breadcrumb`, `.tag`, `.footnote`, `.faint`, `.notice`) are the app's own, in
+   `src/styles/base.css`.
+   ========================================================================== */
+
+/* ---- The URL -------------------------------------------------------------- */
+
+/* One column, and `minmax(0, …)` on it: a track sized `auto` grows to its widest
+   item, so a long address would push the form past the card it sits in rather
+   than wrapping inside it. */
+.form {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fieldGroup {
+  display: grid;
+  min-inline-size: 0;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.fieldGroup > label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.err {
+  color: var(--sev-critical);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- How the site stands, and what binds it ------------------------------- */
+
+.sitestate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--space-4);
+  gap: var(--space-3);
+}
+
+/* The figures and the unlock line are read over somebody's shoulder on a phone:
+   they wrap inside the row rather than widening the page. */
+.sitestate > span {
+  overflow-wrap: anywhere;
+}
+
+/* ---- The four ways to prove it -------------------------------------------- */
+
+.verify {
+  display: grid;
+  margin-top: var(--space-5);
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.method {
+  display: grid;
+  min-inline-size: 0;
+  min-width: 0;
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The method that proved this site, and the one a reader has just run a check on. */
+.method[aria-current='true'] {
+  border-color: var(--color-accent-strong);
+  background: var(--color-surface-raised);
+}
+
+.method header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The prototype sets a method's name at `h3`; on the screen it is the one heading
+   under the page's own, so it is marked up as `h2` and takes that type role. */
+.method h2 {
+  font-size: var(--text-base);
+}
+
+.method p {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The exact line to copy, with the token whole. It scrolls inside its own box at
+   390px rather than widening the page: the line is one unbroken word to a
+   line-breaker, and breaking a record or a tag across lines would be a line that
+   does not work when it is pasted. */
+.tokenline {
+  display: block;
+  overflow-x: auto;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: var(--weight-regular) var(--text-xs) / var(--leading-normal) var(--font-mono);
+  white-space: pre;
+}
+
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  gap: var(--space-4);
+}
+
+/* What the last check found, which wraps under the button on a narrow screen: the
+   platform's sentence quotes a host back, and a host is unbreakable to a
+   line-breaker. */
+.formfoot > span {
+  overflow-wrap: anywhere;
+}
+
+/* A check is running. The product's one pulse and nothing else; the tokens flatten
+   it to a still frame under `prefers-reduced-motion: reduce`. */
+.running {
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
