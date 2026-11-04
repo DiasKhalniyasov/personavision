@@ -824,6 +824,62 @@ export const improveSchema = z.strictObject({
   holdout: holdoutSchema,
 });
 
+/**
+ * One area of interest the run measured, and the row of figures it carries.
+ *
+ * Named rather than written inline inside `runSchema` because the front page's slide data
+ * carries the very same rows (`landingSlidesSchema`), and a field of the artifact is
+ * declared exactly once: two copies of this shape in one file would drift independently,
+ * and a slide that is supposed to be a copy would stop being one without anything failing.
+ */
+const aoiSchema = z.strictObject({
+  id: name,
+  variant: name,
+  step: name,
+  label: name,
+  source: aoiSourceSchema,
+  role: z.string().nullable(),
+  bbox: z.strictObject({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
+  isPrimaryAction: z.boolean(),
+  belowFold: z.boolean(),
+});
+
+const aoiMetricsSchema = z.strictObject({
+  aoiId: name,
+  /** `null` when no fixation ever landed: a never-fixated area is a result, not a gap. */
+  timeToFirstFixationMs: milliseconds.nullable(),
+  firstFixationDurationMs: milliseconds.nullable(),
+  totalDwellMs: milliseconds,
+  fixationCount: count,
+  revisits: count,
+  lookedAtShare: unitInterval,
+  sessionCount: count,
+});
+
+/**
+ * One fixation and one saccade, named for the same reason as the two above: a slide carries
+ * the screen's own fixations and the saccades between them, and they are the session's rows
+ * rather than a shape of their own.
+ */
+const fixationSchema = z.strictObject({
+  index: count,
+  screenIndex: count,
+  tMs: milliseconds,
+  durationMs: milliseconds,
+  x: pixels,
+  y: pixels,
+  pageX: pixels,
+  pageY: pixels,
+  aoiId: name.nullable(),
+});
+
+const saccadeSchema = z.strictObject({
+  fromFixation: count,
+  toFixation: count,
+  amplitudePx: pixels,
+  durationMs: milliseconds,
+});
+
 export const runSchema = z
   .strictObject({
     schemaVersion,
@@ -980,32 +1036,8 @@ export const runSchema = z
         foldY: pixels,
       }),
     ),
-    aois: z.array(
-      z.strictObject({
-        id: name,
-        variant: name,
-        step: name,
-        label: name,
-        source: aoiSourceSchema,
-        role: z.string().nullable(),
-        bbox: z.strictObject({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
-        isPrimaryAction: z.boolean(),
-        belowFold: z.boolean(),
-      }),
-    ),
-    aoiMetrics: z.array(
-      z.strictObject({
-        aoiId: name,
-        /** `null` when no fixation ever landed: a never-fixated area is a result, not a gap. */
-        timeToFirstFixationMs: milliseconds.nullable(),
-        firstFixationDurationMs: milliseconds.nullable(),
-        totalDwellMs: milliseconds,
-        fixationCount: count,
-        revisits: count,
-        lookedAtShare: unitInterval,
-        sessionCount: count,
-      }),
-    ),
+    aois: z.array(aoiSchema),
+    aoiMetrics: z.array(aoiMetricsSchema),
     scores: z.array(scoreSchema),
     verdict: verdictSchema,
     /**
@@ -1520,27 +1552,8 @@ export const sessionSchema = z
         decidedAction: z.string(),
       }),
     ),
-    fixations: z.array(
-      z.strictObject({
-        index: count,
-        screenIndex: count,
-        tMs: milliseconds,
-        durationMs: milliseconds,
-        x: pixels,
-        y: pixels,
-        pageX: pixels,
-        pageY: pixels,
-        aoiId: name.nullable(),
-      }),
-    ),
-    saccades: z.array(
-      z.strictObject({
-        fromFixation: count,
-        toFixation: count,
-        amplitudePx: pixels,
-        durationMs: milliseconds,
-      }),
-    ),
+    fixations: z.array(fixationSchema),
+    saccades: z.array(saccadeSchema),
     actions: z.array(
       z.strictObject({
         tMs: milliseconds,
@@ -2564,7 +2577,13 @@ const landingSlideSchema = z.strictObject({
     /** The two or three traits this slide shows. */
     traits: z.array(slideTraitSchema).min(2).max(3),
   }),
-  /** The capture the slide draws on, as `run.json`'s `screenshots[]` row records it. */
+  /**
+   * The capture the slide draws on, as `run.json`'s `screenshots[]` row records it.
+   *
+   * `foldY` is left out, like the device's `deviceScaleFactor`: a slide shows one screen of
+   * one person and draws no fold line, and an area that was below the fold already says so
+   * on its own `belowFold`. Whoever draws one adds the field here.
+   */
   screenshot: z.strictObject({
     /** Run-directory-relative, as `runPaths('').screenshot(variant, step)` spells it. */
     path: name,
@@ -2577,29 +2596,8 @@ const landingSlideSchema = z.strictObject({
    * against — `pageX`/`pageY` for a fixation, and, for a click, the `bbox` of the area it
    * landed on, because `actions[]` carries no coordinates of its own.
    */
-  fixations: z
-    .array(
-      z.strictObject({
-        index: count,
-        screenIndex: count,
-        tMs: milliseconds,
-        durationMs: milliseconds,
-        x: pixels,
-        y: pixels,
-        pageX: pixels,
-        pageY: pixels,
-        aoiId: name.nullable(),
-      }),
-    )
-    .min(1),
-  saccades: z.array(
-    z.strictObject({
-      fromFixation: count,
-      toFixation: count,
-      amplitudePx: pixels,
-      durationMs: milliseconds,
-    }),
-  ),
+  fixations: z.array(fixationSchema).min(1),
+  saccades: z.array(saccadeSchema),
   /**
    * The clicks of this screen. `type` is gone because every row is one, and `aoiId` is
    * **not** nullable here: a click that names no area has no position on the page and so is
@@ -2619,25 +2617,12 @@ const landingSlideSchema = z.strictObject({
    * run already computed for it. The slide draws the stored numbers and recomputes none.
    */
   areas: z.array(
-    z.strictObject({
-      id: name,
-      variant: name,
-      step: name,
-      label: name,
-      source: aoiSourceSchema,
-      role: z.string().nullable(),
-      bbox: z.strictObject({ x: coordinate, y: coordinate, width: pixels, height: pixels }),
-      isPrimaryAction: z.boolean(),
-      belowFold: z.boolean(),
-      metrics: z.strictObject({
-        timeToFirstFixationMs: milliseconds.nullable(),
-        firstFixationDurationMs: milliseconds.nullable(),
-        totalDwellMs: milliseconds,
-        fixationCount: count,
-        revisits: count,
-        lookedAtShare: unitInterval,
-        sessionCount: count,
-      }),
+    aoiSchema.extend({
+      /**
+       * The row the run already measured for this area, minus its `aoiId`: the area it is
+       * nested inside carries that id, and a slide states nothing twice.
+       */
+      metrics: aoiMetricsSchema.omit({ aoiId: true }),
     }),
   ),
   /**
@@ -2671,6 +2656,14 @@ const landingSlideSchema = z.strictObject({
  * rather than a page of prose about one. The parse is closed like every other object here,
  * so a baked file that drifts from the contract fails to load rather than rendering
  * something plausible.
+ *
+ * It carries **no `schemaVersion`**, and that is deliberate: a slide set is not an artifact
+ * file. It lives in `apps/viewer`'s own source, is rebuilt by one command from a run
+ * directory that does carry one, and is never read off a stranger's disk — so there is no
+ * old copy to identify, and a version nobody raises would be a field that says nothing.
+ * `runRequestSchema` above is in the same position. What stands in for it is the suite
+ * beside the committed file, which checks every value against the run it was baked from, so
+ * a set left behind by a changed fixture fails a test rather than rendering a stale page.
  */
 export const landingSlidesSchema = z
   .strictObject({

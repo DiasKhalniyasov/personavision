@@ -6,7 +6,8 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { landingSlidesSchema, readRun } from '@personavision/contract';
+import { landingSlidesSchema, readRun, runPaths } from '@personavision/contract';
+import { stepWalk } from '@personavision/scoring';
 import type { LandingSlides, Run, Session } from '@personavision/contract';
 
 /**
@@ -19,8 +20,10 @@ import type { LandingSlides, Run, Session } from '@personavision/contract';
  * temporary directory and compared with the committed bytes, so the file, the script and the
  * documented command cannot drift apart.
  *
- * Plus the refusals, because the page would rather have no carousel than a person who looked
- * at a picture that is not there.
+ * The two rules the script applies rather than copies get a test each — which traits a slide
+ * shows, and which screen a click belongs to — restated here rather than imported, so that
+ * changing either has to be done twice on purpose. Plus the refusals, because the page would
+ * rather have no carousel than a person who looked at a picture that is not there.
  */
 
 const run$ = promisify(execFile);
@@ -29,6 +32,10 @@ const ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));
 const SLIDES_FILE = 'apps/viewer/src/screens/landing/slides.json';
 const RUNS_ROOT = join(ROOT, 'runs');
 const EXAMPLE_RUN = '2026-10-24-1402-northwind-demo';
+
+/** The widest a phone is drawn at and the narrowest a desktop is, for the contrast above. */
+const PHONE_WIDTH = 500;
+const DESKTOP_WIDTH = 1000;
 
 /** Long enough for `tsx` to start, read a 3 MB run directory and parse it. */
 const SUBPROCESS_TIMEOUT_MS = 60_000;
@@ -88,11 +95,22 @@ describe('the committed slide set', () => {
   });
 
   it('contrasts a phone and a desktop, and somebody who did not succeed', () => {
-    const touch = committed.slides.filter((slide) => slide.person.device.touch);
-    expect(touch.length, 'at least one slide is a person on a phone').toBeGreaterThan(0);
+    // On the person's device, which is what the slide draws the frame from — not on the
+    // capture's, because every capture of the committed run is 390 px wide, the ones the
+    // desktop people walked included.
+    const widths = committed.slides.map((slide) => slide.person.device.viewport.width);
     expect(
-      committed.slides.length - touch.length,
-      'at least one slide is a person on a desktop',
+      committed.slides.filter(
+        (slide) => slide.person.device.touch && slide.person.device.viewport.width <= PHONE_WIDTH,
+      ).length,
+      `at least one slide is a person on a phone viewport (widths: ${widths.join(', ')})`,
+    ).toBeGreaterThan(0);
+    expect(
+      committed.slides.filter(
+        (slide) =>
+          !slide.person.device.touch && slide.person.device.viewport.width >= DESKTOP_WIDTH,
+      ).length,
+      `at least one slide is a person on a desktop viewport (widths: ${widths.join(', ')})`,
     ).toBeGreaterThan(0);
     expect(
       committed.slides.filter((slide) => slide.outcome.status !== 'success').length,
@@ -223,6 +241,58 @@ describe('every number, name and sentence is the example run’s own', () => {
     }
   });
 
+  it('shows tech confidence, patience and whichever third trait is furthest from the middle', () => {
+    for (const slide of committed.slides) {
+      const session = sessionOf(slide.sessionId);
+      const persona = run.personas.find((candidate) => candidate.id === session.persona?.id);
+      const traits = (persona as NonNullable<typeof persona>).traits;
+      const distance = (key: keyof typeof traits): number => Math.abs(traits[key] - 0.5);
+      const rest = (Object.keys(traits) as (keyof typeof traits)[])
+        .filter((key) => key !== 'interfaceFamiliarity' && key !== 'patience')
+        .sort((a, b) => distance(b) - distance(a) || (a < b ? -1 : 1));
+
+      expect(
+        slide.person.traits.map((trait) => trait.key),
+        `${slide.sessionId}'s trait rows`,
+      ).toEqual(['interfaceFamiliarity', 'patience', rest[0]]);
+    }
+  });
+
+  it('drops no click of the screen and borrows none from another', () => {
+    for (const slide of committed.slides) {
+      const session = sessionOf(slide.sessionId);
+      const step = (session.screens[slide.screenIndex] as NonNullable<Session['screens'][number]>)
+        .step;
+      const areaIds = new Set(slide.areas.map((area) => area.id));
+
+      // The script's own rule, restated: a click belongs to a screen of its area's step —
+      // the last such screen that had already started, and the first of them for a click
+      // that precedes them all. Restated rather than imported so that a change to the rule
+      // has to be made twice on purpose.
+      const spans = stepWalk(session).filter((span) => span.step === step);
+      const placed = (tMs: number): number | undefined => {
+        let found = spans[0];
+        for (const span of spans) {
+          if (span.startMs > tMs) break;
+          found = span;
+        }
+        return found?.screenIndex;
+      };
+
+      expect(slide.clicks, `${slide.sessionId}'s clicks`).toEqual(
+        session.actions
+          .filter(
+            (action) =>
+              action.type === 'click' &&
+              action.aoiId !== null &&
+              areaIds.has(action.aoiId) &&
+              placed(action.tMs) === slide.screenIndex,
+          )
+          .map(({ tMs, target, aoiId, value, ok }) => ({ tMs, target, aoiId, value, ok })),
+      );
+    }
+  });
+
   it('copies the outcome off the session', () => {
     for (const slide of committed.slides) {
       const { status, step, reason, excludedFromScores } = sessionOf(slide.sessionId).outcome;
@@ -257,12 +327,15 @@ describe('every number, name and sentence is the example run’s own', () => {
 
 describe('the script', () => {
   it(
-    'reproduces the committed file byte for byte, from the command the README documents',
+    'reproduces the committed file byte for byte, and adds, changes and removes no file under runs/',
     async () => {
       const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
       const [runsRoot, output, ...triples] = documentedCommand(readme);
       expect(output, 'the documented command writes the committed file').toBe(SLIDES_FILE);
 
+      // The two assertions share one bake because they are two questions about the same run
+      // of the same command: what it wrote, and what it left alone.
+      const before = await listing(RUNS_ROOT);
       const dir = await mkdtemp(join(tmpdir(), 'landing-slides-'));
       try {
         const file = join(dir, 'slides.json');
@@ -272,6 +345,7 @@ describe('the script', () => {
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
+      expect([...(await listing(RUNS_ROOT))].sort()).toEqual([...before].sort());
     },
     SUBPROCESS_TIMEOUT_MS,
   );
@@ -286,12 +360,13 @@ describe('the script', () => {
         // touch `runs/` to make one go missing.
         const copiedRoot = join(dir, 'runs');
         await cp(RUNS_ROOT, copiedRoot, { recursive: true });
-        await unlink(join(copiedRoot, EXAMPLE_RUN, 'screenshots', 'A', 'review.png'));
+        const capture = runPaths('').screenshot('A', 'review');
+        await unlink(join(copiedRoot, EXAMPLE_RUN, capture));
 
         const cases = [
           { root: 'runs', triple: `${EXAMPLE_RUN}:S-99:0`, named: 'S-99' },
           { root: 'runs', triple: `${EXAMPLE_RUN}:S-03:99`, named: 'screens[99]' },
-          { root: copiedRoot, triple: `${EXAMPLE_RUN}:S-03:2`, named: 'screenshots/A/review.png' },
+          { root: copiedRoot, triple: `${EXAMPLE_RUN}:S-03:2`, named: capture },
         ];
 
         for (const { root, triple, named } of cases) {
@@ -305,24 +380,6 @@ describe('the script', () => {
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
-    },
-    SUBPROCESS_TIMEOUT_MS,
-  );
-
-  it(
-    'adds, changes and removes no file under runs/',
-    async () => {
-      const before = await listing(RUNS_ROOT);
-      const dir = await mkdtemp(join(tmpdir(), 'landing-slides-runs-'));
-      try {
-        const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
-        const [runsRoot, , ...triples] = documentedCommand(readme);
-        const baked = await bake([runsRoot as string, join(dir, 'slides.json'), ...triples]);
-        expect(baked.ok, baked.output).toBe(true);
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
-      expect([...(await listing(RUNS_ROOT))].sort()).toEqual([...before].sort());
     },
     SUBPROCESS_TIMEOUT_MS,
   );

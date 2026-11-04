@@ -27,7 +27,14 @@ import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
 import { landingSlidesSchema, readRun } from '@personavision/contract';
 import { stepWalk } from '@personavision/scoring';
-import type { LandingSlide, LandingSlides, Persona, Run, Session } from '@personavision/contract';
+import type {
+  LandingSlide,
+  LandingSlides,
+  Persona,
+  Run,
+  RunArtifact,
+  Session,
+} from '@personavision/contract';
 import type { StepSpan } from '@personavision/scoring';
 
 const COMMAND = 'pnpm bake:landing-slides';
@@ -80,7 +87,9 @@ const traitsOf = (traits: Persona['traits']): LandingSlide['person']['traits'] =
  * `aoiId` of what was pressed — so both questions a slide asks of a click are answered from
  * the area it landed on. **Which screen**: the area is declared for one step of one variant,
  * so the click happened on a screen of that step; where a session walked that step more than
- * once, it is the last such screen that had already started by then. **Where on the page**:
+ * once, it is the last such screen that had already started by then — and the first of them
+ * for a click that precedes them all, which a click on a screen nobody looked at can, since
+ * such a screen's span begins at the next screen's first fixation. **Where on the page**:
  * the area's own `bbox`, which is why a click naming no area is left out of a slide
  * altogether — it has no position anything could draw.
  *
@@ -125,10 +134,13 @@ const figuresOf = ({
   sessionCount,
 });
 
-/** A refusal: the run and the field, so the triple that is wrong is the one named. */
-const refuse = (runId: string, field: string, what: string): never => {
-  throw new Error(`${runId}: ${field} — ${what}`);
-};
+/**
+ * A refusal, as an `Error` the caller throws: the run and the field, so the triple that is
+ * wrong is the one named. Returned rather than thrown so that every refusal in this file is
+ * a `throw` the compiler can see, and no call of it needs a `continue` behind it.
+ */
+const refusal = (runId: string, field: string, what: string): Error =>
+  new Error(`${runId}: ${field} — ${what}`);
 
 const parseTriple = (argument: string): Triple => {
   const parts = argument.split(':');
@@ -145,27 +157,37 @@ const parseTriple = (argument: string): Triple => {
   return { runId, sessionId, screenIndex };
 };
 
-/** One value every slide of a set shares, or a refusal naming the two that disagree. */
-const shared = <T>(field: string, values: readonly { runId: string; value: T }[]): T => {
-  const first = values[0];
-  if (first === undefined) throw new Error(`a slide set is baked from at least one slide`);
-  for (const other of values) {
-    if (JSON.stringify(other.value) !== JSON.stringify(first.value)) {
-      return refuse(
+/**
+ * The one value every run of a set agrees on, or a refusal naming the two that disagree.
+ *
+ * A set carries its task and its audience once rather than per slide, so two runs that were
+ * asked different things cannot be baked into one set: the slides would be read as a
+ * comparison of people when they are a comparison of tasks.
+ */
+const sharedAcross = <T>(
+  runs: readonly [Run, ...Run[]],
+  field: string,
+  read: (run: Run) => T,
+): T => {
+  const [first, ...rest] = runs;
+  const value = read(first);
+  for (const other of rest) {
+    if (JSON.stringify(read(other)) !== JSON.stringify(value)) {
+      throw refusal(
         other.runId,
         field,
-        `a slide set carries one ${field} for every slide, and this run's ${JSON.stringify(other.value)} is not ${first.runId}'s ${JSON.stringify(first.value)}`,
+        `a slide set carries one ${field} for every slide, and this run's ${JSON.stringify(read(other))} is not ${first.runId}'s ${JSON.stringify(value)}`,
       );
     }
   }
-  return first.value;
+  return value;
 };
 
 /** One slide, built out of a run and one screen of one of its sessions. */
-export const slideOf = (run: Run, session: Session, screenIndex: number): LandingSlide => {
+const slideOf = (run: Run, session: Session, screenIndex: number): LandingSlide => {
   const screen = session.screens[screenIndex];
   if (screen === undefined) {
-    return refuse(
+    throw refusal(
       run.runId,
       `sessions/${session.sessionId}.json screens[${screenIndex}]`,
       `that session walked ${session.screens.length} ${session.screens.length === 1 ? 'screen' : 'screens'}, so there is no screen ${screenIndex}`,
@@ -174,7 +196,7 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
 
   const persona = run.personas.find((candidate) => candidate.id === session.persona?.id);
   if (persona === undefined) {
-    return refuse(
+    throw refusal(
       run.runId,
       `sessions/${session.sessionId}.json persona`,
       `a slide is one generated person, and this session names ${session.persona === null ? 'no persona at all' : `a persona "${session.persona.id}" the run does not carry`}`,
@@ -185,7 +207,7 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
     (shot) => shot.variant === session.variant && shot.step === screen.step,
   );
   if (capture === undefined) {
-    return refuse(
+    throw refusal(
       run.runId,
       `screenshots[] ${session.variant} / ${screen.step}`,
       `this run records no capture of the screen ${session.sessionId}'s screen ${screenIndex} is on`,
@@ -194,7 +216,7 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
 
   const fixations = session.fixations.filter((fixation) => fixation.screenIndex === screenIndex);
   if (fixations.length === 0) {
-    return refuse(
+    throw refusal(
       run.runId,
       `sessions/${session.sessionId}.json fixations screenIndex=${screenIndex}`,
       'nobody looked at that screen, so there is no attention for a slide to draw',
@@ -207,7 +229,7 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
     .map((aoi) => {
       const metrics = run.aoiMetrics.find((row) => row.aoiId === aoi.id);
       if (metrics === undefined) {
-        return refuse(
+        throw refusal(
           run.runId,
           `aoiMetrics[] ${aoi.id}`,
           'every area carries its own measured row, and this one has none',
@@ -220,9 +242,12 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
   const walk = stepWalk(session);
   const clicks = session.actions
     .filter((action) => action.type === 'click')
-    .filter((action) => action.aoiId !== null && areaIds.has(action.aoiId))
+    .filter(
+      (action): action is Session['actions'][number] & { aoiId: string } =>
+        action.aoiId !== null && areaIds.has(action.aoiId),
+    )
     .filter((action) => screenOfClick(walk, screen.step, action.tMs) === screenIndex)
-    .map(({ tMs, target, aoiId, value, ok }) => ({ tMs, target, aoiId: aoiId ?? '', value, ok }));
+    .map(({ tMs, target, aoiId, value, ok }) => ({ tMs, target, aoiId, value, ok }));
 
   // The pinning rule, and the whole of it: a screen's `intent` is pinned to its **first**
   // fixation and its `decidedAction` to its **last**, because those are the two moments the
@@ -230,10 +255,15 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
   // it had looked. No other claim about which fixation a sentence belongs to can be read off
   // the artifact: `screens[]` carries two strings and no times, so any finer pinning would be
   // this script's invention rather than the run's measurement.
-  const first = fixations[0]?.index ?? 0;
-  const last = fixations[fixations.length - 1]?.index ?? 0;
+  const [firstLook] = fixations as [
+    Session['fixations'][number],
+    ...Session['fixations'][number][],
+  ];
+  const lastLook = fixations[fixations.length - 1] ?? firstLook;
   const pin = (text: string, fixationIndex: number) =>
     text === '' ? undefined : { text, fixationIndex };
+  const intent = pin(screen.intent, firstLook.index);
+  const decidedAction = pin(screen.decidedAction, lastLook.index);
 
   return {
     runId: run.runId,
@@ -262,10 +292,8 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
     clicks,
     areas,
     thoughts: {
-      ...(pin(screen.intent, first) === undefined ? {} : { intent: pin(screen.intent, first) }),
-      ...(pin(screen.decidedAction, last) === undefined
-        ? {}
-        : { decidedAction: pin(screen.decidedAction, last) }),
+      ...(intent === undefined ? {} : { intent }),
+      ...(decidedAction === undefined ? {} : { decidedAction }),
     },
     outcome: {
       status: session.outcome.status,
@@ -280,33 +308,31 @@ export const slideOf = (run: Run, session: Session, screenIndex: number): Landin
  * The slide set the triples name, read out of the runs root and parsed before it is anything
  * a caller could write.
  */
-export const bakeLandingSlides = async (
+const bakeLandingSlides = async (
   runsRoot: string,
   triples: readonly Triple[],
 ): Promise<LandingSlides> => {
-  const runIds = [...new Set(triples.map((triple) => triple.runId))];
-  const runs = new Map<string, Run>();
-  const sessions = new Map<string, Map<string, Session>>();
-
-  for (const runId of runIds) {
-    const runDir = join(runsRoot, runId);
-    const artifact = await readRun(runDir);
-    runs.set(runId, artifact.run);
-    sessions.set(runId, new Map(artifact.sessions.map((session) => [session.sessionId, session])));
-  }
+  // Each run is read once however many of its screens are slides, in the order the triples
+  // first name it — which is the order the set's `runIds` ends up in.
+  const loaded = new Map<string, RunArtifact>();
+  const readOnce = async (runId: string): Promise<RunArtifact> => {
+    const seen = loaded.get(runId);
+    if (seen !== undefined) return seen;
+    const artifact = await readRun(join(runsRoot, runId));
+    loaded.set(runId, artifact);
+    return artifact;
+  };
 
   const slides: LandingSlide[] = [];
   for (const { runId, sessionId, screenIndex } of triples) {
-    const run = runs.get(runId);
-    const session = sessions.get(runId)?.get(sessionId);
-    if (run === undefined) throw new Error(`${runId}: not read`);
+    const { run, sessions } = await readOnce(runId);
+    const session = sessions.find((candidate) => candidate.sessionId === sessionId);
     if (session === undefined) {
-      refuse(
+      throw refusal(
         runId,
         `sessions/${sessionId}.json`,
         `this run carries ${run.sessionIds.length} sessions and "${sessionId}" is not one of them`,
       );
-      continue;
     }
     const slide = slideOf(run, session, screenIndex);
 
@@ -317,31 +343,23 @@ export const bakeLandingSlides = async (
     try {
       await stat(file);
     } catch {
-      refuse(
+      throw refusal(
         runId,
-        `${slide.screenshot.path}`,
+        slide.screenshot.path,
         `the run directory does not hold the capture ${sessionId}'s screen ${screenIndex} is drawn on`,
       );
     }
     slides.push(slide);
   }
 
-  const named = (pick: (run: Run) => unknown) =>
-    runIds.map((runId) => ({ runId, value: pick(runs.get(runId) as Run) }));
-
+  const runs = [...loaded.values()].map((artifact) => artifact.run) as [Run, ...Run[]];
   const set = {
-    runIds,
-    task: shared(
-      'task',
-      named((run) => run.task.prompt),
-    ) as string,
-    audience: shared(
-      'audience',
-      named((run) => ({
-        name: run.audience.name,
-        priceSensitivity: run.audience.priceSensitivity,
-      })),
-    ) as LandingSlides['audience'],
+    runIds: runs.map((run) => run.runId),
+    task: sharedAcross(runs, 'task', (run) => run.task.prompt),
+    audience: sharedAcross(runs, 'audience', (run) => ({
+      name: run.audience.name,
+      priceSensitivity: run.audience.priceSensitivity,
+    })),
     slides,
   };
 
@@ -375,6 +393,3 @@ const invokedDirectly =
   process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) await main();
-
-export { parseTriple };
-export type { Triple };
