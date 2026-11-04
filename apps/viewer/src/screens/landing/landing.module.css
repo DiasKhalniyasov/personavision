@@ -160,6 +160,162 @@
   font-size: var(--text-sm);
 }
 
+/* ---- Where the heatmaps come from --------------------------------------
+   #431's four stages, drawn. The band is sunken rather than tinted: the page
+   already spends its one tinted band on the heatmap and its one dark band on
+   the close (`docs/FLOW.md` section 10), and `.strip-sunken` is named by the
+   step but declared by no app stylesheet yet, so the band carries the sunken
+   surface token from here rather than a class that styles nothing.
+
+   The drawings' colours are all below and all tokens, which is what makes them
+   read in the dark theme; their geometry is in the SVG's own attributes,
+   because a stylesheet of this app may restate no unit. Nothing here animates.
+   ------------------------------------------------------------------------ */
+
+.measuredBand {
+  background: var(--color-surface-sunken);
+}
+
+.measuredLede {
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+/* Four across, which is what makes the four stages one picture rather than a
+   fourth list. The markers are the printed stage numbers, not the list's. */
+.stages {
+  display: grid;
+  margin-top: var(--space-8);
+  gap: var(--space-5);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+}
+
+.stage {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+/* The drawing sits on the sunken surface the band itself carries, so the card
+   reads as a frame around a picture rather than as a block of text. */
+.stageArt {
+  display: grid;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+
+.drawing {
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.stageNumber {
+  margin-top: var(--space-2);
+}
+
+.stageName {
+  color: var(--color-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.stageBody {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The one claim on the page that has to survive a skim. */
+.stageStress {
+  color: var(--color-heading);
+  font-weight: var(--weight-bold);
+}
+
+.stageLink {
+  color: var(--color-link);
+  font-weight: var(--weight-medium);
+}
+
+.stageLink:hover {
+  color: var(--color-link-hover);
+}
+
+/* A path in the repository, named as code and allowed to break rather than to
+   push the card wider than a 390px window. */
+.stagePath {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ---- The drawings' ink, every colour a token ---------------------------- */
+
+/* A screen or a browser window. */
+.drawFrame {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+  stroke-width: var(--border-width-strong);
+}
+
+/* Lines of a page inside one. */
+.drawRule {
+  stroke: var(--color-border-strong);
+  stroke-width: var(--border-width-strong);
+  stroke-linecap: round;
+}
+
+/* A person: the heading colour, which is dark fir on light and white on dark. */
+.drawInk {
+  fill: var(--color-heading);
+}
+
+/* Gaze, drawn the way the replay draws it. */
+.drawGaze {
+  stroke: var(--gaze-saccade);
+  stroke-width: var(--gaze-saccade-width);
+  stroke-linecap: round;
+}
+
+.drawFixation {
+  fill: var(--gaze-fixation);
+}
+
+/* The one arrow on the section, inside stage 2, where it is the content. */
+.drawArrow {
+  stroke: var(--color-text-muted);
+  stroke-width: var(--border-width-strong);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A model: teal, because this is data and not an action — the accent is never
+   allowed to carry meaning. */
+.drawNode {
+  fill: var(--gaze-aoi-active);
+}
+
+.drawNodeLink {
+  stroke: var(--gaze-aoi-active);
+  stroke-width: var(--border-width);
+}
+
+/* Heat, off the product's own duration-weighted ramp. */
+.drawHeatLow {
+  fill: var(--heat-2);
+}
+
+.drawHeatMid {
+  fill: var(--heat-3);
+}
+
+.drawHeatHigh {
+  fill: var(--heat-5);
+}
+
 /* ---- The closing band ---------------------------------------------------- */
 
 .closing {
@@ -202,6 +358,11 @@
   .headline {
     font-size: var(--text-display-sm);
   }
+
+  /* Two stages across rather than four squashed ones. */
+  .stages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -213,5 +374,10 @@
      buttons that wrap mid-word. */
   .actions > * {
     flex: 1 1 100%;
+  }
+
+  /* The four stages stack rather than squash. */
+  .stages {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

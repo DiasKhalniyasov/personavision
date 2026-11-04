@@ -7,6 +7,7 @@ import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { loadDesignTokens } from '../../../tests/setup';
+import { EYETRACKER_URL, MEASURED_HEADING } from './HowAttentionIsMeasured';
 import { EXAMPLE_RUN_ID, HEADLINE } from './LandingPage';
 
 /**
@@ -58,7 +59,13 @@ describe('the page itself', () => {
     landing();
 
     await screen.findByRole('heading', { name: 'How it works' });
-    const steps = screen.getAllByRole('listitem');
+    // The three lists of this page's own steps. #431's four stages are a fourth list on
+    // the page and a different question — where the numbers come from — so they are not
+    // among them, and *How it works* stays three short steps rather than becoming a
+    // diagram.
+    const steps = screen
+      .getAllByRole('listitem')
+      .filter((step) => step.closest('[data-section="landing-measured"]') === null);
     expect(steps.map((step) => step.querySelector('p')?.textContent)).toEqual([
       'What is this product for?',
       'Where did that impression come from?',
@@ -244,6 +251,44 @@ describe('the people behind the heatmap', () => {
       expect(router.state.location.pathname).toBe(paths.run(EXAMPLE_RUN_ID));
     });
     expect(container.querySelector('[data-section="landing-carousel"]')).toBeNull();
+  });
+});
+
+describe('where the heatmaps come from', () => {
+  it('renders the four stages under *How it works*, on their own band', async () => {
+    await serveRunData();
+    const { container } = landing();
+
+    await screen.findByRole('heading', { level: 1 });
+    const how = screen.getByRole('heading', { name: 'How it works' });
+    const section = container.querySelector('[data-section="landing-measured"]');
+    if (section === null) throw new Error('the four-stage section is not on the page');
+
+    // Under *How it works*, which decision 174 puts it after.
+    expect(how.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('heading', { name: MEASURED_HEADING }).tagName).toBe('H2');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    // Its own band, and not the page's one tinted band nor its one dark one.
+    expect(section.closest('.strip-tint')).toBeNull();
+    expect(section.closest('.strip-dark')).toBeNull();
+    expect(section.closest('.strip')).not.toBeNull();
+  });
+
+  it('carries the eye-tracker link, pointing at tools/eyetrack on main', async () => {
+    await serveRunData();
+    landing();
+
+    const link = await screen.findByRole('link', { name: 'Try the eye tracker' });
+    expect(link.getAttribute('href')).toBe(EYETRACKER_URL);
+  });
+
+  it('is there when the example run cannot be read: it reads nothing from a run', async () => {
+    await serveRunData({ files: { [runFile]: 'this is not a run' } });
+    const { container } = landing();
+
+    await screen.findByText(/could not be read just now/);
+    const section = container.querySelector('[data-section="landing-measured"]');
+    expect(section?.textContent).toContain('No model fitted on human gaze ships today.');
   });
 });
 

@@ -7,6 +7,7 @@ import { HeroEvidence } from '@/screens/verdict/HeroEvidence';
 import { paths } from '@/shell/paths';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
+import { HowAttentionIsMeasured } from './HowAttentionIsMeasured';
 import styles from './landing.module.css';
 import { RunCarousel } from './RunCarousel';
 
@@ -277,6 +278,14 @@ export function LandingPage() {
               ))}
             </ol>
             <SimulatedDisclaimer run={run} />
+          </div>
+        </div>
+
+        {/* Where the numbers come from, which the page above never says: #431's four
+            stages, drawn, on a sunken band (decision 175). It reads nothing from a run. */}
+        <div className={`strip ${styles.measuredBand}`}>
+          <div className="wrap">
+            <HowAttentionIsMeasured />
           </div>
         </div>
 
