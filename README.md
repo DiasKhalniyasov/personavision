@@ -1,6 +1,23 @@
 # personavision
 
-A swarm of simulated users that produces Tobii-style eye tracking for websites: pre-test UI changes before a real A/B test.
+Test a website with a crowd of generated people before you test it on real ones.
+
+<p align="center"><img src="docs/media/audience.svg" width="600" alt="A generated audience: 48 different people, on phones and laptops"></p>
+
+## How it works
+
+1. **Describe who your users are.** PersonaVision generates an audience from it: different ages, roles, devices, patience and confidence.
+2. **Each person tries your site in a real browser,** on a phone or a desktop, driven by Muse Spark, which reads screens well. They pursue a goal you set in plain words, and each move comes with the reason they made it.
+3. **Every session leaves a trajectory:** where they looked, in order, what they clicked and where they gave up. Across the audience, these add up to heatmaps of attention, the paths people took and where they dropped out.
+4. **Muse Wonder reads the results** and says what to change, citing the moment in a session that shows it.
+
+<p align="center">
+  <img src="tools/eyetrack/media/gaze-replay.gif" width="300" alt="Live gaze on a phone screen, with the person's own words">
+  <img src="tools/eyetrack/media/heatmaps.gif" width="280" alt="Numbered gaze path and heatmap over each screen">
+</p>
+<p align="center"><em>The agents' trajectories and heatmaps take this form. These two are a real person, recorded with the eye tracker below.</em></p>
+
+**Grounded in real eyes.** [`tools/eyetrack`](tools/eyetrack) is a webcam eye tracker you run locally. It records where real people look, and those recordings become the gaze examples a run is shown, and data to fit small models of real behaviour.
 
 ## What a new developer runs, in order
 
