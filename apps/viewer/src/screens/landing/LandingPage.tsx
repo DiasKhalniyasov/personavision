@@ -8,6 +8,7 @@ import { paths } from '@/shell/paths';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { useRun } from '@/shell/useRun';
 import styles from './landing.module.css';
+import { RunCarousel } from './RunCarousel';
 
 /**
  * `/` for a visitor with no session: the product's public face.
@@ -23,6 +24,9 @@ import styles from './landing.module.css';
  * Verdict screen reads them with — `CompletionFigures` (#15), `HeroEvidence` (#108) and
  * the shell's `SimulatedDisclaimer`. Changing a field in the fixture changes this page,
  * and `LandingPage.test.tsx` asserts that.
+ *
+ * The carousel of people under the heatmap band is the same promise over a second
+ * committed file: #427's baked slide set, read through the contract by #428's `RunCarousel`.
  *
  * The page's one invented layout is the hero's two columns at desktop width; everything
  * else is the step's own primitives. The animated moments the visual direction gives this
@@ -173,6 +177,16 @@ export function LandingPage() {
             </div>
           </div>
         )}
+
+        {/* The people behind that heatmap, one at a time: #428's carousel, on white, so
+            the tinted band above stays the page's one colour change before *How it
+            works* (decision 174). It reads the committed slide set rather than the run,
+            and says so itself when it cannot. */}
+        <div className="strip">
+          <div className="wrap">
+            <RunCarousel />
+          </div>
+        </div>
 
         <div className="strip">
           <div className="wrap">

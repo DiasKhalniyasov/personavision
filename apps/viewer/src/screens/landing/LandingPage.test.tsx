@@ -187,6 +187,48 @@ describe('the evidence, and it is real', () => {
   });
 });
 
+describe('the people behind the heatmap', () => {
+  it('renders the carousel between the heatmap band and *How it works*, on white', async () => {
+    await serveRunData();
+    const { container } = landing();
+
+    const band = await waitFor(() => {
+      const found = container.querySelector('[data-section="hero-evidence"]');
+      if (found === null) throw new Error('no heatmap band yet');
+      return found;
+    });
+    const section = await waitFor(() => {
+      const found = container.querySelector('[data-slide]');
+      if (found === null) throw new Error('no slide yet');
+      return found.closest('[data-section="landing-carousel"]') as HTMLElement;
+    });
+    const how = screen.getByRole('heading', { name: 'How it works' });
+
+    // Decision 174: under the heatmap band, before *How it works*.
+    expect(band.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(section.compareDocumentPosition(how) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // And on white, so the tinted band above stays the page's one colour change.
+    expect(section.closest('.strip-tint')).toBeNull();
+    // Still the page's one h1: the carousel's own heading is an h2 beside *How it works*.
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(
+      screen.getByRole('heading', { name: 'The people this test generated, one at a time' })
+        .tagName,
+    ).toBe('H2');
+  });
+
+  it('is not on `/` for somebody with a session, who still lands on the latest Verdict', async () => {
+    await serveRunData();
+    // The default session is the seeded demo workspace, signed in.
+    const { container, router } = mountApp(paths.home);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.run(EXAMPLE_RUN_ID));
+    });
+    expect(container.querySelector('[data-section="landing-carousel"]')).toBeNull();
+  });
+});
+
 describe('the figures are labelled simulated', () => {
   it('renders the shared disclaimer, naming the run’s own audience', async () => {
     const run = exampleRun();
@@ -225,6 +267,11 @@ describe('accessibility', () => {
     const { container } = landing();
 
     await screen.findAllByText(/people completed the task/);
+    // The carousel is part of the page axe is asked about: its dots are a tab list and
+    // every stage on it has a text alternative, so it cannot be waited past.
+    await waitFor(() => {
+      expect(container.querySelector('[data-slide]')).not.toBeNull();
+    });
     const violations = await axeViolations(container);
     expect(describeViolations(violations)).toBe('');
   });
