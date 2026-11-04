@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { goalSchema } from '@personavision/contract';
 import type { Goal } from '@personavision/contract';
 import {
@@ -254,8 +254,15 @@ describe('POST /runs/goal', () => {
         successCriterion: A_JUDGEMENT,
       });
       await open(() => judging.provider);
+      // A refused goal is an automation failure, so it is on the server's own log as well
+      // as in the answer: a model answering judgements for every draft takes the step down,
+      // and a deployment emitting nothing but 4xx says so nowhere else.
+      const logged = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
 
       const response = await ask();
+
+      expect(logged.mock.calls.map(([line]) => String(line)).join('')).toContain(A_JUDGEMENT);
+      logged.mockRestore();
 
       expect(response.status).toBe(400);
       const body = await bodyOf(response);

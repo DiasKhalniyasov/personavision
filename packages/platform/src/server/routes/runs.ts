@@ -75,7 +75,12 @@ export interface RunRouteOptions {
   wonder?: WonderSeam;
 }
 
-/** The one sentence a request with no session gets, as the audience routes answer it. */
+/**
+ * The one sentence a request with no session gets from this family. The guard in front of
+ * the routes answers a real request first, with the sentence it gives every signed-out data
+ * request; this is what a handler reached directly says, so neither route depends on
+ * something above it having run.
+ */
 const SIGNED_OUT = 'Sign in to start a test.';
 
 /** The ticket that runs a test, named in the 501 so the developer is not left guessing. */
@@ -157,11 +162,11 @@ interface GoalIssue {
 /**
  * A feature sentence with something in it to read: one letter or one digit somewhere.
  *
- * Deliberately **at least as strict as the ask's own rule**. `goalAsk` trims whitespace *and*
- * trailing `.,;:!?` before deciding a feature box is empty — so a box holding only `...` is
- * empty to it and not to `String.trim` — and it refuses with a bare `TypeError`, which this
- * route would have had to answer 500 to. Anything carrying a letter or a digit survives that
- * trim, so a sentence this accepts is one the ask accepts.
+ * Deliberately **at least as strict as the ask's own rule**: `goalAsk` trims trailing
+ * `.,;:!?` as well as whitespace, so a box holding only `...` is empty to it and not to
+ * `String.trim`, and it refuses with a bare `TypeError` this route would have answered 500
+ * to. The same guard stands in front of `audienceAsk` (`READABLE` in `audiences.ts`), for
+ * the same reason and against a different ask: each route is as strict as the ask it calls.
  */
 const WRITTEN_IN = /[\p{L}\p{N}]/u;
 
@@ -256,9 +261,18 @@ const writtenGoal =
       sendJson(response, 200, written.value);
     } catch (error) {
       if (error instanceof GoalCriterionError) {
+        // **An automation failure** (`docs/FLOW.md` section 8), so it is written to the
+        // server's own log the way the router writes a 500: a model that starts answering
+        // unobservable criteria for every draft would otherwise take the goal step down
+        // while the deployment emitted nothing but 4xx, with two paid-for calls per attempt
+        // and no line anywhere saying so. What it cost goes in the same line, because a
+        // refused goal is still two calls on the invoice.
+        process.stderr.write(
+          `personavision: a goal was refused after one send-back (${String(error.usage.estimatedCostUsd)} USD): ${error.reason}\n`,
+        );
         // The provider's own sentence, unchanged, and `{ error }` alone: the screen renders
-        // it as it stands (decision 117), and what the two refused calls cost is a figure for
-        // whoever runs the server rather than for the person reading the step.
+        // it as it stands (decision 117), and what the two calls cost is a figure for whoever
+        // runs the server rather than for the person reading the step.
         refuse(response, 400, error.reason);
         return;
       }
