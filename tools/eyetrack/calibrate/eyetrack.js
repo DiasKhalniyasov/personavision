@@ -11,18 +11,23 @@
  * `FileReader` from the participant's own disk, and the recording leaves the tab only through
  * a download the participant starts.
  *
- * **Three things protect the data, and each one is a deliberate fight with the library.**
+ * **Four things protect the data, and each one is a deliberate fight with the library.**
  *
  * 1. WebGazer trains itself on every mouse click and mouse movement by default, so merely
  *    pressing *Start recording* would teach it that the participant was looking at a button.
- *    Its listeners are removed the moment it starts, and the only training is the nine
- *    points, recorded explicitly.
+ *    Its listeners come off — see `trainOnlyOnOurPoints`, which is also where the subtlety
+ *    lives, because the obvious place to do it is too early to work — and the only training
+ *    left is the nine points, recorded explicitly.
  * 2. WebGazer keeps its fitted model in `localStorage` and loads it on `begin()`, so the
  *    previous participant's calibration would silently become this one's. It is cleared
  *    first, every time.
- * 3. Nothing is on the display during a recording except the screenshot — no video preview,
- *    no face overlay, no gaze dot. Each of those is a bright moving thing, and a bright
- *    moving thing is where the eye goes.
+ * 3. Nothing is on the display during the accuracy check or a recording except the thing being
+ *    looked at — no video preview, no face overlay, nothing. Each of those is a bright moving
+ *    thing, and a bright moving thing is where the eye goes.
+ * 4. The prediction dot is never shown at all, which WebGazer's own demo does show. It sits
+ *    near where the eye already is, so a participant who glances at it is chasing their own
+ *    gaze — poisoning a training pair during calibration, and flattering the figure during
+ *    the check. See `setTrackerChrome`.
  */
 (function (window, document) {
   'use strict';
