@@ -15,7 +15,8 @@
  *    `demo/northwind/demo.config.ts`'s task, through Chromium, on the offline deterministic
  *    engine and provider — no API key read, nothing but loopback reached;
  * 3. scores the sessions, generates the findings, writes the verdict and composes the
- *    aggregate every figure of the results page is read from;
+ *    aggregate every figure of the results page is read from, then samples, builds,
+ *    generates the write-up of and validates the recommendations (`scripts/recommendations.ts`);
  * 4. writes the whole directory through `@personavision/contract`'s `writeRun`, with every
  *    path from `runPaths`, and reports what it measured against `docs/FLOW.md` section 5
  *    and `demo/northwind/defects.json`.
@@ -58,9 +59,10 @@ import { engineOnTheRecord, planSwarm, runSwarm } from '@personavision/swarm';
 import { declaredDefects } from '@personavision/northwind-demo/defects.ts';
 import { NORTHWIND_TASK, northwindVariants } from '@personavision/northwind-demo/demo.config.ts';
 import { serveDemoShop } from '@personavision/northwind-demo/serve.ts';
+import { recommendationsOf } from './recommendations.js';
 import type { CaptureSource, Variant } from '@personavision/browser';
 import type { DemoShop } from '@personavision/northwind-demo/serve.ts';
-import type { Aggregate, Findings, Run, Session } from '@personavision/contract';
+import type { Aggregate, Findings, Recommendations, Run, Session } from '@personavision/contract';
 import type { PlantedDefectEvaluation } from '@personavision/scoring';
 import type { EngineOnTheRecord } from '@personavision/swarm';
 
@@ -201,6 +203,8 @@ export interface DemoRunMeasurement {
   readonly run: Run;
   readonly sessions: readonly Session[];
   readonly findings: Findings;
+  /** What this run says to change, ranked, each one citing its evidence. */
+  readonly recommendations: Recommendations;
   readonly plantedDefects: PlantedDefectEvaluation;
 }
 
@@ -450,11 +454,24 @@ export const generateDemoRun = async (
     });
 
     const final = scored(walked.run, walked.sessions);
+    // The last stage, and the one that can refuse: `recommendationsOf` samples, calls the
+    // offline Wonder implementation, generates the write-up and resolves every citation
+    // against this run before anything is written. A citation that does not resolve throws
+    // with its JSON path and this directory keeps the files it had, which is the point —
+    // a screen full of dead links is worse than a run with no advice in it.
+    const recommendations = await recommendationsOf({
+      run: final.run,
+      sessions: walked.sessions,
+      findings: final.findings,
+      aggregate: final.aggregate,
+      report,
+    });
     await writeRun(runDir, {
       run: final.run,
       sessions: [...walked.sessions],
       findings: final.findings,
       aggregate: final.aggregate,
+      recommendations,
     });
     // The capture cache is `packages/browser`'s own working state, not artifact data — it
     // says so itself, and `runPaths` spells no path into it. It also carries a key derived
@@ -467,6 +484,7 @@ export const generateDemoRun = async (
       run: final.run,
       sessions: walked.sessions,
       findings: final.findings,
+      recommendations,
       plantedDefects: evaluateAgainstPlantedDefects(final.findings.findings, defects.defects),
     };
   } finally {
@@ -493,7 +511,7 @@ export const reportMeasurement = (
   measured: DemoRunMeasurement,
   report: (line: string) => void,
 ): void => {
-  const { run, sessions, findings, plantedDefects } = measured;
+  const { run, sessions, findings, recommendations, plantedDefects } = measured;
   report('');
   report('demo:run: what this run measured');
 
@@ -526,6 +544,21 @@ export const reportMeasurement = (
         `  ${finding.variant ?? 'run'}/${finding.step}  ${finding.aoiId ?? '—'}`,
     );
   }
+
+  report(
+    `  recommendations, ranked (${String(recommendations.recommendations.length)}),` +
+      ` read ${String(recommendations.sample.read)} of ${String(recommendations.sample.of)} sessions:`,
+  );
+  for (const recommendation of recommendations.recommendations) {
+    report(
+      `    ${String(recommendation.rank)}. ${recommendation.id}  ${recommendation.step}` +
+        `  ${String(recommendation.peopleAffected)} people  ${recommendation.sentence}`,
+    );
+  }
+  if (recommendations.nothingToRecommend !== undefined) {
+    report(`    none — ${recommendations.nothingToRecommend}`);
+  }
+  report(`  write-up claims  ${String(recommendations.writeUp?.length ?? 0)}`);
 
   report(
     `  planted defects  precision ${round(plantedDefects.precision, 3)}` +

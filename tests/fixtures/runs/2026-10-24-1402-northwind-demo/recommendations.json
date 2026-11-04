@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 2,
+  "runId": "2026-10-24-1402-northwind-demo",
+  "sample": {
+    "read": 20,
+    "of": 22,
+    "strategy": "stratified by outcome, then segment",
+    "seed": 1
+  },
+  "recommendations": [
+    {
+      "id": "R-05",
+      "rank": 1,
+      "sentence": "Change the Cart step, where 2 people of this run ran into trouble.",
+      "evidence": "Both were price-led shoppers; $8.95 shipping on a $129.00 order was read twice before they left. Reported for balance: the current checkout is the better version, not a perfect one.",
+      "findingIds": [
+        "F-5"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-12",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "A",
+          "step": "cart",
+          "aoiId": "A-cart-cart-total"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "cart"
+        }
+      ],
+      "peopleAffected": 22,
+      "step": "cart"
+    },
+    {
+      "id": "R-03",
+      "rank": 2,
+      "sentence": "Make the Payment step easier to get past, where 9 people of this run ran into trouble.",
+      "evidence": "It holds 3.1 s of attention against 1.2 s on the button beneath it, and nobody used the code: it costs attention without earning anything.",
+      "findingIds": [
+        "F-3"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-24",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "payment",
+          "aoiId": "B-payment-promo"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "payment"
+        }
+      ],
+      "peopleAffected": 19,
+      "step": "payment"
+    },
+    {
+      "id": "R-04",
+      "rank": 3,
+      "sentence": "Make the Payment step easier to get past, where 3 people of this run ran into trouble.",
+      "evidence": "All three look for a confirmation on the next screen, then stop. They end with no order placed — a failure, not someone choosing to leave.",
+      "findingIds": [
+        "F-4"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-13",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "payment",
+          "aoiId": "B-payment-primary"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "payment"
+        }
+      ],
+      "peopleAffected": 19,
+      "step": "payment"
+    },
+    {
+      "id": "R-01",
+      "rank": 4,
+      "sentence": "Fix what stops people on the Review step, where 9 people of this run ran into trouble.",
+      "evidence": "On the review step, “Confirm purchase” sits about 180 px below the fold. Of the 9 people who got that far, 0 looked at it. On your current checkout the same button was seen by 9 of 9, after 2.3 s on average.",
+      "findingIds": [
+        "F-1"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-16",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-complete"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 18,
+      "step": "review"
+    },
+    {
+      "id": "R-02",
+      "rank": 5,
+      "sentence": "Change the Review step, where 4 people of this run ran into trouble.",
+      "evidence": "The fee holds the eye for 610 ms the first time and is returned to 2.4 times — the most re-read thing in the test. The total changes from $129.00 to $147.95 between the two steps.",
+      "findingIds": [
+        "F-2"
+      ],
+      "citations": [
+        {
+          "kind": "session",
+          "sessionId": "S-24",
+          "offsetMs": 0
+        },
+        {
+          "kind": "heatmap",
+          "variant": "B",
+          "step": "review",
+          "aoiId": "B-review-fee-row"
+        },
+        {
+          "kind": "funnel",
+          "stepId": "review"
+        }
+      ],
+      "peopleAffected": 18,
+      "step": "review"
+    }
+  ]
+}

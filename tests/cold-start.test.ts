@@ -9,6 +9,7 @@ import {
   aggregateSchema,
   findingsSchema,
   readRun,
+  recommendationsSchema,
   runPaths,
   runSchema,
   sessionSchema,
@@ -184,15 +185,33 @@ const readRunOverHttp = async (base: string): Promise<RunArtifact> => {
       sessionSchema.parse(await getJson(base, under(layout.session(sessionId)))),
     ),
   );
-  // The aggregate is the fourth file of the layout and the Funnel and timing screens read it
-  // over this same mount (#295). It is optional in the contract — a run that computed none
-  // carries no file — so an absent one is read as absent rather than as a failure.
-  const served = await get(base, under(layout.aggregate));
-  if (!served.ok && served.status !== 404) {
-    throw new Error(`GET ${layout.aggregate} answered ${String(served.status)}`);
-  }
-  const aggregate = served.status === 404 ? undefined : aggregateSchema.parse(await served.json());
-  return { run, sessions, findings, ...(aggregate !== undefined && { aggregate }) };
+  // The aggregate and the recommendations are the optional two files of the layout, and the
+  // Funnel, Summary and Analysis screens read them over this same mount (#295, #262). Each is
+  // optional in the contract — a run that computed no figures carries no aggregate, and one
+  // that produced no advice carries no recommendations — so an absent file is read as absent
+  // rather than as a failure.
+  const optional = async (path: string): Promise<unknown> => {
+    const served = await get(base, under(path));
+    if (!served.ok && served.status !== 404) {
+      throw new Error(`GET ${path} answered ${String(served.status)}`);
+    }
+    return served.status === 404 ? undefined : await served.json();
+  };
+  const servedAggregate = await optional(layout.aggregate);
+  const aggregate =
+    servedAggregate === undefined ? undefined : aggregateSchema.parse(servedAggregate);
+  const servedRecommendations = await optional(layout.recommendations);
+  const recommendations =
+    servedRecommendations === undefined
+      ? undefined
+      : recommendationsSchema.parse(servedRecommendations);
+  return {
+    run,
+    sessions,
+    findings,
+    ...(aggregate !== undefined && { aggregate }),
+    ...(recommendations !== undefined && { recommendations }),
+  };
 };
 
 /**
