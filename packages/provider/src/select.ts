@@ -36,6 +36,23 @@ import type { WonderProvider } from './wonder.js';
 export const MODEL_API_KEY_ENV = 'MODEL_API_KEY';
 
 /**
+ * Whether this process can serve a model run at all: whether the credential is in the
+ * environment it was handed.
+ *
+ * **Presence and nothing else.** It is built here rather than by a caller reading the
+ * variable, so that the one file the project sanctions to read the credential stays the one
+ * file that names it (`tests/workspace.test.ts`), and so that no caller holds the value in
+ * order to ask the question. The value never leaves this module.
+ *
+ * `personavision serve` asks it before it starts a run: whether a key is present is a fact
+ * only the process serving the request holds (decision 44), and a contributor workspace's
+ * test on a deployment with no key runs offline rather than being refused (#144).
+ */
+export const modelCredentialPresent = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean => (env[MODEL_API_KEY_ENV]?.trim() ?? '') !== '';
+
+/**
  * The tier this picks when the caller expressed no preference at all — no `requestedMode`,
  * the "model if this machine can, offline otherwise" default #33 shipped, which is what our
  * own development, tests, demos and example audiences run through and whose content is ours

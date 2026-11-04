@@ -153,15 +153,40 @@ export interface StartRunOptions {
   readonly report?: (line: string) => void;
   /** Whether to stop: read as each session starts and lands, so Ctrl-C keeps what is done. */
   readonly stopping?: () => boolean;
+  /**
+   * Called **once**, the moment the run exists: after the engine has been selected, after
+   * the run directory has been claimed, and after its first `run.json` has been written — so
+   * whoever is handed it can read the run from disk by the id it carries.
+   *
+   * It is the seam `personavision serve` answers `POST /runs` through. This function resolves
+   * when the whole run has finished, and a hundred sessions is twenty minutes, which is far
+   * too late for an HTTP response: the pipeline built over it resolves on this callback and
+   * lets the run go on in the background (`packages/cli/src/commands/serve.ts`).
+   *
+   * Absent for `personavision run`, which awaits the run it started and reports it at the
+   * end — so nothing about that command changes by this existing.
+   */
+  readonly onOpen?: (opened: OpenedRun) => void;
 }
 
-export interface StartedRun {
+/**
+ * The run as soon as it **exists**: the id it was written under, and the engine that was
+ * selected for it.
+ *
+ * It is what `onOpen` carries, and it is field for field the platform's `StartedTest` — the
+ * thing `POST /runs` answers with — so a caller that only has to name the run can be told
+ * at the open rather than at the end. `StartedRun` below is this plus how it ended.
+ */
+export interface OpenedRun {
   readonly runId: string;
-  readonly runDir: string;
   /** What ran, not what was asked for: the artifact records this. */
   readonly engineMode: RunRequest['engineMode'];
   /** The tier that ran, and absent where no model was called. */
   readonly modelMode?: ModelMode;
+}
+
+export interface StartedRun extends OpenedRun {
+  readonly runDir: string;
   /** The run as it now stands. */
   readonly run: Run;
   /** Whether it was stopped part way rather than running to the end. */
@@ -352,6 +377,15 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
     await sweepIfEmpty();
     throw error;
   }
+  // The run exists from here: the directory is claimed, `run.json` is in it, and the engine
+  // that record names is the one the selection answered with. Whoever is waiting to be told
+  // the run's id — `POST /runs`, which cannot hold a response open for the sessions — is
+  // told now, before the first browser opens.
+  options.onOpen?.({
+    runId,
+    engineMode: open.engine.mode,
+    ...(selected.modelMode === undefined ? {} : { modelMode: selected.modelMode }),
+  });
   for (const line of openingLines(open)) report(line);
   report(`  ${selected.reason}`);
 
