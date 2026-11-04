@@ -1,0 +1,227 @@
+/* =============================================================================
+   `#screen-funnel` of `docs/design/prototype.html`, as this screen's own: the
+   `.seg` filter, the `.funnel` of `.funnel-row` bars, the `.dist` spreads and the
+   two tables.
+
+   Every value is a custom property from `docs/design/tokens.css`, which the app
+   imports and never copies. Nothing here moves: this screen has no animated
+   moment (section 10), so there is nothing for `prefers-reduced-motion` to turn
+   off and every bar is drawn at its final width on the first paint.
+
+   The tables are the shadcn `table` primitive, whose registry file carries
+   Tailwind defaults this design does not use — a cell that never wraps, a 2.5rem
+   head, 8px cells, and `border-b` with no colour, which leaves every rule
+   painting in `currentColor`. Those are answered here, once, in the prototype's
+   own selectors, as `sessionsTable.module.css` answers them for Sessions.
+   ========================================================================== */
+
+/* The control row: the segment pill, and the line stating what the figures are
+   over. They sit on one line while there is room and stack on a phone. */
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+/* The prototype's pill, with links in place of buttons: the filter is `?segment=`
+   in the URL, so each option is a real anchor. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.seg a {
+  padding: var(--space-2) var(--space-4);
+  border-right: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  text-decoration: none;
+}
+
+.seg a:last-child {
+  border-right: 0;
+}
+
+.seg a:hover {
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+/* The option the screen is showing. It wins over the hover colour above, because
+   a reader has to be able to see which way the funnel is narrowed. */
+.seg a[aria-current='page'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* ===== The funnel ========================================================= */
+
+.funnel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* The prototype's three columns — a 144px name, the bar, a 176px note — composed from the
+   spacing steps, because every length on this screen is a token: 96 + 48, and 96 + 80. */
+.funnelRow {
+  display: grid;
+  grid-template-columns:
+    calc(var(--space-24) + var(--space-12))
+    1fr
+    calc(var(--space-24) + var(--space-20));
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.funnelBar {
+  height: var(--space-6);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.funnelBar i {
+  display: block;
+  height: 100%;
+  background: var(--color-accent-grass);
+}
+
+/* The step the pipeline recorded the biggest drop on. */
+.funnelBar i[data-drop] {
+  background: var(--outcome-abandoned);
+}
+
+/* The row a citation opened on, or the drop the screen is about. */
+.funnelRow[aria-current='step'] strong {
+  color: var(--color-heading);
+  font-weight: var(--weight-bold);
+}
+
+.funnelNote {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.outcomes {
+  display: block;
+  font-size: var(--text-2xs);
+}
+
+/* The notice under the funnel, carrying the stored reason. */
+.reason {
+  margin: var(--space-6) 0 0;
+}
+
+/* The funnel's height, held while the aggregate is read so the page does not
+   jump when it arrives: five bars and the gaps between them. */
+.reserve {
+  min-height: calc(var(--space-6) * 5 + var(--space-3) * 4);
+}
+
+/* ===== The spreads ======================================================== */
+
+/* The prototype draws twelve bars; a stored distribution has as many bins as the
+   pipeline binned it into, so the columns are generated rather than counted. */
+.dist {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: end;
+  gap: var(--space-1);
+  height: var(--space-20);
+  min-width: var(--space-24);
+  margin-top: var(--space-4);
+}
+
+.dist i {
+  display: block;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--color-accent-soft);
+}
+
+/* The bar the stored median falls in. */
+.dist i[data-median] {
+  background: var(--color-accent-strong);
+}
+
+/* ===== The two tables ===================================================== */
+
+.tablewrap {
+  overflow-x: auto;
+  margin-top: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* The primitive wraps itself in a second scrolling box, and two nested scrollers
+   means the inner one moves while the outer one — the box a reader can focus and
+   scroll with the keyboard — never does. */
+.tablewrap [data-slot='table-container'] {
+  overflow: visible;
+}
+
+.tablewrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.tablewrap th {
+  height: auto;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The prototype draws its rules on the cells; the primitive draws them on the
+   row, uncoloured, so the row's own border is taken off. */
+.tablewrap tr {
+  border-bottom: 0;
+}
+
+.tablewrap td {
+  padding: var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.tablewrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* `td.n` and `th.n`: a column of figures is read down its last digit. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ===== A phone =========================================================== */
+
+/* At 390 px the three funnel columns do not fit, and the one that would go off
+   the edge is the note carrying the numbers. The row stacks instead, so nothing
+   on this screen scrolls sideways but the tables, which have their own region. */
+@media (max-width: 30rem) {
+  .funnelRow {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+}

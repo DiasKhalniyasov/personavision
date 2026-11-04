@@ -1706,7 +1706,9 @@ export const sessionSchema = z
  * - `variant` — the version a filtered screen is narrowed to. Sessions filters on it;
  *   Heatmaps takes it as the first path segment of `/runs/:runId/attention/:variant/:step`.
  * - `step` — the step. Sessions filters on it as the failure step, Heatmaps takes it as the
- *   second path segment. It was on this list before section 16 and is not re-added.
+ *   second path segment, and Funnel and timing opens with it marked, so a claim about one
+ *   step of the funnel lands on that step. It was on this list before section 16 and is not
+ *   re-added.
  * - `aoi` — one area of interest on that step, on Sessions and on Heatmaps.
  * - `outcome` — how a session ended, on Sessions and on Heatmaps.
  * - `segment` — the audience segment a filtered screen is narrowed to (`phone`,
