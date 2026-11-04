@@ -1,5 +1,7 @@
 /* =============================================================================
-   `#screen-running`: the progress card, its `.segments` and its `.log`.
+   `#screen-running-swarm`: the progress bar, the counts in words, the grid of a
+   hundred squares and its key, the per-version rows a comparison keeps, and the
+   two controls at the foot.
 
    The prototype is the acceptance — same layout, same hierarchy — and every
    value below is a custom property from `docs/design/tokens.css`, which the app
@@ -7,31 +9,27 @@
    restated here, and there is no second palette: light and dark both come from
    that file's own dark-mode block.
 
-   The shared primitives this screen sits in — `.strip`, `.wrap`, `.pagehead`,
-   `.lede`, `.card`, `.notice`, `.tag`, `.num`, `.faint` — are
-   `src/styles/base.css`'s and are not restated. What is here is the progress
-   card and nothing else.
+   The shared primitives this screen sits in — `.strip`, `.wrap-narrow`,
+   `.pagehead`, `.lede`, `.card`, `.notice`, `.tag`, `.num`, `.faint`,
+   `.footnote` — are `src/styles/base.css`'s and are not restated. The *Just
+   finished* card and its table are `justFinished.module.css`'s, scoped as the
+   product's other two tables are.
    ========================================================================== */
-
-/* ---- The card ---------------------------------------------------------- */
-
-.runcard {
-  margin-top: var(--space-8);
-}
 
 /* ---- Progress ---------------------------------------------------------- */
 
+/* The bar opens the reading, under the lede that names the test. */
 .progress {
   block-size: var(--space-2);
+  margin-top: var(--space-6);
   border-radius: var(--radius-full);
   background: var(--color-surface-sunken);
   overflow: hidden;
 }
 
-/* The overall bar is the card's own first child; a version's bar sits inside its
-   row and carries no margin of its own. */
-.runcard > .progress {
-  margin-bottom: var(--space-5);
+/* A version's bar sits inside its own row, which spaces it. */
+.segbar > .progress {
+  margin-top: var(--space-0);
 }
 
 /* A live state pulses softly, and nothing else on this screen moves. The
@@ -44,8 +42,83 @@
   animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
 }
 
+/* ---- The counts, in words ---------------------------------------------- */
+
+/* Everything the grid below says, said in words first: the grid is decoration
+   and this line is the claim, so nothing on the screen is readable only as
+   colour. */
+.swarmcounts {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- One square a person ----------------------------------------------- */
+
+/* The prototype's `.swarmgrid`. `auto-fill` is what reflows it: a hundred
+   squares find their own number of columns, so a phone draws more rows rather
+   than a wider page, and no breakpoint has to say so. */
+.swarmgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--space-6), 1fr));
+  margin-top: var(--space-5);
+  gap: var(--space-1);
+}
+
+.swarmgrid i {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: var(--radius-xs);
+  /* Nobody has started this one: the bar track's own colour. */
+  background: var(--color-surface-sunken);
+}
+
+.swarmgrid i[data-done='success'] {
+  background: var(--outcome-success);
+}
+
+.swarmgrid i[data-done='abandoned'] {
+  background: var(--outcome-abandoned);
+}
+
+.swarmgrid i[data-done='failed'] {
+  background: var(--outcome-failed);
+}
+
+/* Our own automation failing, in the colour the whole product gives it — the
+   attribution token, not an outcome of the site under test
+   (`src/session/vocabulary.ts`, and the owner's decision 151). */
+.swarmgrid i[data-done='automation'] {
+  background: var(--attr-automation);
+}
+
+/* Still going. The prototype's fill is `--color-accent-soft`, which in the light
+   palette is the same value as `--color-surface-sunken` above — so a square in
+   flight and a square nobody has started would be drawn identically, and two of
+   the five states the footnote names would be one. The fill stays the
+   prototype's; the ring is what tells them apart, in the accent the bar above
+   already uses for the live part of this run. Inset, so the square keeps its
+   size under `aspect-ratio`. */
+.swarmgrid i[data-done='running'] {
+  background: var(--color-accent-soft);
+  box-shadow: inset 0 0 0 var(--border-width) var(--color-accent);
+}
+
+/* The key to the colours, and the concurrency this run is running at. */
+.swarmkey {
+  margin-top: var(--space-4);
+}
+
+/* A run with nothing recorded yet: the frame, and a sentence instead of zeroes. */
+.starting {
+  margin-top: var(--space-6);
+}
+
+/* ---- The versions a comparison keeps ----------------------------------- */
+
 .segments {
   display: grid;
+  margin-top: var(--space-6);
   gap: var(--space-3);
 }
 
@@ -53,40 +126,14 @@
   display: grid;
   /* The prototype's fixed label column, as a share of the row instead: no token
      owns that width, and a fraction keeps the bar the long column at every
-     width the card is drawn at. */
+     width the row is drawn at. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) auto;
   align-items: center;
   gap: var(--space-4);
   font-size: var(--text-sm);
 }
 
-/* ---- The log ----------------------------------------------------------- */
-
-.log {
-  /* The prototype's fixed height, in lines of the log's own type, so the window
-     follows the font size rather than a number typed out here. */
-  max-block-size: 12lh;
-  margin-top: var(--space-5);
-  overflow: auto;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.log ul {
-  display: grid;
-  margin: var(--space-0);
-  padding: var(--space-0);
-  gap: var(--space-1);
-  list-style: none;
-}
-
-.log b {
-  color: var(--color-text);
-  font-weight: var(--weight-medium);
-}
-
-/* ---- The card's footer ------------------------------------------------- */
+/* ---- The foot ---------------------------------------------------------- */
 
 /* The prototype's `.formfoot`, under this screen's own name: the shared
    primitives live in `src/styles/base.css`, and a screen ticket does not add to
@@ -122,7 +169,8 @@
 }
 
 /* ---- Narrow windows ---------------------------------------------------
-   The prototype's own breakpoint: the version rows stack rather than squash. */
+   The prototype's own breakpoint: the version rows stack rather than squash.
+   The grid needs no rule here — `auto-fill` reflows it at every width. */
 
 @media (max-width: 640px) {
   .segbar {

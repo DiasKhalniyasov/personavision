@@ -97,6 +97,9 @@ describe('the whole loop over a recorded repository', () => {
       number: PULL_NUMBER,
       url: PULL_URL,
       title: CHANGE_TITLE,
+      // The state the Improve screen prints beside the number (#307): recorded as it was
+      // when the run was written, and never derived from this product having opened it.
+      state: 'open',
     });
     expect(improve?.preview).toEqual({ url: PREVIEW_URL });
     expect(improve?.recommendationId).toBe('R-01');

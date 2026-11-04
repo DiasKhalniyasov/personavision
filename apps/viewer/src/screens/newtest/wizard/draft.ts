@@ -21,6 +21,8 @@ import { z } from 'zod';
 /** Who last wrote the goal — the model or the user — which a run records (section 12). */
 export const GOAL_AUTHORS = ['model', 'user'] as const;
 
+export type GoalAuthor = (typeof GOAL_AUTHORS)[number];
+
 const draftSchema = z.object({
   /** The site under test: a record in the workspace, with the URL the feature starts on. */
   site: z.object({ id: z.string(), url: z.string() }).nullable(),
@@ -41,6 +43,24 @@ const draftSchema = z.object({
       task: z.string(),
       success: z.string(),
       author: z.enum(GOAL_AUTHORS),
+      /**
+       * When this wording was last written, which the goal step's notice states beside the
+       * author (#276). It moves to the moment of the edit when the user takes the authorship
+       * over, because the two halves of that line are one claim: a time from the model's
+       * draft beside the user's name would say the user wrote something they did not.
+       */
+      writtenAt: z.string(),
+      /**
+       * The site and the feature sentence this goal was written **for**.
+       *
+       * A user who goes back a step and changes the sentence has changed what the test is
+       * about, and a goal about the old sentence is a goal about something else — so the goal
+       * step compares these two against the draft as it now stands and asks again rather
+       * than carrying the stale one forward (#276). It is stored rather than derived because
+       * the draft is what survives a reload: nothing else in the browser remembers what the
+       * model was told.
+       */
+      askedFor: z.object({ siteUrl: z.string(), feature: z.string() }),
     })
     .nullable(),
 });

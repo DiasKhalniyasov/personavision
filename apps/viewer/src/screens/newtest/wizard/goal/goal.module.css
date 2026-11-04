@@ -1,0 +1,72 @@
+/* =============================================================================
+   `#screen-newtest-goal` of `docs/design/prototype.html`: the goal read and
+   edited before it runs — the two fields, the footnote under the criterion, the
+   authorship notice and the pair of buttons under them.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies: no colour, length, radius, weight or duration is
+   restated here. The one thing that moves is the soft pulse on the two fields
+   while Muse Wonder is writing the goal, which is the tokens' own `pv-pulse` —
+   and the tokens stop it under `prefers-reduced-motion`, so the step is complete
+   and still there without a rule of its own.
+
+   The rules are scoped to this module rather than written as the prototype's own
+   global class names, because the prototype's `Forms` block — `.form`,
+   `.field-group`, `.formfoot` — is shared with screens other tickets own, exactly
+   as `screens/site/site.module.css` says of the same three. What is reproduced is
+   the layout it draws, not the selector it draws it with; the shared primitives
+   these blocks sit inside (`.strip`, `.wrap-narrow`, `.card`, `.card-lg`,
+   `.pagehead`, `.lede`, `.footnote`, `.notice`) are the app's own, in
+   `src/styles/base.css`.
+   ========================================================================== */
+
+/* The prototype's `.form`, with its own `margin-top: var(--space-6)` folded in:
+   an inline style on the markup would be a value restated outside the tokens.
+   `minmax(0, …)` on the one column so a long sentence wraps inside the card
+   rather than widening it — a `1fr` track grows to its widest item. */
+.form {
+  display: grid;
+  max-width: var(--layout-max-narrow);
+  margin-top: var(--space-6);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The prototype's `.field-group`: the label over its field. */
+.fieldGroup {
+  display: grid;
+  min-inline-size: 0;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.fieldGroup > label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The prototype's `.formfoot`: the two buttons, wrapping at 390px rather than
+   overflowing, with the rule above them. */
+.formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  gap: var(--space-4);
+}
+
+/* The way back from a step with nothing to write a goal from. No rule above it:
+   there is no form for it to be the foot of. */
+.back {
+  margin-top: var(--space-6);
+}
+
+/* A field whose sentence has not arrived yet. The pulse is the only motion this
+   screen is allowed (`docs/FLOW.md` section 10 — a loading state), and the
+   tokens' reduced-motion block flattens the keyframe itself, so there is nothing
+   to switch off here. */
+.pending {
+  animation: pv-pulse var(--pulse-duration) var(--ease) infinite;
+}
