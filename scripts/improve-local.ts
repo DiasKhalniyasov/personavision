@@ -20,6 +20,7 @@
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -267,7 +268,7 @@ const completion = (artifact: RunArtifact): { done: number; of: number } => {
 /** The same test, same audience and same seed, on another URL, through the CLI's own `run`. */
 const rerun = async (artifact: RunArtifact, url: string): Promise<RunArtifact> => {
   const { run } = artifact;
-  const audienceFile = join(root, 'runs', `.${run.runId}-audience.json`);
+  const audienceFile = join(tmpdir(), `${run.runId}-audience.json`);
   writeFileSync(audienceFile, JSON.stringify(run.audience));
   const out = execFileSync(
     process.execPath,
