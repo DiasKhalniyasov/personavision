@@ -40,6 +40,7 @@ import type {
 } from '../src/index.js';
 import { serveFixtureSite } from './helpers/static-site.js';
 import type { FixtureSite } from './helpers/static-site.js';
+import { fileURLToPath } from 'node:url';
 
 /** See `geometry.test.ts`: a developer without the browser is skipped, CI is not. */
 const CHROMIUM_INSTALLED = existsSync(chromium.executablePath());
@@ -480,6 +481,109 @@ describeWithChromium('acting on a page', () => {
         expect(result.failure).toBe('selector_not_found');
         expect(result.url).toBe(`${site.url}/cart.html`);
       }),
+    BROWSER_TIMEOUT_MS,
+  );
+});
+
+/**
+ * A click that moves the page **within one document** (#441).
+ *
+ * `following` waited for a navigation request and gave up when there was none, and a
+ * same-document navigation makes no request: a framework's link pushes its history entry
+ * once the route has resolved, which can be after the click's own promise has settled. So
+ * the position the result reported was the page the click left, and on a one-URL run nothing
+ * ever contradicted it — the step matched both views and the scroll position did not move.
+ * Two of the owner's sessions were recorded as `abandoned` on the sign-up view they had
+ * reached, and a third identical one was a success.
+ *
+ * The fixture is `fixtures/spa/`, whose push is deferred to the frame after the handler for
+ * exactly this reason.
+ */
+describeWithChromium('a click that moves the address with no document load', () => {
+  /** The single-page application of #441: see `fixtures/spa/README.md`. */
+  const SPA_DIR = fileURLToPath(new URL('./fixtures/spa', import.meta.url));
+
+  /** One step for the whole application, as a one-URL run derives it (see `taskFor`). */
+  const ONE_STEP: TaskDefinition = {
+    id: 'signing-up',
+    prompt: 'Sign up.',
+    steps: [
+      { id: 'page', label: 'The page', match: { urlPattern: '/', requiredSelector: '#app' } },
+    ],
+  };
+
+  let site: FixtureSite;
+
+  beforeAll(async () => {
+    site = await serveFixtureSite({ root: SPA_DIR });
+  });
+
+  afterAll(async () => {
+    await site.close();
+  });
+
+  const context = (): CaptureContext => ({
+    variant: 'A',
+    device: DESKTOP,
+    task: ONE_STEP,
+    runDir: 'runs/act-writes-nothing',
+  });
+
+  /**
+   * `act.ts`'s `NAVIGATION_START_MS`: the cap a click's move is waited for under. Written out
+   * here rather than exported, because what this suite needs it for is a bound — a click that
+   * moved the page answers as soon as the move committed, and never by waiting the cap out.
+   */
+  const MOVE_CAP_MS = 1_000;
+
+  it(
+    'reports the address the click reached, and not the page it left',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        // A mark in the document the click starts on: a document that was loaded again
+        // would not carry it, so this is what says the move was a same-document one.
+        await handle.page.evaluate(() => {
+          (window as unknown as { pvMark?: number }).pvMark = 441;
+        });
+
+        const startedAt = Date.now();
+        const result = await act(handle, { type: 'click', selector: '#start-signup' }, context());
+        const tookMs = Date.now() - startedAt;
+
+        expect(result.ok).toBe(true);
+        // Waited for, and no longer: the move is what the action answers on. Waiting the cap
+        // out instead would be waiting for a request a `pushState` never makes.
+        expect(tookMs).toBeLessThan(MOVE_CAP_MS);
+        expect(result.url).toBe(`${site.url}/signup`);
+        expect(result.step).toBe('page');
+        // The page agrees, and nothing was loaded to get there.
+        expect((await readSessionState(handle)).url).toBe(`${site.url}/signup`);
+        expect(
+          await handle.page.evaluate(() => (window as unknown as { pvMark?: number }).pvMark),
+        ).toBe(441);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
+    'reports the page it is on when the click moves nothing at all',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        // The heading is no link, so this click asks for nothing: no request, no address
+        // change, and the one bounded wait both cases share ends without either.
+        const result = await act(handle, { type: 'click', selector: '#view-heading' }, context());
+
+        expect(result.ok).toBe(true);
+        expect(result.url).toBe(`${site.url}/app.html`);
+      } finally {
+        await closeSession(handle);
+      }
+    },
     BROWSER_TIMEOUT_MS,
   );
 });

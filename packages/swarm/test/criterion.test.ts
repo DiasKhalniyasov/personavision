@@ -114,6 +114,25 @@ describe('matching the three kinds against a captured screen', () => {
     ).toBe(false);
   });
 
+  it('is not observed on a path that extends the one it names', () => {
+    // The owner's own criterion (#441), against the three addresses the single-page
+    // application fixture puts a session at. The walk that reaches `/signup` is the only one
+    // that reached it: a path which merely begins with it has not.
+    const criterion = read('The address bar reads /signup.');
+    const at = (path: string): boolean =>
+      observeCriterion(criterion, screen(`http://127.0.0.1:5176${path}`, [])).observed;
+
+    expect(criterion.kind).toBe('url');
+    expect(criterion.terms).toStrictEqual(['/signup']);
+    expect(at('/signup')).toBe(true);
+    expect(at('/app.html')).toBe(false);
+    expect(at('/signup-cancelled')).toBe(false);
+    // A deeper segment, a query and a fragment do end the path that was asked for, which is
+    // the rule as it stands and is not loosened for this.
+    expect(at('/signup/details')).toBe(true);
+    expect(at('/signup?from=home')).toBe(true);
+  });
+
   it('matches a piece of text by the quoted span, whole', () => {
     const criterion = read('The page shows the text “Order confirmed”.');
 

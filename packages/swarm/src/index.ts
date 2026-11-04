@@ -44,7 +44,7 @@
 
 export { calibrationOf, engineOnTheRecord } from './calibration.js';
 export type { EngineOnTheRecord, RunCalibration } from './calibration.js';
-export { criterionToObserve, observeCriterion } from './criterion.js';
+export { criterionToObserve, observeCriterion, readsTheAddress } from './criterion.js';
 export type { CriterionSighting, CriterionToObserve, ObservableScreen } from './criterion.js';
 export { AUTOMATION_FAILURE_KINDS, decideOutcome, OUTCOME_POLICY } from './outcome.js';
 export { runSession } from './run-session.js';

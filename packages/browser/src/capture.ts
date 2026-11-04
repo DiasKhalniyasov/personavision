@@ -15,8 +15,16 @@
  * page on one of the task's steps whose declared primary action cannot be resolved is an
  * automation failure, which excludes the session rather than scoring it as a zero.
  *
+ * **A screen is captured with its address.** One of the reads below asks the page where it is,
+ * through the session's own reader, so a `pushState`, a framework route, a redirect or a
+ * consent bounce that happened while nobody was acting is seen too — and the criterion a run
+ * was given is read against the page's own location rather than against a value carried along
+ * from the last action (#441). It is no part of the cache key: an address is not what makes
+ * two screens the same page to cache, so the address a cache hit is answered with is this
+ * visit's and not the cached visit's.
+ *
  * **A navigation under the read is waited out here, below the budget.** The composition is
- * five reads that each run `page.evaluate`, and a site that navigates between any two of them
+ * six reads that each run `page.evaluate`, and a site that navigates between any two of them
  * — a redirect, a locale bounce, a framework taking over the first paint, a consent flow
  * replacing the document — destroys the execution context the next one runs in. That is an
  * ordinary event on the real web and not a fault of ours, so the new document is waited for
@@ -43,6 +51,7 @@ import { extractElements } from './extract/elements.js';
 import { isDestroyedContext } from './failure-mapping.js';
 import { readGeometry } from './geometry.js';
 import { writeScreenshot } from './screenshot.js';
+import { readSessionState } from './session.js';
 import { detectStep, resolvePrimaryAction, taskStep } from './steps.js';
 import type { Capture, CaptureContext, Device, PageHandle } from './types.js';
 
@@ -81,13 +90,17 @@ export const captureCacheKey = (parts: CaptureCacheKeyParts): string =>
   ].join('|');
 
 /**
- * One composition of the screen the page is on: the five reads, in the order the cache key
+ * One composition of the screen the page is on: the six reads, in the order the cache key
  * needs them. Named rather than inline so that a navigation under it can run it again.
  */
 const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Capture> => {
   const geometry = await readGeometry(page);
   const contentHash = await readContentHash(page);
   const step = await detectStep(page, ctx.task);
+  // Where the page says it is. Through the session's own reader, so that nothing in this
+  // package holds a second opinion about what an address is, and inside the composition, so
+  // that a navigation under it is waited out and the address is the destination's.
+  const { url } = await readSessionState(page);
 
   const key = captureCacheKey({
     variantUrl: page.variant.url,
@@ -112,6 +125,7 @@ const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Cap
     return {
       variant: ctx.variant,
       step,
+      url,
       screenshot,
       viewport: geometry.viewport,
       pageHeight: geometry.pageHeight,
@@ -126,7 +140,13 @@ const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Cap
   // since overwritten (`cache.ts`). A page on no step writes no image.
   const screen = step === null ? ctx.variant : `${ctx.variant}|${step}`;
 
-  return withCache(key, work, { runDir: ctx.runDir, screen });
+  const composed = await withCache(key, work, { runDir: ctx.runDir, screen });
+  // This visit's address, whether the screen was composed or answered from the cache. The
+  // key is the markup, the step and the device: one page's markup served at two addresses —
+  // a single-page application's two routes, a path and its trailing-slash twin — is one
+  // entry, and a hit that carried the first address would state the wrong location for the
+  // second.
+  return { ...composed, url };
 };
 
 /**

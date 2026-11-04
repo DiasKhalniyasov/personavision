@@ -1548,6 +1548,20 @@ export const sessionSchema = z
         step: name,
         screenshot: name,
         scrollY: pixels,
+        /**
+         * The address the screen was captured at.
+         *
+         * **Optional with no default.** A session written before this revision carries none
+         * — the committed example run, every recorded fixture, every webcam session
+         * `packages/calibration` converts — and a screen that recorded no address says so
+         * rather than claiming the run's variant URL: a reader of a finished run could
+         * otherwise not tell a screen that was really on that page from one nobody asked.
+         * It is how `video`, the goal block and a persona's `region` are carried.
+         *
+         * A `webAddress`, so `about:blank` and a `javascript:` address are not writable
+         * here: a screen's address is a page a client could ask for.
+         */
+        url: webAddress.optional(),
         intent: z.string(),
         decidedAction: z.string(),
       }),

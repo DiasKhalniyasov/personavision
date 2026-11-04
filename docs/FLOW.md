@@ -558,6 +558,23 @@ Both are shown on one screen before launch, both are editable, and **the edited 
 always records the goal it ran and **who last wrote it** — the model or the user — because a completion rate is only as
 meaningful as the criterion behind it, and a reader a month later has to be able to see which of the two wrote it.
 
+### Where the criterion is read
+
+The success criterion is read **against the address the page is at**: on every captured screen, and again after
+every action, against the position the driver reports the action reached. And a screen **records the address it
+was captured at**, so that a reader of a finished run can say which page a screen was on, and a session already
+written can be re-read against a criterion without being walked again. A screen that recorded no address says
+so rather than claiming the run's URL — the field is optional with no default, like a session's video.
+
+A **single-page application** is the shape of site that needs this, and the product's own front end is one of
+them: one URL, one derived step that matches every view of it, every view starting at the top, and the address
+the only thing that moves. A client-side navigation — `history.pushState`, a framework route, a consent bounce
+— asks the network for nothing, so an address carried along from the last action never sees it, and nothing
+else in the session contradicts it. Two consequences, both of them about the same click: the address an action
+reports is the one the click **reached**, waited for the same bounded way a document load is; and a click that
+moved the address is a click that **got the agent somewhere**, on a run where neither the step nor the scroll
+position can move to say so.
+
 Every Wonder use — the audience from free text, the goal, the analysis, the change decision — goes through
 `@personavision/provider` with an offline deterministic implementation behind the same interface. **Tests make no network
 call and need no key**, exactly as today.
@@ -767,6 +784,16 @@ Everything in path 1, and then:
   second ask it has always had, with no correction to carry — there is nothing to quote back. Nothing else is asked
   twice: a refusal, an answer our own output cap cut off, a non-2xx status and a timeout are each asked once, as is a
   JSON object the interface rejects, which a model asked twice sends twice.
+
+- **The success criterion is read against the page's own address.** A capture records where it was — read from
+  the page, so a `pushState`, a framework route, a redirect or a consent bounce that happened while nobody was
+  acting is seen too — and the walk reads the criterion against that address on every screen, and after every
+  action against the position the action reached. A same-document navigation is waited for the same bounded
+  way a document load already is, within the cap that exists; and on a one-URL run a click that moved the
+  address is a click that got the agent somewhere, because neither the step nor the scroll position can move
+  to say so. `sessionSchema.screens[]` records the address, **optional with no default**: every session
+  written before this revision carries none, and a screen that recorded none says so rather than claiming the
+  run's variant URL.
 
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.

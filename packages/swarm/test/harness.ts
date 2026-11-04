@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createFixtureSource } from '@personavision/browser';
 import { runPaths, SCHEMA_VERSION, writeRun, ZERO_USAGE } from '@personavision/contract';
+import { FREE_USAGE } from '@personavision/provider';
 import {
   createDecisionSession,
   createMetaModelApiProvider,
@@ -101,6 +102,89 @@ export const TASK: TaskDefinition = {
 
 /** The variant the committed set recorded at each device's viewport. */
 export const variantFor = (id: 'A' | 'B') => ({ id, url: 'https://fixture.test/cart.html' });
+
+/**
+ * The single-page application of #441, as a live session walks it:
+ * `packages/browser/test/fixtures/spa/`, served by `serveFixtureSite({ root })`.
+ */
+export const SPA = fileURLToPath(new URL('../../browser/test/fixtures/spa', import.meta.url));
+
+/**
+ * The one-step task a one-URL run derives, over that application.
+ *
+ * `'/'` is the pattern `packages/cli`'s `taskFor` compiles for a site served at its root —
+ * which the owner's own run was — so the same step matches every view of the application and
+ * the address is the only thing that moves between them. `body` is the required element that
+ * ticket gives a derived step, and a derived step declares no primary action: nobody designed
+ * a control on the site under test.
+ */
+export const spaTask = (successCriterion?: string): TaskDefinition => ({
+  id: 'signing-up',
+  prompt: 'Sign up to try it on your project.',
+  steps: [
+    {
+      id: 'page',
+      label: 'The page',
+      match: { urlPattern: '/', requiredSelector: 'body' },
+      goal: 'Sign up.',
+    },
+  ],
+  ...(successCriterion === undefined ? {} : { successCriterion }),
+});
+
+/**
+ * An agent that follows the link whose words it was given, and does one named thing on a
+ * screen that has no such link.
+ *
+ * It reads images, which is what makes it deterministic: a screenshot-reading agent is
+ * handed every element on the screen and may act on any of them, so the link is found
+ * whether or not a sampled fixation happened to land on it. It reports one look per screen
+ * for the same reason the real ones do — an action's moment in the session is where the
+ * agent's eye had got to, and two actions at the same moment are two actions a reader of
+ * the trace cannot order.
+ */
+export const clicksTheLinkSaying = (
+  words: string,
+  otherwise: 'hesitate' | 'abandon' = 'hesitate',
+): DecisionProvider =>
+  providerThat(
+    (context) => {
+      const screen = context.screenElements ?? [];
+      const sought = words.toLowerCase();
+      const link = screen.find((element) =>
+        `${element.name ?? ''} ${element.text}`.toLowerCase().includes(sought),
+      );
+      const first = screen[0];
+      const looks =
+        first === undefined
+          ? []
+          : [
+              {
+                targetElementId: first.id,
+                durationMs: 400,
+                saw: first.text,
+                thought: 'Reading the page before I do anything.',
+              },
+            ];
+      return link === undefined
+        ? {
+            intent:
+              otherwise === 'abandon'
+                ? 'There is nothing here I came for.'
+                : 'I will take this in before doing anything else.',
+            action: { kind: otherwise, targetElementId: null },
+            looks,
+            usage: FREE_USAGE,
+          }
+        : {
+            intent: `Following “${words}”.`,
+            action: { kind: 'click', targetElementId: link.id },
+            looks,
+            usage: FREE_USAGE,
+          };
+    },
+    { readsImages: true },
+  );
 
 const TRAITS = {
   careful: {
