@@ -731,6 +731,68 @@ export const validArtifact = (): RunArtifact => ({
   findings: validFindings(),
 });
 
+/** What our own browsing breaking says, in the words `packages/swarm` writes it. */
+const BROKE = 'Our own browsing broke on the "cart" step: the Checkout button never appeared.';
+
+/**
+ * A session our own automation broke: `docs/FLOW.md` section 8's fourth outcome, with the
+ * three fields the swarm sets together — the status, the attribution and the stored
+ * exclusion — so that a check reading any one of them reads the same session.
+ */
+export const brokenSession = (sessionId: string, variant: string): Session => ({
+  ...validSession(sessionId, variant),
+  outcome: {
+    status: 'automation_failure',
+    step: CART,
+    reason: BROKE,
+    attribution: 'automation',
+    excludedFromScores: true,
+  },
+});
+
+/**
+ * The same run with one more session on variant A that **we** broke, counted and excluded:
+ * the run a recommendation resting on an excluded session would be written against
+ * (`docs/FLOW.md` section 11). Its score counts the failure separately and keeps its one
+ * scored session, which is exactly what excluding it means.
+ */
+export const brokenSessionArtifact = (): RunArtifact => {
+  const whole = validRun();
+  const progress = finishedProgress();
+  const run: Run = {
+    ...whole,
+    progress: {
+      totalSessions: 3,
+      finishedSessions: 3,
+      perVariant: [
+        { variant: 'A', totalSessions: 2, finishedSessions: 2 },
+        { variant: 'B', totalSessions: 1, finishedSessions: 1 },
+      ],
+      sessions: [
+        ...progress.sessions,
+        {
+          ...finishedEntry('S-03', 'A'),
+          status: 'automation_failure',
+          step: CART,
+          reason: BROKE,
+          attribution: 'automation',
+        },
+      ],
+    },
+    sessionIds: [...whole.sessionIds, 'S-03'],
+    scores: whole.scores.map((score) =>
+      score.variant === 'A'
+        ? { ...score, outcomeCounts: { ...score.outcomeCounts, automationFailure: 1 } }
+        : score,
+    ),
+  };
+  return {
+    run,
+    sessions: [validSession('S-01', 'A'), validSession('S-02', 'B'), brokenSession('S-03', 'A')],
+    findings: validFindings(),
+  };
+};
+
 /**
  * A run that has started and finished nothing: the empty state the Running screen renders,
  * and what the appending writer is handed. Its plan is the two sessions of `validArtifact`,

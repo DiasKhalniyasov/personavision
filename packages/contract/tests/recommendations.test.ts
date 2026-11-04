@@ -1,14 +1,30 @@
 import { rm, writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Recommendations, Violation } from '../src/index.js';
-import { readRun, recommendationsSchema, runPaths, validate, writeRun } from '../src/index.js';
+import type {
+  Aggregate,
+  CitedRun,
+  Recommendation,
+  Recommendations,
+  Violation,
+} from '../src/index.js';
 import {
+  readRun,
+  recommendationsSchema,
+  runPaths,
+  validate,
+  validateRecommendations,
+  writeRun,
+} from '../src/index.js';
+import {
+  brokenSessionArtifact,
   CART,
   CONFIRM,
   FINDING_ID,
   temporaryRunDir,
+  validAggregate,
   validArtifact,
   validRecommendations,
+  validRun,
 } from './fixtures.js';
 
 /**
@@ -481,5 +497,294 @@ describe('recommendations.json in a run directory', () => {
         },
       }),
     ).rejects.toThrow(/one plain sentence/);
+  });
+});
+
+/**
+ * Every citation held to the run it belongs to: the run-level half of the contract, which
+ * the per-file schema above cannot do because it needs the sessions, the areas of interest,
+ * the findings and the aggregate in hand at once.
+ *
+ * The validator is exported, so these assert it directly — the path and the wording of each
+ * rejection, not just that something failed — and the run-directory suite above asserts
+ * that `validate` runs it.
+ */
+describe('every citation against the run it belongs to', () => {
+  /** The artifact, its aggregate and the recommendations, as one argument to the validator. */
+  const cited = (changes: Partial<CitedRun> = {}): CitedRun => ({
+    ...validArtifact(),
+    aggregate: validAggregate(),
+    recommendations: validRecommendations(),
+    ...changes,
+  });
+
+  /** The top recommendation with some of its fields replaced. */
+  const topRecommendation = (
+    document: Recommendations,
+    changes: Partial<Recommendation>,
+  ): Recommendations => ({
+    ...document,
+    recommendations: [{ ...document.recommendations[0], ...changes }],
+  });
+
+  const complaints = (run: CitedRun): string[] =>
+    validateRecommendations(run).map(
+      (violation) => `${violation.file}${violation.path} — ${violation.message}`,
+    );
+
+  it('returns no violation for a run whose citations all resolve', () => {
+    expect(validateRecommendations(cited())).toEqual([]);
+  });
+
+  it('returns no violation for a run that produced no recommendation at all', () => {
+    expect(validateRecommendations({ ...validArtifact(), aggregate: validAggregate() })).toEqual(
+      [],
+    );
+  });
+
+  it('reports in the same shape validate does: the file, the pointer and the message', () => {
+    const [violation] = validateRecommendations(
+      cited({
+        recommendations: topRecommendation(validRecommendations(), {
+          citations: [{ kind: 'session', sessionId: 'S-99', offsetMs: 0 }],
+        }),
+      }),
+    );
+
+    expect(violation).toEqual({
+      file: label.recommendations,
+      path: '/recommendations/0/citations/0/sessionId',
+      message: '"S-99" names no session listed in run.json sessionIds',
+    });
+  });
+
+  describe('a funnel citation', () => {
+    /** The same aggregate with the confirmation step walked by nobody, so its funnel loses it. */
+    const withoutConfirm = (): Aggregate => {
+      const aggregate = validAggregate();
+      return {
+        ...aggregate,
+        funnelSlices: aggregate.funnelSlices.map((slice) => ({
+          ...slice,
+          funnel: slice.funnel.filter((row) => row.step === CART),
+        })),
+      };
+    };
+
+    it('is rejected when the step is not one the aggregate’s funnel carries', () => {
+      const [complaint, ...rest] = complaints(cited({ aggregate: withoutConfirm() }));
+
+      expect(complaint).toBe(
+        // The third citation of the fixture: the one the Funnel and timing screen anchors.
+        `${label.recommendations}/recommendations/0/citations/2/stepId — "${CONFIRM}" names no step the funnel in ${label.aggregate} carries`,
+      );
+      expect(rest).toEqual([]);
+    });
+
+    it('resolves against the funnel and not merely against the task’s steps', () => {
+      // `confirm` is a step the run declares, which is what made the rejection above the
+      // run-level check this ticket is about rather than the one a finding already gets.
+      expect(validRun().steps.map((step) => step.id)).toContain(CONFIRM);
+      expect(validateRecommendations(cited())).toEqual([]);
+    });
+
+    it('is held to the task’s own steps on a run that computed no aggregate', () => {
+      const [complaint] = complaints(
+        cited({
+          aggregate: undefined,
+          recommendations: topRecommendation(validRecommendations(), {
+            citations: [{ kind: 'funnel', stepId: 'wishlist' }],
+          }),
+        }),
+      );
+
+      expect(complaint).toBe(
+        `${label.recommendations}/recommendations/0/citations/0/stepId — "wishlist" names no step declared in this run's steps`,
+      );
+    });
+  });
+
+  describe('no recommendation rests on an excluded session', () => {
+    const broken = (): CitedRun => ({
+      ...brokenSessionArtifact(),
+      aggregate: validAggregate(),
+      recommendations: validRecommendations(),
+    });
+
+    it('rejects a recommendation whose every cited session is one, in those words', () => {
+      const [complaint, ...rest] = complaints({
+        ...broken(),
+        recommendations: topRecommendation(validRecommendations(), {
+          citations: [{ kind: 'session', sessionId: 'S-03', offsetMs: 0 }],
+        }),
+      });
+
+      expect(complaint).toContain(`${label.recommendations}/recommendations/0/citations`);
+      expect(complaint).toContain('every session it cites is an automation failure');
+      expect(complaint).toContain('about our harness and not about the site');
+      expect(rest).toEqual([]);
+    });
+
+    it('accepts one cited among several, and does not count it in peopleAffected', () => {
+      const run = {
+        ...broken(),
+        recommendations: topRecommendation(validRecommendations(), {
+          citations: [
+            { kind: 'session' as const, sessionId: 'S-01', offsetMs: 0 },
+            { kind: 'session' as const, sessionId: 'S-03', offsetMs: 0 },
+          ],
+          // One of the two is ours: the claim is about the one person it is about.
+          peopleAffected: 1,
+        }),
+      };
+
+      expect(validateRecommendations(run)).toEqual([]);
+      // Counting the excluded session would make this the same claim about two people.
+      expect(
+        complaints({
+          ...run,
+          recommendations: topRecommendation(run.recommendations as Recommendations, {
+            citations: [
+              { kind: 'session', sessionId: 'S-01', offsetMs: 0 },
+              { kind: 'session', sessionId: 'S-02', offsetMs: 0 },
+            ],
+            peopleAffected: 1,
+          }),
+        })[0],
+      ).toContain('fewer than its own evidence');
+    });
+
+    it('holds a write-up claim to the same rule', () => {
+      const document = validRecommendations();
+      const [complaint, ...rest] = complaints({
+        ...broken(),
+        recommendations: {
+          ...document,
+          writeUp: [
+            {
+              ...document.writeUp![0],
+              citations: [{ kind: 'session', sessionId: 'S-03', offsetMs: 0 }],
+            },
+          ],
+        },
+      });
+
+      expect(complaint).toContain(`${label.recommendations}/writeUp/0/citations`);
+      expect(complaint).toContain('every session it cites is an automation failure');
+      expect(rest).toEqual([]);
+    });
+  });
+
+  describe('peopleAffected, the stored ranking key', () => {
+    it('is rejected when it is fewer people than the recommendation’s own citations', () => {
+      const [complaint, ...rest] = complaints(
+        cited({
+          recommendations: topRecommendation(validRecommendations(), { peopleAffected: 0 }),
+        }),
+      );
+
+      expect(complaint).toBe(
+        `${label.recommendations}/recommendations/0/peopleAffected — peopleAffected is the people a change would reach, and this recommendation cites 1 of them by session: 0 is fewer than its own evidence`,
+      );
+      expect(rest).toEqual([]);
+    });
+
+    it('is rejected when it is more people than the aggregate measured', () => {
+      const [complaint, ...rest] = complaints(
+        cited({
+          recommendations: topRecommendation(validRecommendations(), { peopleAffected: 3 }),
+        }),
+      );
+
+      expect(complaint).toBe(
+        `${label.recommendations}/recommendations/0/peopleAffected — peopleAffected is the ranking key, and it cannot be a number nobody measured: this says 3, and ${label.aggregate} is of 2 scored sessions`,
+      );
+      expect(rest).toEqual([]);
+    });
+
+    it('is held to the sessions our automation did not break when there is no aggregate', () => {
+      const [complaint, ...rest] = complaints({
+        ...brokenSessionArtifact(),
+        recommendations: topRecommendation(validRecommendations(), { peopleAffected: 3 }),
+      });
+
+      expect(complaint).toBe(
+        `${label.recommendations}/recommendations/0/peopleAffected — peopleAffected is the ranking key, and it cannot be a number nobody measured: this says 3, and the run holds 2 sessions our own automation did not break`,
+      );
+      expect(rest).toEqual([]);
+    });
+
+    it('takes a figure between the people cited and the people measured', () => {
+      for (const peopleAffected of [1, 2]) {
+        expect(
+          validateRecommendations(
+            cited({
+              recommendations: topRecommendation(validRecommendations(), { peopleAffected }),
+            }),
+          ),
+        ).toEqual([]);
+      }
+    });
+  });
+});
+
+describe('validate on a run directory reports the run-level rules too', () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await temporaryRunDir());
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  it('accepts a run whose aggregate, findings and recommendations all agree', async () => {
+    await writeRun(dir, {
+      ...validArtifact(),
+      aggregate: validAggregate(),
+      recommendations: validRecommendations(),
+    });
+
+    expect(await validate(dir)).toEqual([]);
+  });
+
+  it('refuses a recommendation resting only on a session our own automation broke', async () => {
+    const artifact = brokenSessionArtifact();
+    const document = validRecommendations();
+    await writeRun(dir, artifact);
+    await writeFile(
+      runPaths(dir).recommendations,
+      asJson({
+        ...document,
+        recommendations: [
+          {
+            ...document.recommendations[0],
+            citations: [{ kind: 'session', sessionId: 'S-03', offsetMs: 0 }],
+          },
+        ],
+      }),
+    );
+
+    const violations = await validate(dir);
+
+    expect(offenders(violations)).toEqual([`${label.recommendations}/recommendations/0/citations`]);
+    expect(violations[0].message).toContain('automation failure');
+  });
+
+  it('refuses to write a peopleAffected the aggregate did not measure', async () => {
+    const document = validRecommendations();
+
+    await expect(
+      writeRun(dir, {
+        ...validArtifact(),
+        aggregate: validAggregate(),
+        recommendations: {
+          ...document,
+          recommendations: [{ ...document.recommendations[0], peopleAffected: 9 }],
+        },
+      }),
+    ).rejects.toThrow(/cannot be a number nobody measured/);
   });
 });
