@@ -119,6 +119,10 @@ export function GoalStep() {
           task: answer.value.task,
           success: answer.value.successCriterion,
           author: answer.value.lastWrittenBy,
+          // The instant it arrived, which is the instant it was written to within the time of
+          // one request. The platform answers the contract's `Goal` and the contract has no
+          // field for when — asking it to grow one for a line on one screen would be a
+          // second statement of the same fact, and the one that matters here is **who**.
           writtenAt: new Date().toISOString(),
           askedFor: about,
         },
