@@ -6,6 +6,7 @@ import { startPlatformServer } from '../src/server/server.js';
 import type { PlatformServer } from '../src/server/server.js';
 import type { Middleware } from '../src/server/routes/types.js';
 import type { GithubAppRegistration } from '../src/server/routes/github.js';
+import type { WonderSeam } from '../src/server/routes/audiences.js';
 import { temporaryDirectories, writeRunAt } from './workspace.js';
 import type { TestDirectories } from './workspace.js';
 
@@ -38,6 +39,13 @@ export interface TestServerOptions {
    * registered, which is the state until the owner registers one (#231).
    */
   githubApp?: GithubAppRegistration;
+  /**
+   * How `POST /audiences/from-sentence` reaches Muse Wonder (#396). Omitted — as every
+   * suite but the one about that route omits it — leaves the shipped selection in place,
+   * which nothing then calls: no other route asks Wonder for anything, so no suite reaches
+   * a model and none needs a key.
+   */
+  wonder?: WonderSeam;
 }
 
 export interface TestServer {
@@ -65,6 +73,7 @@ export const startTestServer = async ({
   runs = [],
   pipeline,
   githubApp,
+  wonder,
 }: TestServerOptions = {}): Promise<TestServer> => {
   const directories = await temporaryDirectories();
   const runIds: string[] = [];
@@ -73,6 +82,7 @@ export const startTestServer = async ({
     ...directories,
     pipeline,
     githubApp,
+    wonder,
   });
   const server = await startPlatformServer({
     guard: platform.guard,
