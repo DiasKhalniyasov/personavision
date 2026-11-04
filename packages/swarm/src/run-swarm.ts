@@ -25,7 +25,9 @@
  *   looked at and what it spent land in one write per session, so a run stopped halfway
  *   leaves a directory that still validates and the Running screen reads a run that is
  *   still open. `aggregate.json` goes with them (`aggregateRun`, #293), so the results page
- *   has figures to read while the test is still running.
+ *   has figures to read while the test is still running — and never costs the run: the
+ *   figures are a pure function of the directory, so a write that fails is re-landed by the
+ *   next landing, by the close, or by `personavision aggregate`.
  * - **It is bounded by its caller, not by itself.** How many sessions may be in flight at
  *   once arrives as `concurrency`, and the pool holds it: a hundred sessions ten at a time,
  *   proved at that number rather than assumed. `DEFAULT_CONCURRENCY` is only what a caller
@@ -402,6 +404,19 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   const sessions: Session[] = [];
   const takeTurn = inTurn();
   let finishedSessions = 0;
+  /**
+   * The record of every session the run has claimed, by id: what `appendFinishedSession`
+   * parsed and wrote, which is the session file on disk.
+   *
+   * It is kept because the aggregate is composed inside the run's turn, where a reader of
+   * the whole directory cannot be used: `runSession` writes a session's own file before its
+   * worker queues for the turn, so a pool always has files on disk that `run.json` does not
+   * list yet, and the contract's reader rightly calls that a violation. These are the
+   * sessions the run claims, which is exactly what the file has to be of — and for a session
+   * the race gave up on, the run's record rather than the one that landed late, which is the
+   * record the rest of the artifact agrees with.
+   */
+  const claimed = new Map<string, Session>();
 
   /** One session, start to finish: run it, record it, and say so. */
   const walk = async (plan: SwarmSession, position: number): Promise<void> => {
@@ -437,8 +452,9 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
     // `run.json` is one file every session of the swarm would have to queue at, so they do:
     // the append is a read, a change and a write, and two at once would lose one of them.
     await takeTurn(async () => {
+      let appended: Run;
       try {
-        await appendFinishedSession(input.runDir, walked.session, {
+        appended = await appendFinishedSession(input.runDir, walked.session, {
           personaName: plan.persona.name,
           usage: walked.usage,
           aois: walked.aois,
@@ -463,17 +479,32 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
         const ours = walked.session;
         void walked.landsLate.then(() => writeSession(input.runDir, ours)).catch(() => undefined);
       }
-      // The figures, over the sessions that now exist (#293). Inside the turn, because the
-      // file is composed from the `run.json` and the sessions this write just left behind,
-      // and because two of these at once would interleave in one file. Before the progress
-      // event, so that a reader woken by the landing finds the figures of it.
+      claimed.set(walked.session.sessionId, walked.session);
+      // The figures, over the sessions the run has now claimed (#293). Inside the turn,
+      // because the run and its sessions are only one agreeing set within it and because two
+      // of these at once would interleave in one file; before the progress event, so that a
+      // reader woken by the landing finds the figures of it.
       //
-      // Best-effort, and the one `catch` here that drops what it caught: a session that
-      // walked is worth more than a figure that can be computed again, and the next landing
-      // re-composes the whole file from the directory, so a transient failure heals itself.
-      // A failure that is not transient is not lost either — the closing write below is the
-      // same call with no landing after it to heal it, and that one throws.
-      await aggregateRun(input.runDir).catch(() => undefined);
+      // Composed from the records rather than by reading the directory back, and that is not
+      // an optimisation: at any concurrency above one there are sessions on disk that this
+      // `run.json` does not list yet, and a reader handed the whole directory refuses it.
+      // The records are what the writer parsed and wrote, so this is the same composition
+      // over the same sessions — `aggregateRun` does it from the directory once the pool is
+      // empty and nothing is unlisted, and that is the file the run is left with.
+      //
+      // Best-effort: a session that walked is worth more than a figure that is a pure
+      // function of the directory, and the next landing re-composes the whole file, so a
+      // failure that is not permanent heals itself. A permanent one is what the tests here
+      // are for — `personavision aggregate` lands the figures for any run that ends without
+      // them, which is why losing them is never losing the run.
+      await landAggregate(
+        input.runDir,
+        appended,
+        appended.sessionIds.flatMap((sessionId) => {
+          const record = claimed.get(sessionId);
+          return record === undefined ? [] : [record];
+        }),
+      ).catch(() => undefined);
       await input.onProgress?.({
         kind: 'session-finished',
         sessionId: plan.sessionId,
@@ -520,16 +551,18 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
   if (stoppedBy.length > 0) throw stoppedBy[0];
 
   const run = await closeRun(input.runDir, planned, startedAt, clock);
-  // Once more, now that the run is closed: over the final set of sessions, and carrying a
-  // finished `runStatus` rather than the `open` every mid-run write left. It is the same
-  // whole re-composition as every write before it, which is what makes the file the run is
-  // left with the file a re-aggregation of this directory produces.
+  // Once more, now that the run is closed: over the final set of sessions, carrying a
+  // finished `runStatus` rather than the `open` every mid-run write left, and **read back
+  // from the directory**, which is safe here and nowhere above — every worker is done, so
+  // there is no session on disk the run does not list. That is what makes this file the one
+  // a re-aggregation of this directory produces, byte for byte.
   //
-  // This one throws. There is no landing after it to re-compose the file, so a failure here
-  // is the only chance a caller has to learn that the run's figures are missing or stale —
-  // and the run is safe on disk either way: `run.json` is already `finished`, every session
-  // is written, and the figures can be landed by calling this again over the directory.
-  await aggregateRun(input.runDir);
+  // Best-effort like the others, and for a sharper reason than theirs: a throw here reaches
+  // `packages/cli/src/run/start.ts`, which cannot tell it from a run that broke and reports
+  // a complete run as "the run stopped after 8 of 8 sessions" — and reaches
+  // `personavision improve`, which abandons a comparison whose two sides both ran. Figures
+  // are recomputable from the directory by one command; minutes of browser time are not.
+  await aggregateRun(input.runDir).catch(() => undefined);
 
   return { sessions, run, holdoutPersonaIds: holdoutPersonaIds(holdout) };
 };
@@ -540,7 +573,7 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
  * run closes; anything holding a run directory can call it to re-aggregate one.
  *
  * **Every call is a whole re-composition, never an increment.** That looks wasteful and is
- * not. The composition is a pure fold over sessions already parsed, which beside a browser
+ * not. The composition is a pure fold over sessions already in hand, which beside a browser
  * session costs nothing, and it buys the one property the file is worth having: the
  * `aggregate.json` a run is left with is identical to the one a re-aggregation of the same
  * directory produces, because they are the same call. Updating the file in place would mean
@@ -548,10 +581,18 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
  * and two code paths can disagree, which for a file whose whole job is that two screens
  * cannot disagree about a number would be the wrong way round.
  *
- * It reads the directory rather than taking the sessions it is handed, for the same reason:
- * what the file claims to be of is what is on disk. `runStatus` is the status of the
- * `run.json` it just read, so a file written mid-run says `open` and the one written after
- * the run closes says `finished`, and a reader is never told a partial figure is final.
+ * It reads the directory rather than taking the sessions it is handed, which is what makes
+ * it the re-aggregation it claims to be — and **it can only be called when nothing is in
+ * flight**: a session's own file is written before its worker queues for the run's turn, so
+ * a pool always has files on disk that `run.json` does not list yet, and the contract's
+ * reader rightly refuses a directory in that state. The run loop composes over its own
+ * records while its sessions land (`landAggregate`) and calls this once the pool is empty.
+ *
+ * `runStatus` is the status of the `run.json` it read, so a file written over an open run
+ * says `open` and one written over a closed run says `finished`, and a reader is never told
+ * a partial figure is final. A path that closes a run itself rather than letting the loop do
+ * it — `closeStoppedRun`, for *Stop test* — therefore calls this afterwards, or it would
+ * leave a finished run carrying the last `open` file the loop wrote.
  *
  * **It takes no clock either**, which is the other half of the same property: `computedAt`
  * is read off the run by `aggregateComputedAt`, the rule `personavision aggregate` composes
@@ -565,6 +606,23 @@ export const runSwarm = async (input: RunSwarmInput): Promise<SwarmResult> => {
  */
 export const aggregateRun = async (runDir: string): Promise<void> => {
   const { run, sessions } = await readRun(runDir);
+  await landAggregate(runDir, run, sessions);
+};
+
+/**
+ * The figures of one run, composed and landed: the single write behind both
+ * `aggregateRun` and the run loop's own writes as its sessions land.
+ *
+ * It takes the run and its sessions rather than a directory because the run loop has them
+ * in hand and cannot read the directory back — mid-run there are always sessions on disk
+ * that `run.json` does not list yet. `computedAt` is the run's own, never a clock, so the
+ * two callers land the same bytes over the same sessions.
+ */
+const landAggregate = async (
+  runDir: string,
+  run: Run,
+  sessions: readonly Session[],
+): Promise<void> => {
   await writeAggregate(
     runDir,
     composeAggregate({ run, sessions, computedAt: aggregateComputedAt(run) }),

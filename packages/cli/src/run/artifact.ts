@@ -7,7 +7,7 @@ import {
   writeRun,
   ZERO_USAGE,
 } from '@personavision/contract';
-import { engineOnTheRecord } from '@personavision/swarm';
+import { aggregateRun, engineOnTheRecord } from '@personavision/swarm';
 import { stepsOf } from './task.js';
 import type { TaskDefinition } from '@personavision/browser';
 import type { Audience, Persona, Run, RunFailure } from '@personavision/contract';
@@ -195,6 +195,15 @@ export const readRunRecord = async (runDir: string): Promise<Run> =>
  *
  * It goes out through the contract's own reader and writer, so a directory that would not
  * read back is thrown rather than written: that is what "still validates" is checked by.
+ *
+ * The figures are re-aggregated afterwards (#293). The run loop writes `aggregate.json` as
+ * its sessions land and once more when it closes a run itself, and this path is the one that
+ * closes a run instead of it — so what the directory holds here is the last mid-run file,
+ * which says `runStatus: "open"` and is stamped with the run's `startedAt`. Carried through
+ * unchanged beside a `finished` run it would tell a reader these figures are partial for
+ * ever, and its `computedAt` would no longer be the one a re-aggregation derives, so
+ * `personavision aggregate` over the directory would give different bytes. Composing again
+ * over the closed run fixes both, and it is the same call the loop makes.
  */
 export const closeStoppedRun = async (
   runDir: string,
@@ -212,5 +221,9 @@ export const closeStoppedRun = async (
     sessionIds: plannedOrder.filter((sessionId) => landed.has(sessionId)),
   };
   await writeRun(runDir, { ...artifact, run });
+  // Best-effort, like every other write of this file: this close is reached while a failure
+  // is being reported, and it must not replace that failure with one about figures. A run
+  // that ends without them is what `personavision aggregate` is for.
+  await aggregateRun(runDir).catch(() => undefined);
   return run;
 };

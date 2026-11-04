@@ -1111,6 +1111,52 @@ describe('the aggregate a run writes for itself', () => {
     }
   });
 
+  /**
+   * The same promise at a concurrency a real run uses.
+   *
+   * A pool is the case the file can quietly go missing in: `runSession` writes a session's
+   * own file before its worker queues for the run's turn at `run.json`, so while one landing
+   * is being written there are other sessions' files on disk that `run.json` does not list
+   * yet — and a reader handed the whole directory calls that a violation. One at a time
+   * never sees it. `DEFAULT_CONCURRENCY` is 4 and a remote run's is ten, so a figure set
+   * that only lands at one is a figure set no real run has.
+   */
+  it('writes the file at every landing at the concurrency a real run uses', async () => {
+    await open();
+    const landed: Array<{ counted: number; ofSessions: number; listed: number }> = [];
+
+    await runSwarm(
+      swarmOver({
+        concurrency: DEFAULT_CONCURRENCY,
+        onProgress: async (event) => {
+          if (event.kind !== 'session-finished') return;
+          const aggregate = await aggregateOnDisk();
+          expect(aggregate, `no aggregate after ${event.finishedSessions} sessions`).not.toBeNull();
+          const seen = aggregate as Aggregate;
+          landed.push({
+            counted: seen.scoredSessionCount + seen.excludedAutomationFailures,
+            ofSessions: event.finishedSessions,
+            // The sessions the run claims, which is what the file has to be of. Read off
+            // `run.json` alone and not through the directory's reader, for the very reason
+            // this test exists: the other workers' session files are on disk and this
+            // `run.json` does not list them, and a reader handed the whole directory
+            // refuses it.
+            listed: (await runJsonOnDisk()).sessionIds.length,
+          });
+        },
+      }),
+    );
+
+    expect(landed).toHaveLength(8);
+    // Observed inside the run's own turn, so the file is of exactly the sessions the run had
+    // claimed when this one landed — never fewer, and never a file that is not there.
+    for (const seen of landed) {
+      expect(seen.counted).toBe(seen.ofSessions);
+      expect(seen.counted).toBe(seen.listed);
+    }
+    expect(landed.map((seen) => seen.counted)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
   it('carries a finished status and the whole session set once the run closes', async () => {
     await open();
 
@@ -1159,30 +1205,41 @@ describe('the aggregate a run writes for itself', () => {
 
   it('writes again for a session our own harness broke, because the excluded count changed', async () => {
     await open();
-    const excludedAfterEach: number[] = [];
+    const after: Array<{ scored: number; excluded: number; slices: number }> = [];
 
-    // Half this run is our breakage: one of the two people fails to open a browser on both
-    // variants and both seeds, so four of the eight sessions are automation failures.
+    // Half this run is our breakage, and **the first session to land is one of it**: the
+    // person the plan walks first fails to open a browser on both variants and both seeds,
+    // so four of the eight sessions are automation failures and the first file written is of
+    // nobody. That is the shape worth driving a write for — no scored session, so no slice
+    // to store, and a count of what was left out rather than a zero nobody measured.
     const { sessions } = await runSwarm(
       swarmOver({
         concurrency: 1,
-        source: breaksFor(source, 'careful'),
+        source: breaksFor(source, 'rushed'),
         onProgress: async (event) => {
           if (event.kind !== 'session-finished') return;
           const aggregate = await aggregateOnDisk();
-          expect(aggregate).not.toBeNull();
-          excludedAfterEach.push((aggregate as Aggregate).excludedAutomationFailures);
+          expect(aggregate, `no aggregate after ${event.finishedSessions} sessions`).not.toBeNull();
+          const seen = aggregate as Aggregate;
+          after.push({
+            scored: seen.scoredSessionCount,
+            excluded: seen.excludedAutomationFailures,
+            slices: seen.funnelSlices.length + seen.screenSlices.length,
+          });
         },
       }),
     );
 
     const broken = sessions.filter((session) => session.outcome.status === 'automation_failure');
-    expect(broken).toHaveLength(4);
+    expect(broken.map((session) => session.sessionId)).toEqual(['S-01', 'S-02', 'S-05', 'S-06']);
     // The file moved on every landing, the broken ones included: a session nobody can score
     // still changes what the file says about how many were left out.
-    expect(excludedAfterEach).toHaveLength(8);
-    expect(excludedAfterEach.at(-1)).toBe(4);
-    expect(new Set(excludedAfterEach).size).toBeGreaterThan(1);
+    expect(after).toHaveLength(8);
+    expect(after.map((seen) => seen.excluded)).toEqual([1, 2, 2, 2, 3, 4, 4, 4]);
+    expect(after.map((seen) => seen.scored)).toEqual([0, 0, 1, 2, 2, 2, 3, 4]);
+    // Nothing scored is no slices at all, and a filter button over nobody is not a button.
+    expect(after[0]).toEqual({ scored: 0, excluded: 1, slices: 0 });
+    expect(after.at(-1)?.slices).toBeGreaterThan(0);
 
     const aggregate = await aggregateOnDisk();
     expect((aggregate as Aggregate).excludedAutomationFailures).toBe(4);
