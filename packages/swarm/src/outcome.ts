@@ -287,10 +287,14 @@ export function decideOutcome(
           how,
         );
 
-  // Asked before the give-up scan, which is the whole of the rule: the agent did not stop
-  // trying on a walk we stopped, and the scan would find the dwell and the fruitless actions
-  // of its last screens and call it the person leaving. Still `failed` and still the
-  // product's — the session ended with the task not done — with the budget in its words.
+  // Asked before the give-up scan, which is the whole of the rule: on a walk we stopped, the
+  // scan's dwell and fruitless actions are what our own cap left behind, so a give-up read
+  // off them anywhere in the trace — the scan returns the first one, early or late — would
+  // record the person leaving a site they were still being walked around. It is the
+  // precedence the owner's own run asks for: S-01 was called `abandoned` at 8.8 s on a trace
+  // eight actions long because that is all the actions we allowed it. Still `failed` and
+  // still the product's — the session ended with the task not done — with the budget in its
+  // words rather than a verdict we caused.
   if (trace.stoppedOnBudget != null && !completed) {
     return productOutcome(
       'failed',

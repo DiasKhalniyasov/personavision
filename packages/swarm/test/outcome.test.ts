@@ -621,14 +621,28 @@ describe('a walk our own action budget stopped says so', () => {
     );
   });
 
-  it('leaves a stated abandon abandoned, whatever the budget was', () => {
-    // The flag is never set on a walk the agent's own `abandon` ended (`run-session.ts`),
-    // and the rule reads the flag and not the screen count: a trace carrying both is still
-    // the person leaving.
+  it('leaves a walk the agent itself ended abandoned, because no budget stopped it', () => {
+    // The agent said so, so the loop broke on the `abandon` and the flag was never set
+    // (`run-session.ts`): a stated give-up keeps the status and the words it has today.
     const outcome = decideOutcome(STATED_ABANDON, PERSISTENT);
 
     expect(outcome.status).toBe('abandoned');
     expect(outcome.reason).toContain('Gave up');
+  });
+
+  it('outranks a give-up anywhere in the trace, which is the precedence it is', () => {
+    // The scan returns the *first* give-up it finds, and on a walk we stopped that can be
+    // early: forty fruitless scrolls spend this persona's persistence by the fourth of them.
+    // The owner's own run is this shape — S-01 was called `abandoned` at 8.8 s on a trace
+    // eight actions long, because eight actions is all we allowed it — so the rule has to
+    // read the flag rather than where the scan landed.
+    const scanned = decideOutcome(WALKED_ITSELF_OUT, IMPATIENT);
+    expect(scanned.status).toBe('abandoned');
+
+    const stopped = decideOutcome(STOPPED_ON_ITS_BUDGET, IMPATIENT);
+    expect(stopped.status).toBe('failed');
+    expect(stopped.reason).not.toContain('Persistence spent');
+    expect(stopped.reason).not.toContain('Gave up');
   });
 });
 
