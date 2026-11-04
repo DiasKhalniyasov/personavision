@@ -60,7 +60,10 @@ const isSessionFile = (file: string): boolean => {
   return name !== '' && !name.includes('/');
 };
 const serves = (file: string): boolean =>
-  file === layout.run || file === layout.findings || isSessionFile(file);
+  file === layout.run ||
+  file === layout.findings ||
+  file === layout.aggregate ||
+  isSessionFile(file);
 
 export interface ServedRunData {
   /** The run directories the listing holds, newest first. */
@@ -106,12 +109,14 @@ const AUDIENCE_PATH = /^\/audiences\/([^/]+)$/;
  * `docs/adr/0001-run-data-over-http-as-static-files.md`.
  *
  * `runIds` narrows the workspace — pass `[]` for a workspace with no test. A run directory
- * can also be replaced with text of its own, to test a file the viewer cannot read.
+ * can also be replaced with text of its own, to test a file the viewer cannot read, or with
+ * `null`, to test a file a run directory does not have: the optional `aggregate.json` and
+ * `recommendations.json` are absent from most runs, and an absence is not an empty file.
  */
 export async function serveRunData(
   options: {
     runIds?: string[];
-    files?: Record<string, string>;
+    files?: Record<string, string | null>;
     /** The workspace's audiences. The default is the one the demo workspace is seeded with. */
     audiences?: AudienceRecord[];
   } = {},
@@ -141,10 +146,15 @@ export async function serveRunData(
       );
     }
 
-    const override = overrides[pathname];
-    if (override !== undefined) {
+    if (pathname in overrides) {
+      const override = overrides[pathname];
       return Promise.resolve(
-        new Response(override, { status: 200, headers: { 'content-type': 'application/json' } }),
+        override === null || override === undefined
+          ? missing(pathname)
+          : new Response(override, {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
       );
     }
     if (pathname === '/runs/index.json') return Promise.resolve(json(index));

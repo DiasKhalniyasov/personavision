@@ -97,7 +97,13 @@ export const paths = {
  * The order inside each list is the order `docs/FLOW.md` sections 3 and 14 write the query,
  * so two links to the same place are the same string.
  */
-const FUNNEL_PARAMS = ['segment'] as const satisfies readonly EvidenceLinkParam[];
+/**
+ * `step` is here beside `segment` because the Funnel and timing screen opens with a step
+ * marked (#274): a recommendation citing a funnel step is a link to that screen with the
+ * step on it, and the link is built here with every other one rather than on the screen
+ * that writes it.
+ */
+const FUNNEL_PARAMS = ['segment', 'step'] as const satisfies readonly EvidenceLinkParam[];
 const HEATMAP_PARAMS = [
   'aoi',
   'overlay',
@@ -157,7 +163,7 @@ const query = (
   return written === '' ? '' : `?${written}`;
 };
 
-/** `/runs/<id>/funnel?segment=…`: where they dropped out, for one segment or for all. */
+/** `/runs/<id>/funnel?segment=…&step=…`: where they dropped out, and on which step. */
 export const funnelLink = (runId: string, narrowing: FunnelNarrowing = {}): string =>
   `${paths.funnel(runId)}${query(FUNNEL_PARAMS, narrowing)}`;
 

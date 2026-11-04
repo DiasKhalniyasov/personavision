@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useMatch } from 'react-router';
 import {
+  aggregateSchema,
   findingsSchema,
   recommendationsSchema,
   runPaths,
   runSchema,
   sessionSchema,
 } from '@personavision/contract';
-import type { Findings, Recommendations, Run, Session } from '@personavision/contract';
+import type { Aggregate, Findings, Recommendations, Run, Session } from '@personavision/contract';
 // Type-only, and therefore erased: the listing's shape is `readRunIndex`'s own, so the
 // viewer does not restate the three field names it answers with. `@personavision/cli`
 // reads files and never reaches the browser bundle.
@@ -29,6 +30,7 @@ import { matches, patterns } from './paths';
  * - `GET /runs/index.json` → the workspace's tests, newest first
  * - `GET /runs/<runId>/run.json` → one run, byte for byte as the pipeline wrote it
  * - `GET /runs/<runId>/findings.json` → that run's ranked findings
+ * - `GET /runs/<runId>/aggregate.json` → the pre-sliced figures, when the run computed any
  * - `GET /runs/<runId>/recommendations.json` → what to change, when the run produced any
  * - `HEAD /runs/<runId>/videos/<id>.webm` → how big one session's recording is
  *
@@ -53,6 +55,7 @@ export const runDataBase = (runId: string): string => `${RUNS}/${encodeURICompon
 const runFile = (runId: string, file: string): string => `${runDataBase(runId)}${file}`;
 const runUrl = (runId: string): string => runFile(runId, layout.run);
 const findingsUrl = (runId: string): string => runFile(runId, layout.findings);
+const aggregateUrl = (runId: string): string => runFile(runId, layout.aggregate);
 const recommendationsUrl = (runId: string): string => runFile(runId, layout.recommendations);
 const sessionUrl = (runId: string, sessionId: string): string =>
   runFile(runId, layout.session(sessionId));
@@ -187,6 +190,29 @@ const readRecommendations = async (runId: string): Promise<RecommendationsState>
 };
 
 /**
+ * The figures the two filtered results screens read, pre-sliced by the pipeline.
+ *
+ * `aggregate.json` is **optional** in a run directory, like `recommendations.json`: a run
+ * that computed no aggregate has no file, which is never a funnel of zeroes somebody
+ * measured. A 404 is therefore `none` and not a problem; every other failure is named,
+ * because a file that is there and will not parse is a broken run and not a run without an
+ * aggregate.
+ */
+const readAggregate = async (runId: string): Promise<AggregateState> => {
+  const url = aggregateUrl(runId);
+  const answer = await readJson(url);
+  if (!answer.ok) {
+    return answer.status === 404
+      ? { status: 'none' }
+      : { status: 'unreadable', runId, url, problem: answer.problem };
+  }
+  const parsed = aggregateSchema.safeParse(answer.body);
+  return parsed.success
+    ? { status: 'ready', aggregate: parsed.data }
+    : { status: 'unreadable', runId, url, problem: firstViolation(parsed.error) };
+};
+
+/**
  * One person a run excluded from its figures.
  *
  * `excludedFromScores` and `attribution` are stored on each session and were decided once,
@@ -297,6 +323,7 @@ const cache = new Map<string, Promise<RunState>>();
 const findingsCache = new Map<string, Promise<FindingsState>>();
 const excludedCache = new Map<string, Promise<ExcludedState>>();
 const recommendationsCache = new Map<string, Promise<RecommendationsState>>();
+const aggregateCache = new Map<string, Promise<AggregateState>>();
 let runIndex: Promise<RunIndexState> | null = null;
 
 const keep = <State extends { status: string }>(
@@ -324,6 +351,9 @@ const loadExcluded = (runId: string, sessionIds: readonly string[]): Promise<Exc
 const loadRecommendations = (runId: string): Promise<RecommendationsState> =>
   recommendationsCache.get(runId) ?? keep(runId, recommendationsCache, readRecommendations(runId));
 
+const loadAggregate = (runId: string): Promise<AggregateState> =>
+  aggregateCache.get(runId) ?? keep(runId, aggregateCache, readAggregate(runId));
+
 const loadRunIndex = (): Promise<RunIndexState> => {
   runIndex ??= readRunIndexFile().then((state) => {
     if (state.status === 'unreadable') runIndex = null;
@@ -338,6 +368,7 @@ export const refreshRun = (runId: string): void => {
   findingsCache.delete(runId);
   excludedCache.delete(runId);
   recommendationsCache.delete(runId);
+  aggregateCache.delete(runId);
   runIndex = null;
 };
 
@@ -347,6 +378,7 @@ export const clearRunCache = (): void => {
   findingsCache.clear();
   excludedCache.clear();
   recommendationsCache.clear();
+  aggregateCache.clear();
   runIndex = null;
 };
 
@@ -365,6 +397,18 @@ export type RecommendationsState =
   /** The run produced none: there is no file, which is an absence and not a failure. */
   | { readonly status: 'none' }
   | { readonly status: 'ready'; readonly recommendations: Recommendations }
+  | {
+      readonly status: 'unreadable';
+      readonly runId: string;
+      readonly url: string;
+      readonly problem: string;
+    };
+
+export type AggregateState =
+  | { readonly status: 'loading' }
+  /** The run computed none: there is no file, which is an absence and not a failure. */
+  | { readonly status: 'none' }
+  | { readonly status: 'ready'; readonly aggregate: Aggregate }
   | {
       readonly status: 'unreadable';
       readonly runId: string;
@@ -540,6 +584,32 @@ export function useRecommendations(runId: string): RecommendationsState {
     let live = true;
     setState({ status: 'loading' });
     void loadRecommendations(runId).then((next) => {
+      if (live) setState(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+
+  return state;
+}
+
+/**
+ * One run's aggregate: every figure the Funnel and timing and Heatmaps screens read, as the
+ * pipeline pre-sliced it, read once per run while the app is open.
+ *
+ * Nothing is derived from it here and nothing is derived from it on a screen: a screen picks
+ * the slice its filter names and prints the fields of it (`docs/adr/0001`). A run that
+ * computed no aggregate answers `none`, and the screen states that absence in words rather
+ * than drawing a funnel of zeroes.
+ */
+export function useAggregate(runId: string): AggregateState {
+  const [state, setState] = useState<AggregateState>({ status: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    setState({ status: 'loading' });
+    void loadAggregate(runId).then((next) => {
       if (live) setState(next);
     });
     return () => {
