@@ -220,9 +220,20 @@ export const writeUp: WriteUpGenerator = ({
     }
 
     const row = rowOf(recommendation.step);
+    /**
+     * How many people the claim is about. The funnel row of the whole run is the figure a
+     * reader can check on the Funnel screen, so it is used wherever there is one: the people
+     * who reached the step, and the share of the run they are.
+     *
+     * Where there is none — a run whose aggregate carries no whole-run slice, or a step its
+     * funnel does not count — the only number in hand is the recommendation's own
+     * `peopleAffected`, which is *how many people a change would reach* and is **not** how
+     * many reached the step. It is said as what it is, because a reach figure the aggregate
+     * does not carry is the one thing this generator may not state.
+     */
     const reach =
       row === undefined
-        ? `${simulatedPeople(recommendation.peopleAffected, aggregate.scoredSessionCount)} reached ${stepSaid(recommendation.step)}.`
+        ? `A change on ${stepSaid(recommendation.step)} would reach ${simulatedPeople(recommendation.peopleAffected, aggregate.scoredSessionCount)}.`
         : `${simulatedPeople(row.reached, aggregate.scoredSessionCount)} — ${percentSaid(row.reachedShare)} of them — reached ${stepSaid(recommendation.step)}.`;
     const left = row === undefined ? 0 : row.abandoned + row.failed;
     const drop = slice?.biggestDrop;

@@ -219,6 +219,30 @@ describe('the claims it generates', () => {
     expect(claims.at(-1)?.heading).toBe(WHAT_I_DID_NOT_FIND);
   });
 
+  /**
+   * The aggregate of a run whose funnel the whole-run slice is missing from: every figure a
+   * claim would read off that slice is gone, and the only count left is the recommendation's
+   * own `peopleAffected`.
+   */
+  it('says what a change would reach, not what reached the step, where the funnel has no row', () => {
+    const noWholeRun = {
+      ...AGGREGATE,
+      funnelSlices: AGGREGATE.funnelSlices.filter(
+        (slice) => !(slice.variant === null && slice.segment === null),
+      ),
+    };
+
+    const claim = generate(recommendationsOf(PROMPT), { aggregate: noWholeRun })[0];
+
+    // `peopleAffected` is how many people a change would reach, and is never printed as how
+    // many reached the step: that figure is the funnel's, and this aggregate does not carry it.
+    expect(claim?.body).toContain(
+      'A change on the prompt step would reach 5 of 5 simulated people.',
+    );
+    expect(claim?.body).not.toContain('reached the prompt step');
+    expect(claim?.body).not.toContain('left it there');
+  });
+
   it('never emits a claim with an empty citation list', () => {
     for (const claim of generate(recommendationsOf(PROMPT, GENERATE))) {
       expect(claim.citations.length).toBeGreaterThan(0);
