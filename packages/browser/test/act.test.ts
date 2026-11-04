@@ -723,6 +723,44 @@ describeWithChromium('a click that moves the address with no document load', () 
   );
 
   it(
+    'is no success where the page moved itself under a click that asked for nothing',
+    async () => {
+      const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);
+      try {
+        // Nobody acts: the application pushes its own address on a timer, which is a
+        // redirect, a locale bounce or a consent flow on the real web. The click is on the
+        // heading, so it asks for nothing at all — and the heading is redrawn under the same
+        // id in every view, so the thing the click was aimed at is still there afterwards.
+        //
+        // The page having moved cannot be the whole of the rule: a destroyed context is
+        // raised *by* a navigation commit, so "the page moved" is true of every one of them.
+        // Without the target itself being gone, this would be recorded as an action that
+        // worked, and would reset the give-up budgets of an agent that did nothing.
+        await handle.page.evaluate(() => {
+          (window as unknown as { pvMoveIn: (ms: number, to: string) => void }).pvMoveIn(
+            100,
+            '/signup',
+          );
+        });
+
+        const result = await act(
+          clickRaising(handle, destroyedContext('locator.click')),
+          { type: 'click', selector: '#view-heading' },
+          context(),
+        );
+
+        expect(result.ok).toBe(false);
+        expect(result.failure).toBe('navigation_error');
+        // The page really did move, which is what makes this the case worth pinning.
+        expect(result.url).toBe(`${site.url}/signup`);
+      } finally {
+        await closeSession(handle);
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
+
+  it(
     'leaves a destroyed context on a page that went nowhere the navigation error it is today',
     async () => {
       const handle = await openSession({ id: 'A', url: `${site.url}/app.html` }, DESKTOP);

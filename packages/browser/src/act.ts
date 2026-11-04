@@ -39,7 +39,6 @@
 /// <reference lib="dom" />
 // The callback below runs inside the page, not in Node: this module needs the DOM types,
 // and the reference travels with the file (see `geometry.ts`).
-import type { Frame } from 'playwright';
 import { AutomationFailure } from './errors.js';
 import { extractElements } from './extract/elements.js';
 import { isLostTarget, mapToAutomationFailure } from './failure-mapping.js';
@@ -207,14 +206,20 @@ const following = async (handle: PageHandle, click: () => Promise<void>): Promis
  *
  * **Two signals, because either alone misses a case.** The address moves for a `pushState`
  * and for an ordinary link alike, and on a single-page application it is the only thing that
- * moves at all. The main frame navigating is what a new **document** at the same address
- * looks like — the post-redirect-get that lands back where it started — and no reading of the
+ * moves at all. A **new document** is what a move that does not change the address looks
+ * like — the post-redirect-get that lands back where it started — and no reading of the
  * address can see that one.
  *
- * Armed before the action and asked after it, **including after one that threw**: the single
- * failure a click that worked can raise is its target going with the navigation it caused,
- * and where the page ended up is what tells that from a click that broke and went nowhere.
- * It is armed beside `following`'s own waits and reads the same address they do.
+ * `domcontentloaded` is the second signal rather than `framenavigated`, which fires for a
+ * same-document navigation too: an application that calls `replaceState` on mount, on scroll
+ * or for its analytics would otherwise set it with the address unchanged, and swallow the
+ * discriminator this rule rests on. A parsed document is what "not the document it started
+ * on" means.
+ *
+ * Armed before the action and asked after it, **including after one that threw**: a click
+ * that worked can raise its target going with the navigation it caused, and where the page
+ * ended up is part of what tells that from a click that broke and went nowhere. It is armed
+ * beside `following`'s own waits and reads the same address they do.
  *
  * **Asking waits**, under the cap a click's move is already given. At the instant a destroyed
  * context is raised the move is not visible yet — the error *is* the context going away, and
@@ -232,25 +237,35 @@ interface PageMovement {
 const watchMovement = (handle: PageHandle): PageMovement => {
   const { page } = handle;
   const from = page.url();
-  let navigated = false;
-  const onNavigated = (frame: Frame): void => {
-    if (frame === page.mainFrame()) navigated = true;
+  let parsedAnother = false;
+  const onLoaded = (): void => {
+    parsedAnother = true;
   };
-  page.on('framenavigated', onNavigated);
-  const seen = (): boolean => navigated || page.url() !== from;
+  page.on('domcontentloaded', onLoaded);
+  const seen = (): boolean => parsedAnother || page.url() !== from;
 
   return {
     moved: async () => {
       if (seen()) return true;
-      await page
-        .waitForEvent('framenavigated', {
-          predicate: (frame) => frame === page.mainFrame(),
+      // Both settled, so neither rejection is left for the process to complain about, and
+      // both on the one cap, so the pair is one wait rather than two in a row.
+      const changed = page
+        .waitForURL((url) => url.href !== from, {
+          waitUntil: 'commit',
           timeout: NAVIGATION_START_MS,
         })
-        .catch(() => undefined);
+        .then(
+          () => true,
+          () => false,
+        );
+      const loaded = page.waitForEvent('domcontentloaded', { timeout: NAVIGATION_START_MS }).then(
+        () => true,
+        () => false,
+      );
+      await Promise.race([changed, loaded]);
       return seen();
     },
-    stop: () => page.off('framenavigated', onNavigated),
+    stop: () => page.off('domcontentloaded', onLoaded),
   };
 };
 
@@ -406,8 +421,8 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     } catch {
       return report('navigation_error');
     }
-    const landed = handle.page.url();
-    if (landed === BLANK_PAGE || (response === null && landed === from)) {
+    const landedOn = handle.page.url();
+    if (landedOn === BLANK_PAGE || (response === null && landedOn === from)) {
       await restore(handle, from);
       return report('navigation_error');
     }
@@ -426,6 +441,28 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
   if (selector === null) return report('selector_not_found');
 
   const target = handle.page.locator(selector);
+
+  /**
+   * Whether the element the action was aimed at is no longer on the page.
+   *
+   * The piece of evidence that is **about the target** rather than about the page, and the
+   * one that keeps the rule below from being circular. A destroyed execution context is
+   * raised *by* a navigation commit — a `pushState` does not destroy one — so "the page
+   * moved" is true of every such error by construction, and pairing the two would turn every
+   * destroyed context under a click into a success. What is particular to a click whose
+   * target went with the navigation it caused is that the target has gone: an application
+   * that redraws the same control, or a redirect that lands on a page carrying it, leaves it
+   * there and is the failure it has always been.
+   *
+   * A count that cannot be taken answers `false`: not being able to look is not evidence
+   * that something is absent, and the reading below is the conservative one.
+   */
+  const targetIsGone = (): Promise<boolean> =>
+    target.count().then(
+      (found) => found === 0,
+      () => false,
+    );
+
   try {
     // Resolution is separated from the action so that the two failures stay apart, and it
     // waits for what all three actions need: an element in the DOM that can be seen. A
@@ -480,10 +517,24 @@ export const act: Act = async (handle, action, ctx, options = {}) => {
     // driver lost the node, or the context its checks were running in, to the very move the
     // click made — and the artifact used to say that the one action of the session which
     // worked had failed, while `ok: false` spent a give-up budget on it (#442). So it is
-    // reported as the success it is, with the position it reached. A click that raised the
-    // same words and left the page where it was falls through to the reading below, which is
-    // the failure it is today.
-    if (movement !== null && isLostTarget(error) && (await movement.moved())) {
+    // reported as the success it is, with the position it reached.
+    //
+    // **Three things have to hold**, and each is evidence of its own. The driver has to say
+    // the target is gone; the page has to be somewhere else than the click started; and the
+    // target has to be absent now. The third is what makes the second mean anything — see
+    // `targetIsGone` — and without it a page that moved itself under a click which asked for
+    // nothing would be recorded as an action that worked.
+    //
+    // One case stays ambiguous, as the `back` above has one: a page that navigates itself to
+    // a document which does not carry the control, under a click that did nothing. All three
+    // hold and no signal here separates it from the real thing. Anything short of all three
+    // falls through to the reading below, which is the failure it is today.
+    if (
+      movement !== null &&
+      isLostTarget(error) &&
+      (await movement.moved()) &&
+      (await targetIsGone())
+    ) {
       return await landed();
     }
     const reason = mapToAutomationFailure(error);
