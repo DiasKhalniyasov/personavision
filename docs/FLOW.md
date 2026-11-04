@@ -757,6 +757,17 @@ Everything in path 1, and then:
   of the session's retries and the `integrity` counters the artifact reports do not move; it happens at most once per
   capture, and a second navigation under the same capture is the automation failure it is today.
 
+- **A model reply that is not JSON is asked again, once, with the parse error fed back.** One malformed reply on one
+  screen used to throw away every screen before it, because an unreadable body was the one failure we paid for and did
+  not retry. The same question is asked again in the same conversation, carrying the model's own unreadable reply and
+  the parse error that names where it broke; the correction is in that one request and never in the session's prefix, so
+  no later screen re-sends or re-pays for it. Both calls are billed into the screen's usage and both reach the
+  trajectory, so a run's cost still agrees with what was spent. A second unreadable reply is the automation failure it
+  is today, with the second reading's detail in its reason. An answer whose envelope carried no reply at all keeps the
+  second ask it has always had, with no correction to carry — there is nothing to quote back. Nothing else is asked
+  twice: a refusal, an answer our own output cap cut off, a non-2xx status and a timeout are each asked once, as is a
+  JSON object the interface rejects, which a model asked twice sends twice.
+
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
 - **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded

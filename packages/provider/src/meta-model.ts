@@ -7,11 +7,19 @@ import {
   buildPrefix,
   buildRequestBody,
   buildScreenMessage,
+  correctionMessage,
   promptCacheKey,
   readReply,
   readResponse,
+  readTokens,
+  sumTokens,
 } from './meta-request.js';
-import type { ResponsesMessage, ResponsesRequestBody } from './meta-request.js';
+import type {
+  ReadReply,
+  ReportedTokens,
+  ResponsesMessage,
+  ResponsesRequestBody,
+} from './meta-request.js';
 import { estimateCostUsd, MODEL_ID_BY_MODE, MODEL_SPEC_BY_ID } from './meta-pricing.js';
 import type { ModelId, ModelMode } from './meta-pricing.js';
 import { MODEL_API_KEY_ENV } from './select.js';
@@ -51,6 +59,15 @@ import type {
  *    status and a reply that will not parse each come back as a `ModelDecisionError` the run
  *    loop attributes to automation. No failure path invents a decision: a screen the model
  *    could not answer is an automation failure, not a hesitation the agent never had.
+ * 5. **An answer that carried no decision is asked again, once.** When the reply is not JSON
+ *    the parse error goes back to the model with its own unreadable reply, in that one
+ *    request body and not in the session's turns; when the envelope carried no reply at all
+ *    there is nothing to quote, so the same request simply goes again. Both calls are billed
+ *    into the decision's usage and both reach the trajectory (#420), as Muse Wonder's own ask
+ *    already bills and retries (`wonder-model.ts`). A refusal, an answer our own output cap
+ *    cut off, a non-2xx status and a timeout are each asked once — asking again for a cut-off
+ *    answer would cut it off again — and so is a JSON object the interface rejects, which a
+ *    model asked twice sends twice.
  */
 
 /** As `run.json`'s `engine.provider` records it. */
@@ -347,13 +364,16 @@ export const createMetaModelApiProvider = (
     context: DecisionContext,
   ): Promise<Decision> => {
     const apiKey = readApiKey();
-    conversation.calls += 1;
-    const call: TrajectoryCall = {
+    /**
+     * Which call of the session this is. Reassigned for the retry below, so that a screen
+     * asked twice reaches the trajectory as the two calls it was rather than as one.
+     */
+    let call: TrajectoryCall = {
       mode,
       modelId,
       personaId: identity.personaId,
       seed: identity.seed,
-      turn: conversation.calls,
+      turn: (conversation.calls += 1),
       promptCacheKey: conversation.promptCacheKey,
     };
 
@@ -421,72 +441,149 @@ export const createMetaModelApiProvider = (
       }
     }
     const screen = buildScreenMessage(context, { acceptsImages: spec.acceptsImages, imageUrl });
-    const body = buildRequestBody({
-      modelId,
-      input: [...conversation.prefix, ...conversation.turns, screen],
-      promptCacheKey: conversation.promptCacheKey,
-    });
 
-    await record({ ...call, kind: 'request', url: META_RESPONSES_ENDPOINT, body });
+    /**
+     * What each call of this screen reported spending. A reply that could not be read was
+     * still billed, so a screen asked twice reports both calls rather than the cheaper story
+     * of one: a run's cost is only checkable against an invoice if nothing is left out.
+     */
+    const spent: ReportedTokens[] = [];
 
-    const signal = AbortSignal.timeout(timeoutMs);
-    let response: ModelHttpResponse;
-    try {
-      response = await transport({
-        url: META_RESPONSES_ENDPOINT,
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${apiKey}`,
-        },
-        body,
-        signal,
+    /**
+     * One call for this screen: the reply it could read, or why it could not and whether
+     * asking again could help. `appended` goes after the screen in **this** request body and
+     * nowhere else — it is how the retry below shows the model its own unreadable reply
+     * without the session's turns ever carrying it.
+     *
+     * A refusal, an answer our own cap cut off, a non-2xx status and a timeout do not come
+     * back from here: they fail the screen where they are found, because a second identical
+     * ask answers none of them.
+     */
+    const attempt = async (
+      appended: readonly ResponsesMessage[],
+    ): Promise<
+      | { readonly ok: true; readonly reply: ReadReply; readonly replyText: string }
+      | {
+          readonly ok: false;
+          readonly detail: string;
+          /** Whether a second ask could plausibly answer this. */
+          readonly askAgain: boolean;
+          /** The model's own reply, when there was one to replay back to it. */
+          readonly replyText?: string;
+        }
+    > => {
+      const body = buildRequestBody({
+        modelId,
+        input: [...prefix, ...conversation.turns, screen, ...appended],
+        promptCacheKey: conversation.promptCacheKey,
       });
-    } catch (error) {
-      const detail = messageOf(error);
-      return isTimeout(error, signal)
-        ? fail('timeout', `the call did not answer within ${timeoutMs}ms: ${detail}`)
-        : fail('transport', `the call could not be made: ${detail}`);
+
+      await record({ ...call, kind: 'request', url: META_RESPONSES_ENDPOINT, body });
+
+      const signal = AbortSignal.timeout(timeoutMs);
+      let response: ModelHttpResponse;
+      try {
+        response = await transport({
+          url: META_RESPONSES_ENDPOINT,
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${apiKey}`,
+          },
+          body,
+          signal,
+        });
+      } catch (error) {
+        const detail = messageOf(error);
+        return isTimeout(error, signal)
+          ? fail('timeout', `the call did not answer within ${timeoutMs}ms: ${detail}`)
+          : fail('transport', `the call could not be made: ${detail}`);
+      }
+
+      await record({
+        ...call,
+        kind: 'response',
+        status: response.status,
+        body: redactBody(response.body, apiKey),
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        return fail('http_status', `the API answered ${response.status}`, response.status);
+      }
+
+      // Billed before it is read, and whatever becomes of it: an answer that arrived and
+      // could not be read was still paid for, so the figures come off the response rather
+      // than off the happy path. A response reporting nothing reports five zeroes.
+      spent.push(readTokens((response.body as { usage?: unknown } | null)?.usage));
+
+      const read = readResponse(response.body);
+      if (!read.ok) {
+        // A refusal and a cut-off answer are the screen's end here; an envelope that carried
+        // no reply to read is the one the caller may ask again, with nothing to quote back.
+        if (read.fault !== 'unparseable') return fail(read.fault, read.detail);
+        return { ok: false, detail: read.detail, askAgain: true };
+      }
+
+      const reply = readReply(read.value.replyText);
+      return reply.ok
+        ? { ok: true, reply: reply.value, replyText: read.value.replyText }
+        : {
+            ok: false,
+            detail: reply.detail,
+            // Only a reply that is no JSON object at all: an object the interface rejects is
+            // one the model meant to send, and it would send it again.
+            askAgain: reply.fault === 'unreadable',
+            replyText: read.value.replyText,
+          };
+    };
+
+    let got = await attempt([]);
+
+    if (!got.ok && got.askAgain) {
+      // The same question again, carrying what came back and what was wrong with it — and
+      // carrying nothing when no reply came back at all. The two messages belong to this
+      // request only: a malformed reply left in the conversation would be re-sent and
+      // re-billed on every later screen of the session (#138).
+      const correction =
+        got.replyText === undefined
+          ? []
+          : [assistantMessage(got.replyText), correctionMessage(got.detail)];
+      call = { ...call, turn: (conversation.calls += 1) };
+      const again = await attempt(correction);
+      if (!again.ok) {
+        return fail(
+          'unparseable',
+          `the reply could not be read as a decision, asked twice: ${again.detail}`,
+        );
+      }
+      got = again;
     }
 
-    await record({
-      ...call,
-      kind: 'response',
-      status: response.status,
-      body: redactBody(response.body, apiKey),
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      return fail('http_status', `the API answered ${response.status}`, response.status);
+    if (!got.ok) {
+      return fail('unparseable', `the reply could not be read as a decision: ${got.detail}`);
     }
+    const { reply, replyText } = got;
 
-    const read = readResponse(response.body);
-    if (!read.ok) return fail(read.fault, read.detail);
-
-    const reply = readReply(read.value.replyText);
-    if (!reply.ok) {
-      return fail('unparseable', `the reply could not be read as a decision: ${reply.detail}`);
-    }
-
+    const tokens = sumTokens(spent);
     const usage: DecisionUsage = {
-      inputTokens: read.value.tokens.inputTokens,
-      cachedInputTokens: read.value.tokens.cachedInputTokens,
-      outputTokens: read.value.tokens.outputTokens,
-      reasoningTokens: read.value.tokens.reasoningTokens,
-      estimatedCostUsd: estimateCostUsd(modelId, read.value.tokens),
+      inputTokens: tokens.inputTokens,
+      cachedInputTokens: tokens.cachedInputTokens,
+      outputTokens: tokens.outputTokens,
+      reasoningTokens: tokens.reasoningTokens,
+      estimatedCostUsd: estimateCostUsd(modelId, tokens),
     };
     // A hint is advisory metadata, so one the interface would reject — an element from the
     // screen before, a score on a 0-to-100 scale — is dropped rather than allowed to throw
     // away a decision that has already been paid for.
     const fixated = new Set(context.fixatedElements.map((element) => element.id));
-    const hints = Object.entries(reply.value.relevanceHints ?? {}).filter(
+    const hints = Object.entries(reply.relevanceHints ?? {}).filter(
       ([elementId, hint]) => fixated.has(elementId) && hint >= 0 && hint <= 1,
     );
 
     const decision: Decision = {
-      intent: reply.value.intent,
-      ...(reply.value.looks === undefined ? {} : { looks: reply.value.looks }),
-      action: reply.value.action,
+      intent: reply.intent,
+      ...(reply.looks === undefined ? {} : { looks: reply.looks }),
+      action: reply.action,
       ...(hints.length === 0 ? {} : { relevanceHints: Object.fromEntries(hints) }),
       usage,
       model: { mode, modelId },
@@ -502,7 +599,7 @@ export const createMetaModelApiProvider = (
 
     // Appended only now: a screen that failed is not a turn, so the next request opens with
     // exactly the bytes this session has already been charged for.
-    conversation.turns.push(screen, assistantMessage(read.value.replyText));
+    conversation.turns.push(screen, assistantMessage(replyText));
 
     return decision;
   };
@@ -513,13 +610,9 @@ export const createMetaModelApiProvider = (
     conversation: Conversation,
     context: DecisionContext,
   ): Promise<Decision> => {
-    // A reply that could not be read is asked for once more. The failed screen never joined
-    // the conversation, so the second request is the first one again.
-    const ask = (): Promise<Decision> =>
-      takeTurn(identity, conversation, context).catch((thrown: unknown) => {
-        if (!(thrown instanceof ModelDecisionError) || thrown.kind !== 'unparseable') throw thrown;
-        return takeTurn(identity, conversation, context);
-      });
+    // A reply that could not be read is asked again inside the turn, where the parse error
+    // is, rather than by repeating the whole turn blindly from out here (#420).
+    const ask = (): Promise<Decision> => takeTurn(identity, conversation, context);
     const turn = conversation.queue.then(ask, ask);
     conversation.queue = turn.catch(() => undefined);
     return turn;

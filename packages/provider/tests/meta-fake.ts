@@ -29,15 +29,27 @@ export const FAKE_TOKENS = {
   output_tokens_details: { reasoning_tokens: 150 },
 } as const;
 
-const lastUserText = (input: readonly ResponsesMessage[]): string => {
-  const message = [...input].reverse().find((item) => item.role === 'user');
+const textOf = (message: ResponsesMessage | undefined): string => {
   const part = message?.content.find((item) => item.type === 'input_text');
   return part !== undefined && 'text' in part ? part.text : '';
 };
 
+/**
+ * The message carrying the screen a call is about: the last `user` message that asks for a
+ * decision, which is `buildScreenMessage`'s own closing line. Not simply the last user
+ * message — a reply that could not be read is asked again with the correction appended after
+ * the screen (#420), and a fake that answered that would answer no screen at all.
+ */
+const screenText = (input: readonly ResponsesMessage[]): string =>
+  textOf(
+    [...input]
+      .reverse()
+      .find((item) => item.role === 'user' && textOf(item).includes('What do you do now?')),
+  );
+
 /** The element ids this screen's message lists, in the order it lists them. */
 export const listedElementIds = (input: readonly ResponsesMessage[]): readonly string[] =>
-  [...lastUserText(input).matchAll(/^- (\S+) · /gm)].map((match) => match[1] ?? '');
+  [...screenText(input).matchAll(/^- (\S+) · /gm)].map((match) => match[1] ?? '');
 
 export interface FakeTransport {
   readonly transport: ModelTransport;
