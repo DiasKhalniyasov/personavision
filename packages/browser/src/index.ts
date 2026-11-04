@@ -52,6 +52,7 @@ export type { BudgetIntegrity, SessionBudgetLimits, SessionIntegrity } from './b
 export {
   UNKNOWN_STEP,
   frameFailure,
+  isDestroyedContext,
   mapToAutomationFailure,
   navigationFailure,
   toAutomationFailure,

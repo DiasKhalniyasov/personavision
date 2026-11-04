@@ -51,3 +51,11 @@ export const navigationRefused = (url: string): Error =>
 /** A frame's own call that timed out: the frame of `broken-frame.html` that never answers. */
 export const frameLoadTimeout = (afterMs = 300): Error =>
   timeoutError(`frame.waitForLoadState: Timeout ${afterMs}ms exceeded.\n`);
+
+/**
+ * A read whose page went somewhere else under it. Playwright raises this from the call that
+ * was to run in the context the navigation destroyed, and it is the sentence five of six
+ * sessions over `www.canva.com` failed with (#419).
+ */
+export const destroyedContext = (call = 'page.evaluate'): Error =>
+  new Error(`${call}: Execution context was destroyed, most likely because of a navigation.`);

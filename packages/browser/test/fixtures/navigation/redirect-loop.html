@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirecting - fixture page that never stops navigating</title>
+    <link rel="stylesheet" href="./navigation.css" />
+  </head>
+  <body>
+    <h1 id="loop-heading" style="left: 16px; top: 24px; width: 358px; height: 40px">Redirecting</h1>
+    <p id="loop-body" style="left: 16px; top: 80px; width: 358px; height: 112px">
+      A page that answers every load with another navigation, so no read of it is ever finished on
+      the document it started on.
+    </p>
+    <a
+      id="loop-link"
+      href="./destination.html"
+      style="left: 16px; top: 208px; width: 200px; height: 44px"
+    >
+      Leave the loop
+    </a>
+    <script>
+      // Every load bounces to the same page under a new URL, so the browser makes a real
+      // navigation each time rather than a same-document one. `?ms=` sets the gap between
+      // them; the default is short enough that no capture of this page finishes between two.
+      const asked = new URLSearchParams(window.location.search);
+      const gapMs = Number(asked.get('ms') ?? '25');
+      const n = Number(asked.get('n') ?? '0') + 1;
+      setTimeout(
+        () => {
+          window.location.replace(`./redirect-loop.html?n=${n}&ms=${gapMs}`);
+        },
+        Number.isFinite(gapMs) ? gapMs : 25,
+      );
+    </script>
+  </body>
+</html>

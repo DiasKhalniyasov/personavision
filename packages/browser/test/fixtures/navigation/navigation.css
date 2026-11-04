@@ -1,0 +1,26 @@
+/* The three pages' shared frame. Each page is taller than the 900px desktop viewport for the
+   reason `../site/LANDMARKS.md` gives: a page shorter than the viewport reports the viewport's
+   height as its own, and a fold that is the whole page measures nothing. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  position: relative;
+  height: 1000px;
+  width: 100%;
+  background: #ffffff;
+  color: #111111;
+  font:
+    16px/1.4 system-ui,
+    sans-serif;
+}
+
+[id] {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+}

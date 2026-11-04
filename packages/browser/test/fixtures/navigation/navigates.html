@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome - fixture page that moves while it is read</title>
+    <link rel="stylesheet" href="./navigation.css" />
+  </head>
+  <body>
+    <h1 id="start-heading" style="left: 16px; top: 24px; width: 358px; height: 40px">Welcome</h1>
+    <p id="start-body" style="left: 16px; top: 80px; width: 358px; height: 112px">
+      The page a session lands on, and the page it is no longer on a moment later: a redirect, a
+      locale bounce, a framework taking over the first paint. Nothing on it was clicked.
+    </p>
+    <a
+      id="start-link"
+      href="./destination.html"
+      style="left: 16px; top: 208px; width: 200px; height: 44px"
+    >
+      Keep reading
+    </a>
+    <script>
+      // The navigation this page exists for: a `setTimeout` location change, timed by whoever
+      // is reading the page so that it lands *during* a capture rather than before one.
+      //
+      // `holdMs` holds the main thread once the navigation has been asked for. A destination
+      // on this machine answers in about a millisecond, so without it the new document would
+      // commit in the gap between two reads, where nothing is reading and nothing breaks. A
+      // real site's commit takes a network away and lands on a read in flight; holding the
+      // thread is what puts a read in flight here — the reads queue behind the hold, and the
+      // document they were to run in is gone by the time the thread is free.
+      window.pvNavigateIn = (ms, holdMs) => {
+        setTimeout(() => {
+          window.location.assign('./destination.html');
+          const until = Date.now() + (holdMs ?? 0);
+          while (Date.now() < until);
+        }, ms);
+      };
+    </script>
+  </body>
+</html>
