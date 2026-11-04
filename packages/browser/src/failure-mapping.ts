@@ -117,6 +117,18 @@ const DETACHED_FRAME = /frames? (?:was|got) detached/i;
 /** A navigation replaced before it finished — including by Chromium's own error page. */
 const INTERRUPTED = /is interrupted by another navigation/i;
 
+/**
+ * A page that went somewhere else **under a read**: Playwright's own sentence for an
+ * `evaluate` whose execution context the navigation destroyed. A site navigating while we
+ * read it is an ordinary event on the real web — a redirect, a locale bounce, a framework
+ * taking over the first paint, a consent flow replacing the document — so a capture waits the
+ * new document out and composes the screen again, once, below the session's budget
+ * (`capture.ts`). The message is recognised **here**, so that nothing matches it with a
+ * second regular expression of its own, and a destroyed context that was *not* recovered is
+ * the navigation it describes.
+ */
+const DESTROYED_CONTEXT = /Execution context was destroyed/i;
+
 /** The lowest HTTP status a session cannot be driven on: a page that is an error, not a page. */
 const FIRST_ERROR_STATUS = 400;
 
@@ -135,6 +147,19 @@ const readSelector = (message: string): string | null => {
   if (waiting === null) return null;
   const expression = waiting[1].trim();
   return LONE_LOCATOR.exec(expression)?.[2] ?? expression;
+};
+
+/**
+ * Whether an error is a page that navigated out from under a read.
+ *
+ * The one failure a capture recovers from itself: the read is composed again against the
+ * document the page actually ended on. Asked of the driver's own error, below the session's
+ * budget, so a redirect costs the session no retry — `capture.ts` says why that is where it
+ * belongs.
+ */
+export const isDestroyedContext = (error: unknown): boolean => {
+  const raised = asError(error);
+  return raised !== null && DESTROYED_CONTEXT.test(readMessage(raised));
 };
 
 export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
@@ -159,7 +184,9 @@ export const mapToAutomationFailure: MapToAutomationFailure = (error) => {
     return waitedOnSelector ? 'selector_not_found' : 'timeout';
   }
 
-  if (NET_ERROR.test(message) || INTERRUPTED.test(message)) return 'navigation_error';
+  if (NET_ERROR.test(message) || INTERRUPTED.test(message) || DESTROYED_CONTEXT.test(message)) {
+    return 'navigation_error';
+  }
 
   return null;
 };
@@ -187,7 +214,11 @@ const describeFailure = (reason: AutomationFailureReason, message: string): stri
     case 'timeout':
       return `the operation timed out${readWaited(message)}`;
     case 'navigation_error':
-      return `the navigation failed${readNetError(message)}`;
+      // A destroyed context is a navigation nothing asked for, so it is said as what
+      // happened: a capture that reached this point had already re-read the page once.
+      return DESTROYED_CONTEXT.test(message)
+        ? 'the page navigated while it was being read'
+        : `the navigation failed${readNetError(message)}`;
     case 'frame_error':
       return `a frame of the page never loaded${readNetError(message)}`;
   }

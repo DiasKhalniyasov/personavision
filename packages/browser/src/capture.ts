@@ -14,6 +14,23 @@
  * hash and a real step label, a `null` screenshot and no elements. It raises one thing: a
  * page on one of the task's steps whose declared primary action cannot be resolved is an
  * automation failure, which excludes the session rather than scoring it as a zero.
+ *
+ * **A navigation under the read is waited out here, below the budget.** The composition is
+ * five reads that each run `page.evaluate`, and a site that navigates between any two of them
+ * — a redirect, a locale bounce, a framework taking over the first paint, a consent flow
+ * replacing the document — destroys the execution context the next one runs in. That is an
+ * ordinary event on the real web and not a fault of ours, so the new document is waited for
+ * and the screen is composed **once more**, and the screen that is written is the page the
+ * session actually ended on: its content hash, its cache entry, its screenshot and its step
+ * label all describe the destination.
+ *
+ * It happens inside the capture rather than in `SessionBudget` or around the capture in
+ * `walkSession` because the budget's retry cap is two attempts per operation and its counters
+ * are session-wide: a single-page app that navigates on every screen would spend a retry per
+ * screen and end the session, which is exactly how six sessions over `www.canva.com` were
+ * lost (#419). So a navigation costs the session no retry, and the budget sees everything
+ * else exactly as it did. The re-read is **once per capture**: a second destroyed context in
+ * one capture is raised, and is the budget's to retry and to end the session on.
  */
 
 /// <reference lib="dom" />
@@ -23,6 +40,7 @@ import { createHash } from 'node:crypto';
 import { SessionBudget } from './budget.js';
 import { withCache } from './cache.js';
 import { extractElements } from './extract/elements.js';
+import { isDestroyedContext } from './failure-mapping.js';
 import { readGeometry } from './geometry.js';
 import { writeScreenshot } from './screenshot.js';
 import { detectStep, resolvePrimaryAction, taskStep } from './steps.js';
@@ -63,6 +81,70 @@ export const captureCacheKey = (parts: CaptureCacheKeyParts): string =>
   ].join('|');
 
 /**
+ * One composition of the screen the page is on: the five reads, in the order the cache key
+ * needs them. Named rather than inline so that a navigation under it can run it again.
+ */
+const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Capture> => {
+  const geometry = await readGeometry(page);
+  const contentHash = await readContentHash(page);
+  const step = await detectStep(page, ctx.task);
+
+  const key = captureCacheKey({
+    variantUrl: page.variant.url,
+    step,
+    device: ctx.device,
+    contentHash,
+  });
+
+  // The work a cache hit skips: everything that produces bytes. Named rather than
+  // inline so that what it is cached under reads beside it.
+  const work = async (): Promise<Capture> => {
+    const screenshot = await writeScreenshot(page, {
+      runDir: ctx.runDir,
+      variant: ctx.variant,
+      step,
+    });
+    const extracted = await extractElements(page, geometry, step);
+    // The detected step as the task declares it: resolution needs the selector of the
+    // control the step names, which the id alone does not carry.
+    const elements = await resolvePrimaryAction(page, extracted, taskStep(ctx.task, step));
+
+    return {
+      variant: ctx.variant,
+      step,
+      screenshot,
+      viewport: geometry.viewport,
+      pageHeight: geometry.pageHeight,
+      foldY: geometry.foldY,
+      elements,
+      contentHash,
+    };
+  };
+
+  // One cache entry per screen rather than per key: a screen is one image file, and a
+  // hit must not answer with a capture whose image another device or another render has
+  // since overwritten (`cache.ts`). A page on no step writes no image.
+  const screen = step === null ? ctx.variant : `${ctx.variant}|${step}`;
+
+  return withCache(key, work, { runDir: ctx.runDir, screen });
+};
+
+/**
+ * Waits for the document a navigation under the read landed on, so that the second
+ * composition reads a parsed page rather than one still unloading.
+ *
+ * The same settle an action does (`act.ts`), with the document asked directly as well — the
+ * opening navigation does that too (`session.ts`) — and bounded by what is left of the
+ * session's wall clock, so waiting out a redirect cannot outlive the session.
+ */
+const settle = async (page: PageHandle, withinMs: number): Promise<void> => {
+  await page.page.waitForLoadState('domcontentloaded', { timeout: withinMs });
+  await page.page.waitForFunction(() => document.readyState !== 'loading', undefined, {
+    timeout: withinMs,
+  });
+};
+
+/**
  * Captures the screen the session is currently on.
  *
  * The budget is the session's, so that a session's attempts are capped across all of its
@@ -73,47 +155,16 @@ export const capture = async (
   ctx: CaptureContext,
   budget: SessionBudget = new SessionBudget(),
 ): Promise<Capture> =>
-  budget.attempt(async () => {
-    const geometry = await readGeometry(page);
-    const contentHash = await readContentHash(page);
-    const step = await detectStep(page, ctx.task);
-
-    const key = captureCacheKey({
-      variantUrl: page.variant.url,
-      step,
-      device: ctx.device,
-      contentHash,
-    });
-
-    // The work a cache hit skips: everything that produces bytes. Named rather than
-    // inline so that what it is cached under reads beside it.
-    const work = async (): Promise<Capture> => {
-      const screenshot = await writeScreenshot(page, {
-        runDir: ctx.runDir,
-        variant: ctx.variant,
-        step,
-      });
-      const extracted = await extractElements(page, geometry, step);
-      // The detected step as the task declares it: resolution needs the selector of the
-      // control the step names, which the id alone does not carry.
-      const elements = await resolvePrimaryAction(page, extracted, taskStep(ctx.task, step));
-
-      return {
-        variant: ctx.variant,
-        step,
-        screenshot,
-        viewport: geometry.viewport,
-        pageHeight: geometry.pageHeight,
-        foldY: geometry.foldY,
-        elements,
-        contentHash,
-      };
-    };
-
-    // One cache entry per screen rather than per key: a screen is one image file, and a
-    // hit must not answer with a capture whose image another device or another render has
-    // since overwritten (`cache.ts`). A page on no step writes no image.
-    const screen = step === null ? ctx.variant : `${ctx.variant}|${step}`;
-
-    return withCache(key, work, { runDir: ctx.runDir, screen });
+  budget.attempt(async (remainingMs) => {
+    try {
+      return await composeScreen(page, ctx);
+    } catch (error) {
+      // Anything else — a selector the step declared and the page does not have, a read that
+      // timed out — is the budget's, untouched.
+      if (!isDestroyedContext(error)) throw error;
+      await settle(page, remainingMs);
+      // Once. A destroyed context here is raised, and the budget's caps end the session,
+      // which is what stops a redirect loop from re-reading for ever.
+      return await composeScreen(page, ctx);
+    }
   });

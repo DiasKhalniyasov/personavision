@@ -750,6 +750,13 @@ Everything in path 1, and then:
   unchanged: it names its real controls, and a declared control that cannot be resolved is still our automation
   failure.
 
+- **A navigation during a capture is waited out, not an automation failure.** A site that navigates while we read it —
+  a redirect, a locale bounce, a framework taking over the first paint, a consent flow replacing the document — is an
+  ordinary event on the real web, so the capture waits for the new document and composes the screen once more, and what
+  is written is the page the session ended on. It happens inside the capture, below the session budget, so it costs none
+  of the session's retries and the `integrity` counters the artifact reports do not move; it happens at most once per
+  capture, and a second navigation under the same capture is the automation failure it is today.
+
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
 - **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded

@@ -22,6 +22,7 @@ import {
   AutomationFailure,
   closeSession,
   frameFailure,
+  isDestroyedContext,
   mapToAutomationFailure,
   navigationFailure,
   openSession,
@@ -31,6 +32,7 @@ import {
 } from '../src/index.js';
 import type { AutomationFailureOutcome, AutomationFailureReason, Device } from '../src/index.js';
 import {
+  destroyedContext,
   frameLoadTimeout,
   navigationRefused,
   navigationTimeout,
@@ -145,6 +147,25 @@ describe('a thrown error, read as one of ours', () => {
       'navigation_error',
     );
     expect(mapToAutomationFailure(frameLoadTimeout())).toBe('frame_error');
+  });
+
+  it('reads a page that navigated out from under a read as the navigation it is', () => {
+    const destroyed = destroyedContext();
+
+    // A capture recovers from this one itself, below the session's budget (`capture.ts`), and
+    // this is the one message it recovers on: a destroyed context that reached a reason was
+    // never recovered, and is the navigation it describes rather than a timeout or a mystery.
+    expect(isDestroyedContext(destroyed)).toBe(true);
+    expect(mapToAutomationFailure(destroyed)).toBe('navigation_error');
+
+    const failure = toAutomationFailure(destroyed, 'capturing the cart screen');
+    expect(failure?.reason).toBe('navigation_error');
+    expect(failure?.message).toContain('capturing the cart screen');
+    expect(failure?.message).toContain('the page navigated while it was being read');
+
+    expect(isDestroyedContext(navigationRefused('http://127.0.0.1:5173/x'))).toBe(false);
+    expect(isDestroyedContext(selectorTimeout('#nope'))).toBe(false);
+    expect(isDestroyedContext('not even an error')).toBe(false);
   });
 
   it('does not blame the selector for an operation that timed out on an element it found', () => {
