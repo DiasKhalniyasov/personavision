@@ -11,8 +11,8 @@
  * the name of the file it writes, so the recording is saved to the contract's path once the
  * context has closed, and Playwright's own copy is deleted.
  *
- * **The caps are enforced here.** 30 seconds a screen and 10 minutes a session, which is
- * `@personavision/contract`'s `VIDEO_CAP_MS` and nowhere else. Playwright cannot stop
+ * **The caps are enforced here.** The two figures are `@personavision/contract`'s
+ * `VIDEO_CAP_MS` and are written nowhere else, this comment included. Playwright cannot stop
  * recording a page it is still showing, so a cap is enforced on the file: the recording is
  * cut at the cap as it is saved, the screens and actions that happened after it carry no
  * offset, and the result names the cap it hit. A video that is quietly short is worse than
