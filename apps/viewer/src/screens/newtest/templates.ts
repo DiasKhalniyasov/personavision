@@ -129,4 +129,16 @@ export const EXAMPLE_TESTS: readonly ExampleTest[] = Object.freeze([
       'everyday phone owners of all ages, half on phones and half on laptops, from very ' +
       'confident online to not confident at all',
   },
+  {
+    id: 'meta-cheapest-vision-model',
+    siteUrl: 'https://dev.meta.ai',
+    feature: 'choosing an affordable vision model for browsing agents',
+    // The owner's sixth (2026-11-05): the need, never a model's name. The prices page is the
+    // one place a few hundred agents can be costed, so reaching it is the success.
+    task: 'Find out which is the cheapest model that is good at visual tasks like browsing websites, and what it would cost to run a few hundred agents',
+    successCriterion: 'The address bar reads /docs/pricing-rate-limits.',
+    audienceSentence:
+      'developers building AI agents on a budget, mostly on laptops, who compare models and ' +
+      'prices before signing up',
+  },
 ]);

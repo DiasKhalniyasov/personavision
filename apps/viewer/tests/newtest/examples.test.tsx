@@ -84,7 +84,14 @@ describe('the five, under the two path cards', () => {
       within(section)
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent),
-    ).toEqual(['docs.stripe.com', 'vercel.com', 'www.ikea.com', 'www.canva.com', 'www.apple.com']);
+    ).toEqual([
+      'docs.stripe.com',
+      'vercel.com',
+      'www.ikea.com',
+      'www.canva.com',
+      'www.apple.com',
+      'dev.meta.ai',
+    ]);
   });
 
   it('says what each one is about, what it attempts, and who it suggests', async () => {

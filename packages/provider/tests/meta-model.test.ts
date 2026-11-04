@@ -495,7 +495,55 @@ describe('the Meta Model API provider', () => {
       }
     });
 
-    it('asks once for a JSON object the interface rejects', async () => {
+    it('finds the element by its role and name when the model names it at its old position', async () => {
+      // An id ends in the element's box, so the same link a screen later has another id. The
+      // model named it by the old one; the one element here with the same stem is that link.
+      let calls = 0;
+      const transport: ModelTransport = (request) => {
+        calls += 1;
+        const reply = {
+          intent: 'I will open the documentation.',
+          action: { kind: 'click', targetElementId: 'site-page-link-documentation-144-684-125x29' },
+        };
+        return answering(replying(JSON.stringify(reply)))(request);
+      };
+      const provider = createMetaModelApiProvider({ mode: 'standard', env: TEST_ENV, transport });
+      const here = 'site-page-link-documentation-121-420-147x44';
+
+      const decision = await provider.decide(
+        contextOf({ fixatedElements: [element(here, 'Documentation', 'link')] }),
+      );
+
+      expect(decision.action.targetElementId).toBe(here);
+      expect(calls).toBe(1);
+    });
+
+    it('takes the decision the model corrects on the second ask', async () => {
+      const here = 'site-page-link-pricing-12-40-90x20';
+      const replies = [
+        {
+          intent: 'I will open Muse Wonder.',
+          action: { kind: 'click', targetElementId: 'site-page-link-muse-wonder-16-461-358x33' },
+        },
+        { intent: 'I will open pricing.', action: { kind: 'click', targetElementId: here } },
+      ];
+      let calls = 0;
+      const transport: ModelTransport = (request) => {
+        const reply = replies[Math.min(calls, 1)];
+        calls += 1;
+        return answering(replying(JSON.stringify(reply)))(request);
+      };
+      const provider = createMetaModelApiProvider({ mode: 'standard', env: TEST_ENV, transport });
+
+      const decision = await provider.decide(
+        contextOf({ fixatedElements: [element(here, 'Pricing', 'link')] }),
+      );
+
+      expect(decision.action.targetElementId).toBe(here);
+      expect(calls).toBe(2);
+    });
+
+    it('asks again for an element that is not on this screen, once', async () => {
       // Both of these parsed. One names an action that does not exist, the other an element
       // the agent never looked at: the model meant to send each, and would send it again.
       const rejected = [
@@ -519,7 +567,11 @@ describe('the Meta Model API provider', () => {
         });
 
         await expect(provider.decide(contextOf())).rejects.toMatchObject({ kind: 'unparseable' });
-        expect(calls, `${reply.action.kind} was asked ${String(calls)} times`).toBe(1);
+        // An unknown action is refused while the reply is read; an element that is not on
+        // this screen is a decision worth one more ask (it came back the same here).
+        expect(calls, `${reply.action.kind} was asked ${String(calls)} times`).toBe(
+          reply.action.kind === 'teleport' ? 1 : 2,
+        );
       }
     });
 
