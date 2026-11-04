@@ -8,7 +8,7 @@
  * downstream re-derives any of it, and the browser driver's typed failures (#50) are fed
  * in here rather than turned into outcomes of their own.
  *
- * Five rules this module exists to hold (`docs/FLOW.md` sections 5, 8 and 12):
+ * Six rules this module exists to hold (`docs/FLOW.md` sections 5, 8 and 12):
  *
  * 1. **The four statuses stay four.** A session is *abandoned* when the person gave up,
  *    *failed* when it ended with the task not done, and an *automation failure* when our
@@ -30,6 +30,10 @@
  *    {@link PROGRESS_ACTIONS} in the trace. A criterion that was already true when the
  *    agent arrived, on a page nobody operated, is `failed` and says so in words: the
  *    product was never tested, and a completion rate counting it means nothing.
+ * 6. **A walk our own action budget stopped says so** (#413). The agent did not stop
+ *    trying — we stopped it — so the session is never *abandoned*, which would read as a
+ *    verdict on the product for something we did. It is `failed`, the product's, with the
+ *    budget and the step it was on in its reason, and the four statuses stay four.
  *
  * It is a pure function over a trace plus a persona: no browser, no provider, no disk, no
  * clock of its own, so it is testable on synthetic traces.
@@ -135,6 +139,16 @@ export interface SessionTrace {
    * absent or `null` on a run with no goal.
    */
   readonly criterion?: TraceCriterion | null;
+  /**
+   * The action budget that ended the walk, in screens, when the budget is what ended it;
+   * absent or `null` on every other ending — a failure of ours, the end of the walk, or the
+   * agent's own `abandon`.
+   *
+   * It is a fact the walk recorded like any other, and the one fact a reader of a trace
+   * cannot recover from the rest of it: a session cut off at its last allowed screen looks
+   * exactly like one that stopped there of its own accord (#413).
+   */
+  readonly stoppedOnBudget?: number | null;
   /** The area of interest holding the control that advances the task, when the task names one. */
   readonly primaryActionAoiId?: string | null;
   /** Set when the driver's own browsing broke; `null` or absent when it did not. */
@@ -217,11 +231,16 @@ const PROGRESS_ACTIONS: readonly TraceActionType[] = ['click', 'type'];
  *    nobody could evaluate would otherwise be recorded as the person giving up on the
  *    product, which is a verdict the run cannot support. Abandonment keeps its precedence
  *    over the **success** test, which is what it is precedence over.
- * 4. **Was the criterion observed?** Where the run had one, that is the success condition.
+ * 4. **Did our own action budget stop the walk?** A session cut off at its last allowed
+ *    screen is asked about before the persona and never after: the agent had more to try
+ *    and we took the screens away, so reading a give-up off such a trace would record the
+ *    person leaving a product our own cap stopped them using (#413). It is `failed`, and
+ *    its reason names the budget.
+ * 5. **Was the criterion observed?** Where the run had one, that is the success condition.
  *    Where it had none, the step rule stands: the task's last declared step.
- * 5. **Did the agent act?** Success needs one action that operated the page. An arrival on
+ * 6. **Did the agent act?** Success needs one action that operated the page. An arrival on
  *    a screen that already satisfied the criterion is `failed`: nothing was tested.
- * 6. **Otherwise it ended with the task not done** — `failed`, the product's.
+ * 7. **Otherwise it ended with the task not done** — `failed`, the product's.
  */
 export function decideOutcome(
   trace: SessionTrace,
@@ -253,22 +272,43 @@ export function decideOutcome(
     );
   }
 
+  /**
+   * A session that ended with the task not done, in the one sentence both such endings
+   * share: `how` is what the session did — it ended on that step, or our own budget stopped
+   * it there — and the rest is the same words either way.
+   */
+  const notCompletedReason = (how: string): string =>
+    criterion === null
+      ? `The session ${how} on the "${endStep}" step with the task not done.${primaryActionClause(trace)}`
+      : notDone(
+          trace,
+          endStep,
+          `the criterion ${quoted(criterion.criterion)} was never observed — ${missingClause(endStep, criterion.missing)}.`,
+          how,
+        );
+
+  // Asked before the give-up scan, which is the whole of the rule: on a walk we stopped, the
+  // scan's dwell and fruitless actions are what our own cap left behind, so a give-up read
+  // off them anywhere in the trace — the scan returns the first one, early or late — would
+  // record the person leaving a site they were still being walked around. It is the
+  // precedence the owner's own run asks for: S-01 was called `abandoned` at 8.8 s on a trace
+  // eight actions long because that is all the actions we allowed it. Still `failed` and
+  // still the product's — the session ended with the task not done — with the budget in its
+  // words rather than a verdict we caused.
+  if (trace.stoppedOnBudget != null && !completed) {
+    return productOutcome(
+      'failed',
+      endStep,
+      notCompletedReason(`was stopped after its ${plural(trace.stoppedOnBudget, 'action')}`),
+    );
+  }
+
   const giveUp = findGiveUp(trace, completed, persona, policy);
   if (giveUp) {
     return productOutcome('abandoned', giveUp.step, giveUpReason(trace, giveUp));
   }
   if (!completed) {
-    return productOutcome(
-      'failed',
-      endStep,
-      criterion === null
-        ? `The session ended on the "${endStep}" step with the task not done.${primaryActionClause(trace)}`
-        : notDone(
-            trace,
-            endStep,
-            `the criterion ${quoted(criterion.criterion)} was never observed — ${missingClause(endStep, criterion.missing)}.`,
-          ),
-    );
+    return productOutcome('failed', endStep, notCompletedReason('ended'));
   }
   if (!acted(trace)) {
     return productOutcome(
@@ -303,9 +343,12 @@ function acted(trace: SessionTrace): boolean {
   return trace.actions.some((action) => PROGRESS_ACTIONS.includes(action.type));
 }
 
-/** The one shape of a failed session's reason: where it ended, and what was not done. */
-function notDone(trace: SessionTrace, step: string, because: string): string {
-  return `The session ended on the "${step}" step with the task not done: ${because}${primaryActionClause(trace)}`;
+/**
+ * The one shape of a failed session's reason: how the session ended, where, and what was
+ * not done. `how` is "ended" unless our own action budget is what stopped it (#413).
+ */
+function notDone(trace: SessionTrace, step: string, because: string, how = 'ended'): string {
+  return `The session ${how} on the "${step}" step with the task not done: ${because}${primaryActionClause(trace)}`;
 }
 
 /** The criterion's own words, quoted so a reader can see where the sentence ends. */

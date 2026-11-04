@@ -20,7 +20,7 @@ import {
   openingLines,
   reportLine,
 } from './progress.js';
-import { taskFor } from './task.js';
+import { DERIVED_STEP_SCREENS, taskFor } from './task.js';
 import type { CaptureSource, TaskStep, Variant } from '@personavision/browser';
 import type { Audience, Persona, Run, RunFailure, RunRequest } from '@personavision/contract';
 import type { CreateModelProvider, SelectedEngine } from './engine.js';
@@ -244,6 +244,21 @@ const seedGroupsOf = (request: RunRequest): number[] =>
 /** Real time a model-run session may take: sixteen screens at up to ~30 s an answer. */
 const MODEL_SESSION_TIMEOUT_MS = 10 * 60_000;
 
+/** How many screens that figure was set for, so the rate below is the one it states. */
+const MODEL_SESSION_TIMEOUT_SCREENS = 16;
+
+/**
+ * The same allowance **per screen a session may capture**, which is what a session whose
+ * screen budget this function sets is given instead of the flat figure above.
+ *
+ * It matters because the wall-clock cap is a cap of **ours**: a session it cuts off is an
+ * `automation_failure`, excluded from every score, and not the budget-stopped session
+ * `decideOutcome` writes up (#413). A derived task's forty screens under the flat ten
+ * minutes would have reached the clock at around screen twenty on a model — so the very run
+ * #413 exists for would have come back uncountable rather than counted.
+ */
+const MODEL_MS_PER_SCREEN = MODEL_SESSION_TIMEOUT_MS / MODEL_SESSION_TIMEOUT_SCREENS;
+
 export const startRun = async (options: StartRunOptions): Promise<StartedRun> => {
   const { request, audience } = options;
   const clock = options.now ?? ((): Date => new Date());
@@ -256,6 +271,15 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
   const personas = options.people ?? generatePersonas(audience, { seed: request.seed });
   const seedGroups = seedGroupsOf(request);
   const task = taskFor(request, options.steps ?? null);
+  /**
+   * The screens one session may capture, where this function is what sets them: a derived
+   * task's one step stands for the whole site, so its sessions get a visit's budget rather
+   * than one step's eight actions (#413).
+   *
+   * `undefined` leaves the swarm its own eight per declared step, which is what the demo,
+   * the committed example run and `tests/acceptance/` walk.
+   */
+  const maxScreens = (options.steps ?? null) === null ? DERIVED_STEP_SCREENS : undefined;
   const variants = walkable(request.variants);
   const plan = planSwarm({ variants, personas, seedGroups });
   if (plan.length === 0) {
@@ -417,14 +441,23 @@ export const startRun = async (options: StartRunOptions): Promise<StartedRun> =>
       source: options.source ?? createLiveSource(),
       providers: { decision: selected.provider },
       ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+      ...(maxScreens === undefined ? {} : { maxScreens }),
       // Handed on for the swarm to write beside the engine block, before the first session.
       // Nothing here reads it: what site a run is against decides nothing about how it runs.
       ...(options.site === undefined ? {} : { site: options.site }),
-      // A model's reply takes seconds per screen of real time that the person never spent:
-      // a model run gets the room for it, or a slow answer reads as the person giving up.
+      // A model's reply takes seconds per screen of real time that the person never spent: a
+      // model run gets the room for it, or a slow answer reads as the person giving up. The
+      // room is per screen the session may capture wherever this function set that budget,
+      // because a wall-clock cap reached short of the screen budget is a failure of ours
+      // where the screen budget is a fact about the visit (#413).
       ...(options.sessionTimeoutMs === undefined
         ? selected.engine.mode === 'model'
-          ? { sessionTimeoutMs: MODEL_SESSION_TIMEOUT_MS }
+          ? {
+              sessionTimeoutMs:
+                maxScreens === undefined
+                  ? MODEL_SESSION_TIMEOUT_MS
+                  : MODEL_MS_PER_SCREEN * maxScreens,
+            }
           : {}
         : { sessionTimeoutMs: options.sessionTimeoutMs }),
       now: clock,

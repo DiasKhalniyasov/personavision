@@ -7,9 +7,15 @@ import { engineOnTheRecord } from '@personavision/swarm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CliError } from '../src/cli-error.js';
 import { runCommand } from '../src/commands/run.js';
-import { fakeModelProvider, runFixture, STAND_IN_CREDENTIAL } from './run-swarm.js';
+import { DERIVED_STEP_SCREENS } from '../src/run/task.js';
+import {
+  alwaysScrollingProvider,
+  fakeModelProvider,
+  runFixture,
+  STAND_IN_CREDENTIAL,
+} from './run-swarm.js';
 import type { CaptureSource } from '@personavision/browser';
-import type { Run } from '@personavision/contract';
+import type { Run, Session } from '@personavision/contract';
 import type { RunCommandOptions } from '../src/commands/run.js';
 import type { RunFixture } from './run-swarm.js';
 
@@ -194,6 +200,38 @@ describe('a run that goes through', () => {
     expect(printed.at(-4)).toContain('4 of 4 sessions finished');
     expect(printed.at(-4)).toContain('offline deterministic engine');
   });
+
+  /**
+   * The other half of the derived task's budget (#413): a task that declares its steps is
+   * untouched by it. `DERIVED_STEP_SCREENS` is the budget of the one step a derived task
+   * stands the whole site up as, and `serve-run.test.ts` walks a one-URL session to it.
+   */
+  it('leaves a declared task on the swarm’s eight screens per step it declares', async () => {
+    fixture = await runFixture({ size: 1 });
+
+    // Walked by an agent that only ever reads further down: nothing it decides ends the
+    // walk, so the screens it captures *are* the cap it ran under — the swarm's own eight
+    // per declared step, and not the derived task's forty. It is the cap the demo, the
+    // committed example run and `tests/acceptance/` walk. It reaches no network.
+    await runCommand(
+      fixture.options({
+        engine: 'model',
+        mode: 'contributor',
+        env: { MODEL_API_KEY: STAND_IN_CREDENTIAL },
+        createModelProvider: ({ modelMode }) => alwaysScrollingProvider(modelMode),
+      }),
+    );
+
+    const { runDir, run } = await theRun(fixture.runsRoot);
+    expect(run.steps.length).toBeGreaterThan(1);
+    const session = JSON.parse(await readFile(runPaths(runDir).session('S-01'), 'utf8')) as Session;
+    expect(session.screens).toHaveLength(8 * run.steps.length);
+    expect(session.screens.length).not.toBe(DERIVED_STEP_SCREENS);
+    // And its write-up names the budget it actually ran under, not the derived one.
+    expect(session.outcome.reason).toContain(
+      `The session was stopped after its ${String(8 * run.steps.length)} actions`,
+    );
+  }, 60_000);
 });
 
 describe('a run on a model', () => {

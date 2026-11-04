@@ -567,6 +567,10 @@ describe('runSession', () => {
         taskCompleted: session.screens.at(-1)?.step === TASK.steps.at(-1)?.id,
         primaryActionAoiId: built.at(-1)?.aois.find((aoi: Aoi) => aoi.isPrimaryAction)?.id ?? null,
         automationFailure: null,
+        // This walk ends at the task's last step and not at its cap, so nothing stopped it:
+        // a session the budget had stopped would carry the figure here, and the two outcomes
+        // would disagree if it did and this trace said otherwise (#413).
+        stoppedOnBudget: null,
         wallClockBudgetMs: null,
       };
 
@@ -586,6 +590,34 @@ describe('runSession', () => {
       expect(rushed.outcome.excludedFromScores).toBe(false);
       // It stopped well inside the cap: the budget that ran out was the persona's.
       expect(rushed.screens.length).toBeLessThan(8 * TASK.steps.length);
+    });
+
+    it('says the budget stopped it rather than calling it an abandonment', async () => {
+      // An agent that only ever reads further down: it never gets to the task's last step,
+      // and nothing of its own ends the walk — so the cap is what ends it, three screens in.
+      const scrolling = providerThat(() => ({
+        intent: 'Reading further down before I decide.',
+        action: { kind: 'scroll', targetElementId: null },
+        usage: FREE_USAGE,
+      }));
+
+      const session = await runSession(
+        sessionOver(runDir, {
+          persona: personaWho('rushed'),
+          providers: { decision: scrolling },
+          maxScreens: 3,
+        }),
+      );
+
+      expect(session.screens).toHaveLength(3);
+      // The dwell and the fruitless scrolls of its last screens are ours and not the
+      // person's: we took the screens away, so this is never written up as giving up.
+      expect(session.outcome.status).toBe('failed');
+      expect(session.outcome.status).not.toBe('abandoned');
+      expect(session.outcome.reason).toContain(
+        'The session was stopped after its 3 actions on the "cart" step with the task not done',
+      );
+      expect(session.outcome).toMatchObject({ attribution: 'product', excludedFromScores: false });
     });
 
     it('walks the four-step task to its end when the persona sees it through', async () => {
