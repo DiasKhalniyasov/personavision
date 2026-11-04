@@ -362,7 +362,10 @@ describe('starting the test', () => {
     await fillValidTest();
     await start();
 
-    expect(await screen.findByRole('heading', { name: /^Running · / })).toBeTruthy();
+    // `#screen-running-swarm`'s heading counts the people who have finished (#281). What
+    // this test is about is that the New test screen lands on that screen and does not
+    // draw it.
+    expect(await screen.findByRole('heading', { name: /people have finished$/ })).toBeTruthy();
   });
 
   it('submits the repeats the reader chose', async () => {

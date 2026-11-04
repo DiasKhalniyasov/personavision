@@ -384,7 +384,46 @@ export const clearRunCache = (): void => {
   aggregateCache.clear();
   excludedCache.clear();
   recommendationsCache.clear();
+  lastRefresh.clear();
   runIndex = null;
+};
+
+/**
+ * How often an **open** test is read again while a screen of it is on: the Running screen
+ * shows people landing (#281), and the only way it hears about one is this read.
+ *
+ * It is deliberately slower than the file it watches. The pipeline rewrites `run.json` as
+ * each session lands — a hundred people at a concurrency of ten land one every couple of
+ * seconds — so five seconds never asks for a file that has not changed, and a twenty-minute
+ * run costs a couple of hundred reads of one small JSON file rather than a thousand. A
+ * finished or failed test is never polled at all: its artifact is done.
+ */
+export const WATCH_INTERVAL_MS = 5_000;
+
+/** How many re-reads in a row may fail before the watcher gives up and says so. */
+const WATCH_FAILURES_ALLOWED = 3;
+
+/**
+ * When each open run was last dropped from the cache, so that **two subscribers are still
+ * one read**: the chrome names the test and the screen renders it, and both watch it. The
+ * first of their timers to fire drops the entry and re-reads; the second finds the refresh
+ * already made and takes the same in-flight promise.
+ */
+const lastRefresh = new Map<string, number>();
+
+/**
+ * Drop **this run's own entry** and nothing else, if it has not just been dropped.
+ *
+ * Not `refreshRun`: that also nulls the workspace listing and drops the findings, aggregate,
+ * excluded and recommendations caches, which is right for a reader who asked for fresh data
+ * and wrong for a timer. The file the watcher is watching is `run.json`; the rest of a run
+ * directory is written once and does not change under an open test.
+ */
+const dropIfDue = (runId: string, now: number): void => {
+  const at = lastRefresh.get(runId);
+  if (at !== undefined && now - at < WATCH_INTERVAL_MS) return;
+  lastRefresh.set(runId, now);
+  cache.delete(runId);
 };
 
 export type FindingsState =
@@ -449,18 +488,24 @@ export function useExcluded(run: Run): ExcludedState {
   const [state, setState] = useState<ExcludedState>({ status: 'loading' });
   // The two the read is made of, so that another `Run` object for the same test does not
   // re-fire the effect: every other hook here takes an id for the same reason.
+  //
+  // `sessionIds` is compared **by its contents**, not by its identity. Every parse of the
+  // same file produces a new array, so an identity dependency guards nothing — and since an
+  // open test is re-read on a timer (`WATCH_INTERVAL_MS`), that would re-read every session
+  // file of the run and flash this banner's skeleton every few seconds.
   const { runId, sessionIds } = run;
+  const ids = sessionIds.join(',');
 
   useEffect(() => {
     let live = true;
     setState({ status: 'loading' });
-    void loadExcluded(runId, sessionIds).then((next) => {
+    void loadExcluded(runId, ids === '' ? [] : ids.split(',')).then((next) => {
       if (live) setState(next);
     });
     return () => {
       live = false;
     };
-  }, [runId, sessionIds]);
+  }, [runId, ids]);
 
   return state;
 }
@@ -554,6 +599,18 @@ export function useCurrentRun(): RunState | null {
  * One run, or no run: `null` while there is no id to read, which is what a caller that may
  * not have one yet asks with. `useRun` is this with a loading state in place of the `null`.
  */
+/**
+ * Whether a re-read says the same thing as the reading already on screen.
+ *
+ * By value, because every parse of one file produces a new object: two readings of an
+ * unchanged `run.json` are the same reading, and handing out the second one would re-fire
+ * every effect in the product that is keyed on a run's identity.
+ */
+const same = (before: RunState | null, after: RunState): boolean =>
+  before !== null &&
+  before.status === after.status &&
+  JSON.stringify(before) === JSON.stringify(after);
+
 export function useOptionalRun(runId: string | null): RunState | null {
   const [state, setState] = useState<RunState | null>(null);
 
@@ -563,12 +620,52 @@ export function useOptionalRun(runId: string | null): RunState | null {
       return;
     }
     let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
+
+    /**
+     * Read it, show it, and — while it says it is still open — read it again in a while.
+     *
+     * **A re-read that reads the same run hands back the object already on screen.** Every
+     * parse produces a new one, and screens elsewhere key effects on a run's identity — the
+     * Sessions screen re-reads every session file of the test when it changes. Handing out a
+     * new object every five seconds for a file that had not changed would make that screen
+     * re-fetch a hundred files and blank to its loading state, on the very screen this
+     * watcher exists to keep current. So the previous reading is kept unless the file really
+     * moved.
+     *
+     * **A re-read that comes back unreadable does not replace the reading on screen** — for
+     * a few tries. The file is being rewritten as sessions land, so a poll can catch it
+     * half-written or missing for an instant, and wiping an open test's figures and putting
+     * them back would make the screen flicker over a file that is fine. After
+     * `WATCH_FAILURES_ALLOWED` in a row it is not an instant any more: the state is shown and
+     * the watch stops, rather than leaving frozen figures under a request every five seconds.
+     */
+    const read = (first: boolean): void => {
+      void loadRun(runId).then((next) => {
+        if (!live) return;
+        const failed = next.status !== 'ready';
+        failures = failed ? failures + 1 : 0;
+        const giveUp = failures >= WATCH_FAILURES_ALLOWED;
+
+        if (first || !failed || giveUp) setState((prev) => (same(prev, next) ? prev : next));
+        if (giveUp) return;
+        // Watch on while the test says it is open — and through a read that failed while it
+        // was, since a poll only ever runs on a test that was open a moment ago.
+        const open = next.status === 'ready' ? next.run.status === 'open' : !first;
+        if (!open) return;
+        timer = setTimeout(() => {
+          dropIfDue(runId, Date.now());
+          read(false);
+        }, WATCH_INTERVAL_MS);
+      });
+    };
+
     setState({ status: 'loading' });
-    void loadRun(runId).then((next) => {
-      if (live) setState(next);
-    });
+    read(true);
     return () => {
       live = false;
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [runId]);
 
