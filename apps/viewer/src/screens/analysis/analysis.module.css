@@ -1,0 +1,83 @@
+/* =============================================================================
+   `#screen-analysis` of `docs/design/prototype.html`, as this screen's own: the
+   write-up's one card, a claim's heading and paragraph, and the `.cites` row of
+   chips under each.
+
+   Every value below is a custom property from `docs/design/tokens.css`, which the
+   app imports and never copies: no colour, size, spacing step or duration is
+   restated here. Nothing on this screen moves — the write-up has no animated
+   moment (section 10) — so there is nothing for `prefers-reduced-motion` to turn
+   off and every claim is at its final position on the first paint.
+
+   The column's measure is `.wrap-narrow`'s, as the prototype draws it: prose is
+   read at `--layout-max-narrow` and this screen adds no width of its own.
+   ========================================================================== */
+
+/* The one card the write-up is printed in, under the lede. */
+.card {
+  margin-top: var(--space-6);
+}
+
+/* ---- One claim ----------------------------------------------------------- */
+
+/* The first claim sits under the provenance line; each one after it is separated
+   by the prototype's larger step, so two claims never read as one. */
+.claim {
+  margin-top: var(--space-3);
+}
+
+.claim + .claim {
+  margin-top: var(--space-8);
+}
+
+.heading {
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+/* The paragraph that argues the claim: the prose measure, at the body size the
+   `.lede` class already sets. */
+.body {
+  margin-top: var(--space-3);
+}
+
+/* The stored reason a run recommends nothing, which stands in place of the claims
+   above the closing one (the owner's decision 147). */
+.reason {
+  margin-top: var(--space-3);
+}
+
+/* ---- The evidence, as chips --------------------------------------------- */
+
+.cites {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+  gap: var(--space-2);
+}
+
+.cites a,
+.cites span {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  color: var(--color-link);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* The closing chip is the word *simulated*, not a destination: it keeps the chip's
+   shape and gives up the link colour, so a reader does not try to click it. */
+.cites span {
+  color: var(--color-text-faint);
+}
+
+/* ---- Holding the column still while the files are read ------------------ */
+
+/* The card's own height while the run, the write-up and the aggregate are read:
+   the provenance line, a claim's heading, its paragraph and its chips, so the
+   column does not jump when they arrive. */
+.reserve {
+  min-height: calc(var(--space-24) + var(--space-16));
+  border-radius: var(--radius-lg);
+}
