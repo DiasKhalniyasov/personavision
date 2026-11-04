@@ -78,8 +78,16 @@ export function AudienceStep() {
   const navigate = useNavigate();
   const sites = useSites();
 
-  /** The sentence in the box. The draft keeps the one that produced the audience below. */
-  const [sentence, setSentence] = useState<string>(draft.audience?.sentence ?? '');
+  /**
+   * The sentence in the box. The draft keeps the one that produced the audience below, and
+   * an example test's suggested sentence where there is no audience yet (#417) — carried
+   * into the box, **not** read on the user's behalf: the control under it is still what
+   * asks `POST /audiences/from-sentence`, so there is one call site and decision 161's
+   * refusal with no key appears exactly where it always does.
+   */
+  const [sentence, setSentence] = useState<string>(
+    draft.audience?.sentence ?? draft.audienceSentence ?? '',
+  );
   /** The audience as it is stored, which is what the six fields are an edit to. */
   const [record, setRecord] = useState<AudienceRecord | null>(null);
   /** The six lines as they stand. `null` is a reader who has described nobody yet. */

@@ -5,6 +5,8 @@ import { CONNECT_CALL, CONNECT_PROMISE, CONNECTION_UNREADABLE } from '@/screens/
 import { useGithubConnection } from '@/screens/settings/connection';
 import type { GithubConnectionState } from '@/screens/settings/connection';
 import { newTestStep, paths } from '@/shell/paths';
+import { ExampleTests } from '@/screens/newtest/ExampleTests';
+import { useWizardDraft } from '../draft';
 import styles from './path.module.css';
 
 /**
@@ -24,6 +26,13 @@ import styles from './path.module.css';
  * The connection state is read once, by `screens/settings/connection.ts`, and this screen
  * renders it. It decides nothing: whether the GitHub App exists at all is the platform's
  * answer, and locked is what every answer but a connection renders.
+ *
+ * Under the two cards sit **the five example tests** (#417), so a first visit can run one on
+ * a real public site in one click instead of inventing a site, a feature, a task and a
+ * criterion before seeing a single result. They are read from
+ * `screens/newtest/templates.ts`, which the **No tests** state reads too, and this screen
+ * spells none of them; choosing one fills this wizard's own draft and lands on the audience
+ * step with everything editable.
  */
 
 /** What path 1 delivers, in the prototype's three lines and its order. */
@@ -42,6 +51,7 @@ const THEN_THE_CHANGE = [
 
 export function PathStep() {
   const connection = useGithubConnection();
+  const { update } = useWizardDraft();
 
   return (
     <>
@@ -57,6 +67,10 @@ export function PathStep() {
         <TestMySite />
         <ImproveMySite connection={connection} />
       </div>
+
+      {/* The draft is this wizard's own held copy, so the step the templates land on reads
+          what was just written rather than a remembered copy of what it was before. */}
+      <ExampleTests fill={update} />
     </>
   );
 }

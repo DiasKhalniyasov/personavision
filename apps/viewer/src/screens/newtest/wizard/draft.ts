@@ -28,6 +28,23 @@ const draftSchema = z.object({
   site: z.object({ id: z.string(), url: z.string() }).nullable(),
   /** The feature whose experience is being tested, in the user's words, as they wrote it. */
   feature: z.string(),
+  /**
+   * A sentence describing the audience that is **waiting to be read** — what an example
+   * test carries (`screens/newtest/templates.ts`), before there is an audience at all.
+   *
+   * It is a field of its own and not part of `audience` below, because that object is an
+   * audience the platform has stored and that the user has seen: a sentence nobody has read
+   * yet has no `audienceId` and is not `reviewed`, so putting it there would make
+   * `canLaunch` answer about an audience that does not exist. The audience step seeds its
+   * box from here when there is no audience yet, and its own control is what reads it —
+   * nothing is read on the user's behalf (`docs/FLOW.md` section 12).
+   *
+   * Optional, and **absent means no sentence is waiting**: a draft written before this
+   * field existed, and every draft a user typed themselves, carries none — so the field is
+   * not a second empty string beside the audience's own, and no draft a test or a step
+   * builds has to name it.
+   */
+  audienceSentence: z.string().optional(),
   audience: z
     .object({
       /** The sentence the user described the audience in, if they used one. */
@@ -113,6 +130,22 @@ export const writeWizardDraft = (draft: WizardDraft): void => {
   } catch {
     // Nothing a user can act on, and nothing worth losing their step over.
   }
+};
+
+/**
+ * Fill the draft from **outside** the wizard, and leave the rest of it alone.
+ *
+ * The **No tests** screen offers the same five example tests the path step does, and it is
+ * not a step of the wizard: there is no held draft to `update`. So the patch goes through
+ * the same schema and the same key, and the wizard reads it synchronously on its first
+ * render — which is the step the user lands on.
+ *
+ * Inside the wizard this is **not** the way: a step uses `update` from the context, because
+ * a write that only reached storage would leave the step beside it rendering the draft as
+ * it was.
+ */
+export const fillWizardDraft = (patch: Partial<WizardDraft>): void => {
+  writeWizardDraft({ ...readWizardDraft(), ...patch });
 };
 
 export const forgetWizardDraft = (): void => {

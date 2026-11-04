@@ -72,9 +72,12 @@ describe('the two paths', () => {
 
   it('draws both cards, in the prototype’s order and wording', async () => {
     await serveConnection();
-    const { container } = await open();
+    await open();
 
-    const groups = [...container.querySelectorAll('[role="group"]')];
+    // The row the two share, rather than the whole screen: the five example tests under
+    // them are cards of their own (#417), and this assertion is about the two paths.
+    const row = pathOne().parentElement as HTMLElement;
+    const groups = [...row.querySelectorAll('[role="group"]')];
     expect(groups).toHaveLength(2);
     expect(groups[0]?.textContent).toContain('Path 1');
     expect(groups[0]?.textContent).toContain('Test my site');
