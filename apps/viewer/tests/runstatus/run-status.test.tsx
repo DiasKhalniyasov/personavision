@@ -239,7 +239,7 @@ describe('the Running screen', () => {
     // The counts above the grid are the claim the grid is a picture of, so they are what is
     // announced as they change.
     const announced = screen.getByRole('status');
-    expect(announced.textContent).toMatch(/\d+ finished · \d+ gave up · \d+ failed/);
+    expect(announced.textContent).toMatch(/\d+ succeeded · \d+ gave up · \d+ failed/);
 
     // The rows change far more often than the counts and are the one thing on this screen a
     // reader scrolls: they announce nothing and take no focus of their own.

@@ -223,10 +223,12 @@ describe('a square a person', () => {
     const words = counts();
 
     const of = (state: string | null) => drawn.filter((square) => square === state).length;
-    expect(words).toContain(`${of('success')} finished`);
+    expect(words).toContain(`${of('success')} succeeded`);
     expect(words).toContain(`${of('abandoned')} gave up`);
     expect(words).toContain(`${of('failed')} failed`);
-    expect(words).toContain(`${of('automation')} our own automation failing, excluded`);
+    expect(words).toContain(
+      `${of('automation')} our own automation failing, excluded from the results`,
+    );
     expect(words).toContain(`${of('running')} still going`);
     expect(words).toContain(`${of(null)} not started`);
   });
@@ -283,7 +285,7 @@ describe('the concurrency under the grid', () => {
     show(<RunningScreen run={swarmRun()} />);
     const key = screen.getByText(/One square a person/);
 
-    expect(key.textContent).toContain('finished, gave up, failed, still going, not started');
+    expect(key.textContent).toContain('succeeded, gave up, failed, still going, not started');
     expect(key.textContent).toContain(
       `${CONCURRENCY} run at once, which is the concurrency this run was started with`,
     );
@@ -326,7 +328,7 @@ describe('our own automation failing', () => {
 
     expect(ours).toBeGreaterThan(0);
     expect(squares(container).filter((state) => state === 'automation')).toHaveLength(ours);
-    expect(counts()).toContain(`${ours} our own automation failing, excluded`);
+    expect(counts()).toContain(`${ours} our own automation failing, excluded from the results`);
     expect(counts()).toContain(`${gaveUp} gave up`);
     // The two figures are different, which is what makes the distinction worth drawing.
     expect(ours).not.toBe(gaveUp);
@@ -465,6 +467,116 @@ describe('the figures move as the artifact does', () => {
       1,
     );
     vi.useRealTimers();
+  });
+
+  it('hands back the same reading when the file has not changed', async () => {
+    // Every parse of one file makes a new `Run`, and screens elsewhere key effects on a
+    // run's identity — the Sessions screen re-reads every session file of the test when it
+    // changes. A poll of an unchanged file must therefore not produce a new object, or that
+    // screen re-fetches a hundred files and blanks to its loading state every five seconds.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const served = await serveRunData({ files: { [`/runs/${SEED}/run.json`]: openSeed(2) } });
+    mountApp(`${paths.sessions(SEED)}?view=rows`);
+    await screen.findByRole('heading', { name: 'What happened to each person' });
+
+    const sessionReads = () =>
+      served.requests.filter((request) => request.includes('/sessions/')).length;
+    const before = sessionReads();
+    expect(before).toBeGreaterThan(0);
+
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 2 + 100);
+    await waitFor(() => {
+      expect(
+        served.requests.filter((request) => request === `/runs/${SEED}/run.json`).length,
+      ).toBeGreaterThan(1);
+    });
+
+    // The run was read again; the sessions were not, and the screen never went back to
+    // its loading state.
+    expect(sessionReads()).toBe(before);
+    expect(screen.getByRole('heading', { name: 'What happened to each person' })).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('re-reads the run and nothing else: the workspace listing is left alone', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const served = await serveRunData({ files: { [`/runs/${SEED}/run.json`]: openSeed(2) } });
+    mountApp(paths.run(SEED));
+    await screen.findByRole('heading', { level: 1, name: /people have finished$/ });
+
+    const listings = () =>
+      served.requests.filter((request) => request === '/runs/index.json').length;
+    const before = listings();
+
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 2 + 100);
+    await waitFor(() => {
+      expect(
+        served.requests.filter((request) => request === `/runs/${SEED}/run.json`).length,
+      ).toBeGreaterThan(1);
+    });
+
+    // The watcher watches `run.json`. The rest of a run directory is written once, and the
+    // workspace's listing is not this test's business.
+    expect(listings()).toBe(before);
+    vi.useRealTimers();
+  });
+
+  it('gives up on a run that stops being readable, rather than freezing its figures', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const files: Record<string, string> = { [`/runs/${SEED}/run.json`]: openSeed(2) };
+    await serveRunData({ files });
+    mountApp(paths.run(SEED));
+    await screen.findByRole('heading', { level: 1, name: '2 of 24 people have finished' });
+
+    // The directory goes away under the open screen.
+    files[`/runs/${SEED}/run.json`] = '{ not json';
+
+    // One bad read is an instant of a file being rewritten, and the figures stay put.
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS + 100);
+    expect(
+      screen.getByRole('heading', { level: 1, name: '2 of 24 people have finished' }),
+    ).toBeTruthy();
+
+    // Several in a row is not an instant: the reader is told, rather than left reading
+    // figures that stopped being true under a request every five seconds.
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 3 + 100);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'That test could not be read' })).toBeTruthy();
+    });
+    vi.useRealTimers();
+  });
+});
+
+describe('the clock in the lede', () => {
+  it('prints the time alone for a test that started today', () => {
+    const { container } = show(<RunningScreen run={swarmRun()} />);
+
+    expect(container.querySelector('.lede')?.textContent).toMatch(/started \d\d:\d\d,/);
+  });
+
+  it('prints the day too for one that did not, so a stalled test reads as one', () => {
+    const yesterday = new Date(Date.now() - 26 * 60 * 60 * 1000);
+    const run = parse({
+      ...seedJson(),
+      status: 'open',
+      startedAt: yesterday.toISOString(),
+      progress: {
+        totalSessions: 24,
+        finishedSessions: 2,
+        perVariant: [],
+        sessions: [landed(0), landed(1)].map((entry, index) => ({
+          ...entry,
+          sessionId: `S-0${index + 1}`,
+          variant: 'A',
+        })),
+      },
+    });
+
+    const lede = show(<RunningScreen run={run} />).container.querySelector('.lede')?.textContent;
+    // Day then month, as the rest of the product prints a date — `3 Nov`, not `Nov 3`.
+    const day = new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(yesterday);
+    const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(yesterday);
+    expect(lede).toContain(`started ${day} ${month} `);
   });
 });
 

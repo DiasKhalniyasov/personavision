@@ -54,7 +54,24 @@ const clock = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
+ * `3 Nov`, day then month as the prototype prints a date — the two are formatted apart
+ * because `en-US` writes the pair the other way round in one format.
+ */
+const dayOfMonth = new Intl.DateTimeFormat('en-US', { day: 'numeric' });
+const month = new Intl.DateTimeFormat('en-US', { month: 'short' });
+
+/** Whether two instants fall on the same day in the reader's own time zone. */
+const sameDay = (left: Date, right: Date): boolean =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+/**
  * `started 09:12, about 9 minutes left` — the time part of the lede.
+ *
+ * The day is printed only when the test did **not** start today: a test that has been open
+ * since yesterday morning and one that started ten minutes ago would otherwise read
+ * identically, and a stalled test is exactly the one whose clock a reader is looking for.
  *
  * `null` for a run that records no start, which is a run whose clock is unknown rather than
  * one that started a moment ago; the estimate is dropped on its own when there is nothing
@@ -63,8 +80,10 @@ const clock = new Intl.DateTimeFormat('en-US', {
 export function timePhrase(run: Run, now: number): string | null {
   const since = startedAt(run);
   if (since === null) return null;
+  const at = new Date(since);
+  const day = sameDay(at, new Date(now)) ? '' : `${dayOfMonth.format(at)} ${month.format(at)} `;
+  const started = `started ${day}${clock.format(at)}`;
   const left = remainingPhrase(run, now);
-  const started = `started ${clock.format(new Date(since))}`;
   return left === null ? started : `${started}, ${left}`;
 }
 
@@ -187,21 +206,28 @@ export function swarm(progress: Run['progress'], concurrency: number | null, pla
  * The counts in words, above the grid: the same figures the squares are coloured by, so
  * nothing on this screen is readable only as colour.
  *
- * The five words are the legend's own — *finished*, *gave up*, *failed*, *still going*,
- * *not started* — so the line and the key under the grid name the same things. Our own
- * automation failing is counted apart and said to be excluded, and is named only by a run
- * that has one: a run with none makes no claim about it. With no concurrency recorded there
- * is no *still going* to state, and what is left reads as not yet finished rather than as a
- * split nobody measured.
+ * The five words are the legend's own — *succeeded*, *gave up*, *failed*, *still going*,
+ * *not started* — so the line and the key under the grid name the same things.
+ *
+ * *Succeeded* rather than the prototype's *finished*, which is the one word changed from its
+ * footnote: the heading above counts **everybody who is done** — *63 of 100 people have
+ * finished* — and that sixty-three includes the people who gave up. One screen cannot use
+ * *finished* for two different counts, so the one that means *got the task done* takes the
+ * outcome's own word from the vocabulary of `docs/FLOW.md` section 8.
+ *
+ * Our own automation failing is counted apart and said to be excluded, and is named only by
+ * a run that has one: a run with none makes no claim about it. With no concurrency recorded
+ * there is no *still going* to state, and what is left reads as not yet finished rather than
+ * as a split nobody measured.
  */
 export function countsPhrase(counts: SwarmCounts): string {
   const parts = [
-    `${counts.success} finished`,
+    `${counts.success} succeeded`,
     `${counts.abandoned} gave up`,
     `${counts.failed} failed`,
     ...(counts.automation === 0
       ? []
-      : [`${counts.automation} our own automation failing, excluded`]),
+      : [`${counts.automation} our own automation failing, excluded from the results`]),
     ...(counts.running === null
       ? [`${counts.pending} not yet finished`]
       : [`${counts.running} still going`, `${counts.pending} not started`]),
@@ -209,13 +235,23 @@ export function countsPhrase(counts: SwarmCounts): string {
   return parts.join(' · ');
 }
 
-/** `One square a person: …` — the key to the colours, and what this run ran at. */
+/**
+ * `One square a person: …` — the key to the colours, and what this run ran at.
+ *
+ * What our own breakage is excluded from is **the results** — every figure and every
+ * recommendation on the results page (`docs/FLOW.md` section 11). It is not excluded from
+ * the count of people who are done, which is what the heading above states and what this
+ * grid draws a square for: those sessions ran, and a screen that drew them as nothing while
+ * counting them as finished would be two claims about one person.
+ */
 export function footnotePhrase(counts: SwarmCounts, concurrency: number | null): string {
   const sentences = [
-    'One square a person: finished, gave up, failed, still going, not started.',
+    'One square a person: succeeded, gave up, failed, still going, not started.',
     ...(counts.automation === 0
       ? []
-      : ['Our own automation failing is a sixth colour and is in none of the figures.']),
+      : [
+          'Our own automation failing is a sixth colour: those people are counted as done here and are in none of the results.',
+        ]),
     ...(concurrency === null
       ? []
       : [
