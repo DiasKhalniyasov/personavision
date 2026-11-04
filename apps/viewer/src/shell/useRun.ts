@@ -384,7 +384,35 @@ export const clearRunCache = (): void => {
   aggregateCache.clear();
   excludedCache.clear();
   recommendationsCache.clear();
+  lastRefresh.clear();
   runIndex = null;
+};
+
+/**
+ * How often an **open** test is read again while a screen of it is on: the Running screen
+ * shows people landing (#281), and the only way it hears about one is this read.
+ *
+ * It is deliberately slower than the file it watches. The pipeline rewrites `run.json` as
+ * each session lands — a hundred people at a concurrency of ten land one every couple of
+ * seconds — so five seconds never asks for a file that has not changed, and a twenty-minute
+ * run costs a couple of hundred reads of one small JSON file rather than a thousand. A
+ * finished or failed test is never polled at all: its artifact is done.
+ */
+export const WATCH_INTERVAL_MS = 5_000;
+
+/**
+ * When each open run was last dropped from the cache, so that **two subscribers are still
+ * one read**: the chrome names the test and the screen renders it, and both watch it. The
+ * first of their timers to fire drops the entry and re-reads; the second finds the refresh
+ * already made and takes the same in-flight promise.
+ */
+const lastRefresh = new Map<string, number>();
+
+const dropIfDue = (runId: string, now: number): void => {
+  const at = lastRefresh.get(runId);
+  if (at !== undefined && now - at < WATCH_INTERVAL_MS) return;
+  lastRefresh.set(runId, now);
+  refreshRun(runId);
 };
 
 export type FindingsState =
@@ -563,12 +591,37 @@ export function useOptionalRun(runId: string | null): RunState | null {
       return;
     }
     let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    /**
+     * Read it, show it, and — while it says it is still open — read it again in a while.
+     *
+     * A re-read that comes back unreadable **does not replace the reading on screen**. The
+     * file being watched is being rewritten as sessions land, so a poll can catch it
+     * half-written or missing for an instant; wiping an open test's figures to say it could
+     * not be read, and then back, would make the screen flicker over a file that is fine.
+     * The last good reading stays, and the next poll replaces it.
+     */
+    const read = (first: boolean): void => {
+      void loadRun(runId).then((next) => {
+        if (!live) return;
+        if (first || next.status === 'ready') setState(next);
+        // Watch on while the test says it is open — and through a read that failed while it
+        // was, since a poll only ever runs on a test that was open a moment ago.
+        const open = next.status === 'ready' ? next.run.status === 'open' : !first;
+        if (!open) return;
+        timer = setTimeout(() => {
+          dropIfDue(runId, Date.now());
+          read(false);
+        }, WATCH_INTERVAL_MS);
+      });
+    };
+
     setState({ status: 'loading' });
-    void loadRun(runId).then((next) => {
-      if (live) setState(next);
-    });
+    read(true);
     return () => {
       live = false;
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [runId]);
 

@@ -14,7 +14,7 @@ import { RunningScreen } from '../../src/screens/runstatus/RunningScreen';
 
 /**
  * The two states `/runs/:runId` shows when a test is not a finished comparison:
- * `#screen-running` and `#screen-error` of `docs/design/prototype.html`.
+ * `#screen-running-swarm` and `#screen-error` of `docs/design/prototype.html`.
  *
  * Every figure on both screens is read from the run artifact as the pipeline wrote it, so
  * every run below is **the repository's own example run** taken somewhere the pipeline
@@ -146,29 +146,44 @@ const USAGE: Run['usage'] = {
 /** Both screens are mounted the way the run route mounts them: inside the router. */
 const show = (ui: ReactElement) => render(ui, { wrapper: MemoryRouter });
 
-/** The log's lines, in the order they are rendered. */
-const logLines = (): string[] =>
+/** The *Just finished* rows, in the order they are rendered, cell by cell. */
+const finishedRows = (): string[][] =>
   screen
-    .queryAllByRole('listitem')
-    .map((line) => line.textContent ?? '')
-    .filter((line) => line.includes('S-'));
+    .queryAllByRole('row')
+    .map((row) => [...row.querySelectorAll('td')].map((cell) => (cell.textContent ?? '').trim()))
+    .filter((cells) => cells.length > 0);
+
+/** One row as one string, for an assertion about the row rather than about a cell. */
+const finishedLines = (): string[] => finishedRows().map((cells) => cells.join(' · '));
+
+/** The heading of the Running screen, which is the count. */
+const heading = (): string => screen.getByRole('heading', { level: 1 }).textContent ?? '';
 
 beforeEach(loadDesignTokens);
 afterEach(forgetRuns);
 
 describe('the Running screen', () => {
-  it('says how many of how many people have finished', () => {
+  it('counts the people who have finished against the run’s total, in its heading', () => {
     show(<RunningScreen run={openRun()} />);
 
-    expect(screen.getByText(/17 of 24 people finished/)).toBeTruthy();
+    expect(heading()).toBe('17 of 24 people have finished');
   });
 
-  it('names the test it is running, the way the chrome names it', () => {
+  it('names what was tested and for whom, with the clock, in the lede', () => {
     const run = openRun();
-    show(<RunningScreen run={run} />);
+    const { container } = show(<RunningScreen run={run} />);
+    const lede = container.querySelector('.lede')?.textContent ?? '';
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      `Running · ${run.task.prompt}`,
+    // A run carrying no feature sentence is named by the task it was asked for, which is
+    // what the chrome names it too.
+    expect(run.feature).toBeUndefined();
+    expect(lede).toContain(run.task.prompt);
+    expect(lede).toContain(run.audience.name);
+    expect(lede).toMatch(/started \d\d:\d\d/);
+    // One sentence, with the parts separated by the prototype's own middle dots and no
+    // stray space before the full stop.
+    expect(lede).toMatch(
+      /^.+ · Outdoor-gear shoppers · started \d\d:\d\d, about \d+ minutes? left · offline deterministic engine\. You can open a session the moment it lands\.$/,
     );
   });
 
@@ -186,7 +201,7 @@ describe('the Running screen', () => {
     expect(run.sessionIds).toHaveLength(24);
     show(<RunningScreen run={run} />);
 
-    expect(screen.getByText(/17 of 20 people finished/)).toBeTruthy();
+    expect(heading()).toBe('17 of 20 people have finished');
   });
 
   it('draws one row per version, with its own count and its own bar', () => {
@@ -203,39 +218,61 @@ describe('the Running screen', () => {
     expect(screen.getByText('7 / 12')).toBeTruthy();
   });
 
-  it('announces overall progress to assistive technology, and does not let the log do it', () => {
+  it('draws no version rows for a run with one version, as the prototype does not', () => {
+    const { container } = show(
+      <RunningScreen
+        run={openRun({
+          perVariant: [{ variant: 'A', totalSessions: 24 }],
+          sessions: landed(17, 'A', 1),
+        })}
+      />,
+    );
+
+    expect(container.querySelector('[data-section="per-version"]')).toBeNull();
+    expect(screen.getByRole('progressbar', { name: /overall/i })).toBeTruthy();
+    expect(screen.queryAllByRole('progressbar')).toHaveLength(1);
+  });
+
+  it('announces the counts to assistive technology, and does not let the rows do it', () => {
     const { container } = show(<RunningScreen run={openRun()} />);
 
+    // The counts above the grid are the claim the grid is a picture of, so they are what is
+    // announced as they change.
     const announced = screen.getByRole('status');
-    expect(announced.textContent).toContain('17 of 24 people finished');
+    expect(announced.textContent).toMatch(/\d+ finished · \d+ gave up · \d+ failed/);
 
-    // The log changes far more often than the progress figures and is the one thing on this
-    // screen a reader scrolls: it announces nothing and it takes no focus of its own.
-    const log = screen.getByRole('region', { name: /finished sessions/i });
-    expect(log.getAttribute('aria-live')).toBeNull();
-    expect(log.contains(announced)).toBe(false);
+    // The rows change far more often than the counts and are the one thing on this screen a
+    // reader scrolls: they announce nothing and take no focus of their own.
+    const rows = screen.getByRole('region', { name: /just finished/i });
+    expect(rows.getAttribute('aria-live')).toBeNull();
+    expect(rows.contains(announced)).toBe(false);
     expect(document.activeElement).toBe(container.ownerDocument.body);
   });
 
-  it('logs the finished sessions newest first', () => {
+  it('lists the people who just finished, newest first', () => {
     const run = openRun();
     show(<RunningScreen run={run} />);
 
-    const lines = logLines();
-    expect(lines).toHaveLength(17);
-    // The artifact appends in the order they finished, so its last entry is the first line.
+    // The prototype shows the last handful rather than all seventeen.
+    const lines = finishedLines();
+    expect(lines).toHaveLength(5);
+    // The artifact appends in the order they finished, so its last entry is the first row.
     expect(lines[0]).toContain(run.progress?.sessions.at(-1)?.sessionId ?? '');
-    expect(lines.at(-1)).toContain(run.progress?.sessions[0]?.sessionId ?? '');
+    expect(lines.at(-1)).toContain(run.progress?.sessions.at(-5)?.sessionId ?? '');
+
+    // And it says how many of how many it is showing, so a reader who cannot see that the
+    // card holds five rows is not left thinking those five are everybody.
+    expect(screen.getByText(/The 5 most recent of the 17 people who have finished/)).toBeTruthy();
   });
 
-  it('renders each line from the stored fields: who, which version, which seed', () => {
+  it('renders each row from the stored fields: who, the outcome, the time, where they ended', () => {
     const run = openRun({
       sessions: [
         finished({
           sessionId: 'S-24',
           personaName: 'Price-sensitive scanner',
           variant: 'B',
-          seed: 3,
+          durationMs: 68_000,
           status: 'abandoned',
           step: 'review',
           reason: 'service fee revealed late',
@@ -245,12 +282,18 @@ describe('the Running screen', () => {
     });
 
     show(<RunningScreen run={run} />);
-    const line = logLines()[0] ?? '';
+    const [session, person, outcome, time, where] = finishedRows()[0] ?? [];
 
-    expect(line).toContain('S-24 Price-sensitive scanner · B · seed 3');
-    // The vocabulary of `docs/FLOW.md` section 8, naming the step and who it is attributed
-    // to. The artifact stores no sentence; this is the screen rendering one.
-    expect(line).toContain('abandoned at the Review step (product: service fee revealed late)');
+    expect(session).toBe('S-24');
+    // The person's own name, and the age and device of the persona the run carries by that
+    // name — the progress entry names the person, the run describes them.
+    // The example run's people carry no stated age, so the clause is simply absent rather
+    // than printing somebody aged nothing.
+    expect(person).toBe('Price-sensitive scanner · iPhone 15');
+    // The vocabulary of `docs/FLOW.md` section 8, and the step as the run labels it.
+    expect(outcome).toBe('Abandoned');
+    expect(time).toBe('1:08');
+    expect(where).toBe('Review');
   });
 
   it('keeps success, a failed task and our own automation breaking three different things', () => {
@@ -276,66 +319,60 @@ describe('the Running screen', () => {
     });
 
     show(<RunningScreen run={run} />);
-    const [newest, middle, oldest] = logLines();
+    const [newest, middle, oldest] = finishedRows();
 
-    expect(oldest).toContain('success in 58.4 s');
-    expect(middle).toContain('failed at the Payment step (product: the saved card was rejected)');
-    expect(newest).toContain('automation failure at the Payment step');
-    expect(newest).toContain('selector timeout on card iframe, will retry once');
-    // Never folded into the two outcomes of the product under test.
-    expect(newest).not.toContain('failed at');
-    expect(newest).not.toContain('abandoned');
+    expect(oldest?.[2]).toBe('Success');
+    expect(middle?.[2]).toBe('Failed');
+    expect(middle?.[4]).toBe('Payment');
+    expect(newest?.[2]).toBe('Automation failure');
+    // Ours, on the same step, and said to be excluded rather than counted as a loss.
+    expect(newest?.[4]).toBe('Payment · excluded');
+    expect(screen.getByText(/our own automation failing, not this site/i)).toBeTruthy();
+
+    // Never folded into the two outcomes of the product under test: it is counted on its
+    // own, and nobody in this run gave up.
+    const counts = screen.getByRole('status').textContent ?? '';
+    expect(counts).toContain('1 our own automation failing, excluded');
+    expect(counts).toContain('0 gave up');
+    expect(counts).toContain('1 failed');
   });
 
-  it('times a session from the stamps the artifact records, not from the clock', () => {
-    const startedAt = minutesAgo(4);
-    const run = parse({
-      ...seedJson(),
-      status: 'open',
-      startedAt,
-      progress: {
-        totalSessions: 12,
-        finishedSessions: 1,
-        perVariant: [{ variant: 'A', totalSessions: 12, finishedSessions: 1 }],
-        sessions: [
-          finished({
-            sessionId: 'S-01',
-            // Three minutes and eleven seconds after the run started.
-            finishedAt: new Date(Date.parse(startedAt) + 191_000).toISOString(),
-          }),
-        ],
-      },
+  it('times a session from the duration the artifact records, not from the clock', () => {
+    const run = openRun({
+      totalSessions: 12,
+      perVariant: [{ variant: 'A', totalSessions: 12 }],
+      sessions: [finished({ sessionId: 'S-01', durationMs: 161_000 })],
     });
 
     show(<RunningScreen run={run} />);
 
-    expect(logLines()[0]).toContain('00:03:11');
+    expect(finishedRows()[0]?.[3]).toBe('2:41');
   });
 
-  it('renders a run that has finished nobody as zeroed, and says the log is empty', () => {
+  it('renders a run that has finished nobody as zeroed, and says nobody has landed', () => {
     show(<RunningScreen run={openRun({ sessions: [] })} />);
 
-    expect(screen.getByText(/0 of 24 people finished/)).toBeTruthy();
+    expect(heading()).toBe('0 of 24 people have finished');
     expect(
       screen.getByRole('progressbar', { name: /overall/i }).getAttribute('aria-valuenow'),
     ).toBe('0');
     expect(screen.getByText(/Nobody has finished yet/i)).toBeTruthy();
-    expect(logLines()).toEqual([]);
+    expect(finishedRows()).toEqual([]);
   });
 
-  it('shows elapsed time, and an estimate only once there is something to estimate from', () => {
+  it('shows the start, and an estimate only once there is something to estimate from', () => {
     show(<RunningScreen run={openRun({ elapsed: 3 })} />);
 
-    expect(screen.getByText(/3 min elapsed/)).toBeTruthy();
+    expect(screen.getByText(/started \d\d:\d\d/)).toBeTruthy();
     // Seventeen of twenty-four in three minutes: a little over a minute left, rounded.
-    expect(screen.getByText(/about 1 min left/)).toBeTruthy();
+    expect(screen.getByText(/about 1 minute left/)).toBeTruthy();
   });
 
   it('invents no estimate for a run that has finished nobody', () => {
     show(<RunningScreen run={openRun({ elapsed: 3, sessions: [] })} />);
 
-    expect(screen.getByText(/3 min elapsed/)).toBeTruthy();
-    expect(screen.queryByText(/left/)).toBeNull();
+    expect(screen.getByText(/started \d\d:\d\d/)).toBeTruthy();
+    expect(screen.queryByText(/ left/)).toBeNull();
   });
 
   it('times nothing for a run that records no start', () => {
@@ -347,8 +384,8 @@ describe('the Running screen', () => {
 
     show(<RunningScreen run={run} />);
 
-    expect(screen.queryByText(/elapsed/)).toBeNull();
-    expect(screen.getByText(/0 of 24 people finished/)).toBeTruthy();
+    expect(screen.queryByText(/started /)).toBeNull();
+    expect(heading()).toBe('0 of 24 people have finished');
   });
 
   it('states that the numbers are simulated, as every results screen does', () => {
@@ -399,23 +436,25 @@ describe('the buttons on the Running screen', () => {
     await serveRunData();
     const { container } = show(<RunningScreen run={openRun()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Show what we have so far/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Open the results so far/ }));
 
     await waitFor(() => {
       expect(container.querySelector('[data-section="headline"]')).not.toBeNull();
     });
     // The partial figures are labelled as partial, and the way back to the progress is on
-    // the screen: the reader is still reading one open test.
+    // the screen: the reader is still reading one open test. This is also what a stopped
+    // test reads as — the people who had already finished (the owner's decision 50).
     expect(screen.getByText(/still running/i)).toBeTruthy();
+    expect(screen.getByText(/the 17 of 24 people who have finished so far/)).toBeTruthy();
 
     await userEvent.click(screen.getByRole('button', { name: /Back to progress/ }));
-    expect(screen.getByText(/17 of 24 people finished/)).toBeTruthy();
+    expect(heading()).toBe('17 of 24 people have finished');
   });
 
-  it('leaves Stop test inert, and says in a title that it is not wired yet', () => {
+  it('leaves Stop the test inert, and says in a title that it is not wired yet', () => {
     show(<RunningScreen run={openRun()} />);
 
-    const stop = screen.getByRole('button', { name: /Stop test/ });
+    const stop = screen.getByRole('button', { name: /Stop the test/ });
     expect(stop.getAttribute('aria-disabled')).toBe('true');
     expect(stop.getAttribute('title')).toMatch(/not wired/i);
   });

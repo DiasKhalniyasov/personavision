@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import type { Run, SessionProgress } from '@personavision/contract';
+import type { Run } from '@personavision/contract';
 import { Button } from '@/components/ui/button';
 // What a version is called on screen — `Current checkout`, not `A`. The lookup lives in
 // one place (#22), so the two screens that name a version cannot disagree.
@@ -7,46 +7,68 @@ import { variantName } from '@/screens/replay/runWords';
 import { VerdictPage } from '@/screens/verdict/VerdictPage';
 import { SimulatedDisclaimer } from '@/shell/SimulatedDisclaimer';
 import { CONTRIBUTOR_NOTICE, enginePhrase, ranOnContributorModel, usageLine } from './engine';
+import { JustFinished } from './JustFinished';
 import {
-  elapsedPhrase,
+  countsPhrase,
   finishedPhrase,
-  logLine,
-  logStamp,
-  remainingPhrase,
+  footnotePhrase,
+  headingPhrase,
   sharePercent,
+  swarm,
+  timePhrase,
 } from './progress';
+import type { SwarmState } from './progress';
 import './RunningScreen.css';
 
 /**
- * `/runs/:runId` while the test is still open — `#screen-running` of
- * `docs/design/prototype.html`: how many of how many people are finished, how long it has
- * been running, what is running it, the overall and per-version progress, and the log of
- * people as they finish, newest first.
+ * `/runs/:runId` while the test is still open — `#screen-running-swarm` of
+ * `docs/design/prototype.html`: how many of a hundred people have finished, what is being
+ * tested and for whom, a square for every person in the five states they can be in, and the
+ * last handful of them as rows you can open straight away.
+ *
+ * It is **one screen for a run of any size** (#281, the owner's decision 150). A path-1 test
+ * of a hundred people and the committed two-version example run of twenty-four read here the
+ * same way; the one thing a comparison adds is its per-version bars, because while two
+ * versions are still landing their two counts are what a reader of a comparison wants and
+ * one overall bar does not carry them.
  *
  * **Everything on it is read from the run artifact as the pipeline wrote it** (#32, #49).
- * The counts are `run.progress`'s, the log's lines are its `sessions[]` entries, the spend
- * is `run.usage`'s: no figure here is re-derived from the session files beside the run, and
- * a run that records no progress says so rather than showing a zero nobody measured.
+ * The counts are `run.progress`'s, the squares and the rows are its `sessions[]` entries,
+ * the concurrency is `run.runner`'s and the spend is `run.usage`'s: no figure here is
+ * re-derived from the session files beside the run, nothing is computed on the server, and a
+ * run that records no progress says it is starting rather than showing a zero nobody
+ * measured. Two figures are derived in the browser from stored fields — the time left and
+ * how many sessions are in flight — and the screen states what each came from.
  *
- * The figures are what the artifact said when the shell read it. Nothing in the viewer
- * watches an open test yet — `refreshRun` in `src/shell/useRun.ts` is the seam for the
- * ticket that does — so this screen is one honest reading of the run rather than a bar
- * moving against stale data.
+ * **The grid is decoration over figures that are also in words.** It carries `aria-hidden`,
+ * and the counts above it are what a screen reader is given, so nothing on the screen is
+ * readable only as colour.
+ *
+ * The figures move as the artifact does: `useRun` re-reads an open run over the read-only
+ * mount while this screen is on, at an interval slower than the file changes, and this
+ * screen is a rendering of whatever the latest reading said.
  *
  * Starting and stopping a test belong to the New test screen and to the platform (#110), so
- * *Stop test* is present, inert, and says so in its title rather than pretending to work.
+ * *Stop the test* is present, inert, and says so in its title rather than pretending to
+ * work. What stopping would do is stated beside it (the owner's decision 50): the people who
+ * have already finished are kept, and the test then reads as a finished test of those
+ * people — which is the reading *Open the results so far* shows early, labelled with how
+ * many of how many it covers.
  */
 
 /** Why the one button that would change the run does nothing yet. */
 const NOT_WIRED =
   'Not wired up yet: stopping a test belongs to the platform and to the New test screen (#110).';
 
+/** What a run whose progress block is not written yet reads as. */
+const STARTING = 'This test is starting';
+
 /** One variant's share of the swarm, as the progress block records it. */
 type VariantProgress = NonNullable<Run['progress']>['perVariant'][number];
 
 /**
  * One bar, and the one claim it draws: a progress bar carries its two counts, so a reader
- * who cannot see the fill is told the same thing in the same words as the line above.
+ * who cannot see the fill is told the same thing in the same words as the heading above.
  */
 function ProgressBar({
   label,
@@ -94,39 +116,21 @@ function VariantRow({ run, variant }: { run: Run; variant: VariantProgress }) {
 }
 
 /**
- * The people who have finished, newest first.
+ * A hundred people as a hundred squares.
  *
- * It is a region a reader scrolls, not something that announces itself: the progress
- * figures above are the live region, and a log that interrupted on every landing session
- * would make the screen unusable with a screen reader. It takes no focus of its own
- * either — the tab stop is there so that the scrolling it holds is reachable by keyboard,
- * which is what a named, focusable region is for.
+ * It is `aria-hidden` on purpose: it says nothing the counts above it do not say, and a
+ * screen reader read a hundred list items — changing every few seconds — would be given a
+ * wall of noise instead of a figure. A square carries no title and no tooltip either; the
+ * people who are worth opening are the rows under it, which are links.
  */
-function SessionLog({ run, sessions }: { run: Run; sessions: readonly SessionProgress[] }) {
-  // The artifact appends in the order they finished, so the newest is its last entry.
-  const newestFirst = [...sessions].reverse();
-
+function SwarmGrid({ squares }: { squares: readonly SwarmState[] }) {
   return (
-    <div className="log" role="region" tabIndex={0} aria-label="Finished sessions, newest first">
-      {newestFirst.length === 0 ? (
-        <p>Nobody has finished yet. Each person is listed here as they finish.</p>
-      ) : (
-        <ul>
-          {newestFirst.map((entry) => {
-            const stamp = logStamp(run, entry);
-            return (
-              <li key={entry.sessionId}>
-                {stamp === null ? null : (
-                  <>
-                    <b>{stamp}</b>{' '}
-                  </>
-                )}
-                {logLine(run, entry)}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <div className="swarmgrid" aria-hidden="true" data-section="swarm">
+      {squares.map((state, index) => (
+        // The index is the identity: a square is the nth session of the run and nothing
+        // else, and the nth square keeps its place as the ones before it finish.
+        <i key={index} data-done={state ?? undefined} />
+      ))}
     </div>
   );
 }
@@ -142,14 +146,23 @@ export function RunningScreen({ run }: { run: Run }) {
   }
 
   const now = Date.now();
-  const elapsed = elapsedPhrase(run, now);
-  const left = remainingPhrase(run, now);
   const usage = usageLine(run);
+  const concurrency = run.runner?.concurrency ?? null;
+  // A run with no progress block has nothing in flight that it has told us about, so no
+  // square is drawn as running: every planned session is one nobody has started yet, and
+  // how many are planned is the run's own manifest of them.
+  const flock = swarm(progress, progress === undefined ? null : concurrency, run.sessionIds.length);
+  const time = timePhrase(run, now);
 
-  /** The line under the heading, after the counts: time, engine, and what it has spent. */
+  /**
+   * The lede: what was tested, for whom, when it started and how long is left — then what
+   * ran it and what it has spent, which is where this product names a model (decision 11).
+   * A run that carries no feature sentence is named by the task it was asked for.
+   */
   const details: { key: string; text: string; title?: string }[] = [
-    ...(elapsed === null ? [] : [{ key: 'elapsed', text: elapsed }]),
-    ...(left === null ? [] : [{ key: 'left', text: left }]),
+    { key: 'feature', text: run.feature ?? run.task.prompt },
+    { key: 'audience', text: run.audience.name },
+    ...(time === null ? [] : [{ key: 'time', text: time }]),
     { key: 'engine', text: enginePhrase(run.engine) },
     ...(usage === null
       ? []
@@ -161,25 +174,23 @@ export function RunningScreen({ run }: { run: Run }) {
 
   return (
     <div className="strip strip-sm" data-section="run-progress">
-      <div className="wrap">
+      <div className="wrap-narrow">
         <div className="pagehead">
-          <h1>Running · {run.task.prompt}</h1>
+          <h1>
+            {progress === undefined
+              ? STARTING
+              : headingPhrase(progress.finishedSessions, progress.totalSessions)}
+          </h1>
         </div>
 
         <p className="lede">
-          {/* The counts are announced as they change; the time and the engine beside them
-              are not, so a reader is not read a clock every time it ticks over. */}
-          <span role="status">
-            {progress === undefined
-              ? 'This test records no progress yet'
-              : finishedPhrase(progress.finishedSessions, progress.totalSessions)}
-          </span>
-          {details.map((part) => (
+          {details.map((part, index) => (
             <Fragment key={part.key}>
-              {' · '}
+              {index === 0 ? null : ' · '}
               <span title={part.title}>{part.text}</span>
             </Fragment>
           ))}
+          . You can open a session the moment it lands.
         </p>
 
         {ranOnContributorModel(run.engine) ? (
@@ -188,39 +199,59 @@ export function RunningScreen({ run }: { run: Run }) {
           </div>
         ) : null}
 
-        <div className="card card-lg runcard">
-          {progress === undefined ? (
-            <p className="faint">
-              This test was saved without a progress block, so there is nothing to show yet. It
-              appears here as soon as the first person finishes.
+        {progress === undefined ? (
+          <p className="faint starting">
+            This test records no progress yet, so there is nothing measured to show. The people
+            appear below as they finish, and the figures with them.
+          </p>
+        ) : (
+          <>
+            <ProgressBar
+              label="Overall progress"
+              finished={progress.finishedSessions}
+              total={progress.totalSessions}
+            />
+            {/* The counts are announced as they change, and they are the whole of what the
+                grid below says: the time, the engine and the spend beside the heading are
+                not announced, so a reader is not read a clock every time it ticks over. */}
+            <p className="swarmcounts" role="status">
+              {countsPhrase(flock.counts)}
             </p>
-          ) : (
-            <>
-              <ProgressBar
-                label="Overall progress"
-                finished={progress.finishedSessions}
-                total={progress.totalSessions}
-              />
-              <div className="segments">
-                {progress.perVariant.map((variant) => (
-                  <VariantRow key={variant.variant} run={run} variant={variant} />
-                ))}
-              </div>
-              <SessionLog run={run} sessions={progress.sessions} />
-            </>
-          )}
+          </>
+        )}
 
-          <div className="runfoot">
-            <Button variant="outline" onClick={() => setShowingPartial(true)}>
-              Show what we have so far
-            </Button>
-            <Button variant="ghost" aria-disabled="true" title={NOT_WIRED}>
-              Stop test
-            </Button>
-            <span className="faint">
-              Each person is saved as they finish; stopping keeps everyone who is already done.
-            </span>
+        {/* A run that plans nobody — no progress block and an empty manifest — has no
+            squares to draw, and an empty grid under a key to colours nobody can see would
+            be a frame around nothing. */}
+        {flock.squares.length === 0 ? null : (
+          <>
+            <SwarmGrid squares={flock.squares} />
+            <p className="footnote swarmkey">
+              {footnotePhrase(flock.counts, progress === undefined ? null : concurrency)}
+            </p>
+          </>
+        )}
+
+        {progress !== undefined && progress.perVariant.length > 1 ? (
+          <div className="segments" data-section="per-version">
+            {progress.perVariant.map((variant) => (
+              <VariantRow key={variant.variant} run={run} variant={variant} />
+            ))}
           </div>
+        ) : null}
+
+        <JustFinished run={run} sessions={progress?.sessions ?? []} />
+
+        <div className="runfoot">
+          <Button variant="outline" onClick={() => setShowingPartial(true)}>
+            Open the results so far
+          </Button>
+          <Button variant="ghost" aria-disabled="true" title={NOT_WIRED}>
+            Stop the test
+          </Button>
+          <span className="faint">
+            Each person is saved as they finish; stopping keeps everyone who is already done.
+          </span>
         </div>
 
         <SimulatedDisclaimer />
@@ -232,9 +263,11 @@ export function RunningScreen({ run }: { run: Run }) {
 /**
  * The Verdict for the people who have finished so far, with what it is of stated above it.
  *
- * The same screen a finished test renders, over the same artifact — the pipeline writes the
- * verdict as it goes, so nothing is computed here — and the reader never leaves the test:
- * the way back to the progress sits beside the notice.
+ * It is also what a **stopped** test reads as (the owner's decision 50): stopping keeps
+ * everyone who has already finished, and the reading of those people is this one — the same
+ * screen a finished test renders, over the same artifact, labelled with how many of how many
+ * it covers. Nothing is computed here; the pipeline writes the verdict as it goes. And the
+ * reader never leaves the test: the way back to the progress sits beside the notice.
  */
 function PartialVerdict({ run, onBack }: { run: Run; onBack: () => void }) {
   const { progress } = run;
