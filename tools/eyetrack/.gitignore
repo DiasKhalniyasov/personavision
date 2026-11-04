@@ -1,0 +1,6 @@
+sessions/
+ptgaze/.venv/
+vendor/
+phone/
+telegram/
+participants/
