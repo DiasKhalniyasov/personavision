@@ -78,29 +78,39 @@
    * image is not somewhere a human looked at it, and `convertRecord` rejects a record that
    * carries one; two samples sharing a millisecond would make two fixations whose onsets are
    * equal, which it rejects as well. Dropping is counted and reported rather than hidden,
-   * because the share of gaze that missed the image is how a reader judges a recording.
+   * because the share of gaze that missed the image is how a reader judges a recording — and
+   * it is counted in three buckets, `outsideImage`, `outOfOrder` and `unreadable`, because a
+   * participant who looked away and a tracker returning nonsense are different problems.
    */
   const cleanSamples = function (samples, imageSize) {
     const kept = [];
     let outsideImage = 0;
     let outOfOrder = 0;
+    let unreadable = 0;
     let lastTime = null;
 
     for (let i = 0; i < samples.length; i += 1) {
       const sample = samples[i];
+      // Three different defects, counted apart, because this file is the provenance a reader
+      // judges the recording by: gaze that left the screenshot, a reading that is not a number
+      // at all, and a clock that did not move. Lumping them would hide a broken tracker behind
+      // a participant who looked away.
+      if (
+        !Number.isFinite(sample.x) ||
+        !Number.isFinite(sample.y) ||
+        !Number.isFinite(sample.tMs) ||
+        sample.tMs < 0
+      ) {
+        unreadable += 1;
+        continue;
+      }
       const inside =
-        Number.isFinite(sample.x) &&
-        Number.isFinite(sample.y) &&
         sample.x >= 0 &&
         sample.y >= 0 &&
         sample.x <= imageSize.width &&
         sample.y <= imageSize.height;
       if (!inside) {
         outsideImage += 1;
-        continue;
-      }
-      if (!Number.isFinite(sample.tMs) || sample.tMs < 0) {
-        outOfOrder += 1;
         continue;
       }
       const tMs = Math.round(sample.tMs);
@@ -112,7 +122,12 @@
       kept.push({ tMs: tMs, x: round(sample.x, 1), y: round(sample.y, 1) });
     }
 
-    return { gaze: kept, outsideImage: outsideImage, outOfOrder: outOfOrder };
+    return {
+      gaze: kept,
+      outsideImage: outsideImage,
+      outOfOrder: outOfOrder,
+      unreadable: unreadable,
+    };
   };
 
   /** The dispersion of `samples[from..to]`: the x range plus the y range, in image pixels. */
@@ -157,15 +172,13 @@
    * It is *a* fixation detector, not the one true one, which is why the thresholds travel in
    * the recorded file and the raw samples travel beside the fixations: a reader who prefers
    * a velocity-based detector has everything needed to run it.
+   *
+   * The thresholds are this module's constants and deliberately not arguments. `buildFile`
+   * writes those same constants into the recording as `fixationDetector`, so a per-call
+   * override would let a file report thresholds its fixations were not derived with — a knob
+   * whose only possible use is to make the provenance wrong.
    */
-  const detectFixations = function (gaze, options) {
-    const settings = options || {};
-    const dispersionPx =
-      settings.dispersionPx === undefined ? DISPERSION_PX : settings.dispersionPx;
-    const minDurationMs =
-      settings.minDurationMs === undefined ? MIN_DURATION_MS : settings.minDurationMs;
-    const maxGapMs = settings.maxGapMs === undefined ? MAX_GAP_MS : settings.maxGapMs;
-
+  const detectFixations = function (gaze) {
     const fixations = [];
     let start = 0;
 
@@ -173,13 +186,13 @@
       // Grow the window while the gaze holds still and keeps talking.
       let end = start;
       while (end + 1 < gaze.length) {
-        if (gaze[end + 1].tMs - gaze[end].tMs > maxGapMs) break;
-        if (dispersionOf(gaze, start, end + 1) > dispersionPx) break;
+        if (gaze[end + 1].tMs - gaze[end].tMs > MAX_GAP_MS) break;
+        if (dispersionOf(gaze, start, end + 1) > DISPERSION_PX) break;
         end += 1;
       }
 
       const durationMs = gaze[end].tMs - gaze[start].tMs;
-      if (durationMs < minDurationMs) {
+      if (durationMs < MIN_DURATION_MS) {
         // Too brief to be a fixation: the eye was moving. Try again one sample along.
         start += 1;
         continue;
@@ -214,7 +227,7 @@
   const buildRecord = function (input) {
     const imageSize = { width: input.image.width, height: input.image.height };
     const cleaned = cleanSamples(input.samples, imageSize);
-    const fixations = detectFixations(cleaned.gaze, input.detector);
+    const fixations = detectFixations(cleaned.gaze);
 
     return {
       id: input.id,
@@ -241,7 +254,11 @@
         },
       ],
       gaze: cleaned.gaze,
-      dropped: { outsideImage: cleaned.outsideImage, outOfOrder: cleaned.outOfOrder },
+      dropped: {
+        outsideImage: cleaned.outsideImage,
+        outOfOrder: cleaned.outOfOrder,
+        unreadable: cleaned.unreadable,
+      },
     };
   };
 

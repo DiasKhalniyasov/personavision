@@ -85,7 +85,11 @@ interface GazeSample {
 /** A record as the tool writes it: this package's `RawRecord`, plus the gaze behind it. */
 interface RecordedRecord extends RawRecord {
   readonly gaze: readonly GazeSample[];
-  readonly dropped: { readonly outsideImage: number; readonly outOfOrder: number };
+  readonly dropped: {
+    readonly outsideImage: number;
+    readonly outOfOrder: number;
+    readonly unreadable: number;
+  };
 }
 
 /** The one file a participant saves. */
@@ -255,8 +259,12 @@ describe('the sample’s fixations are the tool’s own reading of its raw gaze'
         record.participants[0].fixations.length,
       );
       // Gaze that left the screenshot is dropped rather than clamped, and counted rather
-      // than hidden: the share that missed is how a reader judges a recording.
-      expect(record.dropped.outsideImage, record.id).toBeGreaterThanOrEqual(0);
+      // than hidden: the share that missed is how a reader judges a recording. Asserted
+      // above zero, not at or above it — a counter is always at or above zero, so the weaker
+      // form would pass over a tool that had quietly stopped counting.
+      expect(record.dropped.outsideImage, record.id).toBeGreaterThan(0);
+      expect(record.dropped.outOfOrder, record.id).toBeGreaterThanOrEqual(0);
+      expect(record.dropped.unreadable, record.id).toBe(0);
     }
   });
 });

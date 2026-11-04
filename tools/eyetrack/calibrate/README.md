@@ -126,7 +126,7 @@ not a finished session — under one envelope key. The auto-decision is on
         },
       ],
       "gaze": [{ "tMs": 29, "x": 331.5, "y": 165.1 }], // extra: the raw samples
-      "dropped": { "outsideImage": 14, "outOfOrder": 0 }, // extra: what was thrown away
+      "dropped": { "outsideImage": 14, "outOfOrder": 0, "unreadable": 0 }, // extra: dropped
     },
   ],
 }
@@ -163,7 +163,10 @@ A few things worth knowing about the fields:
 - **`gaze` and `dropped` are extra**, and the converter ignores them. Gaze that fell off the
   screenshot is dropped rather than clamped — a point off the image is not somewhere a human
   looked at it — and counted, because the share that missed is how a reader judges a
-  recording.
+  recording. The three buckets are kept apart on purpose: `outsideImage` is a participant
+  looking away, `outOfOrder` is a clock that did not move between two samples, and
+  `unreadable` is the tracker returning something that is not a number. One total would hide
+  a broken tracker behind a wandering eye.
 
 ### The sample
 

@@ -58,6 +58,14 @@
   /** The centre cross between screenshots, so every recording starts from the same place. */
   const CROSS_MS = 1000;
 
+  /**
+   * How far a calibration target stays from the viewport's edges and from the instruction.
+   *
+   * A dot half off the screen cannot be looked at squarely, and one on top of the words
+   * cannot be read around.
+   */
+  const TARGET_CLEARANCE_PX = 44;
+
   /** How much of the viewport a screenshot may fill, leaving a mat around it. */
   const STAGE_FILL = 0.9;
 
@@ -143,17 +151,25 @@
   };
 
   /**
-   * Resolve once the browser has put a frame on the screen.
+   * Resolve once an image is decoded *and* the browser has put a frame on the screen.
    *
-   * Two frames, because the first callback runs *before* the paint it belongs to. It is what
-   * the recording clock waits for: start it when `src` is assigned and the first sample or two
-   * are gaze over a stage the screenshot had not reached yet, which is a measurement of the
-   * wrong thing.
+   * Both halves are needed, and neither covers the other. Two animation frames guarantee a
+   * paint but not a bitmap — a large screenshot can take longer than 32 ms to decode, and the
+   * clock would start over a bare stage again, which is the whole thing this waits for.
+   * `decode()` guarantees the bitmap but not that it has been drawn. So: decode, then two
+   * frames, because the first callback runs *before* the paint it belongs to.
+   *
+   * A browser without `decode`, or an image it refuses to decode, falls through to the frames
+   * alone: a slightly early clock is worth more than a recording that never starts.
    */
-  const painted = function () {
-    return new Promise(function (resolve) {
-      window.requestAnimationFrame(function () {
-        window.requestAnimationFrame(resolve);
+  const shown = function (image) {
+    const decoded =
+      typeof image.decode === 'function' ? image.decode().catch(function () {}) : Promise.resolve();
+    return decoded.then(function () {
+      return new Promise(function (resolve) {
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(resolve);
+        });
       });
     });
   };
@@ -282,10 +298,43 @@
       window.alert = realAlert;
     }
 
-    // WebGazer adds mouse listeners that train the model on every click and movement. The
-    // only training this tool allows is the nine points, recorded by hand.
-    window.webgazer.removeMouseEventListeners();
     setTrackerChrome(true);
+  };
+
+  /**
+   * Stop WebGazer training itself on the mouse, and throw away anything it already learnt
+   * that way.
+   *
+   * **This cannot be done when `begin()` returns.** WebGazer attaches those listeners in its
+   * `init`, which runs inside the `getUserMedia` promise — so a `removeMouseEventListeners`
+   * call on the line after `begin()` executes *before* the add and silently does nothing,
+   * leaving every button press and every sweep of the cursor to teach the model that the eye
+   * was on the pointer. It is called from the ready branch instead, which is strictly after
+   * `init` because `isReady` reads a canvas that `init` sizes.
+   *
+   * Removing them still leaves the window between `init` and ready, so the training data
+   * collected up to this moment is discarded outright. After this the only pairs in the model
+   * are the nine points, recorded by hand.
+   */
+  const trainOnlyOnOurPoints = function () {
+    // The removal first and unguarded: it is the step that matters, and a library that cannot
+    // do it is broken in a way this page should not paper over.
+    window.webgazer.removeMouseEventListeners();
+
+    // The clearing is best effort. It reaches through `getRegression` into a regression's
+    // `setData`, which WebGazer offers but does not promise — and if that interface is not
+    // there, the cost is the handful of pairs collected before the listeners came off, not a
+    // participant stuck on a page that never leaves "waiting for the camera".
+    try {
+      const regressions = window.webgazer.getRegression();
+      if (regressions !== undefined && regressions !== null) {
+        for (let i = 0; i < regressions.length; i += 1) {
+          if (typeof regressions[i].setData === 'function') regressions[i].setData([]);
+        }
+      }
+    } catch {
+      // Nothing to clear through, and nothing worth stopping for.
+    }
   };
 
   /** Stop predicting and let go of the camera: the light goes out when it is no longer needed. */
@@ -323,8 +372,32 @@
     });
   };
 
+  /**
+   * Give each loaded screenshot its record id.
+   *
+   * The id is the file's name without its extension, as `packages/calibration` spells it. Two
+   * files can share one, and two records under one id are two recordings nobody can tell
+   * apart, so a repeat is suffixed rather than merged. It happens here, over the whole list in
+   * the order the participant chose the files, rather than inside each image's `onload`: those
+   * fire in decode order, so the bare id would land on whichever file happened to decode first.
+   */
+  const withIds = function (shots) {
+    const taken = {};
+    return shots.map(function (shot) {
+      const base = shot.name.replace(/\.[^.]+$/, '');
+      let id = base;
+      let suffix = 2;
+      while (taken[id] === true) {
+        id = base + '-' + suffix;
+        suffix += 1;
+      }
+      taken[id] = true;
+      return { id: id, name: shot.name, src: shot.src, image: shot.image };
+    });
+  };
+
   /** Load one chosen file into an `Image`, so its own pixel size is known before it is shown. */
-  const loadShot = function (file, takenIds) {
+  const loadShot = function (file) {
     return new Promise(function (resolve, reject) {
       const reader = new FileReader();
       reader.onerror = function () {
@@ -340,18 +413,7 @@
             reject(new Error('has no pixels'));
             return;
           }
-          // The record's id is the name without its extension, as `packages/calibration`
-          // spells it. Two files can share one, and two records under one id are two
-          // recordings nobody can tell apart, so a repeat is suffixed rather than merged.
-          const base = file.name.replace(/\.[^.]+$/, '');
-          let id = base;
-          let suffix = 2;
-          while (takenIds[id] === true) {
-            id = base + '-' + suffix;
-            suffix += 1;
-          }
-          takenIds[id] = true;
-          resolve({ id: id, name: file.name, src: String(reader.result), image: image });
+          resolve({ name: file.name, src: String(reader.result), image: image });
         };
         image.src = String(reader.result);
       };
@@ -387,16 +449,15 @@
     nodes.toCamera.disabled = true;
     say(nodes.setupStatus, 'Reading the screenshots…');
 
-    const takenIds = {};
     Promise.all(
       files.map(function (file) {
-        return loadShot(file, takenIds).catch(function (error) {
+        return loadShot(file).catch(function (error) {
           throw new Error(file.name + ' ' + error.message);
         });
       }),
     ).then(
       function (shots) {
-        state.shots = shots;
+        state.shots = withIds(shots);
         state.participantId = participantId;
         state.category = nodes.category.value;
         state.viewingDurationSeconds = Number(nodes.exposure.value);
@@ -427,6 +488,8 @@
     const started = window.performance.now();
     const poll = function () {
       if (window.webgazer.isReady()) {
+        // Now, not after `begin()`: this is the first moment WebGazer's own listeners exist.
+        trainOnlyOnOurPoints();
         say(nodes.cameraStatus, 'The camera is on and your face is being tracked.', 'ok');
         nodes.toCalibration.disabled = false;
         return;
@@ -457,6 +520,33 @@
     return points;
   };
 
+  /**
+   * The band of the viewport a calibration target may sit in.
+   *
+   * The nine fractions span 10%–90%, which is fine on a laptop and wrong on a phone held
+   * sideways: at 390 px of height the top row lands at 39 px, under the instruction, and a
+   * target drawn over the words is both unreadable and no longer a clean thing to fixate. So
+   * the rows are spread across what is left below the instruction instead of across the whole
+   * height — and because the point passed to `recordScreenPosition` is computed from the same
+   * numbers as the dot's `style`, the model is trained on where the dot actually is.
+   */
+  const targetBand = function () {
+    const instruction = nodes.overlayInstruction.getBoundingClientRect();
+    const top = Math.max(instruction.bottom + TARGET_CLEARANCE_PX, TARGET_CLEARANCE_PX);
+    const bottom = window.innerHeight - TARGET_CLEARANCE_PX;
+    // A viewport too short to hold a band falls back to the whole height: a cramped
+    // calibration is better than none, and the participant can still see the dots.
+    return bottom > top
+      ? { top: top, height: bottom - top }
+      : { top: 0, height: window.innerHeight };
+  };
+
+  /** Where one point of the nine goes, in viewport pixels. */
+  const targetAt = function (point, band) {
+    const left = TARGET_CLEARANCE_PX + point.fx * (window.innerWidth - 2 * TARGET_CLEARANCE_PX);
+    return { left: left, top: band.top + point.fy * band.height };
+  };
+
   const instruct = function (lead, rest) {
     nodes.overlayInstruction.textContent = '';
     const strong = document.createElement('strong');
@@ -477,10 +567,14 @@
     );
     setTrackerChrome(true);
 
+    // Measured once the instruction is in place, so every target clears it.
+    const band = targetBand();
+
     return new Promise(function (resolve) {
       points.forEach(function (point) {
-        const left = point.fx * window.innerWidth;
-        const top = point.fy * window.innerHeight;
+        const place = targetAt(point, band);
+        const left = place.left;
+        const top = place.top;
         let clicks = 0;
 
         const target = document.createElement('button');
@@ -686,7 +780,7 @@
         nodes.shot.alt = 'Screenshot being viewed: ' + shot.name;
         nodes.shot.hidden = false;
 
-        return painted();
+        return shown(nodes.shot);
       })
       .then(function () {
         // The rect is read once the screenshot is on the screen, so both the mapping below
@@ -696,16 +790,23 @@
         geometry = rect;
         const perCssPixel = shot.image.naturalWidth / rect.width;
         const started = window.performance.now();
+        const exposureMs = state.viewingDurationSeconds * 1000;
 
         state.sink = function (x, y, now) {
+          const tMs = now - started;
+          // The exposure is what the record claims the screenshot was looked at for, and a
+          // `setTimeout` fires a little late. A sample past the cut is gaze at a stage the
+          // screenshot is about to leave, and it would stretch the last dwell beyond the
+          // exposure the file reports.
+          if (tMs > exposureMs) return;
           samples.push({
-            tMs: now - started,
+            tMs: tMs,
             x: (x - rect.left) * perCssPixel,
             y: (y - rect.top) * perCssPixel,
           });
         };
 
-        return wait(state.viewingDurationSeconds * 1000);
+        return wait(exposureMs);
       })
       .then(function () {
         state.sink = null;
@@ -748,10 +849,51 @@
         finish();
         return;
       }
-      recordOne(state.shots[position], position).then(function (built) {
-        records.push(built);
-        next(position + 1);
-      });
+      recordOne(state.shots[position], position).then(
+        function (built) {
+          records.push(built);
+          next(position + 1);
+        },
+        function (error) {
+          // Without this the page sits on "Recording" with the camera live and nothing said,
+          // which is the one state a participant cannot leave without reloading — and
+          // reloading loses every screenshot recorded so far.
+          state.sink = null;
+          nodes.stage.hidden = true;
+          stopTracking();
+          const stopped =
+            'Recording stopped on ' +
+            state.shots[position].name +
+            ': ' +
+            String(error && error.message ? error.message : error) +
+            '.';
+
+          if (records.length === 0) {
+            say(
+              nodes.recordStatus,
+              stopped + ' Nothing was recorded, so there is nothing to save.',
+              'bad',
+            );
+            return;
+          }
+
+          // Whatever was recorded is still worth saving. `finish` moves to the save card, so
+          // the reason has to be put there afterwards — and without trampling what `finish`
+          // itself had to say about the records.
+          state.records = records;
+          finish();
+          const already = nodes.saveStatus.textContent;
+          say(
+            nodes.saveStatus,
+            stopped +
+              ' The ' +
+              records.length +
+              ' screenshots before it were recorded, and are in the file.' +
+              (already === '' ? '' : ' ' + already),
+            'bad',
+          );
+        },
+      );
     };
     next(0);
   };
@@ -827,8 +969,12 @@
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     const stamp = state.file.recordedAt.replace(/[:.]/g, '-');
+    // The id is free text and reaches a file name here: a `/` or a `..` in it gives a name the
+    // browser silently mangles or refuses. Only the file name is tidied — the id inside the
+    // file is whatever was typed.
+    const safeId = state.participantId.replace(/[^a-z0-9_-]+/gi, '-');
     link.href = url;
-    link.download = 'eyetrack-' + state.participantId + '-' + stamp + '.json';
+    link.download = 'eyetrack-' + safeId + '-' + stamp + '.json';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
