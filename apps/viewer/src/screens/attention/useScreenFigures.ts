@@ -27,12 +27,7 @@ import type { ScreenFigures } from './screenSlices';
  * - `ready` — the figures are in hand.
  */
 export type ScreenFiguresStatus =
-  | 'loading'
-  | 'none'
-  | 'unreadable'
-  | 'no-people'
-  | 'no-screen'
-  | 'ready';
+  'loading' | 'none' | 'unreadable' | 'no-people' | 'no-screen' | 'ready';
 
 export interface ScreenFiguresView {
   readonly status: ScreenFiguresStatus;

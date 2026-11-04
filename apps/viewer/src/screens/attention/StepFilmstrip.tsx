@@ -74,9 +74,7 @@ export function StepFilmstrip({ run, selection, sessions, screen }: StepFilmstri
             screen={screen}
             selection={selection}
             sessions={sessions}
-            fromSessions={
-              fromSessions.find((row) => row.step.id === step.id)?.reached ?? 0
-            }
+            fromSessions={fromSessions.find((row) => row.step.id === step.id)?.reached ?? 0}
           />
         </Toggle>
       ))}

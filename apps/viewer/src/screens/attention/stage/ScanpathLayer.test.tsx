@@ -34,10 +34,6 @@ const RUN_ID = '2026-10-24-1402-northwind-demo';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
-
-
-
-
 const layerIn = (container: HTMLElement) => container.querySelector('[data-overlay-layer="scan"]');
 const keyIn = (container: HTMLElement) => container.querySelector('[data-scan-key]');
 
@@ -421,7 +417,6 @@ describe('the scale beside the switch', () => {
     expect((keyIn(container) as HTMLElement).dataset.scanKey).toBe('sizes');
     expect(container.textContent).toBe('brieflong dwell');
   });
-
 
   it('states the marks it could not place on the capture rather than dropping them', () => {
     const { container } = render(

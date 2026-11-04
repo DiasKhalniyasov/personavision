@@ -194,7 +194,11 @@ export function useOverlayLayers(
   const setShown = useCallback(
     (id: string, on: boolean) => {
       const layer = OVERLAY_LAYERS.find((candidate) => candidate.id === id);
-      if (layer?.overlay !== undefined && urlOverlays !== undefined && setUrlOverlays !== undefined) {
+      if (
+        layer?.overlay !== undefined &&
+        urlOverlays !== undefined &&
+        setUrlOverlays !== undefined
+      ) {
         // The whole set is rewritten, in the registry's order, so that two readers who
         // turned the same overlays on are at the same URL however they got there.
         const next = OVERLAY_LAYERS.flatMap((candidate) => {

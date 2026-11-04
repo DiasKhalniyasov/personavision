@@ -8,11 +8,7 @@ import { paths, sessionsWithArea } from '@/shell/paths';
 import { forgetRuns, mountApp, readRunFile, serveRunData } from '../../../tests/app';
 import { axeViolations, describeViolations } from '../../../tests/axe';
 import { loadDesignTokens } from '../../../tests/setup';
-import {
-  areasOnThisScreenCaveat,
-  lookedAtShare,
-  notPresentInVariant,
-} from './attentionWording';
+import { areasOnThisScreenCaveat, lookedAtShare, notPresentInVariant } from './attentionWording';
 
 /**
  * The "Areas of interest" table of `#screen-attention`, over the repository's own committed
@@ -78,9 +74,7 @@ const settled = async () => {
   await waitFor(() => {
     // The `This screen` panel's first reading, settled: every figure on this screen comes
     // from the aggregate, so "settled" is that file having arrived.
-    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
   });
 };
 

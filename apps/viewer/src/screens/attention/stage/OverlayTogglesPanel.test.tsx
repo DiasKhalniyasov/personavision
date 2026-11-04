@@ -81,9 +81,7 @@ describe('the panel on the screen', () => {
       // named none, so the screen opens on `DEFAULT_OVERLAYS`. A layer with no overlay name
       // — the outlines — is still the registry's to default.
       const on =
-        layer.overlay === undefined
-          ? layer.defaultOn
-          : DEFAULT_OVERLAYS.includes(layer.overlay);
+        layer.overlay === undefined ? layer.defaultOn : DEFAULT_OVERLAYS.includes(layer.overlay);
       expect(control.getAttribute('aria-pressed'), layer.id).toBe(String(on));
     }
   });

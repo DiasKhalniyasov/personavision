@@ -117,9 +117,8 @@ export const pickScreenSlice = (
   segment: string | null,
   outcome: string | null,
 ): ScreenSlice | null =>
-  aggregate.screenSlices.find(
-    (slice) => slice.segment === segment && slice.outcome === outcome,
-  ) ?? null;
+  aggregate.screenSlices.find((slice) => slice.segment === segment && slice.outcome === outcome) ??
+  null;
 
 /**
  * The figures of one version's step inside a slice, or `null` when the slice holds no row

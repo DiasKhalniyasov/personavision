@@ -118,9 +118,7 @@ const settled = async () => {
   await waitFor(() => {
     // The `This screen` panel's first reading, settled: every figure on this screen comes
     // from the aggregate, so "settled" is that file having arrived.
-    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
   });
   // And the areas, which are a read of their own: this suite is about the row and the
   // caption an isolated area produces, and both come from that read rather than from the

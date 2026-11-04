@@ -75,9 +75,11 @@ export function ThisStepPanel({ step, screen, areas }: ThisStepPanelProps) {
       <dt>Left here</dt>
       <dd className="num" data-reading="left-here">
         <Figure screen={screen}>
-          {figures === null
-            ? null
-            : `${figures.leftHere} of the ${figures.reached} who reached it`}
+          {/* Out of the people who reached the screen, as the row below it is: the row above
+              is out of the whole slice, and the two denominators are different questions.
+              Short, because the panel is 280px wide and a sentence here wraps to four
+              lines beside a two-word term. */}
+          {figures === null ? null : `${figures.leftHere} of ${figures.reached}`}
         </Figure>
       </dd>
 
@@ -102,17 +104,16 @@ export function ThisStepPanel({ step, screen, areas }: ThisStepPanelProps) {
         </Figure>
       </dd>
 
-      <dt>
-        {primary === null
-          ? `Clicks on this screen`
-          : `Clicks on ${primary.aoi.label}`}
-      </dt>
+      {/* A fixed term, not `Clicks on <the area's label>`: a run names its areas as long as
+          it likes — the committed one calls this control *Primary action — A: "Continue to
+          review", B: "Place order"* — and a four-line heading in a 280px panel pushes the
+          figure beside it to four lines too. Which area it is, the table below names, in the
+          `Source` column that already marks the primary action. */}
+      <dt>Clicks on the primary action</dt>
       <dd className="num" data-reading="primary-clicks">
         <Figure screen={screen}>
           {figures === null ? null : primary === null ? (
-            <span className="faint">
-              the {step.label} screen marks no control as its primary action
-            </span>
+            <span className="faint">the {step.label} screen marks none</span>
           ) : clicks === null ? (
             <span className="faint">no clicks recorded for it</span>
           ) : (
@@ -133,17 +134,20 @@ export function ThisStepPanel({ step, screen, areas }: ThisStepPanelProps) {
  * never a zero where the answer is that nothing was measured.
  */
 function Figure({ screen, children }: { screen: ScreenFiguresView; children: React.ReactNode }) {
+  // Short, and short on purpose: these words stand in five rows at once, in a panel 280px
+  // wide, and a sentence in each of them is the same thing said five times down the side of
+  // the screen. The sentence itself is beside the stage, once, where the reader is looking.
   switch (screen.status) {
     case 'loading':
-      return <span className="faint">reading this test’s figures…</span>;
+      return <span className="faint">reading…</span>;
     case 'none':
-      return <span className="faint">this test computed none</span>;
+      return <span className="faint">not computed</span>;
     case 'unreadable':
-      return <span className="faint">could not be read</span>;
+      return <span className="faint">unreadable</span>;
     case 'no-people':
-      return <span className="faint">nobody matches both filters</span>;
+      return <span className="faint">nobody matches</span>;
     case 'no-screen':
-      return <span className="faint">none of them reached it</span>;
+      return <span className="faint">none reached it</span>;
     case 'ready':
       return <>{children}</>;
   }

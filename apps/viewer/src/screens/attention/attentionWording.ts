@@ -172,9 +172,16 @@ export const unknownAreaProblem = (aoiId: string): string =>
 export interface PeopleShown {
   /** What is drawn, in the overlays' own labels — `Clicks`, `Attention`. */
   readonly overlays: readonly string[];
-  /** The outcome filter's words, or `null` for every outcome. */
+  /**
+   * How the outcome filter reads in a sentence, or `null` for every outcome.
+   *
+   * The product's own word for the status — `Abandoned`, not `Gave up 8`: a strip's button
+   * carries its count because a reader choosing between buttons wants it, and this sentence
+   * states the count once, of the composition, so carrying it again here would say 8 twice
+   * about two different things.
+   */
   readonly outcome: string | null;
-  /** The segment filter's words, or `null` for every segment. */
+  /** The segment, in the audience's own words, or `null` for every segment. */
   readonly segment: string | null;
   /** How many people the composition narrows to, as the slice states it. */
   readonly sessionCount: number | null;
@@ -206,20 +213,27 @@ export function peopleShown({
   scoredSessionCount,
   excludedAutomationFailures,
 }: PeopleShown): string {
-  const drawn = overlays.length === 0 ? 'No overlay' : overlays.join(' and ');
+  // `Clicks, Attention and Scroll depth` — a list, not `and` three times.
+  const drawn =
+    overlays.length === 0
+      ? 'No overlay'
+      : overlays.length === 1
+        ? (overlays[0] as string)
+        : `${overlays.slice(0, -1).join(', ')} and ${overlays[overlays.length - 1] as string}`;
   const narrowed = [outcome, segment].filter((part) => part !== null);
 
   // Who they are. With no filter at all the people are the run's own scored sessions, and
   // the count beside them is the run's; with a filter they are the slice's.
   const count = narrowed.length === 0 ? scoredSessionCount : sessionCount;
+  const people = (of: number): string => `${of} ${of === 1 ? 'person' : 'people'}`;
   const who =
     count === null
       ? narrowed.length === 0
         ? 'your audience'
         : narrowed.join(' · ')
       : narrowed.length === 0
-        ? `all ${count} people`
-        : `${count} people · ${narrowed.join(' · ')}`;
+        ? `all ${people(count)}`
+        : `${people(count)} · ${narrowed.join(' · ')}`;
 
   const excluded =
     excludedAutomationFailures === null
@@ -295,7 +309,9 @@ export function clicksFootnote({ busiest, nowhere, total }: ClicksFootnote): str
   if (total === 0) return null;
   const parts: string[] = [];
   if (busiest !== null) {
-    parts.push(`${busiest.clicks} of the ${total} clicks on this screen landed on ${busiest.label}`);
+    parts.push(
+      `${busiest.clicks} of the ${total} clicks on this screen landed on ${busiest.label}`,
+    );
   }
   if (nowhere > 0) {
     parts.push(

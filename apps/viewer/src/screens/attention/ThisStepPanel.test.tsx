@@ -29,8 +29,7 @@ const RUN_ID = '2026-10-24-1402-northwind-demo';
 const layout = runPaths('');
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
-const seedAggregate = (): Aggregate =>
-  aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
+const seedAggregate = (): Aggregate => aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
 
 /** The hook's answer, built from a state rather than from a server. */
 const figuresFor = (
@@ -49,21 +48,14 @@ const stepOf = (run: Run, step: string) =>
 const reading = (term: string): string =>
   screen.getByText(term, { selector: 'dt' }).nextElementSibling?.textContent ?? '';
 
-/** The heading whose words name an area, matched on its stem. */
+/** The clicks row's term, which names what it counts rather than the area it counts on. */
 const clicksTerm = (): string =>
   screen.getByText(/^Clicks on /, { selector: 'dt' }).textContent ?? '';
 
-const panel = (options: {
-  run: Run;
-  step: string;
-  variant: string;
-  screen: ScreenFiguresView;
-}) => {
+const panel = (options: { run: Run; step: string; variant: string; screen: ScreenFiguresView }) => {
   const { run, step, variant } = options;
   const { areas } = attentionAreas(run, variant, step);
-  return render(
-    <ThisStepPanel step={stepOf(run, step)} screen={options.screen} areas={areas} />,
-  );
+  return render(<ThisStepPanel step={stepOf(run, step)} screen={options.screen} areas={areas} />);
 };
 
 describe('the five readings of one screen', () => {
@@ -75,13 +67,13 @@ describe('the five readings of one screen', () => {
     // Each of these is one stored field, printed. The redesign's review screen: nine of the
     // test's twenty-two scored people got there, seven of those nine left on it.
     expect(reading('Reached it')).toBe('9 of 22');
-    expect(reading('Left here')).toBe('7 of the 9 who reached it');
+    expect(reading('Left here')).toBe('7 of 9');
     expect(reading('Median time on it')).toBe('10.8 s');
     expect(reading('Scrolled past the fold')).toBe('9 of 9');
     expect(reading(clicksTerm())).toBe('2 of 22 people');
   });
 
-  it('names the control the clicks row is about, from the step’s primary action', () => {
+  it('names the clicks row for what is stored, not for a repeat press', () => {
     const run = seedRun();
     panel({
       run,
@@ -90,9 +82,10 @@ describe('the five readings of one screen', () => {
       screen: figuresFor(seedAggregate(), 'B', 'review'),
     });
 
-    // Not "second click on …": what is stored is clicks on the area, and whether one is a
-    // repeat depends on the screen (decision 137).
-    expect(clicksTerm()).toBe('Clicks on Completing action — A: "Place order", B: "Confirm purchase"');
+    // Not "second click on …": what is stored is clicks on an area, and whether one is a
+    // repeat depends on the screen (decision 137). The term is fixed words rather than the
+    // area's own label, which a run may make as long as it likes.
+    expect(clicksTerm()).toBe('Clicks on the primary action');
   });
 
   it('follows the stored figure rather than its own arithmetic', () => {
@@ -115,7 +108,7 @@ describe('the five readings of one screen', () => {
     };
 
     panel({ run, variant: 'B', step: 'review', screen: figuresFor(changed, 'B', 'review') });
-    expect(reading('Left here')).toBe('3 of the 9 who reached it');
+    expect(reading('Left here')).toBe('3 of 9');
   });
 
   it('reads the slice the filters compose to, not the whole run’s', () => {
@@ -156,12 +149,12 @@ describe('the five readings that are not a figure', () => {
     [
       'still reading',
       screenFiguresFrom({ status: 'loading' }, 'B', 'review', null, null),
-      'reading this test’s figures…',
+      'reading…',
     ],
     [
       'a run that computed no aggregate',
       screenFiguresFrom({ status: 'none' }, 'B', 'review', null, null),
-      'this test computed none',
+      'not computed',
     ],
     [
       'an aggregate that will not parse',
@@ -172,7 +165,7 @@ describe('the five readings that are not a figure', () => {
         null,
         null,
       ),
-      'could not be read',
+      'unreadable',
     ],
   ];
 
@@ -195,7 +188,7 @@ describe('the five readings that are not a figure', () => {
       step: 'review',
       screen: figuresFor(aggregate, 'B', 'review', 'mobile · price-sensitive', 'failed'),
     });
-    expect(reading('Reached it')).toBe('nobody matches both filters');
+    expect(reading('Reached it')).toBe('nobody matches');
   });
 
   it('prints no figure for a screen none of these people reached', () => {
@@ -211,15 +204,18 @@ describe('the five readings that are not a figure', () => {
         one === slice
           ? ({
               ...one,
-              screens: one.screens.filter(
-                (row) => !(row.variant === 'B' && row.step === 'review'),
-              ),
+              screens: one.screens.filter((row) => !(row.variant === 'B' && row.step === 'review')),
             } as ScreenSlice)
           : one,
       ),
     };
 
-    panel({ run: seedRun(), variant: 'B', step: 'review', screen: figuresFor(thinned, 'B', 'review') });
-    expect(reading('Reached it')).toBe('none of them reached it');
+    panel({
+      run: seedRun(),
+      variant: 'B',
+      step: 'review',
+      screen: figuresFor(thinned, 'B', 'review'),
+    });
+    expect(reading('Reached it')).toBe('none reached it');
   });
 });

@@ -32,8 +32,7 @@ const LEDE =
   'One screen at a time, three overlays, and the filter that answers the question worth asking: where did the people who failed click?';
 
 const ledeText = (container: HTMLElement): string =>
-  (container.querySelector('.lede') as HTMLElement | null)?.textContent?.replace(/\s+/g, ' ') ??
-  '';
+  (container.querySelector('.lede') as HTMLElement | null)?.textContent?.replace(/\s+/g, ' ') ?? '';
 
 const seedRun = (): Run => runSchema.parse(readRunFile(RUN_ID));
 
@@ -53,9 +52,7 @@ const settled = async () => {
   await waitFor(() => {
     // The `This screen` panel's first reading, settled: every figure on this screen comes
     // from the aggregate, so "settled" is that file having arrived.
-    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
   });
   // And the areas, which the screen reads separately from the aggregate: the table's rows,
   // the outlines and the isolate caption all come from that read.
@@ -117,10 +114,13 @@ describe('the screen the evidence is on', () => {
     attention('B', 'review', '?outcome=abandoned&segment=mobile%20%C2%B7%20in%20a%20hurry');
 
     await settled();
-    // The composed slice's own count, and the two filters' own stored words.
+    // The composed slice's own count, stated once, and the two filters in the product's own
+    // words: the strips' buttons carry counts because a reader choosing between them wants
+    // one, and repeating those here would say three different numbers about three different
+    // populations in one sentence.
     expect(
       screen.getByText(
-        'Clicks of 1 people · Gave up 8 · Mobile · in a hurry 6 · the 2 our automation broke are excluded',
+        'Clicks of 1 person · Abandoned · mobile · in a hurry · the 2 our automation broke are excluded',
       ),
     ).toBeDefined();
   });
@@ -246,7 +246,7 @@ describe('the URL is the whole of what is on screen', () => {
     await settled();
 
     expect([...READINGS.map(reading), isolatedSaid()]).toEqual(first);
-    expect(first.slice(0, 4)).toEqual(['9 of 22', '7 of the 9 who reached it', '10.8 s', '9 of 9']);
+    expect(first.slice(0, 4)).toEqual(['9 of 22', '7 of 9', '10.8 s', '9 of 9']);
     expect(first[4]).toContain('Service fee row — planted defect');
   });
 });

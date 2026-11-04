@@ -101,7 +101,9 @@ const FULL = aggregate([
     outcome: 'abandoned',
     label: 'Gave up 4',
     sessionCount: 4,
-    screens: [screen({ reached: 4, leftHere: 4, clicksByAoi: [{ aoiId: 'A-cart-checkout', clicks: 7 }] })],
+    screens: [
+      screen({ reached: 4, leftHere: 4, clicksByAoi: [{ aoiId: 'A-cart-checkout', clicks: 7 }] }),
+    ],
   }),
   slice({
     key: 'outcome:success',

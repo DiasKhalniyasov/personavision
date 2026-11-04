@@ -1,4 +1,5 @@
 import { Toggle } from '@/components/ui/toggle';
+import { isOutcomeStatus, outcomeWords } from '@/session';
 import { peopleShown } from './attentionWording';
 import { ALL_OPTION, outcomeOptions, segmentOptions } from './screenSlices';
 import type { FilterOption } from './screenSlices';
@@ -70,14 +71,8 @@ export function HeatmapFilters({ selection, screen }: HeatmapFiltersProps) {
       <span className="microlabel" data-section="people-shown">
         {peopleShown({
           overlays: selection.overlays.map(overlayLabel),
-          outcome: chosenLabel(
-            aggregate === null ? [] : outcomeOptions(aggregate),
-            selection.outcome,
-          ),
-          segment: chosenLabel(
-            aggregate === null ? [] : segmentOptions(aggregate),
-            selection.segment,
-          ),
+          outcome: outcomeSaid(selection.outcome),
+          segment: selection.segment,
           sessionCount: screen.sessionCount,
           scoredSessionCount: screen.scoredSessionCount,
           excludedAutomationFailures: screen.excludedAutomationFailures,
@@ -92,16 +87,15 @@ const overlayLabel = (overlay: HeatmapOverlay): string =>
   OVERLAY_LAYERS.find((layer) => layer.overlay === overlay)?.label ?? overlay;
 
 /**
- * The words of the option a filter is set to, or `null` for a filter that is set to every.
+ * How the outcome reads in the line above the stage: the product's own word for the status.
  *
- * An asked-for value the aggregate has no option for answers with the value itself, so the
- * sentence names what the URL asked for rather than quietly reading as unfiltered — the
- * screen states the rest of that story where the figures would have been.
+ * Not the strip button's label, which carries a count: the line states the count once, of
+ * the composition, and `Clicks of 8 people · Gave up 8` would say eight twice about two
+ * different populations. A value that is not one of the four statuses is passed through, so
+ * a link asking for something this product has no word for says what it asked for.
  */
-const chosenLabel = (options: readonly FilterOption[], chosen: string | null): string | null => {
-  if (chosen === null) return null;
-  return options.find((option) => option.value === chosen)?.label ?? chosen;
-};
+const outcomeSaid = (outcome: string | null): string | null =>
+  outcome === null ? null : isOutcomeStatus(outcome) ? outcomeWords(outcome).label : outcome;
 
 /**
  * The overlay strip: three states of one view, so three `aria-pressed` buttons.

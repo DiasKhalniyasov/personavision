@@ -32,8 +32,7 @@ const RUN_ID = '2026-10-24-1402-northwind-demo';
 const layout = runPaths('');
 const HEADING = 'Where they looked, clicked and stopped scrolling';
 
-const seedAggregate = (): Aggregate =>
-  aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
+const seedAggregate = (): Aggregate => aggregateSchema.parse(readRunFile(RUN_ID, layout.aggregate));
 
 const aggregateFile = `/runs/${RUN_ID}/${layout.aggregate}`;
 
@@ -73,9 +72,7 @@ const heatmaps = (variant: string, step: string, query = '') =>
 const settled = async () => {
   await screen.findByRole('heading', { level: 1, name: HEADING });
   await waitFor(() => {
-    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain(
-      'reading',
-    );
+    expect(screen.getByText('Reached it').nextElementSibling?.textContent).not.toContain('reading');
   });
   await waitFor(() => {
     expect(document.querySelector('[data-aoi-row]')).not.toBeNull();
@@ -125,7 +122,11 @@ describe('the three overlays', () => {
   it('each draw over the page, with the fold on it, and toggle independently', async () => {
     await serveRunData();
     // All three at once, which is what "independently" has to be asserted against.
-    const { container } = heatmaps('B', 'payment', '?overlay=clicks&overlay=attention&overlay=scroll');
+    const { container } = heatmaps(
+      'B',
+      'payment',
+      '?overlay=clicks&overlay=attention&overlay=scroll',
+    );
     await settled();
     decoded(container);
 
@@ -156,7 +157,9 @@ describe('the three overlays', () => {
     const files = [
       ...readdirSync(here).map((name) => join(here, name)),
       ...readdirSync(join(here, 'stage')).map((name) => join(here, 'stage', name)),
-    ].filter((path) => /\.tsx?$/.test(path) && !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'));
+    ].filter(
+      (path) => /\.tsx?$/.test(path) && !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
+    );
 
     const accumulators = files.filter((path) =>
       /export (const|function) accumulate/.test(readFileSync(path, 'utf8')),
@@ -168,7 +171,11 @@ describe('the three overlays', () => {
 
   it('each name what they show, in words, beside the switch', async () => {
     await serveRunData();
-    const { container } = heatmaps('B', 'payment', '?overlay=clicks&overlay=attention&overlay=scroll');
+    const { container } = heatmaps(
+      'B',
+      'payment',
+      '?overlay=clicks&overlay=attention&overlay=scroll',
+    );
     await settled();
     decoded(container);
 
@@ -358,7 +365,9 @@ describe('marks stay registered to the screenshot', () => {
         mark.getAttribute('width'),
         mark.getAttribute('height'),
       ]),
-      viewBox: container.querySelector('[data-overlay-layer="clicks"] svg')?.getAttribute('viewBox'),
+      viewBox: container
+        .querySelector('[data-overlay-layer="clicks"] svg')
+        ?.getAttribute('viewBox'),
       bands: [...container.querySelectorAll('[data-scroll-band]')].map(
         (band) => (band as HTMLElement).style.cssText,
       ),
@@ -387,9 +396,11 @@ describe('the two filters', () => {
     await settled();
 
     const words = (section: string) =>
-      [...within(document.querySelector(`[data-section="${section}"]`) as HTMLElement)
-        .getAllByRole('button')
-        .values()].map((button) => button.textContent);
+      [
+        ...within(document.querySelector(`[data-section="${section}"]`) as HTMLElement)
+          .getAllByRole('button')
+          .values(),
+      ].map((button) => button.textContent);
 
     expect(words('outcome-strip')).toEqual(['All 22', 'Completed 11', 'Gave up 8', 'Failed 3']);
     expect(words('segment-strip')).toEqual([
@@ -519,9 +530,9 @@ describe('the URL carries the overlay, the segment and the outcome', () => {
       ),
     ).toBe('true');
     expect(
-      (
-        document.querySelector('[data-filter="mobile · in a hurry"]') as HTMLElement
-      ).getAttribute('aria-pressed'),
+      (document.querySelector('[data-filter="mobile · in a hurry"]') as HTMLElement).getAttribute(
+        'aria-pressed',
+      ),
     ).toBe('true');
     // And the area it named.
     expect(document.querySelector('#att-caption')?.textContent).toContain(

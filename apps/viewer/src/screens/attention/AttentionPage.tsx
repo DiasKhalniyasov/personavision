@@ -164,8 +164,8 @@ export function AttentionScreen({ run }: { run: Run }) {
             )}
             <SidePanel title="Reading this">
               <p className="lede">
-                Filters compose: an overlay, an outcome and a segment. Every count is the
-                people left after the filters, and automation failures are never among them.
+                Filters compose: an overlay, an outcome and a segment. Every count is the people
+                left after the filters, and automation failures are never among them.
               </p>
             </SidePanel>
           </SideColumn>
@@ -357,9 +357,7 @@ function StagePlace({
         <h2>None of these people reached this screen</h2>
         <p>{noneOfThemReached(stage.stepLabel)}</p>
         <div className="actions">
-          <Link to={sessionsWithVariant(run.runId, selection.variant)}>
-            See where they ended
-          </Link>
+          <Link to={sessionsWithVariant(run.runId, selection.variant)}>See where they ended</Link>
         </div>
       </div>
     );

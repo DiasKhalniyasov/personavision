@@ -75,7 +75,8 @@ export function resolveOverlays(asked: readonly string[]): {
 } {
   const wanted = new Set(asked.filter(isOverlay));
   return {
-    overlays: wanted.size === 0 ? DEFAULT_OVERLAYS : HEATMAP_OVERLAYS.filter((one) => wanted.has(one)),
+    overlays:
+      wanted.size === 0 ? DEFAULT_OVERLAYS : HEATMAP_OVERLAYS.filter((one) => wanted.has(one)),
     unknown: asked.filter((value) => !isOverlay(value)),
   };
 }

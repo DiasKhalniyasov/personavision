@@ -24,20 +24,27 @@
   left: 0;
 }
 
+/* The ramp's **cooler** stops, and that is this layer's one departure from the two beside
+   it. A click is a patch the size of a control and a fixation is a blob; a band is the whole
+   width of the page, ten of them end to end, so the same stops that read as marks over a
+   screenshot read as a blanket over it — and a page nobody can see under is a stage with no
+   page on it. Starting at `--heat-1`, which is the ramp's own fully transparent stop, keeps
+   a band a wash rather than a fill, and the key beside the switch is drawn from these same
+   four so the legend is still the legend for what is on the page. */
 .step1 {
-  background: var(--heat-2);
+  background: var(--heat-1);
 }
 
 .step2 {
-  background: var(--heat-3);
+  background: var(--heat-2);
 }
 
 .step3 {
-  background: var(--heat-4);
+  background: var(--heat-3);
 }
 
 .step4 {
-  background: var(--heat-5);
+  background: var(--heat-4);
 }
 
 /* ---- The key ------------------------------------------------------------ */
@@ -46,7 +53,7 @@
   height: var(--space-2);
   margin-block: var(--space-2) var(--space-1);
   border-radius: var(--radius-full);
-  background: linear-gradient(to right, var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5));
+  background: linear-gradient(to right, var(--heat-1), var(--heat-2), var(--heat-3), var(--heat-4));
 }
 
 .scale {
