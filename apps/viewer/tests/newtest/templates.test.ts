@@ -48,6 +48,11 @@ const THE_OWNERS_FIVE: readonly { readonly siteUrl: string; readonly feature: st
   { siteUrl: 'https://www.ikea.com', feature: 'furniture take-back' },
   { siteUrl: 'https://www.canva.com', feature: 'making short social videos' },
   { siteUrl: 'https://www.apple.com', feature: 'trading in an old phone' },
+  // The sixth, added by the owner on 2026-11-05.
+  {
+    siteUrl: 'https://dev.meta.ai',
+    feature: 'choosing an affordable vision model for browsing agents',
+  },
 ];
 
 /**

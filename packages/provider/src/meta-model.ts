@@ -562,34 +562,64 @@ export const createMetaModelApiProvider = (
     if (!got.ok) {
       return fail('unparseable', `the reply could not be read as a decision: ${got.detail}`);
     }
-    const { reply, replyText } = got;
+    let { reply, replyText } = got;
 
-    const tokens = sumTokens(spent);
-    const usage: DecisionUsage = {
-      inputTokens: tokens.inputTokens,
-      cachedInputTokens: tokens.cachedInputTokens,
-      outputTokens: tokens.outputTokens,
-      reasoningTokens: tokens.reasoningTokens,
-      estimatedCostUsd: estimateCostUsd(modelId, tokens),
-    };
-    // A hint is advisory metadata, so one the interface would reject — an element from the
-    // screen before, a score on a 0-to-100 scale — is dropped rather than allowed to throw
-    // away a decision that has already been paid for.
-    const fixated = new Set(context.fixatedElements.map((element) => element.id));
-    const hints = Object.entries(reply.relevanceHints ?? {}).filter(
-      ([elementId, hint]) => fixated.has(elementId) && hint >= 0 && hint <= 1,
+    // An element id ends in its box (`…-144-684-125x29`), so the same link at another position
+    // has another id, and the model sometimes names it by the id it had on the screen before.
+    // The one element on this screen with the same role and name is that element.
+    const onScreen = [...context.fixatedElements, ...(context.screenElements ?? [])].map(
+      (element) => element.id,
     );
-
-    const decision: Decision = {
-      intent: reply.intent,
-      ...(reply.looks === undefined ? {} : { looks: reply.looks }),
-      action: reply.action,
-      ...(hints.length === 0 ? {} : { relevanceHints: Object.fromEntries(hints) }),
-      usage,
-      model: { mode, modelId },
+    const stem = (id: string): string => id.replace(/-\d+-\d+-\d+x\d+$/, '');
+    const relocated = (read: ReadReply): ReadReply['action'] => {
+      const target = read.action.targetElementId;
+      if (typeof target !== 'string' || onScreen.includes(target)) return read.action;
+      const same = onScreen.filter((id) => stem(id) === stem(target));
+      return same.length === 1 ? { ...read.action, targetElementId: same[0] } : read.action;
     };
 
-    const violations = validateDecision(context, decision);
+    const toDecision = (read: ReadReply): Decision => {
+      const tokens = sumTokens(spent);
+      const usage: DecisionUsage = {
+        inputTokens: tokens.inputTokens,
+        cachedInputTokens: tokens.cachedInputTokens,
+        outputTokens: tokens.outputTokens,
+        reasoningTokens: tokens.reasoningTokens,
+        estimatedCostUsd: estimateCostUsd(modelId, tokens),
+      };
+      // A hint is advisory metadata, so one the interface would reject — an element from the
+      // screen before, a score on a 0-to-100 scale — is dropped rather than allowed to throw
+      // away a decision that has already been paid for.
+      const fixated = new Set(context.fixatedElements.map((element) => element.id));
+      const hints = Object.entries(read.relevanceHints ?? {}).filter(
+        ([elementId, hint]) => fixated.has(elementId) && hint >= 0 && hint <= 1,
+      );
+      return {
+        intent: read.intent,
+        ...(read.looks === undefined ? {} : { looks: read.looks }),
+        action: relocated(read),
+        ...(hints.length === 0 ? {} : { relevanceHints: Object.fromEntries(hints) }),
+        usage,
+        model: { mode, modelId },
+      };
+    };
+
+    let decision = toDecision(reply);
+    let violations = validateDecision(context, decision);
+    if (violations.length > 0) {
+      // An element that is not on this screen at all is a decision worth one more ask: the
+      // model is shown what was wrong and picks again from this screen's own elements.
+      call = { ...call, turn: (conversation.calls += 1) };
+      const again = await attempt([
+        assistantMessage(replyText),
+        correctionMessage(`${violations.join('; ')}. Choose again, from this screen.`),
+      ]);
+      if (again.ok) {
+        ({ reply, replyText } = again);
+        decision = toDecision(reply);
+        violations = validateDecision(context, decision);
+      }
+    }
     if (violations.length > 0) {
       return fail(
         'unparseable',
