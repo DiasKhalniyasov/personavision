@@ -23,6 +23,11 @@ packages/browser/test/fixtures/captures/captures
 packages/swarm/fixtures/captures/capture-set.json
 packages/swarm/fixtures/captures/captures
 
+# The eye tracker's vendored library is a third-party build, kept byte for byte as it was
+# published: `packages/calibration/test/eyetrack-sample.test.ts` pins its digest, because
+# "needs no network at run time" is a property of that particular file and of no other.
+tools/eyetrack/calibrate/vendor/webgazer.js
+
 # The calibration corpus is generated data: `pnpm -F @personavision/calibration corpus` writes
 # it and `packages/calibration/test/corpus.test.ts` asserts the committed bytes are that
 # generator's output, so formatting it here would make the two disagree.

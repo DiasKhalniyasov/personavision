@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Eye tracker — record gaze over screenshots</title>
+    <!--
+      Everything this page needs is in this directory. There is no build step, no bundler and
+      no third-party host: it opens from a `file://` URL as readily as from a static server,
+      because a tool for recording somebody's gaze should not need a network to be trusted.
+
+      The colours below mirror `docs/design/tokens.css` — the token each one stands for is
+      named in a comment. They are copied rather than imported on purpose: the page must be
+      one self-contained directory, and a stylesheet reached three levels up the repository
+      would break the moment this folder is opened on its own. Nothing else of the product's
+      visual direction is borrowed, because this is an instrument and not a screen: during a
+      recording, anything on the display that is not the screenshot competes for the gaze
+      being measured, which is the one thing it must not do.
+    -->
+    <style>
+      :root {
+        --fir: #08251a; /* --color-heading */
+        --fir-mid: #0d3a29; /* --color-canvas-dark-mid */
+        --canvas: #ffffff; /* --color-canvas */
+        --sunken: #eff6e9; /* --color-surface-sunken */
+        --border: #d8e4cb; /* --color-border */
+        --border-strong: #c3ceaf; /* --color-border-strong */
+        --text: #101828; /* --color-text */
+        --muted: #4a5c53; /* --color-text-muted */
+        --accent: #abff44; /* --color-accent */
+        --accent-strong: #92ec41; /* --color-accent-strong */
+        --link: #007b79; /* --color-link */
+        --ok: #227d47; /* --outcome-success */
+        --warn: #8f4764; /* --sev-medium */
+        --bad: #c80808; /* --sev-critical */
+        --radius: 12px; /* --radius-md */
+        --radius-pill: 999px; /* --radius-full */
+        --mono: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace; /* --font-mono */
+        --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.55;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+      }
+
+      h1 {
+        font-size: 2rem;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--fir);
+        margin: 0 0 8px;
+      }
+
+      h2 {
+        font-size: 1.125rem;
+        color: var(--fir);
+        margin: 0 0 4px;
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      .lede {
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+
+      .microlabel {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 8px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin: 0 0 20px;
+        background: var(--canvas);
+      }
+
+      .card.sunken {
+        background: var(--sunken);
+        border-color: var(--border-strong);
+      }
+
+      .privacy {
+        font-size: 0.875rem;
+        color: var(--fir);
+        background: var(--sunken);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        margin: 0 0 24px;
+      }
+
+      .field {
+        display: block;
+        margin: 0 0 16px;
+      }
+
+      .field > span {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--fir);
+        margin-bottom: 4px;
+      }
+
+      .field .hint {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      input[type='text'],
+      input[type='file'],
+      select {
+        font: inherit;
+        font-size: 1rem;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--canvas);
+        color: var(--text);
+      }
+
+      button {
+        font: inherit;
+        font-weight: 500;
+        padding: 10px 20px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--fir);
+        background: var(--accent);
+        color: var(--fir);
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled) {
+        background: var(--accent-strong);
+      }
+
+      button.quiet {
+        background: transparent;
+        border-color: var(--border-strong);
+        color: var(--fir);
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--fir);
+        outline-offset: 2px;
+      }
+
+      .status {
+        font-size: 0.875rem;
+        color: var(--muted);
+        margin: 12px 0 0;
+      }
+
+      .status.bad {
+        color: var(--bad);
+      }
+
+      .status.ok {
+        color: var(--ok);
+      }
+
+      .figures {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        margin: 12px 0;
+      }
+
+      .figure .value {
+        font-family: var(--mono);
+        font-size: 1.5rem;
+        color: var(--fir);
+        letter-spacing: -0.015em;
+      }
+
+      .figure .label {
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 400;
+      }
+
+      td.num {
+        font-family: var(--mono);
+        text-align: right;
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 0.875em;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      pre {
+        font-family: var(--mono);
+        font-size: 0.8125rem;
+        background: var(--fir);
+        color: #ffffff;
+        padding: 12px 14px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 8px 0 0;
+      }
+
+      a {
+        color: var(--link);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---- The overlays. Full-viewport, above WebGazer's own video and dot. ---- */
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: var(--canvas);
+      }
+
+      .overlay .instruction {
+        position: absolute;
+        left: 50%;
+        top: 16px;
+        transform: translateX(-50%);
+        max-width: 90vw;
+        text-align: center;
+        font-size: 0.875rem;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .overlay .instruction strong {
+        color: var(--fir);
+      }
+
+      /*
+        A calibration target. The participant looks at it and clicks it, so it has to be
+        small enough to fixate precisely and large enough to hit: 22px is both.
+      */
+      .target {
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border-radius: var(--radius-pill);
+        border: 2px solid var(--fir);
+        background: var(--accent);
+        transform: translate(-50%, -50%);
+      }
+
+      .target .count {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        color: var(--fir);
+      }
+
+      .target[data-done='true'] {
+        background: var(--fir);
+        border-color: var(--fir);
+      }
+
+      .target[data-done='true'] .count {
+        color: var(--accent);
+      }
+
+      /*
+        The stage a screenshot is shown on. Deliberately plain: a mid-fir mat with nothing on
+        it but the image, because every other mark on the display would pull the gaze being
+        recorded.
+      */
+      .stage {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: var(--fir-mid);
+        display: grid;
+        place-items: center;
+      }
+
+      .stage img {
+        display: block;
+        box-shadow: 0 18px 48px rgb(8 37 26 / 0.4);
+      }
+
+      /* The fixation cross shown between screenshots, so every recording starts from the
+         same place on the display rather than wherever the last one ended. */
+      .cross {
+        width: 28px;
+        height: 28px;
+        position: relative;
+      }
+
+      .cross::before,
+      .cross::after {
+        content: '';
+        position: absolute;
+        background: #ffffff;
+      }
+
+      .cross::before {
+        left: 50%;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        transform: translateX(-50%);
+      }
+
+      .cross::after {
+        top: 50%;
+        left: 0;
+        height: 2px;
+        width: 100%;
+        transform: translateY(-50%);
+      }
+
+      /* WebGazer injects its own video, overlays and gaze dot into the body at z-index
+         values of its own. Keep them under the overlays so a target is never hidden. */
+      #webgazerVideoContainer,
+      #webgazerVideoFeed,
+      #webgazerVideoCanvas,
+      #webgazerFaceOverlay,
+      #webgazerFaceFeedbackBox {
+        z-index: 10 !important;
+      }
+
+      #webgazerGazeDot {
+        z-index: 30 !important;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --canvas: #08251a;
+          --sunken: #0d3a29;
+          --border: #0d3a29;
+          --border-strong: #1b4b37;
+          --text: #ffffff;
+          --muted: #b9cfc4;
+          --fir: #ffffff;
+          --fir-mid: #061c14;
+          --link: #91dbda;
+          --ok: #abff44;
+          --warn: #ff99b6;
+          --bad: #f8c4c4;
+        }
+
+        :root:not([data-theme='light']) pre {
+          background: #061c14;
+          border: 1px solid #1b4b37;
+        }
+
+        :root:not([data-theme='light']) .target {
+          border-color: #ffffff;
+        }
+
+        :root:not([data-theme='light']) .target[data-done='true'] {
+          background: #ffffff;
+          border-color: #ffffff;
+        }
+
+        :root:not([data-theme='light']) .target[data-done='true'] .count {
+          color: #08251a;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="wrap" id="page">
+      <h1>Eye tracker</h1>
+      <p class="lede">
+        Records where you look on screenshots of a site, using your own webcam, on your own machine.
+      </p>
+
+      <p class="privacy">
+        <strong>Nothing is uploaded.</strong> The camera image, the gaze estimate and the
+        screenshots you choose stay in this browser tab. This page makes no network request to any
+        host — it has no code that could — and the recording only leaves the tab when you press
+        <em>Save the file</em> at the end and choose where to put it.
+      </p>
+
+      <!-- ------------------------------------------------------------------ Setup -->
+      <section class="card" id="step-setup">
+        <p class="microlabel">Step 1 of 4</p>
+        <h2>What is being recorded</h2>
+        <p>
+          Gaze is recorded over <strong>screenshots</strong>, shown one at a time at a fixed size —
+          not over a live site. A page belonging to somebody else cannot be instrumented from a tool
+          like this, and a tool that said it could would be lying about what it measured.
+        </p>
+
+        <label class="field">
+          <span>Participant id</span>
+          <input
+            type="text"
+            id="participant"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="p01"
+          />
+          <span class="hint">
+            Type anything that is not a name — <code>p01</code>, <code>blue-heron</code>. It goes in
+            the file, so keep it free of anything about the person.
+          </span>
+        </label>
+
+        <label class="field">
+          <span>Screenshots</span>
+          <input type="file" id="shots" accept="image/*" multiple />
+          <span class="hint">
+            PNG or JPEG, from your own disk. They are read in the tab and never sent anywhere.
+          </span>
+        </label>
+
+        <label class="field">
+          <span>What kind of interface they show</span>
+          <select id="category"></select>
+          <span class="hint">
+            <code>packages/calibration</code> reports a score per category, so a wrong one lands
+            under a heading nobody chose.
+          </span>
+        </label>
+
+        <label class="field">
+          <span>How long each screenshot is shown</span>
+          <select id="exposure"></select>
+          <span class="hint">
+            One, three or seven seconds of free viewing: the three conditions UEyes publishes, and
+            the only exposures the project's converter accepts.
+          </span>
+        </label>
+
+        <button type="button" id="to-camera">Turn the camera on</button>
+        <p class="status" id="setup-status"></p>
+      </section>
+
+      <!-- ----------------------------------------------------------------- Camera -->
+      <section class="card" id="step-camera" hidden>
+        <p class="microlabel">Step 2 of 4</p>
+        <h2>Sit square to the camera</h2>
+        <p>
+          Put your face inside the box, with the room lit from in front rather than behind you. Then
+          keep your head still: this estimates gaze from the image of your eyes, so moving your head
+          undoes the calibration.
+        </p>
+        <button type="button" id="to-calibration" disabled>Calibrate</button>
+        <p class="status" id="camera-status">Waiting for the camera…</p>
+      </section>
+
+      <!-- ------------------------------------------------------------ Calibration -->
+      <section class="card" id="step-calibrate" hidden>
+        <p class="microlabel">Step 3 of 4</p>
+        <h2>Calibration</h2>
+        <p id="calibrate-summary">Nine points, five clicks each.</p>
+        <button type="button" id="start-calibration">Start calibration</button>
+        <p class="status" id="calibrate-status"></p>
+      </section>
+
+      <!-- --------------------------------------------------------------- Accuracy -->
+      <section class="card" id="step-accuracy" hidden>
+        <p class="microlabel">Accuracy</p>
+        <h2 id="accuracy-heading">How far off the estimate is</h2>
+        <div class="figures" id="accuracy-figures"></div>
+        <p class="status" id="accuracy-note"></p>
+        <p>
+          A webcam eye tracker is accurate to <strong>around 100 px</strong> at best. This figure is
+          recorded in the file, so nobody reading the data later has to guess how good the
+          calibration was.
+        </p>
+        <button type="button" id="to-record" disabled>Start recording</button>
+        <button type="button" class="quiet" id="recalibrate">Calibrate again</button>
+      </section>
+
+      <!-- ----------------------------------------------------------------- Record -->
+      <section class="card" id="step-record" hidden>
+        <p class="microlabel">Step 4 of 4</p>
+        <h2>Recording</h2>
+        <p class="status" id="record-status"></p>
+      </section>
+
+      <!-- ------------------------------------------------------------------- Save -->
+      <section class="card" id="step-save" hidden>
+        <p class="microlabel">Done</p>
+        <h2>One file, yours to keep</h2>
+        <table id="save-table">
+          <thead>
+            <tr>
+              <th scope="col">Screenshot</th>
+              <th scope="col">Size</th>
+              <th scope="col" class="num">Samples</th>
+              <th scope="col" class="num">Off-image</th>
+              <th scope="col" class="num">Fixations</th>
+            </tr>
+          </thead>
+          <tbody id="save-rows"></tbody>
+        </table>
+        <p class="status" id="save-status"></p>
+        <p>
+          <button type="button" id="save">Save the file</button>
+        </p>
+        <h2>What to do with it</h2>
+        <p>
+          It holds <code>packages/calibration</code>'s raw records under <code>.records</code>, so
+          the project reads it with one call:
+        </p>
+        <pre>
+import { convertRecords } from '@personavision/calibration';
+
+const file = JSON.parse(await readFile(path, 'utf8'));
+const { sessions, rejections } = convertRecords(file.records);</pre>
+        <p>
+          Each record also carries the raw gaze samples the fixations were read from, under
+          <code>gaze</code>, which the converter ignores. <code>README.md</code> beside this page
+          says what every field means.
+        </p>
+      </section>
+
+      <!-- ------------------------------------------------------------- No WebGazer -->
+      <section class="card" id="step-broken" hidden>
+        <h2>This page cannot run here</h2>
+        <p class="status bad" id="broken-reason"></p>
+      </section>
+    </main>
+
+    <!-- The calibration and accuracy overlays, and the recording stage. -->
+    <div class="overlay" id="overlay" hidden>
+      <p class="instruction" id="overlay-instruction"></p>
+      <div id="targets"></div>
+    </div>
+
+    <div class="stage" id="stage" hidden>
+      <div class="cross" id="cross" hidden></div>
+      <img id="shot" alt="" hidden />
+    </div>
+
+    <!--
+      Classic scripts, in order, and deliberately not ES modules: a browser refuses to load a
+      module from a `file://` URL, and this page has to open from one.
+
+      `vendor/webgazer.js` is WebGazer.js 1.0.1, vendored with its licence — see
+      `vendor/README.md` for the version, where it came from and why that version.
+    -->
+    <script src="vendor/webgazer.js"></script>
+    <script src="fixations.js"></script>
+    <script src="eyetrack.js"></script>
+  </body>
+</html>
