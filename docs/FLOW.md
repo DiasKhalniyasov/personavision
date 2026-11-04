@@ -163,6 +163,8 @@ tickets rather than in the prototype, which covers the signed-in product.
 
 Supporting states, all built in the prototype: **Signed out**, **No audience yet**, **No tests yet**, **New test with
 invalid input**, **Test failed to start**, **Sessions with no match**, and **an area of interest nobody looked at**.
+**No tests yet** keeps its two actions — the committed example run and a new test — and offers **the five example tests**
+of section 13 below them, from the same file the first New test screen reads them from.
 
 The "how human-like is this" figure is a **persistent badge in the header** (`Simulated audience · gaze similarity 0.68`),
 not a screen of its own, and it carries the UEyes saliency and scanpath metrics in its tooltip. The word *Simulated* is
@@ -576,6 +578,32 @@ see a **cost and time estimate** for N agents → launch → a live **Running** 
 The route family of section 3 is otherwise untouched: `/new` is the same screen with more steps, and `/runs/:runId` is
 still where a test lands. The steps of `/new` are **one screen with a step in the query**, not five routes: a user who
 reloads, or who is sent a link, lands where they were.
+
+### The five example tests
+
+A first visit has nothing to test yet, and inventing a site, a feature, a task and a success criterion before seeing a
+single result is four decisions in a row. So the product ships **five example tests** on real public sites, none of them
+behind a login — the owner's own five (the input of **2026-11-04**): Stripe's docs (testing payments), Vercel (starting
+from a template), IKEA (furniture take-back), Canva (short social videos) and Apple (trading in an old phone).
+
+**Two surfaces show them**, from one file and with no screen spelling a template: the first New test screen
+(`/new?step=path`, under the two path cards) and the **No tests** state of section 3. A card states the site's host, the
+feature, the task, the audience it suggests, and has **one control** — *Try this test*.
+
+**The rule they exist to demonstrate.** Each task names a need **in everyday words and never the site's own label for
+the feature** — *"a way to get rid of your old furniture"*, not *"the take-back service"* — because the product's claim
+is that people with different personalities look for the same thing differently. A task in the site's own vocabulary
+would be testing whether somebody can read a menu we already read for them. The **success criterion** is held to the
+same rule every criterion is: it names something observable on the page, so a template's run is decided by what a
+session saw rather than being a failure by construction.
+
+**Choosing one fills four fields and launches nothing.** A workspace site whose URL matches is reused, otherwise the
+template is added through `POST /sites` with the refusals the Add-a-site form already has; then the site, the feature and
+the goal are written into the New test draft, the audience **sentence** is carried into the audience step's box, and the
+user lands on `?step=audience` with every one of them editable. The goal is recorded as **the user's** — they chose it
+and can edit it, and no model wrote it — so there are still two goal authorships and not three. The audience is still
+read by that step's own control, the estimate and the caps are whatever they are for a typed test, and nothing starts
+until the user presses Launch.
 
 ### Ownership verification
 

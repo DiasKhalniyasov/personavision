@@ -123,6 +123,9 @@ importers:
       '@personavision/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@personavision/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2

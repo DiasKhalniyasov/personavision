@@ -1,0 +1,92 @@
+/* =============================================================================
+   The five example tests, as cards: offered on `/new?step=path` under the two
+   path cards, and on the **No tests** state (#417).
+
+   The prototype draws no templates section — they are the owner's input of
+   2026-11-04 — so the layout is the one the prototype already uses for a row of
+   cards: `#screen-sites`' three-to-two-to-one grid, at the same gaps, with the
+   shared `.card` primitive underneath. Every value below is a custom property
+   from `docs/design/tokens.css`; the only numbers here are the prototype's own
+   two breakpoints, which a media query cannot read from a token.
+
+   Nothing animates and nothing hovers: a card is a group with one real control,
+   so a pointer that changed over dead space would promise a press that does not
+   happen — the same reason `wizard/path/path.module.css` drops them.
+   ========================================================================== */
+
+.examples {
+  margin-top: var(--space-10);
+}
+
+.heading {
+  font-size: var(--text-md);
+}
+
+/* The tokens name no card width, so the count is stated and the two breakpoints
+   below take it down rather than a length being restated here. */
+.cards {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-5);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+/* The host, which to a line-breaker is one unbroken word: it wraps rather than
+   pushing the card wider than its column at 390px. */
+.host {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* What the test is about, in the register a user writes it in. */
+.feature {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The task: the line this section exists for, so it is the body size and the
+   body colour while the two facts around it are muted. */
+.task {
+  font-size: var(--text-sm);
+}
+
+.audience {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* `.notice` is written for the top of a form, where it carries the width of the
+   page and a margin under it; inside a card it is the last thing before the
+   control. */
+.refusal {
+  margin-top: var(--space-1);
+  margin-bottom: 0;
+}
+
+.control {
+  margin-top: var(--space-2);
+}
+
+/* ---- Narrow windows -----------------------------------------------------
+   The prototype's own two breakpoints: three cards to two, and two to one. */
+
+@media (max-width: 1000px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
