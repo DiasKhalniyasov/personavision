@@ -371,6 +371,28 @@ export const personaSchema = z.strictObject({
     .string()
     .min(1, 'a persona drawn in no particular language leaves the field out rather than empty')
     .optional(),
+  /**
+   * The one region this person browses from, drawn from the audience's `regions`, in the
+   * audience's own words — "United Kingdom", "Almaty". One and not a list, for the same
+   * reason `language` is one: a region is what a single session is opened in, and that is
+   * what makes it groupable.
+   *
+   * It is a **region name, not a locale**: what the name becomes in a browser — a BCP-47
+   * region subtag, an IANA time zone, a coarse latitude and longitude — is
+   * `@personavision/personas`' table to say, and a session records what it was opened with
+   * under its own `browser` block. Keeping the audience's word here is what lets a reader
+   * see that the person came from the region the audience declared, including when the
+   * table does not know it.
+   *
+   * Optional with no default, for the same reason as `gender` and `language`: a persona
+   * generated before this revision was drawn from no particular region, and inventing a
+   * country on their behalf is how a UK shopper ends up tested against the Arabic store
+   * of a site that geolocates its visitors (#421).
+   */
+  region: z
+    .string()
+    .min(1, 'a persona drawn from no particular region leaves the field out rather than empty')
+    .optional(),
   /** Who the person is, in words: optional, because a generated persona has only its traits. */
   profile: z.strictObject({ age: z.int().min(0), about: name, habits: z.array(name) }).optional(),
 });
@@ -1526,6 +1548,52 @@ export const sessionVideoSchema = z.discriminatedUnion('state', [
   }),
 ]);
 
+/**
+ * What a session's browser was opened as: the three settings a persona's region becomes,
+ * each of them nullable (`docs/FLOW.md` section 12).
+ *
+ * A run on a site that geolocates its visitors is a run of whatever country the machine
+ * happens to sit in unless the browser is told otherwise — every session of the IKEA test
+ * was redirected to the Arabic store of the United Arab Emirates while the audience was UK
+ * and US shoppers (#421). The settings are therefore derived from the person and recorded
+ * here, so a reader of a finished run can say that these sessions ran as `en-GB` in
+ * `Europe/London` rather than having to infer it from the audience.
+ *
+ * **Each one is nullable rather than absent.** A session whose persona came from a region
+ * the mapping table does not know runs with no time zone and no location, and that is a
+ * statement worth reading: `null` says *this session was opened with none*, which is what
+ * makes an unrecognised region visible in the artifact instead of silently becoming
+ * somebody else's country. `locale` is `null` only where the person was drawn neither a
+ * region the table knows nor a language.
+ *
+ * **There is no `Accept-Language` field**, because there is no second fact. The locale is
+ * what sets both `navigator.language` and the `Accept-Language` request header, so a
+ * session that ran as `en-GB` sent `Accept-Language: en-GB`; writing the header down beside
+ * the locale would be two spellings of one fact, free to drift.
+ */
+export const sessionBrowserSchema = z.strictObject({
+  /** A BCP-47 locale — `en-GB` — or `null` where the session was opened with none. */
+  locale: z
+    .string()
+    .min(1, 'a session opened with no locale records null, not an empty string')
+    .nullable(),
+  /** An IANA time zone — `Europe/London` — or `null` where the session was opened with none. */
+  timezoneId: z
+    .string()
+    .min(1, 'a session opened with no time zone records null, not an empty string')
+    .nullable(),
+  /**
+   * Where the browser said it was, coarse — a region's largest city, never a person's own
+   * address — or `null` where the session was opened with no location at all.
+   */
+  geolocation: z
+    .strictObject({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+    })
+    .nullable(),
+});
+
 /** One shape for a simulated and a real session, told apart by `kind`. */
 export const sessionSchema = z
   .strictObject({
@@ -1593,6 +1661,18 @@ export const sessionSchema = z
      * than one that lost one or one somebody measured as zero.
      */
     video: sessionVideoSchema.optional(),
+    /**
+     * What the browser was opened as, where the person said anything about where or how
+     * they read (`sessionBrowserSchema`).
+     *
+     * **Optional with no default**, like `video` and a screen's `url`: a session written
+     * before this revision was opened with the host's own locale and knows nothing about
+     * it, and a block of three nulls would claim it had been asked and answered. A session
+     * whose persona carries neither a region nor a language has nothing to record either,
+     * so it carries no block; one that carries a region the table does not know carries the
+     * block with the nulls it ran under, which is the whole point of recording it.
+     */
+    browser: sessionBrowserSchema.optional(),
   })
   .superRefine((session, ctx) => {
     // `index` is the ordering key and runs continuously across the whole session, not
@@ -2841,6 +2921,7 @@ export const automationFailureNoticeIsDue = (progress: RunProgress | undefined):
 
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionVideo = z.infer<typeof sessionVideoSchema>;
+export type SessionBrowser = z.infer<typeof sessionBrowserSchema>;
 export type VideoCap = z.infer<typeof videoCapSchema>;
 export type Findings = z.infer<typeof findingsSchema>;
 export type Recommendations = z.infer<typeof recommendationsSchema>;

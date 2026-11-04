@@ -358,6 +358,9 @@ importers:
       '@personavision/engine':
         specifier: workspace:*
         version: link:../engine
+      '@personavision/personas':
+        specifier: workspace:*
+        version: link:../personas
       '@personavision/provider':
         specifier: workspace:*
         version: link:../provider

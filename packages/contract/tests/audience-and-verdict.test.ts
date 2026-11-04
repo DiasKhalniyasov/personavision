@@ -766,11 +766,49 @@ describe('what a persona was drawn as', () => {
     return offenders(await validate(runDir.dir()));
   };
 
-  it('parses a persona written before an audience had a split or a language', async () => {
+  it('parses a persona written before an audience had a split, a language or a region', async () => {
     const { run } = await readRun(runDir.dir());
 
     expect(run.personas[0].gender).toBeUndefined();
     expect(run.personas[0].language).toBeUndefined();
+    expect(run.personas[0].region).toBeUndefined();
+  });
+
+  it('carries the region it browses from, in the audience own words', async () => {
+    expect(await withPersona({ region: 'United Kingdom' })).toEqual([]);
+
+    const { run } = await readRun(runDir.dir());
+
+    expect(run.personas[0].region).toBe('United Kingdom');
+  });
+
+  it('carries a region the mapping table does not know, because that is the audience own word', async () => {
+    // A region name is not a locale: what it becomes in a browser is
+    // `@personavision/personas`' table to say, and a region nobody mapped still reaches the
+    // person so that a reader of the run can see it (#421).
+    expect(await withPersona({ region: 'Almaty' })).toEqual([]);
+    expect(await withPersona({ region: 'Narnia' })).toEqual([]);
+  });
+
+  it('rejects an empty region, because a persona browses from one or declares none', async () => {
+    const run: Record<string, unknown> = {
+      ...validRun(),
+      personas: [{ ...validRun().personas[0], region: '' }],
+    };
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const violations = await validate(runDir.dir());
+
+    expect(offenders(violations)).toEqual([`${label.run}/personas/0/region`]);
+    expect(violations[0].message).toBe(
+      'a persona drawn from no particular region leaves the field out rather than empty',
+    );
+  });
+
+  it('rejects a list of regions, because one session is opened in one place', async () => {
+    expect(await withPersona({ region: ['United Kingdom', 'Ireland'] })).toEqual([
+      `${label.run}/personas/0/region`,
+    ]);
   });
 
   it('carries the gender it was drawn as and the language it reads in', async () => {

@@ -70,16 +70,37 @@ describe('the package holds generation and nothing else', () => {
    * absent; this says what the package offers, so behaviour cannot be added to the interface
    * without this list changing and somebody reading why.
    */
-  it('exports generation, the holdout, the preset and the audience validation, and nothing else', () => {
+  it('exports generation, the holdout, the preset, the audience validation and the region table, and nothing else', () => {
     expect(Object.keys(personas).sort()).toStrictEqual([
       'AudienceValidationError',
+      'BROWSING_REGIONS',
       'DEMO_AUDIENCE_SEED',
       'GENERATOR_VERSION',
       'OUTDOOR_GEAR_SHOPPERS',
+      'browsingFor',
+      'browsingRegion',
       'generateHoldout',
       'generatePersonas',
       'holdoutSize',
+      'languageSubtag',
       'parseAudience',
     ]);
   });
+
+  /**
+   * The one copy of the mapping. A region name becomes a locale, a time zone and a location
+   * in exactly one place, and the swarm opens its sessions with what that place says: a
+   * second table anywhere would be free to drift, and the drift would be a session reporting
+   * a locale it did not run under (#421).
+   */
+  it.each(['Europe/London', 'America/New_York', 'Asia/Almaty'])(
+    'is the only module here that names %s',
+    (timeZone) => {
+      const naming = sources
+        .filter(({ text }) => text.includes(timeZone))
+        .map(({ entry }) => entry);
+
+      expect(naming).toStrictEqual(['regions.ts']);
+    },
+  );
 });

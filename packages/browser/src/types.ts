@@ -37,6 +37,56 @@ export interface Device {
 }
 
 /**
+ * Where the browser says it is, coarse: a region's largest city, never a person's own
+ * address. The field names are `browser.newContext`'s own `geolocation`.
+ */
+export interface BrowsingLocation {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+/**
+ * Where and how a session browses: the locale, the time zone and the location a context is
+ * opened with, carried beside the device because they are the same kind of fact about the
+ * same person.
+ *
+ * A site that geolocates its visitors serves whatever country the machine sits in unless the
+ * browser is told otherwise, and every session of the IKEA test was redirected to the Arabic
+ * store of the United Arab Emirates while the audience was UK and US shoppers (#421). A
+ * session therefore browses in its persona's region, and this is what carries that down to
+ * `browser.newContext`.
+ *
+ * The three names are **Playwright's**, not an artifact's: `locale`, `timezoneId` and
+ * `geolocation` are what a context is opened with. What a *region* becomes — which region
+ * subtag, which time zone, which city — is `@personavision/personas`' one table to say, and
+ * nothing in this package reads a region name. The artifact's own `browser` block happens to
+ * spell these three the same way, which is what lets one object be both what a context was
+ * opened with and what the session records.
+ *
+ * Every field is optional **and** nullable, and the two mean the same thing here: a setting
+ * nobody named is a setting the context is not opened with. A session opened with none of
+ * them behaves exactly as it does today — the host's own locale and time zone, and no
+ * geolocation permission.
+ *
+ * **No `Accept-Language` header is set by hand.** `locale` is what sets both
+ * `navigator.language` and the `Accept-Language` request header, and two spellings of one
+ * fact would drift: a context opened as `en-GB` asks the site for `en-GB` pages, which is
+ * the header the real site read.
+ */
+export interface Browsing {
+  /** A BCP-47 locale: `en-GB`. */
+  readonly locale?: string | null;
+  /** An IANA time zone: `Europe/London`. */
+  readonly timezoneId?: string | null;
+  /**
+   * Where the browser reports being. A context given one is also granted the `geolocation`
+   * permission, because a site that asks for the position has to be answered rather than
+   * left waiting on a prompt nobody can click.
+   */
+  readonly geolocation?: BrowsingLocation | null;
+}
+
+/**
  * A page's measurements in CSS pixels. `foldY` is the viewport's bottom edge in page space
  * at scroll 0 — the line every screenshot in this project is drawn with
  * (`docs/FLOW.md` section 8) — and an element is below the fold when `y >= foldY`.
@@ -269,6 +319,18 @@ export interface SessionRequest {
    * video at all rather than with an absence it would have to explain.
    */
   readonly video?: VideoRequest;
+  /**
+   * Where and how **this** session browses (`Browsing`).
+   *
+   * Per session for the same reason the recording is: one source drives every session of a
+   * run, and the people of one audience are drawn different regions — a swarm of UK and US
+   * shoppers is half `en-GB` in `Europe/London` and half `en-US` in `America/New_York`. A
+   * source that opens no browser ignores it, exactly as it ignores the recording.
+   *
+   * Omitted, the session is opened with the source's own settings where it has any, and
+   * otherwise with none at all — which is a session that behaves exactly as it does today.
+   */
+  readonly browsing?: Browsing;
 }
 
 /**

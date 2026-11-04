@@ -21,10 +21,12 @@ import { largestRemainder } from './devices.js';
  * | `genderSplit`      | the `gender` each person is drawn as, by share                         |
  * | `ageGroups`        | the bracket each person is drawn from and the age they are drawn at, by share — and so their own `patience` and `scanningVsReading` rather than the audience's |
  * | `languages`        | the one `language` each person reads and types in — **apportioned evenly**, because a list declares no shares |
+ * | `regions`          | the one `region` each person browses from, and so the locale, time zone and location their browser is opened with — **apportioned evenly**, for the same reason — `regions.ts` |
  *
- * The last three are `docs/FLOW.md` section 12's three new rows, and they fire only on an
- * audience that carries the field: an audience declaring none of them generates exactly the
- * people it generated before they existed, which is why `GENERATOR_VERSION` does not move
+ * The last four are `docs/FLOW.md` section 12's rows, and each fires only on an audience
+ * that carries the field — an empty `regions` list included, which is an audience that
+ * named no region rather than one nobody can place. Nobody's traits, id, name, segment or
+ * device moves when one of them fires, which is why `GENERATOR_VERSION` does not move
  * (`README.md`, "Why this is not a new generator version").
  *
  * `persistence` and `riskTolerance` are not in that table, so no audience field moves them:
@@ -179,9 +181,9 @@ export const parseAudience = (audience: unknown): Audience => {
 /**
  * One value a drawn audience field can take, and how many of the audience's people take it.
  *
- * The three fields `docs/FLOW.md` section 12 adds — the gender split, the age groups and the
- * languages — are all read the same way: the audience declares the values and (for two of
- * the three) their shares, and the apportionment says how many people each value is worth.
+ * The four drawn fields — the gender split, the age groups, the languages and the regions —
+ * are all read the same way: the audience declares the values and (for two of the four)
+ * their shares, and the apportionment says how many people each value is worth.
  * Who then gets which is the generator's, in `generate.ts`, because that is the part a seed
  * decides.
  */
@@ -287,6 +289,30 @@ export const languageApportionment = (
   return apportion(
     audience.size,
     languages.map((value) => ({ value, share: even })),
+  );
+};
+
+/**
+ * How many people browse from each region the audience lists, or `null` where it lists none.
+ *
+ * **Evenly**, exactly as the languages are and for the same reason: `regions` is a list and
+ * nobody gave shares, so reading shares into it would be this package inventing a claim
+ * about the audience.
+ *
+ * `regions` is a field every audience carries — unlike `languages`, it is not optional — so
+ * the "declares none" case here is the **empty list** rather than an absent field. An
+ * audience that lists no region has said nothing about where its people are, and a person
+ * drawn from it browses from nowhere in particular: the same statement the absent field
+ * makes for a language, and the one that leaves such a session opened exactly as it is
+ * today (`regions.ts`).
+ */
+export const regionApportionment = (audience: Audience): readonly Apportioned<string>[] | null => {
+  const { regions } = audience;
+  if (regions.length === 0) return null;
+  const even = 1 / regions.length;
+  return apportion(
+    audience.size,
+    regions.map((value) => ({ value, share: even })),
   );
 };
 

@@ -14,7 +14,7 @@
 // types, and the reference travels with the file (see `geometry.ts`).
 import { chromium, devices, errors } from 'playwright';
 import { prepareRecording, videoFrame } from './video.js';
-import type { Device, PageHandle, Variant, Viewport } from './types.js';
+import type { Browsing, Device, PageHandle, Variant, Viewport } from './types.js';
 import type { VideoRequest } from './video.js';
 
 export interface OpenSessionOptions {
@@ -36,6 +36,16 @@ export interface OpenSessionOptions {
    * `handle.video.finish()` reports in words why there is none (`video.ts`).
    */
   readonly video?: VideoRequest;
+  /**
+   * Where and how this session browses: the locale, the time zone and the location the
+   * context is opened with (`Browsing`).
+   *
+   * Omitted, nothing is set and Chromium reports the host's own locale and time zone, which
+   * is how every suite that is not about a region opens a session — and how every session
+   * was opened before #421, which is why a site that geolocates its visitors served a UK
+   * audience the Arabic store of the United Arab Emirates.
+   */
+  readonly browsing?: Browsing;
 }
 
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
@@ -86,16 +96,72 @@ export interface SessionState {
   readonly deviceScaleFactor: number;
   readonly touch: boolean;
   readonly scrollY: number;
+  /**
+   * The locale the page itself reports — `navigator.language`.
+   *
+   * Read out of the page rather than echoed back from what the context was opened with, for
+   * the same reason the viewport is: a caller checking that a session browses in its
+   * persona's region is checking Chromium, not this module's bookkeeping. A session opened
+   * with no locale reports the host's own, which is exactly the thing #421 is about.
+   */
+  readonly locale: string;
+  /**
+   * The time zone the page resolves — `Intl.DateTimeFormat().resolvedOptions().timeZone` —
+   * which is what a site's own date formatting reads.
+   */
+  readonly timeZone: string;
   /** What the session was opened as, not something the page could know. */
   readonly headless: boolean;
 }
+
+/**
+ * What the context is opened with, where the session named a locale, a time zone or a
+ * location, and `{}` where it named none.
+ *
+ * Each one is spread in only when it is there, so a session that named nothing is opened with
+ * exactly the options it was opened with before any of this existed. A location also grants
+ * the `geolocation` permission: a site that asks the browser where it is has to be answered,
+ * and a context with coordinates and no permission leaves the page waiting on a prompt
+ * nobody can click.
+ *
+ * `locale` is the only thing said about language. Playwright sets `navigator.language` **and**
+ * the `Accept-Language` request header from it, so a context opened as `en-GB` asks the site
+ * for `en-GB` pages — and an `Accept-Language` written out beside the locale would be two
+ * spellings of one fact, free to drift.
+ */
+// ponytail: three optional fields spread in; a fourth setting adds a line, not a mechanism.
+const browsingContext = (
+  browsing: Browsing | undefined,
+): Readonly<{
+  locale?: string;
+  timezoneId?: string;
+  geolocation?: { latitude: number; longitude: number };
+  permissions?: string[];
+}> => {
+  if (browsing === undefined) return {};
+  const { locale, timezoneId, geolocation } = browsing;
+  return {
+    ...(locale === undefined || locale === null ? {} : { locale }),
+    ...(timezoneId === undefined || timezoneId === null ? {} : { timezoneId }),
+    ...(geolocation === undefined || geolocation === null
+      ? {}
+      : {
+          geolocation: { latitude: geolocation.latitude, longitude: geolocation.longitude },
+          permissions: ['geolocation'],
+        }),
+  };
+};
 
 /**
  * Launches Chromium with the device applied and navigates to the variant's URL.
  *
  * The viewport, device scale factor and touch emulation are the browser context's, so they
  * are in force before the first byte of the page is parsed — a media query that depends on
- * the viewport therefore matches the device rather than a default and then a resize.
+ * the viewport therefore matches the device rather than a default and then a resize. The
+ * locale, the time zone and the location are the context's for the same reason and a
+ * stronger one: the opening navigation is the request whose `Accept-Language` a site reads
+ * to decide which country's store to redirect to, and a locale set after the page had
+ * loaded would be a locale the site never saw.
  */
 export const openSession = async (
   variant: Variant,
@@ -114,6 +180,9 @@ export const openSession = async (
       viewport: { width: device.viewport.width, height: device.viewport.height },
       deviceScaleFactor: device.deviceScaleFactor,
       hasTouch: device.touch,
+      // The person's region, where the session was opened with one: in force before the
+      // opening navigation, which is the request the site geolocates.
+      ...browsingContext(options.browsing),
       // Recording is declared on the context and flushed when it closes; the frame is the
       // device's viewport inside 720p, which is the cap the project records at.
       ...(recording?.dir === null || recording?.dir === undefined
@@ -178,7 +247,8 @@ export const openSession = async (
 
 /**
  * What the page reports about itself: the emulated viewport in CSS pixels, the device pixel
- * ratio, whether touch is available, and where the page is scrolled to.
+ * ratio, whether touch is available, where the page is scrolled to, and the locale and time
+ * zone it resolves.
  *
  * Read out of the page rather than echoed back from the handle, so that a caller checking
  * emulation is checking the browser and not this module's own bookkeeping.
@@ -191,6 +261,8 @@ export const readSessionState = async (handle: PageHandle): Promise<SessionState
     deviceScaleFactor: window.devicePixelRatio,
     touch: navigator.maxTouchPoints > 0 || 'ontouchstart' in window,
     scrollY: window.scrollY,
+    locale: navigator.language,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }));
 
   return {
@@ -199,6 +271,8 @@ export const readSessionState = async (handle: PageHandle): Promise<SessionState
     deviceScaleFactor: observed.deviceScaleFactor,
     touch: observed.touch,
     scrollY: observed.scrollY,
+    locale: observed.locale,
+    timeZone: observed.timeZone,
     headless: handle.headless,
   };
 };

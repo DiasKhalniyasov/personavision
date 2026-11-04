@@ -10,7 +10,11 @@
  *
  * What is exported is what a caller outside this package needs, and no more: generation, the
  * holdout a path-2 comparison is believed on, the committed preset, the generator's version
- * for anyone building an audience, and the validation an audience form reports field by field.
+ * for anyone building an audience, the validation an audience form reports field by field,
+ * and the one table from a region to a browser — which is published because a session has
+ * to be opened with what it says and nothing else may hold a second copy of it
+ * (`regions.ts`).
+ *
  * The archetype table, the trait centres and the device apportionment are the derivation, not
  * an interface — `README.md` states each of their choices, and `tests/` reaches them by module.
  */
@@ -23,5 +27,8 @@ export type { GenerateHoldoutRequest, Holdout } from './holdout.js';
 
 export { AudienceValidationError, GENERATOR_VERSION, parseAudience } from './audience.js';
 export type { AudienceIssue } from './audience.js';
+
+export { BROWSING_REGIONS, browsingFor, browsingRegion, languageSubtag } from './regions.js';
+export type { BrowsingRegion } from './regions.js';
 
 export { DEMO_AUDIENCE_SEED, OUTDOOR_GEAR_SHOPPERS } from './presets.js';

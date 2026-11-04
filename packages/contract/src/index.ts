@@ -74,6 +74,7 @@ export type {
   Score,
   ScreenSlice,
   Session,
+  SessionBrowser,
   SessionProgress,
   SessionVideo,
   Verdict,

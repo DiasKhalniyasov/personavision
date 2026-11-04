@@ -21,6 +21,7 @@
     "@personavision/browser": "workspace:*",
     "@personavision/contract": "workspace:*",
     "@personavision/engine": "workspace:*",
+    "@personavision/personas": "workspace:*",
     "@personavision/provider": "workspace:*",
     "@personavision/scoring": "workspace:*"
   },
