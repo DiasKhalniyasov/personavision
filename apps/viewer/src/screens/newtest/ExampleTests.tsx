@@ -31,6 +31,13 @@ import styles from './examples.module.css';
  *    refusals the Add-a-site form uses (`sites/store.ts`). **Nothing is half-filled**: a
  *    refusal is rendered in the card the user pressed, in the store's own words, and the
  *    draft is not touched.
+ *
+ *    A press **waits for the workspace's sites to be readable**, because a site cannot be
+ *    reused before it is known and the platform does not refuse a URL a workspace already
+ *    holds (`addSite`: *"the same URL added by two workspaces is two records"*) — so a press
+ *    into an unread list would quietly add a second record for the same address. While the
+ *    list is being read the control says so, in the words the audience step's own site
+ *    chooser uses; a list that cannot be read at all states why, once, above the five.
  * 2. **the draft**, in one write: the site, the feature, the goal, and the audience
  *    *sentence* — which lands in the audience step's box and is read by that step's own
  *    control, never on the user's behalf.
@@ -45,9 +52,15 @@ import styles from './examples.module.css';
 /** The section's own heading, which is all either screen says about the five. */
 const OFFER = 'Or try one of these, on a real public site';
 
-/** The one control on a card, and what it says while the site is being added. */
+/** The one control on a card: what it says, and what it says while it is working. */
 const TRY = 'Try this test';
 const ADDING = 'Adding the site…';
+/** While the workspace's sites are being read — the audience step's own words for it. */
+const READING_SITES = 'Reading your sites…';
+/** What an unreadable list of sites means for the five, beside the store's own sentence. */
+const UNTIL_SITES_READ =
+  'An example test adds its site to this workspace, so none of them can be started until ' +
+  'your sites can be read.';
 
 /** What a card says about the sentence under it: the audience it suggests, unread. */
 const SUGGESTED = 'Suggested audience';
@@ -78,7 +91,12 @@ export function ExampleTests({
   const headingId = useId();
   const navigate = useNavigate();
   const sites = useSites();
-  /** The template being set up, so one press cannot be two. */
+  /**
+   * The template being set up. **One press at a time, across all five**: the one that was
+   * pressed says what it is doing and the other four are refused, because two presses would
+   * be two sites and two drafts — and the slower of the two would write its own site,
+   * feature and goal over the draft the user is already looking at.
+   */
   const [busy, setBusy] = useState<string | null>(null);
   /**
    * Why the site could not be added, and **which card was pressed**: one at a time, because
@@ -90,9 +108,11 @@ export function ExampleTests({
     readonly message: string;
   } | null>(null);
 
-  const known = sites.status === 'ready' ? sites.sites : [];
+  // A press is honoured only against a list that was read: see the note above.
+  const known = sites.status === 'ready' ? sites.sites : null;
 
   const choose = async (template: ExampleTest): Promise<void> => {
+    if (known === null || busy !== null) return;
     setRefusal(null);
     const existing = known.find((site) => sameSite(site.url, template.siteUrl));
     let site: SiteRecord;
@@ -146,12 +166,20 @@ export function ExampleTests({
       <h2 className={styles.heading} id={headingId}>
         {OFFER}
       </h2>
+      {sites.status === 'unreadable' ? (
+        <p className="notice" role="alert">
+          {sites.problem} {UNTIL_SITES_READ}
+        </p>
+      ) : null}
       <div className={styles.cards}>
         {EXAMPLE_TESTS.map((template) => (
           <ExampleCard
             key={template.id}
             template={template}
+            reading={sites.status === 'loading'}
             busy={busy === template.id}
+            // One press at a time, across all five, and none at all until the sites are read.
+            refused={busy !== null || known === null}
             {...(refusal?.id === template.id ? { refusal: refusal.message } : {})}
             onChoose={() => {
               void choose(template);
@@ -173,12 +201,19 @@ export function ExampleTests({
  */
 function ExampleCard({
   template,
+  reading,
   busy,
+  refused,
   refusal,
   onChoose,
 }: {
   template: ExampleTest;
+  /** The workspace's sites are still being read, which the control says rather than hides. */
+  reading: boolean;
+  /** This is the template being set up. */
   busy: boolean;
+  /** Nothing may be pressed: another card is working, or the sites could not be read. */
+  refused: boolean;
   refusal?: string;
   onChoose: () => void;
 }) {
@@ -198,8 +233,13 @@ function ExampleCard({
           {refusal}
         </p>
       )}
-      <Button size="sm" className={styles.control} disabled={busy} onClick={onChoose}>
-        {busy ? ADDING : TRY}
+      <Button
+        size="sm"
+        className={styles.control}
+        disabled={busy || refused || reading}
+        onClick={onChoose}
+      >
+        {busy ? ADDING : reading ? READING_SITES : TRY}
       </Button>
     </div>
   );

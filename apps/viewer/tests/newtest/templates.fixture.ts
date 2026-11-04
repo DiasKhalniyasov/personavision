@@ -29,6 +29,10 @@ export interface WorkspaceBehaviour {
   readonly sites?: readonly SiteSeed[];
   /** What `POST /sites` answers instead of adding the site. */
   readonly refusesCreate?: { readonly status: number; readonly body: unknown };
+  /** Hold `GET /sites` until `release` is called: the list is still being read. */
+  readonly holdList?: boolean;
+  /** Hold `POST /sites` until `release` is called: a site is still being added. */
+  readonly holdCreate?: boolean;
   /** `POST /sites` is not answered at all: the platform is not there. */
   readonly createUnreachable?: boolean;
   /** `GET /sites` cannot be read, so no site is known before one is posted. */
@@ -42,6 +46,8 @@ export interface ServedWorkspace {
   created: () => readonly string[];
   /** The sites the workspace holds now, as `GET /sites` would list them. */
   listed: () => readonly string[];
+  /** Answer a held read or a held write. */
+  release: () => void;
 }
 
 const json = (status: number, body: unknown): Response =>
@@ -61,6 +67,14 @@ export async function serveWorkspace(behaviour: WorkspaceBehaviour = {}): Promis
   const live: SiteSeed[] = [...(behaviour.sites ?? [])];
   const created: string[] = [];
 
+  let release = (): void => {};
+  const held =
+    behaviour.holdList === true || behaviour.holdCreate === true
+      ? new Promise<void>((resolve) => {
+          release = resolve;
+        })
+      : null;
+
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
 
@@ -74,6 +88,7 @@ export async function serveWorkspace(behaviour: WorkspaceBehaviour = {}): Promis
       if ((init?.method ?? 'GET') === 'POST') {
         const url = (JSON.parse(String(init?.body ?? '{}')) as { url?: string }).url ?? '';
         created.push(url);
+        if (held !== null && behaviour.holdCreate === true) await held;
         if (behaviour.createUnreachable === true) throw new TypeError('Failed to fetch');
         const refusal = behaviour.refusesCreate;
         if (refusal !== undefined) return json(refusal.status, refusal.body);
@@ -81,6 +96,7 @@ export async function serveWorkspace(behaviour: WorkspaceBehaviour = {}): Promis
         live.push(seed);
         return json(201, servedSite(seed));
       }
+      if (held !== null && behaviour.holdList === true) await held;
       if (behaviour.listUnreachable === true) throw new TypeError('Failed to fetch');
       return json(200, { sites: live.map(servedSite) });
     }
@@ -91,5 +107,8 @@ export async function serveWorkspace(behaviour: WorkspaceBehaviour = {}): Promis
   return {
     created: () => created,
     listed: () => live.map((seed) => seed.url),
+    release: () => {
+      release();
+    },
   };
 }

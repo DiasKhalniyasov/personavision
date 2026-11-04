@@ -2,10 +2,11 @@ import { runRequestSchema } from '@personavision/contract';
 import { parseSiteUrl, seedForLaunchDay, variantForSite } from '@personavision/platform';
 import { describe, expect, it } from 'vitest';
 import { EXAMPLE_TESTS } from '../../src/screens/newtest/templates';
-// The rule itself, from the file that states it, rather than through the provider's barrel:
-// `readCriterion` is a function of the sentence alone — no model, no network, no state —
-// and it is what `packages/swarm/src/criterion.ts` decides a session's outcome with.
-import { readCriterion } from '../../../../packages/provider/src/wonder-goal.js';
+// **The rule a session's outcome is decided by**, from the file that states it rather than
+// through the swarm's barrel, which would pull the run loop and the browser into this app's
+// test graph. It is a function of the sentence alone — no model, no network, no state — so a
+// criterion reads the same way here, on the goal step and in a walking run.
+import { criterionToObserve } from '../../../../packages/swarm/src/criterion.js';
 import type { ExampleTest } from '../../src/screens/newtest/templates';
 
 /**
@@ -21,16 +22,23 @@ import type { ExampleTest } from '../../src/screens/newtest/templates';
  * - the **feature and the goal** through the contract's own `runRequestSchema`, built the way
  *   `packages/platform/src/run/start.ts` builds a one-URL request — so the request a template
  *   would start parses;
- * - the **success criterion** through `readCriterion`, because a criterion that names nothing
- *   observable is not refused by any schema and is instead refused once a run is walking:
- *   `criterionToObserve` reads it, finds nothing to look for, and **every session of that run
- *   is a failure by construction**. A template whose first result is 0% would be the one
- *   thing these five exist to prevent.
+ * - the **success criterion** through `criterionToObserve`, which is the rule the run loop
+ *   decides a session by (`packages/swarm/src/criterion.ts`) and not merely the one that
+ *   classifies a sentence. No schema refuses a criterion that names nothing observable: it is
+ *   refused once a run is walking, and **every session of that run is then a failure by
+ *   construction**. A template whose first result is 0% would be the one thing these five
+ *   exist to prevent.
+ *
+ *   The same rule is what holds each criterion to **one phrase**. A criterion is read as a
+ *   conjunction — every term has to be on one screen — so *"the video editor or the
+ *   templates page is shown"* asks for the words of both pages at once and is satisfied by
+ *   neither. One quoted span is one thing to find.
  *
  * The rules are imported, never copied: a template is held to what the platform, the
- * contract and the provider say, so a template cannot pass a test here and be refused by the
- * product. Adding a sixth with an address nobody can request, a two-sentence task or a
- * criterion no session can evaluate fails CI rather than a run.
+ * contract and the run loop say, so a template cannot pass a test here and be refused by the
+ * product. Adding a sixth with an address nobody can request, a two-sentence task, a
+ * criterion no session can evaluate or one that quietly asks for five words at once fails CI
+ * rather than a run.
  */
 
 /** The owner's five, by site and by what each test is about (the input of 2026-11-04 on #1). */
@@ -116,8 +124,16 @@ describe('every template passes the validation a typed test passes', () => {
 
   it('states a success criterion a session can observe', () => {
     for (const template of EXAMPLE_TESTS) {
-      const reading = readCriterion(template.successCriterion);
-      expect(reading.observable ? '' : reading.reason, template.id).toBe('');
+      const read = criterionToObserve(template.successCriterion);
+      expect(read?.unobservable ?? '', template.id).toBe('');
+    }
+  });
+
+  it('asks for one phrase, not for every word of two pages at once', () => {
+    for (const template of EXAMPLE_TESTS) {
+      // Every term has to be on one screen, so a criterion of five content words is five
+      // things that must co-occur. Each of these quotes the words to find.
+      expect(criterionToObserve(template.successCriterion)?.terms, template.id).toHaveLength(1);
     }
   });
 });
@@ -133,10 +149,11 @@ describe('what a sixth template would be refused for', () => {
     ...over,
   });
 
-  it('is itself valid, so the three refusals below are about what they change', () => {
+  it('is itself valid, so the refusals below are about what they change', () => {
     const template = sixth({});
     expect(runRequestSchema.safeParse(requestFrom(template)).success).toBe(true);
-    expect(readCriterion(template.successCriterion).observable).toBe(true);
+    expect(criterionToObserve(template.successCriterion)?.unobservable).toBeNull();
+    expect(criterionToObserve(template.successCriterion)?.terms).toHaveLength(1);
   });
 
   it('refuses an address nobody can request', () => {
@@ -155,7 +172,16 @@ describe('what a sixth template would be refused for', () => {
     // The whole class: a criterion about the page rather than about something on it, and a
     // criterion about how the page felt.
     for (const criterion of ['The sign-up page is shown.', 'The form is easy to understand.']) {
-      expect(readCriterion(criterion).observable, criterion).toBe(false);
+      expect(criterionToObserve(criterion)?.unobservable ?? '', criterion).not.toBe('');
     }
+  });
+
+  it('refuses a criterion that asks for the words of two pages at once', () => {
+    // Observable — it names a card and says it is there — and still unsatisfiable: the
+    // five content words all have to be on one screen. This is the shape three of the
+    // owner's five criteria had.
+    const criterion = 'The account card or the sign-up form is shown.';
+    expect(criterionToObserve(criterion)?.unobservable).toBeNull();
+    expect(criterionToObserve(criterion)?.terms.length).toBeGreaterThan(1);
   });
 });

@@ -20,8 +20,15 @@
  * through `readCriterion`, which is the rule a session's outcome is decided by
  * (`packages/swarm/src/criterion.ts`) — so a sixth template with an address nobody can
  * request, a two-sentence task or a criterion no session can evaluate fails CI rather than a
- * run. Three of the owner's five criteria named *the page* rather than something on it,
- * which that rule refuses: each is below with the owner's own sentence beside it.
+ * run.
+ *
+ * **Every criterion here is one phrase to find.** The owner's five each named *the page* —
+ * and three of them offered two or three names for it. A criterion is read as a conjunction:
+ * `criterionToObserve` turns *"Canva's video editor or social-video templates page is
+ * shown"* into five words that must **all** be on one screen, so a sentence offering
+ * alternatives asks for all of them and a template's every session fails. Each criterion
+ * below therefore names the element that carries the claim and quotes **one** phrase as the
+ * words to find, with the owner's own sentence beside it in a comment.
  *
  * **Each one carries its audience as a sentence**, not as a structured audience: the
  * sentence lands in the audience step's own box and that step's own control is what reads it
@@ -62,7 +69,9 @@ export const EXAMPLE_TESTS: readonly ExampleTest[] = Object.freeze([
     siteUrl: 'https://docs.stripe.com',
     feature: 'testing payments',
     task: 'Find out how to check a payment works without spending real money',
-    successCriterion: 'The testing page with test card numbers is visible.',
+    // The owner wrote *"the testing page with test card numbers is visible"*: the same claim,
+    // with the heading that carries it named rather than the page, and **as one phrase**.
+    successCriterion: 'A heading with the words “Test card numbers” is visible.',
     audienceSentence:
       'developers integrating payments for the first time, on laptops, comfortable reading ' +
       'technical documentation',
@@ -100,7 +109,10 @@ export const EXAMPLE_TESTS: readonly ExampleTest[] = Object.freeze([
     siteUrl: 'https://www.canva.com',
     feature: 'making short social videos',
     task: "Find out what you'd need to make a short video for social media",
-    successCriterion: "Canva's video editor or social-video templates page is shown.",
+    // The owner wrote *"Canva's video editor or social-video templates page is shown"*. A
+    // criterion offering two pages asks for the words of both, so this names the one its own
+    // editor is headed with.
+    successCriterion: 'A heading with the words “Video editor” is visible.',
     audienceSentence:
       'everyday people of all ages who want to post a video, mostly on phones, from very ' +
       'confident online to not confident at all',

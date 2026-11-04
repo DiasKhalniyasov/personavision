@@ -46,9 +46,22 @@ const open = async (address: string = newTestStep('path')) => {
   return mounted;
 };
 
-/** Press *Try this test* on one of the five. */
+/**
+ * Press *Try this test* on one of the five.
+ *
+ * It waits for the control to be offered: until the workspace's sites have been read the
+ * card says so instead, because a press into an unread list would add a site the workspace
+ * already holds a second time.
+ */
 const tryIt = async (host: string): Promise<void> => {
-  await userEvent.click(within(cardFor(host)).getByRole('button', { name: 'Try this test' }));
+  const control = await waitFor(() => {
+    const button = within(cardFor(host)).getByRole('button', {
+      name: 'Try this test',
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    return button;
+  });
+  await userEvent.click(control);
 };
 
 beforeEach(loadDesignTokens);
@@ -88,6 +101,11 @@ describe('the five, under the two path cards', () => {
   it('gives each card exactly one control, so a card is a group and not a button', async () => {
     await serveWorkspace();
     await open();
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Try this test' })).toHaveLength(
+        EXAMPLE_TESTS.length,
+      );
+    });
 
     for (const template of EXAMPLE_TESTS) {
       const card = cardFor(new URL(template.siteUrl).host);
@@ -207,7 +225,10 @@ describe('choosing one fills the draft and lands on the audience step', () => {
 });
 
 describe('a site the platform refuses', () => {
-  const REFUSED = 'That address is already a site in this workspace.';
+  // A refusal of the URL itself, which is what `POST /sites` answers with `400` and issues.
+  // Deliberately **not** "that site is already here": the platform does not refuse one a
+  // workspace already holds (`addSite`), which is why a press waits for the list instead.
+  const REFUSED = 'a site is an http:// or https:// URL, and that address was refused.';
 
   it('states the refusal in the card that was pressed, and fills nothing', async () => {
     await serveWorkspace({
@@ -244,6 +265,80 @@ describe('a site the platform refuses', () => {
   });
 });
 
+describe('a press is never a second site', () => {
+  it('offers nothing to press until the workspace’s sites have been read', async () => {
+    const served = await serveWorkspace({
+      sites: [{ id: 'site-ikea', url: IKEA.siteUrl }],
+      holdList: true,
+    });
+    await open();
+
+    // The card says what it is doing rather than hiding its control: the audience step's
+    // own words for the same wait.
+    const control = within(cardFor('www.ikea.com')).getByRole('button', {
+      name: 'Reading your sites…',
+    }) as HTMLButtonElement;
+    expect(control.disabled).toBe(true);
+    await userEvent.click(control);
+    expect(served.created()).toEqual([]);
+
+    served.release();
+
+    // Once the list is in, the site it names is reused rather than added again.
+    await tryIt('www.ikea.com');
+    await waitFor(() => {
+      expect(readWizardDraft().site?.id).toBe('site-ikea');
+    });
+    expect(served.created()).toEqual([]);
+  });
+
+  it('refuses the other four while one site is being added', async () => {
+    const served = await serveWorkspace({ holdCreate: true });
+    await open();
+
+    await tryIt('docs.stripe.com');
+
+    await waitFor(() => {
+      const working = within(cardFor('docs.stripe.com')).getByRole('button', {
+        name: 'Adding the site…',
+      }) as HTMLButtonElement;
+      expect(working.disabled).toBe(true);
+    });
+    for (const host of ['vercel.com', 'www.ikea.com', 'www.canva.com', 'www.apple.com']) {
+      const other = within(cardFor(host)).getByRole('button', {
+        name: 'Try this test',
+      }) as HTMLButtonElement;
+      expect(other.disabled, host).toBe(true);
+    }
+
+    served.release();
+    await waitFor(() => {
+      expect(readWizardDraft().feature).toBe(STRIPE.feature);
+    });
+    // One press, one site: the slower of two presses cannot write its draft over the other's.
+    expect(served.created()).toEqual([STRIPE.siteUrl]);
+  });
+
+  it('says why none of them can be started when the sites cannot be read at all', async () => {
+    await serveWorkspace({ listUnreachable: true });
+    await open();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('could not be read');
+    });
+    expect(screen.getByRole('alert').textContent).toContain(
+      'none of them can be started until your sites can be read',
+    );
+    for (const template of EXAMPLE_TESTS) {
+      const host = new URL(template.siteUrl).host;
+      const control = within(cardFor(host)).getByRole('button', {
+        name: 'Try this test',
+      }) as HTMLButtonElement;
+      expect(control.disabled, host).toBe(true);
+    }
+  });
+});
+
 describe('the screen stays accessible with the five on it', () => {
   it('passes axe, and restates no value inline', async () => {
     await serveWorkspace();
@@ -263,9 +358,9 @@ describe('the screen stays accessible with the five on it', () => {
     await serveWorkspace();
     await open();
 
-    const first = within(cardFor('docs.stripe.com')).getByRole('button', {
-      name: 'Try this test',
-    });
+    const first = await waitFor(() =>
+      within(cardFor('docs.stripe.com')).getByRole('button', { name: 'Try this test' }),
+    );
     first.focus();
     expect(document.activeElement).toBe(first);
     await userEvent.tab();
