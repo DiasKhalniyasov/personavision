@@ -87,7 +87,7 @@ export { withPeople } from './audience/people.js';
 export type { AudienceWithPeople } from './audience/people.js';
 
 export { audienceRoutes, DEFAULT_PARTICIPANTS } from './server/routes/audiences.js';
-export type { AudienceRouteOptions } from './server/routes/audiences.js';
+export type { AudienceRouteOptions, WonderSeam } from './server/routes/audiences.js';
 
 export { runRoutes } from './server/routes/runs.js';
 export type { RunRouteOptions } from './server/routes/runs.js';

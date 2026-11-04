@@ -9,6 +9,7 @@ import type {
   PlatformServer,
   SeededWorkspace,
   TestPipeline,
+  WonderSeam,
 } from '@personavision/platform';
 import { modelCredentialPresent, ModelModeUnavailableError } from '@personavision/provider';
 import launch from 'open';
@@ -66,6 +67,13 @@ export interface ServeCommandOptions {
    * offline and says so. A suite passes its own, so no test reaches a model.
    */
   runEnv?: Readonly<Record<string, string | undefined>>;
+  /**
+   * How `POST /audiences/from-sentence` and `POST /runs/goal` reach Muse Wonder. Absent — as
+   * it is in the product — leaves `createPlatform`'s own selection in place: the model where
+   * `MODEL_API_KEY` is set, and a refusal in words where it is not. A suite passes its own,
+   * so no test of this command reaches a model.
+   */
+  wonder?: WonderSeam;
 }
 
 export interface ServeResult extends PlatformServer {
@@ -273,6 +281,7 @@ export const serveCommand = async ({
   launchBrowser = async (url) => void (await launch(url)),
   captureSource,
   runEnv,
+  wonder,
 }: ServeCommandOptions): Promise<ServeResult> => {
   await ensureViewerBuilt({ viewerDist, repoRoot, build, log, buildViewer });
 
@@ -310,6 +319,9 @@ export const serveCommand = async ({
       ...(runEnv === undefined ? {} : { runEnv }),
     }),
     githubApp: githubAppRegistration(),
+    // Left out unless a caller brings one, so the product's own selection — the model where
+    // `MODEL_API_KEY` is set, a refusal in words where it is not — stays the default.
+    ...(wonder === undefined ? {} : { wonder }),
   });
 
   if (platform.seeded !== null) {
