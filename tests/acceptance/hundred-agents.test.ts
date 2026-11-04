@@ -106,10 +106,22 @@ const A_HUNDRED = DEFAULT_PARTICIPANTS;
 /** The feature, in the words a user would have typed, carried on exactly as written. */
 const FEATURE = 'Checking out and paying for one item on my phone, start to finish.';
 
-/** The goal as a person approved it before launch, which makes its author `user`. */
+/**
+ * The goal as a person approved it before launch, which makes its author `user`.
+ *
+ * Its criterion is **what the sessions are now decided by** (#400): a session of a run with
+ * a goal completes the task when the criterion is observed on a screen it captured, and not
+ * by having reached the last declared step. So the sentence has to be one `readCriterion`
+ * accepts and one the fixture site really satisfies **in what it drew** — the confirmation
+ * page names an image *A printed receipt* and a region *Receipt*, and no page before it says
+ * either word. The sentence this walk carried before — *"The confirmation screen shows an
+ * order number"* — names an order number rather than anything of the three observable kinds,
+ * and the reader refuses it: under the rule this walk now exercises, every one of the hundred
+ * sessions would have been `failed` for a criterion nothing could evaluate.
+ */
 const GOAL: Goal = {
   task: FIXTURE_SITE_ERRAND,
-  successCriterion: 'The confirmation screen shows an order number.',
+  successCriterion: 'A printed receipt is visible.',
   lastWrittenBy: 'user',
 };
 

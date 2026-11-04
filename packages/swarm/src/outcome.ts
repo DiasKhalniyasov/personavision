@@ -8,7 +8,7 @@
  * downstream re-derives any of it, and the browser driver's typed failures (#50) are fed
  * in here rather than turned into outcomes of their own.
  *
- * Three rules this module exists to hold (`docs/FLOW.md` sections 5 and 8):
+ * Five rules this module exists to hold (`docs/FLOW.md` sections 5, 8 and 12):
  *
  * 1. **The four statuses stay four.** A session is *abandoned* when the person gave up,
  *    *failed* when it ended with the task not done, and an *automation failure* when our
@@ -20,6 +20,16 @@
  *    per-session wall-clock cap is `attribution: "automation"` and
  *    `excludedFromScores: true` — it counts towards no score, no heatmap and no aggregate.
  *    Every other ending is the product's, and is counted.
+ * 4. **A session succeeds only when its criterion was observed** (#400). Where the run was
+ *    given a goal, `trace.criterion` says what the session made of that goal's success
+ *    criterion, and it — not the step the walk ended on — decides completion. A criterion
+ *    nothing could evaluate is never promoted to a success by falling back to a weaker
+ *    test. Where the run was given none, the old rule stands: a declared multi-step task
+ *    says where its end is, and reaching it is the task done.
+ * 5. **An agent that never acted cannot succeed.** Success additionally requires one of
+ *    {@link PROGRESS_ACTIONS} in the trace. A criterion that was already true when the
+ *    agent arrived, on a page nobody operated, is `failed` and says so in words: the
+ *    product was never tested, and a completion rate counting it means nothing.
  *
  * It is a pure function over a trace plus a persona: no browser, no provider, no disk, no
  * clock of its own, so it is testable on synthetic traces.
@@ -52,6 +62,28 @@ export interface AutomationFailure {
   readonly detail: string;
   /** The step it broke on. */
   readonly step: string;
+}
+
+/**
+ * The run's success criterion, and what this session made of it — present exactly when the
+ * run was given a goal (`docs/FLOW.md` section 12, #400).
+ *
+ * It is facts and not a verdict, like every other field of a trace: `criterion.ts` reads the
+ * sentence and checks it against what the session captured, and this module decides what the
+ * answer means. A trace carrying none is a run with no goal, decided by the step it reached.
+ */
+export interface TraceCriterion {
+  /** The criterion, in the words the run's goal states it. */
+  readonly criterion: string;
+  /** Whether it was observed on a captured screen of this session. */
+  readonly observed: boolean;
+  /**
+   * Why no screen could be searched for it — a judgement, a feeling, a sentence naming none
+   * of the three observable kinds — in the reader's own words; `null` when one could.
+   */
+  readonly unobservable: string | null;
+  /** What the session looked for and did not find, in the criterion's own words. */
+  readonly missing: readonly string[];
 }
 
 /** One screen of the walk: its position, and the step of the task it is. */
@@ -90,8 +122,19 @@ export interface SessionTrace {
   /** Oldest first, as the session stores them. */
   readonly actions: readonly TraceAction[];
   readonly durationMs: number;
-  /** The task's own success condition, as the browser observed it: a fact, not a verdict. */
+  /**
+   * The task's own success condition, as the browser observed it: a fact, not a verdict.
+   *
+   * It is **the step rule** — the walk reached the task's last declared step — and it decides
+   * a session only where the run was given no goal. Where one was, `criterion` below is the
+   * success condition and this is ignored.
+   */
   readonly taskCompleted: boolean;
+  /**
+   * The run's success criterion and what this session observed of it, where the run had one;
+   * absent or `null` on a run with no goal.
+   */
+  readonly criterion?: TraceCriterion | null;
   /** The area of interest holding the control that advances the task, when the task names one. */
   readonly primaryActionAoiId?: string | null;
   /** Set when the driver's own browsing broke; `null` or absent when it did not. */
@@ -166,9 +209,19 @@ const PROGRESS_ACTIONS: readonly TraceActionType[] = ['click', 'type'];
  * 2. **Did the persona give up?** Either it said so — an `abandon` action — or its patience
  *    or its persistence ran out over the trace. Asked before success, because a
  *    low-patience persona abandons part-way through a trace that a persistent persona
- *    walks to the end.
- * 3. **Was the task done?** `success` if the browser saw the task's success condition.
- * 4. **Otherwise it ended with the task not done** — `failed`, the product's.
+ *    walks to the end. (Question 3 below is the one thing asked before it, and only
+ *    because it says this session measured nothing at all.)
+ * 3. **Could the criterion be observed at all?** A criterion the reader cannot evaluate
+ *    leaves the session nothing to have done, so it is `failed` saying so. It is asked
+ *    before the persona and not after: a walk that spent its patience against a criterion
+ *    nobody could evaluate would otherwise be recorded as the person giving up on the
+ *    product, which is a verdict the run cannot support. Abandonment keeps its precedence
+ *    over the **success** test, which is what it is precedence over.
+ * 4. **Was the criterion observed?** Where the run had one, that is the success condition.
+ *    Where it had none, the step rule stands: the task's last declared step.
+ * 5. **Did the agent act?** Success needs one action that operated the page. An arrival on
+ *    a screen that already satisfied the criterion is `failed`: nothing was tested.
+ * 6. **Otherwise it ended with the task not done** — `failed`, the product's.
  */
 export function decideOutcome(
   trace: SessionTrace,
@@ -176,29 +229,98 @@ export function decideOutcome(
   policy: OutcomePolicy = OUTCOME_POLICY,
 ): SessionOutcome {
   const endStep = trace.screens.at(-1)?.step ?? NO_SCREEN_STEP;
+  const criterion = trace.criterion ?? null;
+  // The criterion decides completion where the run has one; the step rule where it does
+  // not. Read once, because the abandonment scan asks the same question: effort after the
+  // task was done is not effort towards it.
+  const completed = criterion === null ? trace.taskCompleted : criterion.observed;
 
   const failure = automationFailureOf(trace);
   if (failure) {
     return automationOutcome(failure, endStep);
   }
 
-  const giveUp = findGiveUp(trace, persona, policy);
+  // Asked before the persona, and after our own browsing only: a criterion nothing can
+  // evaluate means this session measured nothing, so neither a success nor a give-up can be
+  // read off it. A walk that ran its patience out against an unevaluable criterion would
+  // otherwise be recorded as the person giving up on the product — a verdict the run cannot
+  // support, counted against the product's own score.
+  if (criterion !== null && criterion.unobservable !== null) {
+    return productOutcome(
+      'failed',
+      endStep,
+      notDone(trace, endStep, `the criterion could not be observed. ${criterion.unobservable}`),
+    );
+  }
+
+  const giveUp = findGiveUp(trace, completed, persona, policy);
   if (giveUp) {
     return productOutcome('abandoned', giveUp.step, giveUpReason(trace, giveUp));
   }
-
-  if (trace.taskCompleted) {
+  if (!completed) {
     return productOutcome(
-      'success',
+      'failed',
       endStep,
-      `Completed the task on the "${endStep}" step.${primaryActionClause(trace)}`,
+      criterion === null
+        ? `The session ended on the "${endStep}" step with the task not done.${primaryActionClause(trace)}`
+        : notDone(
+            trace,
+            endStep,
+            `the criterion ${quoted(criterion.criterion)} was never observed — ${missingClause(endStep, criterion.missing)}.`,
+          ),
+    );
+  }
+  if (!acted(trace)) {
+    return productOutcome(
+      'failed',
+      endStep,
+      notDone(
+        trace,
+        endStep,
+        criterion === null
+          ? 'the step was reached without the agent acting on anything.'
+          : `the criterion ${quoted(criterion.criterion)} was already true when the agent arrived, and nothing was acted on.`,
+      ),
     );
   }
   return productOutcome(
-    'failed',
+    'success',
     endStep,
-    `The session ended on the "${endStep}" step with the task not done.${primaryActionClause(trace)}`,
+    criterion === null
+      ? `Completed the task on the "${endStep}" step.${primaryActionClause(trace)}`
+      : `Completed the task on the "${endStep}" step: the criterion ${quoted(criterion.criterion)} was observed.${primaryActionClause(trace)}`,
   );
+}
+
+/**
+ * Whether the agent operated the page at all: one click or one keystroke anywhere in the
+ * trace, whether or not it worked.
+ *
+ * A scroll, a hesitation and a step back are not among {@link PROGRESS_ACTIONS}, and a
+ * session made only of them has looked at a product rather than used it.
+ */
+function acted(trace: SessionTrace): boolean {
+  return trace.actions.some((action) => PROGRESS_ACTIONS.includes(action.type));
+}
+
+/** The one shape of a failed session's reason: where it ended, and what was not done. */
+function notDone(trace: SessionTrace, step: string, because: string): string {
+  return `The session ended on the "${step}" step with the task not done: ${because}${primaryActionClause(trace)}`;
+}
+
+/** The criterion's own words, quoted so a reader can see where the sentence ends. */
+function quoted(criterion: string): string {
+  return `“${criterion}”`;
+}
+
+/** What the screen was missing, in the criterion's own words. */
+function missingClause(step: string, missing: readonly string[]): string {
+  if (missing.length === 0) {
+    return `the "${step}" step did not show it`;
+  }
+  // "no X and no Y", never "X or Y": every term is required, and a reader told the step
+  // named neither would otherwise understand that either one would have done.
+  return `the "${step}" step named ${missing.map((term) => `no “${term}”`).join(' and ')}`;
 }
 
 /**
@@ -249,9 +371,14 @@ interface GiveUp {
  * The first moment the agent stopped trying: it said so, or one of its two budgets ran
  * out. Both budgets count from the last action that got it somewhere, so an agent that
  * keeps making progress never spends them however long the session runs.
+ *
+ * `completed` is whether the walk's success condition was met — the criterion where the run
+ * had one, the final declared step where it did not. It is passed in rather than read off
+ * the trace so that one answer governs both this scan and the verdict.
  */
 function findGiveUp(
   trace: SessionTrace,
+  completed: boolean,
   persona: DecidingPersona,
   policy: OutcomePolicy,
 ): GiveUp | null {
@@ -269,7 +396,7 @@ function findGiveUp(
   // Effort after the task was done is not effort towards it: an agent reading the
   // confirmation page has given up on nothing, so the scan stops where the task was
   // completed rather than running to the end of the trace.
-  const until = trace.taskCompleted ? completedAtMs(trace) : Number.POSITIVE_INFINITY;
+  const until = completed ? completedAtMs(trace) : Number.POSITIVE_INFINITY;
 
   let sinceMs = 0;
   let attempts = 0;
@@ -307,7 +434,7 @@ function findGiveUp(
   // A session ends when the agent stops acting, so the dwell it ends on is where giving up
   // most often happens — and there is no action after it to measure it at.
   const trailingDwellMs = trace.durationMs - sinceMs;
-  if (!trace.taskCompleted && trailingDwellMs > dwellBudgetMs) {
+  if (!completed && trailingDwellMs > dwellBudgetMs) {
     return {
       cause: 'patience',
       step: trace.screens.at(-1)?.step ?? NO_SCREEN_STEP,

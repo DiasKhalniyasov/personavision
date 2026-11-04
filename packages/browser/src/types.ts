@@ -172,6 +172,21 @@ export interface TaskDefinition {
   id: string;
   prompt: string;
   steps: TaskStep[];
+  /**
+   * What has to be **observable in the page** for an attempt to count as a success, where
+   * the run was given a goal: a visible element, a URL, a piece of text (`docs/FLOW.md`
+   * section 12). It is the goal's own `successCriterion`, carried onto the task so that the
+   * task a session is run with says where the task ends.
+   *
+   * Nothing in this package reads it — a step is recognised by its URL pattern and its
+   * required element, and that is all this package does — but it travels with the task
+   * through the swarm and across the runner seam, which is where a session's outcome is
+   * decided from it (`@personavision/swarm`, #400).
+   *
+   * Optional: a run with no goal declares none, and its sessions are decided by reaching
+   * the task's last declared step.
+   */
+  successCriterion?: string;
 }
 
 /** Everything a capture needs to know that the page cannot tell it. */
