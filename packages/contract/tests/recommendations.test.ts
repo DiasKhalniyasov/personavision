@@ -5,6 +5,7 @@ import type {
   CitedRun,
   Recommendation,
   Recommendations,
+  Session,
   Violation,
 } from '../src/index.js';
 import {
@@ -17,10 +18,12 @@ import {
   writeRun,
 } from '../src/index.js';
 import {
+  absentVideo,
   brokenSessionArtifact,
   CART,
   CONFIRM,
   FINDING_ID,
+  recordedVideo,
   temporaryRunDir,
   validAggregate,
   validArtifact,
@@ -631,6 +634,109 @@ describe('every citation against the run it belongs to', () => {
     });
   });
 
+  /**
+   * The last citation check, and the one that needed the session video block (#220): a
+   * session citation's `offsetMs` against the length of the recording it names.
+   *
+   * *"S-62 · 0:48"* is the strongest citation in the product and the easiest one to get
+   * wrong — an offset past the end opens a paused black frame, and a reader who clicks that
+   * once stops trusting the rest of the write-up.
+   */
+  describe('a session citation’s timestamp', () => {
+    /** The run with S-02 — the session the fixture cites — given a video block of its own. */
+    const givenVideo = (video: Session['video']): CitedRun => {
+      const run = cited();
+      return {
+        ...run,
+        sessions: run.sessions.map((session) =>
+          session.sessionId === 'S-02' ? { ...session, video } : session,
+        ),
+      };
+    };
+
+    /** The top recommendation citing S-02 at one offset, and nothing else. */
+    const citingAt = (offsetMs: number): Recommendations =>
+      topRecommendation(validRecommendations(), {
+        citations: [{ kind: 'session', sessionId: 'S-02', offsetMs }],
+      });
+
+    it('is rejected past the end of the recording, with the path and both numbers', () => {
+      const [complaint, ...rest] = complaints({
+        ...givenVideo(recordedVideo('S-02')),
+        recommendations: citingAt(38_001),
+      });
+
+      expect(complaint).toBe(
+        `${label.recommendations}/recommendations/0/citations/0/offsetMs — offsetMs 38001 is past the end of S-02’s 38000 ms recording: a cited timestamp has to land inside the recording it names, or one click opens a paused black frame instead of the moment the claim is about`,
+      );
+      expect(rest).toEqual([]);
+    });
+
+    it('is accepted at 0 on a recorded session', () => {
+      expect(
+        validateRecommendations({
+          ...givenVideo(recordedVideo('S-02')),
+          recommendations: citingAt(0),
+        }),
+      ).toEqual([]);
+    });
+
+    it('is accepted at the last millisecond the recording reached', () => {
+      // The same boundary `sessionSchema` holds the video's own positional offsets to, spelt
+      // the same way: past the end is rejected, the end itself is a frame that exists.
+      expect(
+        validateRecommendations({
+          ...givenVideo(recordedVideo('S-02')),
+          recommendations: citingAt(38_000),
+        }),
+      ).toEqual([]);
+    });
+
+    it('is rejected on a session that recorded no video, in those words and with the reason', () => {
+      const [complaint, ...rest] = complaints({
+        ...givenVideo(absentVideo()),
+        recommendations: citingAt(0),
+      });
+
+      expect(complaint).toContain(
+        `${label.recommendations}/recommendations/0/citations/0/offsetMs — S-02 was not recorded`,
+      );
+      expect(complaint).toContain(absentVideo().reason);
+      expect(complaint).toContain('names no frame');
+      expect(rest).toEqual([]);
+    });
+
+    it('is left to the run that names no video at all, as every run written before #220 does', () => {
+      // An absent block is a run from before recordings existed, not a stated absence: the
+      // contract has no duration in hand to hold the timestamp to, the same way it skips the
+      // findingIds rule on a directory whose findings.json it does not have.
+      expect(cited().sessions.map((session) => session.video)).toEqual([undefined, undefined]);
+      expect(validateRecommendations({ ...cited(), recommendations: citingAt(99_999) })).toEqual(
+        [],
+      );
+    });
+
+    it('holds a write-up claim to the same recording', () => {
+      const document = validRecommendations();
+      const [complaint, ...rest] = complaints({
+        ...givenVideo(recordedVideo('S-02')),
+        recommendations: {
+          ...document,
+          writeUp: [
+            {
+              ...document.writeUp![0],
+              citations: [{ kind: 'session', sessionId: 'S-02', offsetMs: 38_001 }],
+            },
+          ],
+        },
+      });
+
+      expect(complaint).toContain(`${label.recommendations}/writeUp/0/citations/0/offsetMs`);
+      expect(complaint).toContain('has to land inside the recording it names');
+      expect(rest).toEqual([]);
+    });
+  });
+
   describe('no recommendation rests on an excluded session', () => {
     const broken = (): CitedRun => ({
       ...brokenSessionArtifact(),
@@ -862,5 +968,31 @@ describe('validate on a run directory reports the run-level rules too', () => {
         },
       }),
     ).rejects.toThrow(/cannot be a number nobody measured/);
+  });
+
+  it('refuses to write a cited timestamp past the end of the recording it names', async () => {
+    // The rule lives in the one validator `validate`, `readRun` and `writeRun` all run, so
+    // `personavision validate` and the pipeline get it without either one asking for it.
+    const artifact = validArtifact();
+    const document = validRecommendations();
+
+    await expect(
+      writeRun(dir, {
+        ...artifact,
+        sessions: artifact.sessions.map((session) =>
+          session.sessionId === 'S-02' ? { ...session, video: recordedVideo('S-02') } : session,
+        ),
+        aggregate: validAggregate(),
+        recommendations: {
+          ...document,
+          recommendations: [
+            {
+              ...document.recommendations[0],
+              citations: [{ kind: 'session', sessionId: 'S-02', offsetMs: 90_000 }],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/offsetMs 90000 is past the end of S-02\u2019s 38000 ms recording/);
   });
 });
