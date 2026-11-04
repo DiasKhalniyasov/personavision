@@ -339,14 +339,25 @@ const openRun = ({
         deviceScaleFactor: device.deviceScaleFactor,
         touch: device.touch,
       })),
-      steps: NORTHWIND_TASK.steps.map((step) => ({
-        id: step.id,
-        label: step.label,
-        urlPattern: step.match.urlPattern,
-        requiredSelector: step.match.requiredSelector,
-        primaryActionSelector: step.primaryAction.selector,
-        ...(step.goal === undefined ? {} : { goal: step.goal }),
-      })),
+      steps: NORTHWIND_TASK.steps.map((step) => {
+        // `reproduce.steps` requires the selector of each step's control, and the demo task
+        // names a real one on every step: it is the worked example of a *declared* task.
+        // `TaskStep.primaryAction` is optional because a step may be a whole page — what a
+        // test of one URL derives (#418) — and such a task is never recorded here, because
+        // it has no recipe of steps to write down.
+        const { primaryAction } = step;
+        if (primaryAction === undefined) {
+          throw new Error(`the ${step.id} step of the demo task declares no primary action`);
+        }
+        return {
+          id: step.id,
+          label: step.label,
+          urlPattern: step.match.urlPattern,
+          requiredSelector: step.match.requiredSelector,
+          primaryActionSelector: primaryAction.selector,
+          ...(step.goal === undefined ? {} : { goal: step.goal }),
+        };
+      }),
     },
     sessionIds: [],
     screenshots: [

@@ -742,6 +742,14 @@ Everything in path 1, and then:
   `run.json`, `findings.json`, `sessions/` and `screenshots/`, declared by `packages/contract`'s paths module like every
   other path in the directory. The read-only HTTP mount of `CONTEXT.md` gains them by the same rule: the on-disk layout,
   mirrored, with no server-side computation.
+- **A step may be a whole page, and such a step declares no primary action.** A step's primary action is the control
+  that advances it, named by selector, and a test of **one URL** has none to name: the one step it derives stands for
+  the whole site, and nobody designed a control on the site under test. So the declaration is absent rather than stood
+  in for, no selector is probed, and every element of such a screen is `isPrimaryAction: false` — the honest statement
+  that nobody named a control, and the same thing a page on no step already gets. A task that declares its own steps is
+  unchanged: it names its real controls, and a declared control that cannot be resolved is still our automation
+  failure.
+
 - **The evidence-link parameter list is closed and grows here.** Section 14's routes add `segment`, `step`, `overlay`
   and `t`; they are added to the contract's closed parameter list in the same change, or a deep link cannot be built.
 - **The browser is CloakBrowser**, behind `packages/browser`'s existing interface. It is a binary that is downloaded

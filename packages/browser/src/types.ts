@@ -140,11 +140,19 @@ export interface TaskStep {
   label: string;
   match: { urlPattern: string; requiredSelector: string };
   /**
-   * `optional`: a page of the step where the control is not rendered carries no primary
-   * action rather than failing the session — for a step that spans pages the task does not
-   * control, such as a whole site a person wanders before finding what they were sent for.
+   * The control that advances the step, by selector.
+   *
+   * **A step that declares none is a step that is a whole page.** A test of one URL has no
+   * designed primary action: the step stands for the site, nobody named a control on it,
+   * and `resolvePrimaryAction` therefore probes nothing and marks nothing — every element
+   * of such a screen comes back with `isPrimaryAction: false`, which is the honest
+   * statement and the same thing a page on no step already gets (#418).
+   *
+   * `optional` is the other case and not this one: it is a **declared** control that some
+   * pages of its step do not render, and such a page carries no primary action rather than
+   * failing the session — for a step that spans pages the task does not control.
    */
-  primaryAction: { selector: string; optional?: boolean };
+  primaryAction?: { selector: string; optional?: boolean };
   /**
    * What the person is trying to do *on this screen*, in their own words — "Go to
    * checkout", not the whole errand. Omitted, the screen inherits the task's `prompt`.

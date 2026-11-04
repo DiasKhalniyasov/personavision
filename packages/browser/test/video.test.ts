@@ -139,7 +139,11 @@ const dwellThenAdvance =
   (forMs: number): DecideAction =>
   async (_screen, step) => {
     await new Promise((resolve) => setTimeout(resolve, forMs));
-    return step === null ? null : { type: 'click', selector: step.primaryAction.selector };
+    // The task this suite walks declares its controls; a step that declares none is a step
+    // that is a whole page, and there is nothing for this layer to press on one (#418).
+    return step?.primaryAction === undefined
+      ? null
+      : { type: 'click', selector: step.primaryAction.selector };
   };
 
 describe('the frame a session is recorded at', () => {
