@@ -350,6 +350,18 @@ export const criterionToObserve = (criterion: string | undefined): CriterionToOb
 };
 
 /**
+ * Whether this criterion is answered by the address rather than by what the page drew.
+ *
+ * It is {@link haystackOf}'s rule, asked rather than restated: a caller that wants to know
+ * whether moving the page could have made the criterion true — the walk, after an action,
+ * with the elements of the screen the action *left* in hand — must not have to know which
+ * kind reads which half of a screen. A criterion nothing can look for is answered by
+ * neither.
+ */
+export const readsTheAddress = (read: CriterionToObserve): boolean =>
+  read.unobservable === null && read.kind === 'url';
+
+/**
  * What one screen showed of the criterion: every term, or which ones were missing.
  *
  * A criterion nothing can look for is never observed, on any screen — it is not promoted to

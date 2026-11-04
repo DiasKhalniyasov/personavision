@@ -146,7 +146,7 @@ const composeScreen = async (page: PageHandle, ctx: CaptureContext): Promise<Cap
   // a single-page application's two routes, a path and its trailing-slash twin — is one
   // entry, and a hit that carried the first address would state the wrong location for the
   // second.
-  return composed.url === url ? composed : { ...composed, url };
+  return { ...composed, url };
 };
 
 /**

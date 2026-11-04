@@ -77,7 +77,7 @@ import {
   saccadeDurationMsFor,
 } from '@personavision/engine';
 import { openTrajectoryFile, validateDecision } from '@personavision/provider';
-import { criterionToObserve, observeCriterion } from './criterion.js';
+import { criterionToObserve, observeCriterion, readsTheAddress } from './criterion.js';
 import { decideOutcome } from './outcome.js';
 import type {
   ActResult,
@@ -396,8 +396,18 @@ const fixatedElementsOf = (
  * one out, and is how the owner's two sessions that reached the sign-up view were written up
  * as the person abandoning the product there (#441).
  */
-const gotSomewhere = (acted: ActResult, step: string, scrollY: number, url: string): boolean =>
-  acted.step !== step || acted.scrollY !== scrollY || acted.url !== url;
+const gotSomewhere = (acted: ActResult, was: WalkPosition): boolean =>
+  acted.step !== was.step || acted.url !== was.url || acted.scrollY !== was.scrollY;
+
+/**
+ * Where the walk was before an action: the three fields an `ActResult` reports back, named
+ * so that the two addresses and the two labels cannot be handed over the wrong way round.
+ */
+interface WalkPosition {
+  readonly step: string;
+  readonly url: string;
+  readonly scrollY: number;
+}
 
 /**
  * The one driver refusal that is the agent's doing and not our breakage: a `back` from a
@@ -721,7 +731,10 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
       // arriving somewhere: a one-URL run derives one step, which the page matches the
       // moment it loads, so the step rule made every such session a success (#400). A run
       // with no goal keeps that rule, because a declared task says where its end is.
-      if (criterion !== null) {
+      // Until it has been observed. Once it has, this screen cannot unsee it — the walk ends
+      // here or on the next action — and a later reading would leave the trace saying the
+      // criterion was observed and naming terms the session was missing.
+      if (criterion !== null && !completed) {
         lastSighting = observeCriterion(criterion, { step, url, elements: capture.elements });
       }
       reachedFinalStep = reachedFinalStep || step === finalStepId;
@@ -871,8 +884,8 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           record(kind, aoi, false, null, actedAtMs);
           history.push({ ...attempted, ok: false });
         } else if (executed !== null) {
-          // `url` is still the address the screen was captured at: it is replaced below.
-          const worked = executed.ok && gotSomewhere(executed, step, scrollY, url);
+          // `url` and `scrollY` are still the screen's own: both are replaced below.
+          const worked = executed.ok && gotSomewhere(executed, { step, url, scrollY });
           // Depth counts navigations and not progress: a scroll gets the agent somewhere
           // and puts nothing behind it to go back to.
           if (executed.ok && executed.step !== step) {
@@ -887,16 +900,17 @@ export const runSession = async (input: RunSessionInput): Promise<Session> => {
           // page before it. Observed is observed: the walk's own ending is untouched, and so
           // is `docs/FLOW.md` section 8's order of outcomes.
           //
-          // Only a URL criterion. An element or a piece of text is a claim about what the
+          // Only where the criterion is answered by the address, which is `criterion.ts`'s
+          // own question to answer: an element or a piece of text is a claim about what the
           // page drew, and the elements in hand are the screen the action left — so reading
           // one here would answer a question about the destination with the source's words.
-          if (criterion !== null && criterion.kind === 'url') {
+          if (criterion !== null && !completed && readsTheAddress(criterion)) {
             lastSighting = observeCriterion(criterion, {
               step: executed.step ?? step,
               url,
               elements: capture.elements,
             });
-            completed = completed || lastSighting.observed;
+            completed = lastSighting.observed;
           }
           record(kind, aoi, worked, kind === 'scroll' ? String(executed.scrollY) : null, actedAtMs);
           history.push({ ...attempted, ok: worked });

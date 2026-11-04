@@ -21,6 +21,11 @@ adds it under its own directory. `serveFixtureSite({ root })` serves this one, e
 | `/signup`           | The second view. Never requested from the server: nothing loads it.               |
 | `/signup-cancelled` | A path that **extends** the one a criterion asks for, and so does not satisfy it. |
 
+`spa.css` is `../navigation/navigation.css` again, down to the absolute positioning and the page
+being taller than the desktop viewport. The duplication is what serving one directory costs:
+`serveFixtureSite({ root })` serves this directory and nothing beside it, so a stylesheet one level
+up is a 404, and a shared one would have to live in a third directory that is neither fixture's.
+
 Two things about it are deliberate.
 
 **The push happens 50 ms after the click handler, not in it.** A framework resolves its route and
