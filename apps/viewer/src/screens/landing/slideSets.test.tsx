@@ -235,6 +235,36 @@ describe('every registered set is one the page can draw', () => {
   }
 });
 
+describe('a set whose captures were copied into the assets', () => {
+  /**
+   * The front page drawing a template-style set, before any template set exists.
+   *
+   * Every piece of the path a template set will take is real here but the run: the committed
+   * set's own slides, served as a set whose captures are in the app's assets rather than under
+   * `runs/`. What it pins is the one thing that differs between the two kinds — the base a
+   * capture is loaded from — so the day #423's runs produce a set, the page is known to draw
+   * it and not to reach for a run directory that is not in the repository.
+   */
+  it('loads its captures from the assets directory and from no other host', async () => {
+    const [{ set, data }] = parsed as [{ set: SlideSet; data: LandingSlides }];
+    chosen = { ...set, screenshots: { kind: 'assets', base: '/landing-slides/trial/' } };
+
+    const { container } = mountApp(paths.home, { session: SIGNED_OUT });
+    const image = await waitFor(() => {
+      const found = container.querySelector<HTMLImageElement>(
+        '[data-section="landing-carousel"] img',
+      );
+      if (found === null) throw new Error('no capture yet');
+      return found;
+    });
+
+    const first = data.slides[0] as LandingSlides['slides'][number];
+    const src = new URL(image.getAttribute('src') as string, window.location.href);
+    expect(src.pathname).toBe(`/landing-slides/trial/${first.runId}/${first.screenshot.path}`);
+    expect(src.origin).toBe(window.location.origin);
+  });
+});
+
 describe('a set baked from a run that is not committed', () => {
   let work: string;
 
