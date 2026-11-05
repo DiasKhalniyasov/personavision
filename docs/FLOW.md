@@ -240,6 +240,11 @@ acceptance test**. Its formula, weights and exclusion rule are unchanged:
 > - **Time to first fixation on the primary action**, weight **35%** — on the step where it is worst, the median seconds
 >   before someone first looks at the control that advances the task, divided by six seconds and capped at one.
 >   **Never fixated counts as a full 1.0**: a control nobody ever sees is the worst case, not a missing value.
+>   **On a test of one URL it is not measured, and the remaining weights carry the score.** That test's single step
+>   stands for a whole site and names no control that advances the task (section 16), so there is nothing to time: the
+>   component is absent, the other three are blended over their own weights renormalised, and the Score breakdown row
+>   says *not measured* rather than drawing a bar. Not measured and never fixated are two different statements, and a
+>   test that declares its steps still reads the 1.0 above.
 > - **Dead-end revisits**, weight **15%** — the median number of returns per session to an area that does not advance
 >   the task, divided by five and capped at one.
 >

@@ -543,12 +543,29 @@ const scoreSchema = z.strictObject({
   components: z.strictObject({
     taskFailureRate: unitInterval,
     abandonment: unitInterval,
-    timeToFirstFixationPrimary: z.strictObject({
-      worstStep: name,
-      /** `null` when no session ever fixated the primary action on the worst step. */
-      medianSeconds: seconds.nullable(),
-      value: unitInterval,
-    }),
+    /**
+     * The seconds before anyone first looked at the control that advances the task, on the
+     * step where that reads worst — and **`null` when the task declared no such control**,
+     * so there was nothing to time.
+     *
+     * The two absences are different statements and the artifact spells them differently.
+     * A step that **declares** a control nobody ever fixated reads a full `value: 1` with
+     * `medianSeconds: null`: nobody looked, which is the worst case there is. A task that
+     * declares no control anywhere — every test of one URL, whose single derived step
+     * stands for a whole site (`docs/FLOW.md` sections 5 and 16) — carries no object at
+     * all: **not measured**, never `0`, and never a penalty for something the test did not
+     * have. `@personavision/scoring` then blends the friction score over the components it
+     * did measure, with their weights renormalised, so a run that declares its steps
+     * scores exactly what it has always scored.
+     */
+    timeToFirstFixationPrimary: z
+      .strictObject({
+        worstStep: name,
+        /** `null` when no session ever fixated the primary action on the worst step. */
+        medianSeconds: seconds.nullable(),
+        value: unitInterval,
+      })
+      .nullable(),
     deadEndRevisits: unitInterval,
   }),
   outcomeCounts: outcomeCountsSchema,

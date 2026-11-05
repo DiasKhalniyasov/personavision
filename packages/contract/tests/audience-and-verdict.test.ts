@@ -286,6 +286,56 @@ describe('the completion rate the product leads with', () => {
   });
 });
 
+/**
+ * A test of one URL declares no control that advances the task, so there is nothing to
+ * time: the 35% component is **absent** rather than reported as the worst reading there is
+ * (#422). What the contract fixes is that the absence has one spelling, and that every
+ * score written before this field could be null still parses.
+ */
+describe('the time to the primary action, where there was no control to time', () => {
+  const runDir = describeRunDir();
+
+  it('accepts a score whose component is null', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        run.scores[0].components.timeToFirstFixationPrimary = null;
+      }),
+    ).toEqual([]);
+  });
+
+  it('reads the null back as a null, never as a zero', async () => {
+    const run = validRun();
+    run.scores[0].components.timeToFirstFixationPrimary = null;
+    await writeFile(runPaths(runDir.dir()).run, asJson(run));
+
+    const read = await readRun(runDir.dir());
+
+    expect(read.run.scores[0].components.timeToFirstFixationPrimary).toBeNull();
+    // The other three are still required: a run may be missing the reading, never the
+    // components it did take.
+    expect(read.run.scores[0].components.abandonment).toBe(
+      validRun().scores[0].components.abandonment,
+    );
+  });
+
+  it('still rejects a component that is present and malformed', async () => {
+    expect(
+      await runDir.afterRunChange((run) => {
+        const components: Record<string, unknown> = run.scores[0].components;
+        components['timeToFirstFixationPrimary'] = { worstStep: CONFIRM, value: 0.4 };
+      }),
+    ).toContain(`${label.run}/scores/0/components/timeToFirstFixationPrimary/medianSeconds`);
+  });
+
+  it('keeps the object every committed score carries', async () => {
+    const { run } = await readRun(runDir.dir());
+
+    expect(run.scores[0].components.timeToFirstFixationPrimary).toEqual(
+      validRun().scores[0].components.timeToFirstFixationPrimary,
+    );
+  });
+});
+
 describe('the audience is extended, never forked', () => {
   const runDir = describeRunDir();
 

@@ -18,6 +18,7 @@ import {
   fixtureSessions,
   fixtureTask,
   plantedDefects,
+  unmarkedAois,
 } from './fixtures/index.js';
 
 /**
@@ -75,6 +76,39 @@ const scoreOf = (sessions: readonly Session[]): VariantScore => {
 
 const scoreMini = (rows: readonly MiniRow[]): VariantScore => scoreOf(miniSessions(rows));
 
+/**
+ * The same rows over areas with **nothing marked as the control that advances the task**:
+ * a test of one URL (#418). `seconds` is ignored here, because there is no control to be
+ * looked at — what the rows still say is who failed, who gave up and how often they went
+ * back to something.
+ */
+const scoreUnmarked = (rows: readonly MiniRow[]): VariantScore => {
+  const sessions = rows.map((row, index) =>
+    buildSession(
+      {
+        sessionId: `S-${String(index + 1).padStart(2, '0')}`,
+        variant: 'A',
+        seed: row.seed ?? null,
+        personaId: 'P-1',
+        status: row.status,
+        attribution: row.attribution,
+        excludedFromScores: row.excludedFromScores,
+        steps: [{ step: 'review', primaryAfterSeconds: null, deadEndReturns: row.returns }],
+      },
+      unmarkedAois,
+    ),
+  );
+  const [only, ...rest] = score(
+    sessions,
+    unmarkedAois,
+    buildAoiMetrics(sessions, unmarkedAois),
+    fixtureTask,
+  );
+  if (only === undefined) throw new Error('the sessions produced no score');
+  if (rest.length > 0) throw new Error('the sessions produced more than one score');
+  return only;
+};
+
 /** The whole fixture run, both variants, as the pipeline would score it. */
 const fixtureScores = (): VariantScore[] =>
   score(fixtureSessions, fixtureAois, fixtureAoiMetrics, fixtureTask);
@@ -83,6 +117,25 @@ const forVariant = (scores: readonly VariantScore[], variant: string): VariantSc
   const found = scores.find((candidate) => candidate.variant === variant);
   if (found === undefined) throw new Error(`no score for variant ${variant}`);
   return found;
+};
+
+/**
+ * The time-to-primary-action component where the run measured one.
+ *
+ * It is `null` when the task declared no control that advances it — its own case below —
+ * so every test that is about the *reading* asks for it here rather than reaching through
+ * a nullable field and asserting against an absence by accident.
+ */
+const timed = (
+  components: VariantScore['components'],
+): NonNullable<VariantScore['components']['timeToFirstFixationPrimary']> => {
+  const component = components.timeToFirstFixationPrimary;
+  if (component === null) {
+    throw new Error(
+      'this variant declared no control that advances the task, so there is no time to assert on',
+    );
+  }
+  return component;
 };
 
 describe('the configuration object', () => {
@@ -168,19 +221,15 @@ describe('the abandonment component', () => {
 
 describe('the time to first fixation on the primary action', () => {
   it('is 0 when the primary action took the first look', () => {
-    const { timeToFirstFixationPrimary } = scoreMini([
-      { status: 'success', seconds: 0, returns: 0 },
-    ]).components;
-    expect(timeToFirstFixationPrimary.medianSeconds).toBe(0);
-    expect(timeToFirstFixationPrimary.value).toBe(0);
+    const reading = timed(scoreMini([{ status: 'success', seconds: 0, returns: 0 }]).components);
+    expect(reading.medianSeconds).toBe(0);
+    expect(reading.value).toBe(0);
   });
 
   it('is the median seconds over six at the middle', () => {
-    const { timeToFirstFixationPrimary } = scoreMini([
-      { status: 'success', seconds: 3, returns: 0 },
-    ]).components;
-    expect(timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(3, 10);
-    expect(timeToFirstFixationPrimary.value).toBeCloseTo(0.5, 10);
+    const reading = timed(scoreMini([{ status: 'success', seconds: 3, returns: 0 }]).components);
+    expect(reading.medianSeconds).toBeCloseTo(3, 10);
+    expect(reading.value).toBeCloseTo(0.5, 10);
   });
 
   it('is a full 1 at six seconds, and stays capped at 1 beyond it', () => {
@@ -188,8 +237,7 @@ describe('the time to first fixation on the primary action', () => {
       scoreMini([{ status: 'success', seconds: 6, returns: 0 }]).components
         .timeToFirstFixationPrimary,
     ).toEqual({ worstStep: 'review', medianSeconds: 6, value: 1 });
-    const beyond = scoreMini([{ status: 'success', seconds: 9, returns: 0 }]).components
-      .timeToFirstFixationPrimary;
+    const beyond = timed(scoreMini([{ status: 'success', seconds: 9, returns: 0 }]).components);
     expect(beyond.medianSeconds).toBeCloseTo(9, 10);
     expect(beyond.value).toBe(1);
   });
@@ -204,12 +252,14 @@ describe('the time to first fixation on the primary action', () => {
   it('is the median over the sessions that looked, not over all of them', () => {
     // Two looked, at two and four seconds; one never did. A zero or a 6 for the third
     // would move the median, and neither is a time anybody was measured at.
-    const { timeToFirstFixationPrimary } = scoreMini([
-      { status: 'success', seconds: 2, returns: 0 },
-      { status: 'success', seconds: 4, returns: 0 },
-      { status: 'abandoned', seconds: null, returns: 0 },
-    ]).components;
-    expect(timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(3, 10);
+    const reading = timed(
+      scoreMini([
+        { status: 'success', seconds: 2, returns: 0 },
+        { status: 'success', seconds: 4, returns: 0 },
+        { status: 'abandoned', seconds: null, returns: 0 },
+      ]).components,
+    );
+    expect(reading.medianSeconds).toBeCloseTo(3, 10);
   });
 
   it('names the worst of the steps the sessions reached', () => {
@@ -230,9 +280,9 @@ describe('the time to first fixation on the primary action', () => {
         fixtureAois,
       ),
     ];
-    const { timeToFirstFixationPrimary } = scoreOf(sessions).components;
-    expect(timeToFirstFixationPrimary.worstStep).toBe('payment');
-    expect(timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(4.5, 10);
+    const reading = timed(scoreOf(sessions).components);
+    expect(reading.worstStep).toBe('payment');
+    expect(reading.medianSeconds).toBeCloseTo(4.5, 10);
   });
 
   it('names the same worst step whatever order the sessions arrive in', () => {
@@ -256,7 +306,7 @@ describe('the time to first fixation on the primary action', () => {
     expect(scoreOf([cart, payment]).components.timeToFirstFixationPrimary).toEqual(
       scoreOf([payment, cart]).components.timeToFirstFixationPrimary,
     );
-    expect(scoreOf([payment, cart]).components.timeToFirstFixationPrimary.worstStep).toBe('cart');
+    expect(timed(scoreOf([payment, cart]).components).worstStep).toBe('cart');
   });
 
   it('measures from the arrival of the visit the control was found on, not across a detour', () => {
@@ -278,9 +328,9 @@ describe('the time to first fixation on the primary action', () => {
       },
       fixtureAois,
     );
-    const { components } = scoreOf([wentBack]);
-    expect(components.timeToFirstFixationPrimary.worstStep).toBe('cart');
-    expect(components.timeToFirstFixationPrimary.medianSeconds).toBeCloseTo(0.9, 10);
+    const reading = timed(scoreOf([wentBack]).components);
+    expect(reading.worstStep).toBe('cart');
+    expect(reading.medianSeconds).toBeCloseTo(0.9, 10);
   });
 
   it('reports the never-fixated 1.0 even where a session did look, when the run says nobody did', () => {
@@ -296,6 +346,105 @@ describe('the time to first fixation on the primary action', () => {
       medianSeconds: null,
       value: 1,
     });
+  });
+});
+
+describe('a task that declares no control that advances it', () => {
+  /**
+   * The shape of every test of one URL (#418, #422). The component is **not measured** —
+   * not a zero, which would be the most flattering wrong number on the card, and not the
+   * full 1.0 a declared control nobody looked at reads, which is a statement about an
+   * audience that was really there.
+   */
+  it('reports the component as absent rather than as a penalty', () => {
+    expect(
+      scoreUnmarked([{ status: 'success', seconds: null, returns: 0 }]).components
+        .timeToFirstFixationPrimary,
+    ).toBeNull();
+  });
+
+  it('says "not measured" and "nobody looked" as two different things', () => {
+    const declared = scoreMini([{ status: 'abandoned', seconds: null, returns: 0 }]);
+    const undeclared = scoreUnmarked([{ status: 'abandoned', seconds: null, returns: 0 }]);
+
+    expect(timed(declared.components)).toEqual({
+      worstStep: 'review',
+      medianSeconds: null,
+      value: 1,
+    });
+    expect(undeclared.components.timeToFirstFixationPrimary).toBeNull();
+
+    // And the two score differently, which is the whole point: the declared control nobody
+    // saw carries its 35%, while the test that never had one is scored on the 20% it did
+    // measure, renormalised over the three weights it used.
+    const { weights, pointsPerUnit } = scoringConfig;
+    const used = weights.taskFailureRate + weights.abandonment + weights.deadEndRevisits;
+    expect(declared.frictionScore.median).toBeCloseTo(
+      (weights.abandonment + weights.timeToFirstFixationPrimary) * pointsPerUnit,
+      10,
+    );
+    expect(undeclared.frictionScore.median).toBeCloseTo(
+      (weights.abandonment / used) * pointsPerUnit,
+      10,
+    );
+  });
+
+  it('scores a run with nothing else wrong at zero, not at the missing 35%', () => {
+    expect(
+      scoreUnmarked([
+        { status: 'success', seconds: null, returns: 0 },
+        { status: 'success', seconds: null, returns: 0 },
+      ]).frictionScore.median,
+    ).toBe(0);
+  });
+
+  it('blends the three measured components over the weight it actually used', () => {
+    const { weights, pointsPerUnit } = scoringConfig;
+    // Everyone failed with the product at fault, and each went back twice to something
+    // that does not advance the task: the 30% is full, the 20% is nothing, the 15% reads
+    // two returns over the cap of five.
+    const scored = scoreUnmarked([
+      { status: 'failed', seconds: null, returns: 2 },
+      { status: 'failed', seconds: null, returns: 2 },
+    ]);
+    const { components } = scored;
+    const used = weights.taskFailureRate + weights.abandonment + weights.deadEndRevisits;
+    const weighted =
+      weights.taskFailureRate * components.taskFailureRate +
+      weights.abandonment * components.abandonment +
+      weights.deadEndRevisits * components.deadEndRevisits;
+
+    expect(components.taskFailureRate).toBe(1);
+    expect(scored.frictionScore.median).toBeCloseTo((weighted / used) * pointsPerUnit, 10);
+    // What it would have read with the old full penalty on a component nothing measured.
+    expect(scored.frictionScore.median).not.toBeCloseTo(
+      (weighted + weights.timeToFirstFixationPrimary) * pointsPerUnit,
+      6,
+    );
+  });
+
+  /**
+   * The renormalisation must not move a run that measured all four, because the committed
+   * example run, `tests/acceptance/`'s score table and the planted-defect precision and
+   * recall are all read off those numbers. Four measured components divide by exactly one
+   * unit of weight, and dividing a double by 1 changes no bit of it — so this asserts
+   * exact equality with the blend written out by hand, not closeness to it.
+   */
+  it('leaves a four-component blend bit for bit what the weights alone give', () => {
+    const { weights, pointsPerUnit } = scoringConfig;
+    const scored = scoreMini([
+      { status: 'failed', seconds: 2, returns: 1 },
+      { status: 'abandoned', seconds: 4, returns: 3 },
+      { status: 'success', seconds: 1, returns: 0 },
+    ]);
+    const { components } = scored;
+    const byHand =
+      weights.taskFailureRate * components.taskFailureRate +
+      weights.abandonment * components.abandonment +
+      weights.timeToFirstFixationPrimary * timed(components).value +
+      weights.deadEndRevisits * components.deadEndRevisits;
+
+    expect(scored.frictionScore.median).toBe(byHand * pointsPerUnit);
   });
 });
 
@@ -355,7 +504,7 @@ describe('the whole formula', () => {
       { status: 'failed', seconds: null, returns: 6 },
     ]);
     expect(worst.components.taskFailureRate).toBe(1);
-    expect(worst.components.timeToFirstFixationPrimary.value).toBe(1);
+    expect(timed(worst.components).value).toBe(1);
     expect(worst.components.deadEndRevisits).toBe(1);
     expect(worst.frictionScore.median).toBeCloseTo(80, 10);
     expect(worst.completionRate).toBe(0);
