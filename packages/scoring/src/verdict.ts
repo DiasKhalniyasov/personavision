@@ -1,9 +1,9 @@
-import type { Audience, Verdict } from '@personavision/contract';
+import type { Audience, Session, Verdict } from '@personavision/contract';
 import { audienceSentenceFor, completionReason, reasonFrom } from './audienceSentence.js';
 import { bandOf, bandsDisjoint, type Band } from './bands.js';
 import type { Finding } from './findings/index.js';
 import { judgeHoldout, type ChangeUnderTest, type OnTheOriginalSeeds } from './holdout.js';
-import type { VariantScore } from './score.js';
+import { stepsReached, type VariantScore } from './score.js';
 
 /**
  * The verdict: what the product leads with, produced once by the pipeline and stored.
@@ -35,18 +35,25 @@ import type { VariantScore } from './score.js';
  */
 
 /**
- * The signature #27 implements, with #304's fourth argument.
+ * The signature #27 implements, with #304's fourth argument and #422's fifth.
  *
  * `change` names the two versions of a path-2 run — the site as it is and the pull
  * request's — and is the whole of what this function needs to read the holdout beside
  * them. A path-1 run passes none and gets today's verdict, with no holdout field: the
  * contract refuses a holdout verdict on a run that tested no change.
+ *
+ * `sessions` are read for **one fact**: the furthest step the harder variant's sessions
+ * reached, which is the hero evidence's step on a run whose task declared no control to
+ * time (#422). Every other figure the verdict needs is already on the scores and the
+ * findings, so a caller whose scores all measured that component can leave them out and
+ * gets the verdict it has always got.
  */
 export type VerdictWriter = (
   scores: readonly VariantScore[],
   findings: readonly Finding[],
   audience: Audience,
   change?: ChangeUnderTest,
+  sessions?: readonly Session[],
 ) => Verdict;
 
 /** The Verdict screen shows at most three findings; the cap is the artifact contract's. */
@@ -235,6 +242,7 @@ const reasonsOf = (
 const heroEvidenceOf = (
   findings: readonly Finding[],
   harder: VariantScore,
+  sessions: readonly Session[],
 ): Verdict['heroEvidence'] => {
   const withArea = [...findings]
     .sort((a, b) => a.rank - b.rank)
@@ -243,11 +251,61 @@ const heroEvidenceOf = (
   if (hero !== undefined && hero.variant !== null) {
     return { variant: hero.variant, step: hero.step, aoiId: hero.aoiId };
   }
-  return {
-    variant: harder.variant,
-    step: harder.components.timeToFirstFixationPrimary.worstStep,
-    aoiId: null,
-  };
+  return { variant: harder.variant, step: heroStepOf(harder, findings, sessions), aoiId: null };
+};
+
+/**
+ * The step the hero evidence falls back to when no finding named an area.
+ *
+ * Normally it is the step the friction score itself turns on: where the time to the control
+ * that advances the task reads worst. A run of one URL declared no such control, so that
+ * component was **not measured** (#422) and there is no worst step to name — and the
+ * Verdict screen still has to embed one heatmap, of a step the run declared and captured.
+ *
+ * It is then the **last step of the journey those sessions walked**, which is exactly what
+ * `worstPrimaryAction` names when a declared control was never fixated, so the two agree.
+ * `stepsReached` ranks a step by the earliest screen it ever appeared as, which is the run's
+ * journey order and not one session's: a session that began mid-journey can therefore put a
+ * step it skipped last. That is the same order the friction score names its worst step in,
+ * and taking a different one here would point the evidence at a step the score never did.
+ *
+ * **Only the sessions the figures were computed from are read**: this variant, this task,
+ * and nothing our own automation lost. `score()` leaves an automation failure out of every
+ * component, and a heatmap of a page only a crashed session ever reached would be evidence
+ * for figures that say nothing about it. The holdout is the one filter this function cannot
+ * apply — it is given no persona list — and a holdout session walks the same declared steps
+ * as the rest, so the step it could name is one of the variant's own either way.
+ *
+ * A caller that handed in no session falls back once more, to the step the highest-ranked
+ * finding on that variant names — the only other step this function can see — and a verdict
+ * with none of the three is refused rather than pointed at a step nobody measured.
+ */
+const heroStepOf = (
+  harder: VariantScore,
+  findings: readonly Finding[],
+  sessions: readonly Session[],
+): string => {
+  const measured = harder.components.timeToFirstFixationPrimary;
+  if (measured !== null) return measured.worstStep;
+
+  const scored = sessions.filter(
+    (session) =>
+      session.variant === harder.variant &&
+      session.taskId === harder.taskId &&
+      !session.outcome.excludedFromScores,
+  );
+  const reached = stepsReached(scored);
+  const furthest = reached[reached.length - 1];
+  if (furthest !== undefined) return furthest;
+
+  const named = [...findings]
+    .sort((a, b) => a.rank - b.rank)
+    .find((finding) => finding.variant === harder.variant);
+  if (named !== undefined) return named.step;
+
+  throw new Error(
+    `the verdict has no step to point its evidence at on variant ${harder.variant}: the time to the primary action was not measured, no session was handed in to say which steps that variant reached, and no finding names one`,
+  );
 };
 
 /** What the verdict line is composed from, once the comparison has been made. */
@@ -336,7 +394,7 @@ const sentenceOf = ({ harder, easiest, gapPoints, disjoint, agreement }: Sentenc
  * is refused rather than invented: there is no variant to name, and a `verdict` naming one
  * would be the only part of the artifact nobody measured.
  */
-export const verdict: VerdictWriter = (scores, findings, audience, change) => {
+export const verdict: VerdictWriter = (scores, findings, audience, change, sessions = []) => {
   if (scores.length === 0) {
     throw new Error(
       'a verdict needs at least one scored variant: there is no variant to name and no gap to measure',
@@ -414,7 +472,7 @@ export const verdict: VerdictWriter = (scores, findings, audience, change) => {
     audienceSentence: holdout === null ? audienceSentence : holdout.audienceSentence,
     reasons: reasonsOf(headline, preferred, other, holdout?.reason ?? null),
     headlineFindingIds: headline.map((finding) => finding.id),
-    heroEvidence: heroEvidenceOf(findings, harder),
+    heroEvidence: heroEvidenceOf(findings, harder, sessions),
     ...(holdout === null ? {} : { holdout: holdout.verdict }),
   };
 };

@@ -183,6 +183,20 @@ export const fixtureAois: Aoi[] = Object.entries(PAGES).flatMap(([variant, steps
   ),
 );
 
+/**
+ * The same areas with **nothing marked as the control that advances the task**.
+ *
+ * That is the shape of every test of one URL (#418): its one derived step stands for a
+ * whole site, a site has no designed primary action, and `resolvePrimaryAction` therefore
+ * marks nothing. Same ids, same boxes, same labels, so a session built against these reads
+ * exactly as it reads against `fixtureAois` apart from the one mark — what changes is what
+ * the score and the findings may claim about a control that was never named (#422).
+ */
+export const unmarkedAois: Aoi[] = fixtureAois.map((aoi) => ({
+  ...aoi,
+  isPrimaryAction: false,
+}));
+
 export const fixtureTask: Task = { id: 'buy-a-tent', prompt: 'Buy the two-person tent' };
 
 /** A row of the table below: the four steps' readings, as `seconds / returns`. */
@@ -464,6 +478,19 @@ export const cleanVariantSessions: Session[] = CLEAN.map((row) =>
 
 export const defectiveVariantSessions: Session[] = DEFECTIVE.map((row) =>
   buildSession(toSpec('B', row), fixtureAois),
+);
+
+/**
+ * The defective checkout's own sessions walked over `unmarkedAois`: the same twelve people
+ * on the same pages, with **no control named as the one that advances the task**.
+ *
+ * The banner still opens the basket step and still holds its attention, which is what makes
+ * this the set that matters: the competing-banner rule's claim is that an area holds *more*
+ * attention than the control beneath it, and here there is no control on the other side of
+ * that comparison (#422).
+ */
+export const unmarkedDefectiveSessions: Session[] = DEFECTIVE.map((row) =>
+  buildSession(toSpec('B', row), unmarkedAois),
 );
 
 /** Both variants of one run, in session-id order, as `run.sessionIds` lists them. */

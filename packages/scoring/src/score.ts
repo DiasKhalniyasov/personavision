@@ -69,7 +69,7 @@ const scored = (session: Session): boolean => !session.outcome.excludedFromScore
  * name a different worst step depending on which session came first. A step id breaks a
  * remaining tie, so the order is total.
  */
-const stepsReached = (sessions: readonly Session[]): string[] => {
+export const stepsReached = (sessions: readonly Session[]): string[] => {
   const firstSeenAt = new Map<string, number>();
   for (const session of sessions) {
     for (const screen of session.screens) {
@@ -168,16 +168,31 @@ const firstFixationReading = (
 };
 
 /**
- * The step where the primary action reads worst, and its reading.
+ * The step where the primary action reads worst, and its reading — or `null` when the task
+ * declared no control that advances it anywhere on this variant.
  *
  * A step may declare more than one primary action, and an agent only has to find one of
  * them, so a step reads as its **best** control; the component then takes the **worst**
  * step, as section 5 says. Ties go to the step that comes first in the journey, so the
  * answer does not depend on the order the areas or the sessions happen to be listed in.
  *
- * A variant that declares no primary action anywhere is a full 1.0: nobody could have
- * looked at a control that is not there. The step named is then the furthest the sessions
- * got, which is where the task would have been completed.
+ * **No control anywhere is not measured, and not a penalty.** A declared control nobody
+ * ever fixated still reads the full 1.0 it has always read — nobody looked, and that is the
+ * worst case there is — but a variant whose task names no such control had nothing to time:
+ * every test of one URL is that shape, because its single derived step stands for a whole
+ * site and a site has no designed primary action (`docs/FLOW.md` sections 5 and 16). Timing
+ * a control that does not exist and then charging 35% of the score for it would make the
+ * friction score of a healthy site read as friction, so the component is absent instead and
+ * `frictionScoreOf` renormalises over the ones that were measured.
+ *
+ * **Which of the two it is is read from what the variant declared, never from how far the
+ * sessions got.** The areas are searched for a control before the journey is walked, so a
+ * checkout whose control sits on the review step still *has* one when every session gave up
+ * on the basket: nobody could reach it, which is the full 1.0 below, and not a measurement
+ * this run never had to take. Deciding it from the steps the sessions reached would make a
+ * run that failed completely score **better** than one that half worked, and would
+ * renormalise one seed group and not another on the same variant — two group scores blended
+ * from different denominators and averaged into one median.
  */
 const worstPrimaryAction = (
   sessions: readonly Session[],
@@ -187,11 +202,14 @@ const worstPrimaryAction = (
   const steps = stepsReached(sessions);
   if (steps.length === 0) {
     throw new Error(
-      'a variant whose sessions reached no step cannot be scored: the time to the primary action has no step to be measured on',
+      'a variant whose sessions reached no step cannot be scored: there is no journey for the time to the primary action to name a worst step of',
     );
   }
 
-  let worst: Score['components']['timeToFirstFixationPrimary'] | undefined;
+  // Nothing to time, on any step, reached or not: the one case the component is absent in.
+  if (!aois.some((aoi) => aoi.isPrimaryAction)) return null;
+
+  let worst: NonNullable<Score['components']['timeToFirstFixationPrimary']> | undefined;
   for (const step of steps) {
     const primaries = aois.filter((aoi) => aoi.step === step && aoi.isPrimaryAction);
     if (primaries.length === 0) continue;
@@ -202,6 +220,10 @@ const worstPrimaryAction = (
     if (worst === undefined || best.value > worst.value) worst = { worstStep: step, ...best };
   }
 
+  // A control this variant declares that no step the sessions reached holds: unreachable,
+  // which is the same 1.0 as unseen and the reading this function has always given it. The
+  // step named is the last of the journey the sessions walked, which is where the task
+  // would have been completed.
   return worst ?? { worstStep: steps[steps.length - 1], ...NEVER_FIXATED };
 };
 
@@ -239,7 +261,12 @@ const deadEndReturns = (session: Session, byId: ReadonlyMap<string, Aoi>): numbe
   return returns;
 };
 
-/** The four components over one set of sessions: a whole variant, or one seed group of it. */
+/**
+ * The four components over one set of sessions: a whole variant, or one seed group of it.
+ *
+ * Three of them on a variant whose task declared no control that advances it: the time to
+ * that control is then `null`, which is the one component a run may be missing.
+ */
 const componentsOf = (
   sessions: readonly Session[],
   aois: readonly Aoi[],
@@ -266,21 +293,42 @@ const componentsOf = (
 };
 
 /**
- * Weighted, summed and put on the contract's 0–100 scale.
+ * Weighted, summed over the components that were **measured**, and put on the contract's
+ * 0–100 scale.
  *
  * Each component is a fraction in 0..1 and the weights sum to exactly one, so the blend
  * cannot leave 0..1 by more than a float's last digit — but `frictionScore` is typed as
  * points out of 100 and would be refused at 100.000000000000014, so the answer is held
  * inside the range the contract declares. A set of weights that genuinely summed to more
  * than one is a different mistake, and the configuration test is where it fails.
+ *
+ * **The divisor is the weight actually used**, which is what makes a not-measured component
+ * cost nothing rather than scoring zero. A run of one URL has no control to time, so the
+ * remaining 30%, 20% and 15% carry the score between them: three components that all read
+ * their worst still reach 100, and three that read nothing still reach 0. A run that
+ * measured all four divides by one and is therefore **bit for bit** the score it has always
+ * been — the sum is accumulated in the order section 5 lists the components, and dividing a
+ * double by exactly 1 changes nothing. The divisor cannot be zero: the three components
+ * beside this one are always measured, and the configuration test holds the four weights to
+ * summing to one.
  */
 const frictionScoreOf = (components: Score['components']): number => {
   const { weights, pointsPerUnit } = scoringConfig;
-  const blend =
-    weights.taskFailureRate * components.taskFailureRate +
-    weights.abandonment * components.abandonment +
-    weights.timeToFirstFixationPrimary * components.timeToFirstFixationPrimary.value +
-    weights.deadEndRevisits * components.deadEndRevisits;
+  const fixation = components.timeToFirstFixationPrimary;
+  const measured: readonly (readonly [number, number])[] = [
+    [weights.taskFailureRate, components.taskFailureRate],
+    [weights.abandonment, components.abandonment],
+    ...(fixation === null ? [] : [[weights.timeToFirstFixationPrimary, fixation.value] as const]),
+    [weights.deadEndRevisits, components.deadEndRevisits],
+  ];
+
+  let weighted = 0;
+  let weightUsed = 0;
+  for (const [weight, value] of measured) {
+    weighted += weight * value;
+    weightUsed += weight;
+  }
+  const blend = weighted / weightUsed;
   return Math.min(Math.max(blend * pointsPerUnit, 0), pointsPerUnit);
 };
 

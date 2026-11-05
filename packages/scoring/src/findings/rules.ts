@@ -262,15 +262,28 @@ const primaryActionBelowFold: VariantRule = (reading) => {
  * and costs nothing. What makes it a finding is that the area then holds a large share of
  * the step's attention **and more of it than the control that advances the task** — it is
  * not merely first, it is where the time went.
+ *
+ * **It is held to steps that have such a control**, which is the reading it was written
+ * for. "More attention than the control" is a comparison, and on a step with no control in
+ * the artifact there is nothing on the other side of it: `?? 0` made the comparison
+ * vacuous, so any area with a millisecond of dwell won it, and the most-looked-at block of
+ * any page became a competing banner (#422).
+ *
+ * Two kinds of step are that shape, and both lose the finding deliberately: every step of
+ * a test of one URL, which declares no control at all (#418), and a **declared** step whose
+ * `primaryAction` is `optional` and absent from the page, where `resolvePrimaryAction`
+ * marks nothing. The second is the narrower case the change also covers: a banner there is
+ * holding attention against nothing measured, which is a claim this rule cannot make.
  */
 const competingFirstFixation: VariantRule = (reading) => {
   const candidates = reading.areas.filter((area) => {
     if (area.aoi.isPrimaryAction || area.reachedBy.length === 0) return false;
     const control = controlOf(reading, area.aoi.step);
+    if (control === undefined) return false;
     return (
       area.firstLookOfStepBy.length * 2 > area.reachedBy.length &&
       area.shareOfStepAttention > thresholds.competingDwellShare &&
-      area.totalLookMs > (control?.totalLookMs ?? 0)
+      area.totalLookMs > control.totalLookMs
     );
   });
   const found = worst(
@@ -282,15 +295,15 @@ const competingFirstFixation: VariantRule = (reading) => {
   if (found === undefined) return undefined;
 
   const { aoi } = found;
+  // Present by construction: the filter above kept only areas on a step that has one.
   const control = controlOf(reading, aoi.step);
+  if (control === undefined) return undefined;
   // The head start it had: the gap between when the step's control was first looked at and
   // when this area was. `null` when the control was never looked at at all — that session
   // has no gap, it has the critical rule above — and the clause is then left off rather
   // than printed as a zero.
   const lead =
-    control === undefined ||
-    control.secondsToFirstLook === null ||
-    found.secondsToFirstLook === null
+    control.secondsToFirstLook === null || found.secondsToFirstLook === null
       ? null
       : control.secondsToFirstLook - found.secondsToFirstLook;
 
@@ -305,11 +318,9 @@ const competingFirstFixation: VariantRule = (reading) => {
         ? `${quoted(aoi.label)} takes the first look in ${outOf(found.firstLookOfStepBy.length, found.reachedBy.length)} ${onVariant(reading.variant)}, about ${secondsSaid(lead)} before they look at anything that moves the task on.`
         : `${quoted(aoi.label)} takes the first look in ${outOf(found.firstLookOfStepBy.length, found.reachedBy.length)} ${onVariant(reading.variant)}, before they look at anything that moves the task on.`,
     evidence: said(
-      control === undefined
-        ? `It holds ${secondsSaid(found.totalLookMs / 1000)} of attention on ${stepSaid(aoi.step)}.`
-        : control.totalLookMs === 0
-          ? `It holds ${secondsSaid(found.totalLookMs / 1000)} of attention, against none at all on the control beneath it.`
-          : `It holds ${secondsSaid(found.totalLookMs / 1000)} of attention against ${secondsSaid(control.totalLookMs / 1000)} on the control beneath it.`,
+      control.totalLookMs === 0
+        ? `It holds ${secondsSaid(found.totalLookMs / 1000)} of attention, against none at all on the control beneath it.`
+        : `It holds ${secondsSaid(found.totalLookMs / 1000)} of attention against ${secondsSaid(control.totalLookMs / 1000)} on the control beneath it.`,
       `That is ${percentSaid(found.shareOfStepAttention)} of everything looked at on ${stepSaid(aoi.step)} — attention it costs without earning anything.`,
     ),
     attribution: 'product',

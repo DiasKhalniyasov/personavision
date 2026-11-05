@@ -239,6 +239,84 @@ describe('the four weighted components', () => {
   });
 });
 
+/**
+ * A test of one URL names no control that advances the task, so its score carries no time
+ * to one (#422). The row stays — dropping it would hide a third of the weighting — and says
+ * so in the product's own words where the bar and the figure would be: a `never` would
+ * claim nobody looked at a control, and an empty bar would claim somebody measured a zero.
+ */
+describe('a component this test did not measure', () => {
+  const NOT_MEASURED =
+    'not measured: this test has one URL, so no control was named as the one that advances the task';
+
+  /** The committed run with one version's 35% component absent, as a one-URL run writes it. */
+  const notMeasured = () =>
+    withScore(seedRun(), 'A', {
+      components: {
+        ...(seedRun().scores[0] as NonNullable<ReturnType<typeof seedRun>['scores'][number]>)
+          .components,
+        timeToFirstFixationPrimary: null,
+      },
+    });
+
+  it('keeps the row and its weight, and says why there is no figure', () => {
+    show(<ScoreCards run={notMeasured()} />);
+
+    const rows = rowsOf(cardFor('Current checkout'));
+    expect(rows).toHaveLength(4);
+    expect(textOf(rows[2]?.querySelector('.what') ?? null)).toBe(
+      'Time before anyone looked at the main button ' +
+        `weight ${Math.round(scoringConfig.weights.timeToFirstFixationPrimary * 100)}% · ${NOT_MEASURED}`,
+    );
+  });
+
+  it('draws no bar and prints no reading, rather than a 0% bar or a “never”', () => {
+    show(<ScoreCards run={notMeasured()} />);
+
+    const row = rowsOf(cardFor('Current checkout'))[2] as HTMLElement;
+    expect(row.querySelector('.bar')).toBeNull();
+    expect(row.querySelector('.val')).toBeNull();
+    expect(textOf(row)).not.toContain('never');
+    expect(textOf(row)).not.toContain('0 s');
+  });
+
+  it('leaves the other three rows exactly as they read', () => {
+    show(<ScoreCards run={notMeasured()} />);
+
+    const rows = rowsOf(cardFor('Current checkout'));
+    expect([0, 1, 3].map((index) => textOf(rows[index]?.querySelector('.val') ?? null))).toEqual([
+      '0 / 11',
+      '2 / 11',
+      '1.5',
+    ]);
+  });
+
+  it('is clean under axe', async () => {
+    const { container } = show(<ScoreCards run={notMeasured()} />);
+
+    const results = await axe.run(container, { resultTypes: ['violations'] });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  });
+
+  it('gives the row the whole width at 390 px, with no empty bar column', () => {
+    // A media query is not reachable through a rendered component, so the rule is read off
+    // the file the screen imports — as the stacking test below does. The phone rule gives
+    // every component row `1fr auto`, and the not-measured row has to beat it: a second
+    // column at 390 px is an empty track where a reading would be.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const css = readFileSync(join(here, '../../src/screens/breakdown/ScoreCards.css'), 'utf8');
+
+    expect(css).toContain(
+      ".components li[data-measured='false'] {\n  grid-template-columns: 1fr;\n}",
+    );
+    // Written before the phone media query, so it wins on specificity and not on order:
+    // `.components li[data-measured='false']` is one class heavier than `.components li`.
+    expect(css.indexOf("[data-measured='false']")).toBeLessThan(
+      css.indexOf('@media (max-width: 640px)'),
+    );
+  });
+});
+
 describe('a run with less to compare', () => {
   it('renders what it has and names the version that is missing', () => {
     const run = withScore(seedRun(), 'B', null);

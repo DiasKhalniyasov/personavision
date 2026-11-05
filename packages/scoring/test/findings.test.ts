@@ -19,6 +19,8 @@ import {
   fixtureSessions,
   fixtureTask,
   plantedDefects,
+  unmarkedAois,
+  unmarkedDefectiveSessions,
 } from './fixtures/index.js';
 import {
   rulesAoiMetrics,
@@ -648,5 +650,78 @@ describe('the wording the demo’s findings carry', () => {
       ).toContain(ruleId);
     }
     expect(SITUATIONS).toHaveLength(6);
+  });
+});
+
+/**
+ * A run of one URL names no control that advances the task (#418), and four of these rules
+ * are keyed on that mark. The two halves the ticket (#422) asks for, stated separately:
+ * the rules that are **about** the control say nothing, which is correct — they have
+ * nothing to say — and the rule that reads another area **against** the control does not
+ * suddenly indict the whole page for want of something to compare with.
+ */
+describe('a run whose task declares no control that advances it', () => {
+  const unmarkedMetrics = buildAoiMetrics(unmarkedDefectiveSessions, unmarkedAois);
+  const unmarked = findings(
+    unmarkedDefectiveSessions,
+    unmarkedAois,
+    unmarkedMetrics,
+    score(unmarkedDefectiveSessions, unmarkedAois, unmarkedMetrics, fixtureTask),
+  );
+
+  it('states no finding about a control that was never named', () => {
+    const aboutTheControl = [
+      'never-fixated-primary-action',
+      'primary-action-below-fold',
+      'slow-primary-action-fixation',
+    ];
+    expect(unmarked.map((finding) => findingRuleIdOf(finding))).not.toEqual(
+      expect.arrayContaining(aboutTheControl),
+    );
+    // And no sentence names one either, in the words the product actually uses for a
+    // control: `primaryActionSaid`'s two phrasings, the competing rule's comparison
+    // against it, and the counterpart sentence that reads it on the other version. The
+    // same scan over the **declared** checkout finds all of them, which is what stops this
+    // assertion passing on wording the product never writes.
+    const NAMES_A_CONTROL =
+      /the button that (?:completes the order|moves on from)|the control beneath it|the same control/;
+    const sentencesOf = (list: readonly Finding[]): string =>
+      list.map((finding) => `${finding.claim} ${finding.evidence}`).join(' ');
+
+    expect(sentencesOf(forCheckouts(defectiveVariantSessions))).toMatch(NAMES_A_CONTROL);
+    expect(sentencesOf(unmarked)).not.toMatch(NAMES_A_CONTROL);
+  });
+
+  /**
+   * The same basket step, the same banner, the same linger: on the declared checkout this
+   * fires `competing-first-fixation@B`, because the banner holds more attention than the
+   * Checkout button beneath it. With nothing marked there is no button beneath it, so the
+   * comparison has nothing on its other side and the rule is silent rather than reporting
+   * the most-looked-at block of the page as a cost.
+   */
+  it('does not report the banner as competing when the step has no control to compete with', () => {
+    expect(
+      defectiveVariantSessions.length === unmarkedDefectiveSessions.length,
+      'the two sets are the same people on the same pages',
+    ).toBe(true);
+    expect(
+      forCheckouts(defectiveVariantSessions).map((finding) => findingRuleIdOf(finding)),
+    ).toContain('competing-first-fixation');
+    expect(unmarked.map((finding) => findingRuleIdOf(finding))).not.toContain(
+      'competing-first-fixation',
+    );
+  });
+
+  it('still states what happened to the people: where they gave up and where it failed', () => {
+    // The rules that read outcomes rather than the mark are untouched, so a one-URL run is
+    // not left with nothing to say.
+    expect(unmarked.length).toBeGreaterThan(0);
+    expect(
+      findingsSchema.parse({
+        schemaVersion: SCHEMA_VERSION,
+        runId: 'fixture-run',
+        findings: unmarked,
+      }).findings,
+    ).toHaveLength(unmarked.length);
   });
 });

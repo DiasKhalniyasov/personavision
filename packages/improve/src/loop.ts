@@ -731,10 +731,19 @@ export const runImproveLoop = async (request: ImproveRequest): Promise<ImproveRe
     driven.holdoutPersonaIds,
   );
   const found = writeFindings(driven.sessions, driven.run.aois, driven.aoiMetrics, scores);
-  const verdict = writeVerdict(scores, found, driven.run.audience, {
-    baselineVariant: underWay.baselineVariant,
-    changeVariant: underWay.changeVariant,
-  });
+  const verdict = writeVerdict(
+    scores,
+    found,
+    driven.run.audience,
+    {
+      baselineVariant: underWay.baselineVariant,
+      changeVariant: underWay.changeVariant,
+    },
+    // The sessions, for the one fact the scores cannot carry when the task declared no
+    // control that advances it: the furthest step they reached, which is the step the
+    // hero evidence then points at (#422).
+    driven.sessions,
+  );
   const improve: Improve = {
     ...underWay,
     holdout: {

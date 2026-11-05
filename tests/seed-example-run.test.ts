@@ -399,10 +399,17 @@ describe('each score', () => {
 
       it('weights and sums its four components back to the headline score', () => {
         const { components } = score;
+        // All four, not three: this run's task declares its steps and its controls, so the
+        // time to the primary action was measured and the blend divides by a whole unit of
+        // weight. A run of one URL carries `null` here and is scored over the other three
+        // (`packages/scoring/src/score.ts`), which is a different arithmetic and a
+        // different run.
+        const timed = components.timeToFirstFixationPrimary;
+        expect(timed).not.toBeNull();
         const weighted =
           components.taskFailureRate * WEIGHTS.taskFailureRate +
           components.abandonment * WEIGHTS.abandonment +
-          components.timeToFirstFixationPrimary.value * WEIGHTS.timeToFirstFixationPrimary +
+          (timed?.value ?? 0) * WEIGHTS.timeToFirstFixationPrimary +
           components.deadEndRevisits * WEIGHTS.deadEndRevisits;
         expect(Math.round(weighted * 100)).toBe(score.frictionScore.median);
       });

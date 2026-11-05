@@ -360,6 +360,27 @@ describe('the ask the analysis is written through', () => {
     // The score the recommendations are written against, and the criterion the run ran.
     expect(document).toContain('friction score 61 of 100');
     expect(document).toContain('The page shows the text “Order complete”.');
+    expect(document).toContain('the step people were slowest to reach the primary action on');
+  });
+
+  /**
+   * A test of one URL names no control that advances the task (#418), so its score carries
+   * no time to one (#422). The line is **dropped** rather than printed with an empty step:
+   * "the step people were slowest to reach the primary action on: ``" is a sentence about
+   * nothing, and every recommendation the model writes would rest on it.
+   */
+  it('drops the slowest-step line when the run had no control to time', () => {
+    const notMeasured: Run = {
+      ...RUN,
+      scores: RUN.scores.map((score) => ({
+        ...score,
+        components: { ...score.components, timeToFirstFixationPrimary: null },
+      })),
+    };
+    const document = analysisAsk(input({ run: notMeasured })).document;
+
+    expect(document).toContain('friction score 61 of 100');
+    expect(document).not.toContain('slowest to reach the primary action');
   });
 
   it('refuses to be built for a run with no session read', () => {

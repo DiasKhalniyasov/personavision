@@ -1,6 +1,8 @@
-import { verdictSchema, type Audience } from '@personavision/contract';
+import { verdictSchema, type Audience, type Session } from '@personavision/contract';
 import { describe, expect, it } from 'vitest';
 import { verdict, type Finding, type VariantScore } from '../src/index.js';
+import { buildSession } from './fixtures/build.js';
+import { unmarkedAois } from './fixtures/index.js';
 
 /**
  * The verdict sentence: what a run closes on.
@@ -47,7 +49,12 @@ interface ScoreSpec {
   readonly groups?: readonly number[];
   readonly success?: number;
   readonly scored?: number;
-  readonly worstStep?: string;
+  /**
+   * The step the time to the primary action reads worst on — or `null` for a score whose
+   * task declared no control that advances it, where the component is **not measured** and
+   * there is no worst step to name (#422).
+   */
+  readonly worstStep?: string | null;
 }
 
 const scoreOf = ({
@@ -66,7 +73,8 @@ const scoreOf = ({
   components: {
     taskFailureRate: 0,
     abandonment: 0,
-    timeToFirstFixationPrimary: { worstStep, medianSeconds: 2, value: 0.33 },
+    timeToFirstFixationPrimary:
+      worstStep === null ? null : { worstStep, medianSeconds: 2, value: 0.33 },
     deadEndRevisits: 0,
   },
   outcomeCounts: { success, abandoned: scored - success, failed: 0, automationFailure: 0 },
@@ -436,5 +444,129 @@ describe('the hero evidence: the one heatmap the Verdict screen embeds', () => {
       [findingOf({ id: 'F-1', rank: 1, aoiId: null })],
     );
     expect(written.heroEvidence).toEqual({ variant: 'B', step: 'review', aoiId: null });
+  });
+});
+
+/**
+ * A run of one URL declares no control that advances the task, so the friction score's 35%
+ * component is **not measured** and there is no worst step for the evidence to fall back
+ * to (#422). The Verdict screen still embeds one heatmap, of a step the run declared and
+ * captured, so the verdict names the furthest step the variant's sessions reached: the
+ * deepest page the audience got to is the page the verdict is about.
+ */
+describe('the hero evidence when there was no control to time', () => {
+  /** A session that walked the steps given, over areas with nothing marked (#418). */
+  const walked = (variant: string, steps: readonly string[]): Session =>
+    buildSession(
+      {
+        sessionId: `S-${variant}`,
+        variant,
+        seed: 1,
+        personaId: 'P-1',
+        status: 'abandoned',
+        steps: steps.map((step) => ({ step, primaryAfterSeconds: null, deadEndReturns: 0 })),
+      },
+      unmarkedAois,
+    );
+
+  const DERIVED_CLEAN = scoreOf({
+    variant: 'A',
+    median: 20,
+    sd: 2,
+    groups: [18, 20, 22],
+    worstStep: null,
+  });
+  const DERIVED_HARDER = scoreOf({
+    variant: 'B',
+    median: 60,
+    sd: 3,
+    groups: [57, 60, 63],
+    worstStep: null,
+  });
+  const WALK: Session[] = [
+    walked('A', ['cart', 'payment']),
+    walked('B', ['cart', 'payment', 'review']),
+  ];
+
+  it('names the furthest step the harder variant reached', () => {
+    const written = verdict([DERIVED_CLEAN, DERIVED_HARDER], [], AUDIENCE, undefined, WALK);
+    expect(written.heroEvidence).toEqual({ variant: 'B', step: 'review', aoiId: null });
+  });
+
+  it('resolves a real step on a path-2 run of a derived task, and parses as a verdict', () => {
+    const written = verdict(
+      [DERIVED_CLEAN, DERIVED_HARDER],
+      [],
+      AUDIENCE,
+      { baselineVariant: 'B', changeVariant: 'A' },
+      WALK,
+    );
+    expect(written.heroEvidence.variant).toBe('B');
+    // A step the sessions of that variant really reached, not a control that does not exist.
+    const reached = new Set(
+      WALK.filter((session) => session.variant === 'B').flatMap((session) =>
+        session.screens.map((screen) => screen.step),
+      ),
+    );
+    expect(reached.has(written.heroEvidence.step)).toBe(true);
+    expect(written.heroEvidence.aoiId).toBeNull();
+    expect(() => verdictSchema.parse(written)).not.toThrow();
+  });
+
+  /**
+   * The figures beside the heatmap are over the scored sessions of this variant and this
+   * task, so the heatmap has to be of a page one of **those** reached. A session our own
+   * automation lost reaches no component and no finding, and a session of another task is
+   * another row's result.
+   */
+  it('reads only the sessions the figures were computed from', () => {
+    const deeper = (over: Partial<Session>): Session => ({
+      ...walked('B', ['cart', 'payment', 'review', 'confirm']),
+      sessionId: 'S-deep',
+      ...over,
+    });
+    const lostByOurAutomation = deeper({
+      outcome: {
+        status: 'automation_failure',
+        step: 'confirm',
+        reason: 'the continue selector timed out',
+        attribution: 'automation',
+        excludedFromScores: true,
+      },
+    });
+    const anotherTask = deeper({ taskId: 'buy-a-stove' });
+
+    for (const ignored of [lostByOurAutomation, anotherTask]) {
+      const written = verdict([DERIVED_CLEAN, DERIVED_HARDER], [], AUDIENCE, undefined, [
+        ...WALK,
+        ignored,
+      ]);
+      expect(written.heroEvidence.step).toBe('review');
+    }
+  });
+
+  it('still prefers a finding that named an area, as it does on any other run', () => {
+    const written = verdict(
+      [DERIVED_CLEAN, DERIVED_HARDER],
+      [findingOf({ id: 'F-1', rank: 1, step: 'cart', aoiId: 'b-cart-promo' })],
+      AUDIENCE,
+      undefined,
+      WALK,
+    );
+    expect(written.heroEvidence).toEqual({ variant: 'B', step: 'cart', aoiId: 'b-cart-promo' });
+  });
+
+  it('falls back to the step a finding names when the caller handed in no session', () => {
+    const written = write(
+      [DERIVED_CLEAN, DERIVED_HARDER],
+      [findingOf({ id: 'F-1', rank: 1, step: 'payment', aoiId: null })],
+    );
+    expect(written.heroEvidence).toEqual({ variant: 'B', step: 'payment', aoiId: null });
+  });
+
+  it('refuses a verdict with no step to point at rather than inventing one', () => {
+    expect(() => write([DERIVED_CLEAN, DERIVED_HARDER])).toThrow(
+      /no step to point its evidence at on variant B/,
+    );
   });
 });

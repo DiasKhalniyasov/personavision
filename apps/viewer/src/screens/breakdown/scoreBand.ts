@@ -122,10 +122,14 @@ export interface ComponentRow {
   readonly weight: string;
   /** `worst step: Review`, where the component has one. `null` otherwise. */
   readonly note: string | null;
-  /** The stored 0..1 component, which is the bar's width and nothing else. */
-  readonly fill: number;
-  /** The raw reading beside the bar. */
-  readonly reading: string;
+  /**
+   * The stored 0..1 component, which is the bar's width and nothing else — and `null` when
+   * the component was **not measured**, where there is no bar to draw. An empty bar would
+   * read as a measurement of zero, which is the most flattering wrong number on the card.
+   */
+  readonly fill: number | null;
+  /** The raw reading beside the bar; `null` when there is no reading to print. */
+  readonly reading: string | null;
   /** True when the reading is `never`: a control nobody ever looked at. */
   readonly never: boolean;
 }
@@ -154,9 +158,21 @@ const outOf = (share: number, of: number): string => `${Math.round(share * of)} 
  * never a blank, and never a large number standing in for infinity.
  */
 const fixationReading = (
-  component: VariantScore['components']['timeToFirstFixationPrimary'],
+  component: NonNullable<VariantScore['components']['timeToFirstFixationPrimary']>,
 ): string =>
   component.medianSeconds === null ? 'never' : `${figure.format(component.medianSeconds)} s`;
+
+/**
+ * Why the 35% component has no figure, in the product's own words.
+ *
+ * The component is absent when the task declared no control that advances it, which is
+ * every test of one URL: its single step stands for a whole site, and a site has no
+ * designed primary action (`docs/FLOW.md` section 5). The row says that, in place of the
+ * bar and the reading — a `never` would claim nobody looked at a control, and an empty bar
+ * would claim somebody measured a zero, and neither happened.
+ */
+const NOT_MEASURED =
+  'not measured: this test has one URL, so no control was named as the one that advances the task';
 
 /**
  * Dead-end revisits per person, back from the normalised component.
@@ -178,6 +194,13 @@ const revisitsReading = (component: number): string => {
  *
  * `run` is here for one word only: the step the time-to-fixation component is worst on is
  * stored as an id, and the run holds the label a reader sees.
+ *
+ * **A component the run did not measure keeps its row and loses its bar.** The 35% one is
+ * absent on a test of one URL, and the row then says so in words where the figure would
+ * be: dropping the row would hide a third of the weighting, and drawing it empty would
+ * report a reading nobody took. The score beside it is already blended over the components
+ * that were measured (`packages/scoring/src/score.ts`), so nothing here renormalises
+ * anything.
  */
 export function componentRows(run: Run, score: VariantScore): ComponentRow[] {
   const { components, scoredSessionCount } = score;
@@ -209,10 +232,10 @@ export function componentRows(run: Run, score: VariantScore): ComponentRow[] {
       key: 'timeToFirstFixationPrimary',
       label: 'Time before anyone looked at the main button',
       weight: percentOfWeight(weights.timeToFirstFixationPrimary),
-      note: `worst step: ${stepLabel(run, fixation.worstStep)}`,
-      fill: fixation.value,
-      reading: fixationReading(fixation),
-      never: fixation.medianSeconds === null,
+      note: fixation === null ? NOT_MEASURED : `worst step: ${stepLabel(run, fixation.worstStep)}`,
+      fill: fixation === null ? null : fixation.value,
+      reading: fixation === null ? null : fixationReading(fixation),
+      never: fixation !== null && fixation.medianSeconds === null,
     },
     {
       key: 'deadEndRevisits',

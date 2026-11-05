@@ -199,6 +199,14 @@
   color: var(--sev-critical);
 }
 
+/* A component this test did not measure: its label and weight stay, and the note
+   beside them carries the reason in words. There is no bar and no figure, so the
+   label takes the whole row rather than leaving an empty track where a reading
+   would be — an empty bar reads as a measurement of zero. */
+.components li[data-measured='false'] {
+  grid-template-columns: 1fr;
+}
+
 /* ---- A narrow window ---------------------------------------------------- */
 
 @media (max-width: 1000px) {

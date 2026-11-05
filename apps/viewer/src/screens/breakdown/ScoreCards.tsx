@@ -162,10 +162,18 @@ function NoSpread() {
   );
 }
 
-/** One component: what it is, its weight, its bar and its raw reading. */
+/**
+ * One component: what it is, its weight, its bar and its raw reading.
+ *
+ * A component the run **did not measure** keeps its label and its weight and loses the bar
+ * and the figure, because there is no figure: its note carries the reason in words instead
+ * (`scoreBand.ts`), and the row spans the card rather than leaving an empty track where a
+ * reading would be. `data-measured="false"` is what the stylesheet lays that row out from.
+ */
 function Component({ band, row }: { band: ReturnType<typeof bandOfScore>; row: ComponentRow }) {
+  const measured = row.fill !== null && row.reading !== null;
   return (
-    <li>
+    <li data-measured={measured ? undefined : 'false'}>
       <span className="what">
         {row.label}{' '}
         <i>
@@ -174,12 +182,16 @@ function Component({ band, row }: { band: ReturnType<typeof bandOfScore>; row: C
         </i>
       </span>
       {/* The bar is never the only carrier: the reading beside it is the same figure in text. */}
-      <span aria-hidden="true" className={`bar band-${band}`}>
-        <span style={{ width: `${row.fill * 100}%` }} />
-      </span>
-      <span className="val" data-never={row.never ? 'true' : undefined}>
-        {row.reading}
-      </span>
+      {row.fill === null ? null : (
+        <span aria-hidden="true" className={`bar band-${band}`}>
+          <span style={{ width: `${row.fill * 100}%` }} />
+        </span>
+      )}
+      {row.reading === null ? null : (
+        <span className="val" data-never={row.never ? 'true' : undefined}>
+          {row.reading}
+        </span>
+      )}
     </li>
   );
 }

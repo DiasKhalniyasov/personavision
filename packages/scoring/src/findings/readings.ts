@@ -297,6 +297,11 @@ export const readRun = (
  * it matters more here than there — a rule's *firing* depends on this area, so taking
  * whichever control happened to be listed first in `aois` would make "this banner competes
  * for attention" a fact about the order of an array.
+ *
+ * `undefined` when the step declares no control at all, which is every step of a test of
+ * one URL (#418). A rule that reads a control **against** another area is held to steps
+ * that have one rather than comparing against nothing (#422); a rule that is *about* the
+ * control simply has nothing to say.
  */
 export const controlOf = (reading: VariantReading, step: string): AreaReading | undefined =>
   reading.areas

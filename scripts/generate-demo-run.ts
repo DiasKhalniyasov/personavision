@@ -251,7 +251,11 @@ const scored = (
     ...run,
     aoiMetrics,
     scores,
-    verdict: writeVerdict(scores, found, run.audience),
+    // The sessions too, although the demo declares a control on every step and so always
+    // measures the time to one: a caller that omits them is a caller that would fail at
+    // run time rather than at the type checker the day a variant's component came back
+    // absent (#422).
+    verdict: writeVerdict(scores, found, run.audience, undefined, sessions),
   };
 
   return {

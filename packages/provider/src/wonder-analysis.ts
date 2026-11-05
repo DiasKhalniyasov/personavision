@@ -514,7 +514,15 @@ const documentOf = (input: AnalysisAskInput): string => {
       ? ['None recorded.']
       : run.scores.flatMap((score) => [
           `- \`${score.variant}\`: ${score.scoredSessionCount} sessions scored — ${score.outcomeCounts.success} completed, ${score.outcomeCounts.abandoned} abandoned, ${score.outcomeCounts.failed} failed, ${score.outcomeCounts.automationFailure} automation failures; completion rate ${score.completionRate}; friction score ${score.frictionScore.median} of 100`,
-          `  the step people were slowest to reach the primary action on: \`${score.components.timeToFirstFixationPrimary.worstStep}\``,
+          // Dropped rather than printed empty when the task declared no control that
+          // advances it: "the step people were slowest to reach the primary action on" is
+          // a sentence about nothing on a test of one URL, and the recommendations would
+          // rest on it (#422). A score with the component carries the line as before.
+          ...(score.components.timeToFirstFixationPrimary === null
+            ? []
+            : [
+                `  the step people were slowest to reach the primary action on: \`${score.components.timeToFirstFixationPrimary.worstStep}\``,
+              ]),
         ])),
     '',
     '## The findings this run stated',
