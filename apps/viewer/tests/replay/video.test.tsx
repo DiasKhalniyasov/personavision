@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDesignTokens } from '../setup';
@@ -12,7 +12,6 @@ import {
   forget,
   metadataArrives,
   mountApp,
-  playedTo,
   recordedSession,
   SEED_RUN,
   serveRecordings,
@@ -55,6 +54,31 @@ const shifted = (sessionId = 'S-15') => ({
   [sessionId]: recordedSession(sessionId, { shiftMs: SHIFT_MS }),
 });
 
+/**
+ * The recording with a **wait** in it: eight seconds of being told what to do next between
+ * the click on Checkout (8 s) and typing the card number (14 s), so the recorder stamped
+ * fourteen seconds over six of session. That is the shape of every browser-driven run —
+ * the gaze model's clock costs no wall time and a model call costs seconds — and the
+ * stretch is what `deciding… 14 s` is said about.
+ */
+const thinking = (sessionId = 'S-15') => ({
+  [sessionId]: recordedSession(sessionId, { waits: { 1: 8_000 } }),
+});
+
+/**
+ * The run the owner watched, in this fixture's figures: a **38 second session in a 9 minute
+ * 30 second recording**, which is fifteen times its own length. The browser opened 32
+ * seconds before the first screen and the agent spent a hundred seconds in front of each of
+ * five decisions, which leaves eight seconds of the session the two clocks crossed together
+ * and thirty the replay has to cross at once.
+ */
+const fifteenTimes = (sessionId = 'S-15') => ({
+  [sessionId]: recordedSession(sessionId, {
+    shiftMs: SHIFT_MS,
+    waits: { 1: 100_000, 2: 100_000, 3: 100_000, 4: 100_000, 5: 100_000 },
+  }),
+});
+
 beforeEach(() => {
   loadDesignTokens();
   stubVideoPlayback();
@@ -88,6 +112,13 @@ const theFour = () => ({
   screen: document.querySelector('[data-screen-card][data-active="true"] h2')?.textContent ?? '',
   row: activeRow(),
 });
+
+/** The waits the track is marked with, in the order the session meets them. */
+const waitMarks = (): string[] =>
+  [...document.querySelectorAll('[data-wait]')].map((mark) => mark.getAttribute('data-wait') ?? '');
+
+/** The badge over the stage, when the replay is crossing a wait. */
+const waitBadge = (): string => document.querySelector('[data-waiting]')?.textContent ?? '';
 
 const marks = (): Element[] => [...document.querySelectorAll('[data-fixation]')];
 const clicks = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-click]')];
@@ -215,7 +246,7 @@ describe('the recording as the stage', () => {
   });
 });
 
-describe('one clock', () => {
+describe('one clock, and it is the session’s own', () => {
   it('moves the video, the screen, the log row and the fixation counter from one drag', async () => {
     await serveRecordings({ sessions: recorded() });
     mountApp(replay('S-15', '?t=16'));
@@ -247,39 +278,87 @@ describe('one clock', () => {
     expect(stage().currentTime).toBeCloseTo(38, 1);
   });
 
-  it('moves the same four as the video plays, and leaves them on the frame it was paused on', async () => {
+  it('runs the track over the session and not over the file it is four times shorter than', async () => {
+    await serveRecordings({ sessions: shifted() });
+    mountApp(replay('S-15', '?t=48'));
+    await ready();
+
+    // The recording is 1:10 and the session inside it is 0:38, and the track is the
+    // session's: its right-hand end is the moment this person gave up, not the moment the
+    // file runs out.
+    const slider = screen.getByRole('slider', { name: 'Scrub the recording' });
+    expect(slider.getAttribute('aria-valuemax')).toBe('38');
+    expect(clock()).toBe('0:16 / 0:38');
+    // And the recording is seeked to follow: 0:16 of this person is 0:48 of the tape.
+    expect(stage().currentTime).toBeCloseTo(48, 1);
+  });
+
+  it('reaches the end of a recording fifteen times its length in the session’s own time', async () => {
+    await serveRecordings({ sessions: fifteenTimes() });
+    const { router } = mountApp(replay('S-15', '?t=0'));
+    await ready();
+
+    // The file: 9:30, which the outcome card states as the recording's own fact.
+    expect(cardRow('Video')).toContain('9:30');
+    expect(clock()).toBe('0:00 / 0:38');
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Play the recording' }));
+
+      // Twenty seconds of wall time, twenty seconds of this person's attempt — although
+      // the tape has run through more than four minutes of waiting to get here.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(clock()).toBe('0:20 / 0:38');
+
+      // And the end of the session is the end of the replay, at 38 seconds and not at 570.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(18_500);
+      });
+      expect(clock()).toBe('0:38 / 0:38');
+      expect(screen.getByRole('button', { name: 'Play the recording' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // One entry in the history for a session played through, not one per second.
+    expect(router.state.historyAction).toBe('REPLACE');
+  });
+
+  it('moves the same four as it plays, and leaves them where it was paused', async () => {
     await serveRecordings({ sessions: recorded() });
     const { router } = mountApp(replay('S-15', '?t=16'));
     await ready();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Play the recording' }));
-    expect(screen.getByRole('button', { name: 'Pause the recording' })).toBeTruthy();
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Play the recording' }));
+      expect(screen.getByRole('button', { name: 'Pause the recording' })).toBeTruthy();
 
-    // The player running on, as a playing element reports itself.
-    playedTo(30);
-    await waitFor(() => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(14_000);
+      });
       expect(theFour()).toEqual({
         clock: '0:30 / 0:38',
         fixation: 'fixation 20 of 23',
         screen: 'Screen 3 of 3 · Review',
         row: '0:29 | read · Order summary · 558 ms held',
       });
-    });
-    // One entry in the history for a recording played through, not one per second.
-    expect(router.state.location.search).toBe('?t=30');
-    expect(router.state.historyAction).toBe('REPLACE');
+      expect(router.state.location.search).toBe('?t=30');
 
-    // Part-way through the second the page names, which is where pausing really happens.
-    playedTo(30.85);
-    await userEvent.click(screen.getByRole('button', { name: 'Pause the recording' }));
-    expect(screen.getByRole('button', { name: 'Play the recording' })).toBeTruthy();
-    // Paused leaves the four where the frame was, and leaves the link citing it.
-    expect(theFour().clock).toBe('0:30 / 0:38');
-    expect(theFour().fixation).toBe('fixation 20 of 23');
-    expect(router.state.location.search).toBe('?t=30');
-    // And it leaves the frame alone: the element is inside the second the page names, so
-    // it is not snapped back to the start of it.
-    expect(stage().currentTime).toBeCloseTo(30.85, 2);
+      fireEvent.click(screen.getByRole('button', { name: 'Pause the recording' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      // Paused leaves the four where they were, and leaves the link citing that second.
+      expect(theFour().clock).toBe('0:30 / 0:38');
+      expect(theFour().fixation).toBe('fixation 20 of 23');
+      expect(router.state.location.search).toBe('?t=30');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -290,9 +369,10 @@ describe('a link to one moment of the recording', () => {
     await ready();
 
     // The recording ran 32 seconds longer than the session's own figures, and the offsets
-    // are what resolve the second: 0:48 of the recording is this person 16 seconds in.
+    // are what resolve the second: 0:48 of the recording is this person 16 seconds in, and
+    // the clock reads the person's own time because that is the clock this screen runs on.
     expect(theFour()).toEqual({
-      clock: '0:48 / 1:10',
+      clock: '0:16 / 0:38',
       fixation: 'fixation 12 of 23',
       screen: 'Screen 2 of 3 · Payment',
       row: '0:15 | read · Expiry field · 202 ms held',
@@ -319,8 +399,8 @@ describe('a link to one moment of the recording', () => {
 
     // The recorder's clock starts when the browser opens, before the page is navigated to,
     // so the first 32 seconds of this recording are before the session's own first figure.
-    // The first screen's offset is what says so.
-    expect(clock()).toBe('0:10 / 1:10');
+    // The first screen's offset is what says so, and the session's clock starts at zero.
+    expect(clock()).toBe('0:00 / 0:38');
     expect(fixation()).toBe('before the first of 23');
     expect(activeCard()).toContain('Screen 1 of 3 · Cart');
   });
@@ -415,6 +495,131 @@ describe('a link to one moment of the recording', () => {
       expect(router.state.location.search).toBe('?t=17');
     });
     expect(clock()).toBe('0:17 / 0:38');
+  });
+});
+
+describe('a wait is shown as a wait', () => {
+  it('marks the stretch on the track and says in words how long it really was', async () => {
+    await serveRecordings({ sessions: thinking() });
+    const { container } = mountApp(replay('S-15', '?t=0'));
+    await ready();
+
+    // One stretch, between the click on Checkout and typing the card number.
+    expect(waitMarks()).toEqual(['14']);
+    expect(prose(container.querySelector('[data-waits]')?.textContent)).toBe(
+      'Marked on the track: one stretch the recording ran on through while nothing ' +
+        'happened on the page — 14 s — which the replay crosses rather than plays.',
+    );
+  });
+
+  it('marks every stretch of the run the owner watched, each with its own seconds', async () => {
+    await serveRecordings({ sessions: fifteenTimes() });
+    const { container } = mountApp(replay('S-15', '?t=0'));
+    await ready();
+
+    expect(waitMarks()).toEqual(['106', '109', '103', '103', '109']);
+    expect(prose(container.querySelector('[data-waits]')?.textContent)).toContain(
+      '5 stretches the recording ran on through while nothing happened on the page — ' +
+        '106 s, 109 s, 103 s, 103 s and 109 s',
+    );
+  });
+
+  it('says over the stage what the replay crossed, and holds the frame it ends on', async () => {
+    await serveRecordings({ sessions: thinking() });
+    mountApp(replay('S-15', '?fix=9'));
+    await ready();
+
+    // Fixation 9 happened 11.7 seconds in, which is inside the stretch: the session was
+    // reading the payment screen while the recording stood still waiting to be told what
+    // to do next.
+    expect(clock()).toBe('0:11 / 0:38');
+    expect(waitBadge()).toBe('deciding… 14 s');
+    // The frame is the one the wait **ends** on — nothing between the two actions moved,
+    // so the replay is already there rather than part-way through a page that is not
+    // changing: 0:22 of the tape, not 0:11.
+    expect(stage().currentTime).toBeCloseTo(22, 1);
+  });
+
+  it('says nothing over the stage where the two clocks crossed together', async () => {
+    await serveRecordings({ sessions: thinking() });
+    mountApp(replay('S-15', '?t=0'));
+    await ready();
+
+    expect(document.querySelector('[data-waiting]')).toBeNull();
+    expect(stage().currentTime).toBeCloseTo(0, 1);
+  });
+
+  it('crosses the stretch at once as it plays, rather than playing a page that is still', async () => {
+    await serveRecordings({ sessions: thinking() });
+    mountApp(replay('S-15', '?t=8'));
+    await ready();
+
+    // The action the wait begins on: the click on Checkout, at 8 s on both clocks.
+    expect(clock()).toBe('0:08 / 0:38');
+    expect(stage().currentTime).toBeCloseTo(8, 1);
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Play the recording' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      // Half a second later the session is half a second further on and the recording is
+      // fourteen seconds further on: the stretch was crossed, not played.
+      expect(clock()).toBe('0:08 / 0:38');
+      expect(waitBadge()).toBe('deciding… 14 s');
+      expect(stage().currentTime).toBeCloseTo(22, 1);
+
+      // And out the other side the two run on together again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7_000);
+      });
+      expect(clock()).toBe('0:15 / 0:38');
+      expect(document.querySelector('[data-waiting]')).toBeNull();
+      expect(stage().currentTime).toBeCloseTo(23.5, 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens a ?t= that falls inside a wait on the action the wait ends on', async () => {
+    await serveRecordings({ sessions: thinking() });
+    mountApp(replay('S-15', '?t=18'));
+    await ready();
+
+    // 0:18 of this recording is in the middle of the stretch, where every frame is the
+    // same picture. It opens on the action the stretch ends on instead: typing the card
+    // number, 14 seconds into the session.
+    expect(theFour()).toEqual({
+      clock: '0:14 / 0:38',
+      fixation: 'fixation 10 of 23',
+      screen: 'Screen 2 of 3 · Payment',
+      row: '0:14 | type · Card number · autofilled',
+    });
+    expect(document.querySelector('[data-waiting]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play the recording' })).toBeTruthy();
+  });
+
+  it('opens a citation of an action on that action, through the wait before it', async () => {
+    await serveRecordings({ sessions: thinking() });
+    mountApp(replay('S-15', '?t=22'));
+    await ready();
+
+    // 0:22 is where the recorder stamped typing the card number, which is the second a
+    // recommendation citing that action carries.
+    expect(clock()).toBe('0:14 / 0:38');
+    expect(activeRow()).toBe('0:14 | type · Card number · autofilled');
+  });
+
+  it('marks no stretch on a recording whose clock is the session’s own', async () => {
+    await serveRecordings({ sessions: recorded() });
+    const { container } = mountApp(replay('S-15', '?t=16'));
+    await ready();
+
+    expect(waitMarks()).toEqual([]);
+    expect(container.querySelector('[data-waits]')).toBeNull();
+    expect(document.querySelector('[data-waiting]')).toBeNull();
   });
 });
 
@@ -736,6 +941,22 @@ describe('the stage’s own stylesheet', () => {
     expect(rule('.video')['inset']).toBe('0px');
     expect(rule('.overlay')['inset']).toBe('0px');
     expect(rule('.vidstage')['aspect-ratio']).toBe('var(--frame-ratio-desktop)');
+  });
+
+  it('draws a wait on the track it marks, under the thumb, and its badge over the stage', () => {
+    // On the track and under the thumb, so a mark never reads as a second handle; and it
+    // takes no pointer, because the track it marks is still the control.
+    const marker = Number(rule('.wait')['z-index']);
+    expect(marker).toBeGreaterThan(Number(rule(".track [data-slot='slider']")['z-index']));
+    expect(Number(rule(".track [data-slot='slider-thumb']")['z-index'])).toBeGreaterThan(marker);
+    expect(rule('.wait')['pointer-events']).toBe('none');
+    // Never thinner than a rule, so a wait between two actions a moment apart is visible.
+    expect(rule('.wait')['min-width']).toBe('var(--border-width-strong)');
+    // The badge is over the stage and over the gaze layer, which is why a jsdom test
+    // cannot see it and the real browser is where it is looked at.
+    expect(Number(rule('.waiting')['z-index'])).toBeGreaterThan(
+      Number(rule('.overlay')['z-index']),
+    );
   });
 
   it('restates no visual value of its own', () => {

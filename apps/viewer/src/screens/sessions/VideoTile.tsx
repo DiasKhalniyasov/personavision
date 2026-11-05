@@ -4,12 +4,12 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Run, Session } from '@personavision/contract';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { timeLabel } from '@/screens/replay/position';
 import type { SessionRow } from '@/session';
 import { paths } from '@/shell/paths';
 import { runDataBase } from '@/shell/useRun';
 import {
   deviceAndSegment,
+  durationSeconds,
   frameAspect,
   personLine,
   posterFrame,
@@ -157,7 +157,12 @@ function Thumb({ session }: { session: Session }) {
           style={{ left: `${poster.gaze.xPct}%`, top: `${poster.gaze.yPct}%` }}
         />
       )}
-      <span className={styles.play}>{timeLabel(video.durationMs)}</span>
+      {/* **The session's own duration, not the file's.** A recording runs in wall-clock
+          time and includes every second the agent spent waiting to be told what to do
+          next, so the file is several times the attempt it holds: a tile printing the
+          file's length read 2:05 for a 9 second session (#414). This is the figure the
+          rows view of the same data prints in the column headed Duration. */}
+      <span className={styles.play}>{durationSeconds(session.durationMs)}</span>
     </span>
   );
 }

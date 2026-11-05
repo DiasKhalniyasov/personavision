@@ -724,6 +724,15 @@ variants, because a run with one has nothing to compare.
    synced action timeline**, the gaze and click overlay on top of it, and the agent's **stated intent per step** beside
    it. The scrubber moves the video, the gaze, the timeline and the event log together. A recommendation deep-links to
    **the exact timestamp** (`?t=`), and a link with a timestamp opens paused on that frame.
+
+   **The scrubber runs on the session's own clock, and a wait between two actions is shown as a wait rather than
+   played.** A recording runs in wall-clock time and holds every second the agent spent waiting to be told what to do
+   next, so it is several times the attempt inside it; the track is therefore the session's own length and the recording
+   is seeked to follow it. A stretch the two clocks disagree about is **crossed at once** and marked on the track with
+   the real seconds it took — *deciding… 14 s* over the stage. `?t=` stays an offset into the recording, because that
+   is what a citation carries: it opens on the action whose offset it cites, and one that falls inside a wait opens on
+   the action that wait ends on rather than on a frozen frame. A tile in section 2 states the **session's** duration for
+   the same reason the scrubber does.
 4. **Heatmaps.** Per screen and step, **three overlays**: **clicks**, **attention** and **scroll depth**, each
    toggleable, over the page screenshot with the fold drawn. Filterable by **segment and outcome** — _"where the agents
    who failed clicked"_ is one choice on this screen, not a different screen. The area-of-interest table of section 3

@@ -16,11 +16,17 @@ import styles from './replay.module.css';
  * ratio, the video fills it, and every mark is a percentage of that same box — so a mark
  * sits on its element at any player width, and nothing drifts when the window changes.
  *
- * **One clock, and the element is not it.** The position this stage draws is handed to it;
- * what the element owns is the frame it is painting. While the video plays, its own
- * `timeupdate` reports the moment and the page moves everything to it; while it is paused,
- * the page's position is authoritative and the element is seeked to it. That is why the
- * seek below is conditional: a seek on every frame of playback would fight the player.
+ * **One clock, and the element is not it.** The clock the replay runs on is the session's
+ * own and the page owns it (`ReplayPage.tsx`); what this stage is handed is the moment of
+ * the **recording** that moment of the session falls at, and the element is seeked to
+ * follow. That is why the seek below is conditional: a seek on every tick of playback would
+ * fight the player, so it is left alone while it is painting the moment the page is at.
+ *
+ * **A wait is crossed, not played.** Between two actions the recording ran on through and
+ * the session did not, nothing happened on the page: the page holds its position on the
+ * frame the wait ends on, this stage holds the element still there, and the badge says how
+ * many real seconds the agent spent deciding. Playing those seconds back is the defect this
+ * screen was built to stop, and it is what made a 9 s session a 2 minute replay (#414).
  *
  * **Nothing here autoplays.** A replay opens paused, at the frame the link asks for, which
  * is also what `prefers-reduced-motion: reduce` asks of a video that carries meaning: it
@@ -33,13 +39,14 @@ export function VideoStage({
   videoMs,
   durationMs,
   playing,
+  held,
+  waiting,
   gaze,
   clicks,
   scanpath,
   trail,
   clickMarks,
   alternative,
-  onTime,
   onStopped,
   onResolution,
 }: {
@@ -53,6 +60,10 @@ export function VideoStage({
   videoMs: number;
   durationMs: number;
   playing: boolean;
+  /** The session's clock is crossing a wait, so the recording is held on this frame. */
+  held: boolean;
+  /** `deciding… 14 s`, over the stage, or `null` when the recording is being played. */
+  waiting: string | null;
   gaze: boolean;
   clicks: boolean;
   scanpath: boolean;
@@ -60,9 +71,7 @@ export function VideoStage({
   clickMarks: readonly ClickMark[];
   /** Where attention went at this frame, in words: the overlay's text alternative. */
   alternative: string;
-  /** The element's own moment, reported while it plays. */
-  onTime: (videoMs: number) => void;
-  /** The element stopped playing — paused, ended, or refused to start. */
+  /** The element will not play at all: a file it cannot decode, or a refused start. */
   onStopped: () => void;
   /** The recording's own frame size, once the file says what it is. */
   onResolution: (size: { width: number; height: number }) => void;
@@ -71,29 +80,31 @@ export function VideoStage({
   const [state, setState] = useState<'loading' | 'ready' | 'unreadable'>('loading');
 
   /**
-   * The element is seeked when it is not already **inside the second the page names**.
+   * The element is seeked when it is **more than a second from where the page is**.
    *
-   * The page's position is whole seconds, because that is what a link carries, and a playing
-   * element runs through the whole of each one — so an element at 7.85 while the page says 7
-   * is where it should be, and snapping it to 7.0 would rewind the frame the reader is
-   * watching. That is what pausing and ending do: both leave the element part-way through
-   * the page's current second, and a seek there would jump the picture backwards, or off the
-   * end of a recording that had just finished.
+   * The page's clock ticks several times a second and a playing element runs on by itself,
+   * so the two are never on the same millisecond and snapping on every tick would stutter
+   * the picture for nothing. A second of slack is the tolerance: inside it the element is
+   * painting the moment the page is at and is left alone.
    *
-   * Anything else — a dragged scrubber, a link opened on a frame, the element behind the
-   * page — is a real divergence and is followed at once.
+   * Everything that really moves the playhead is outside it — a dragged scrubber, a link
+   * opened on a frame, and above all a wait, where the page's position jumps by every second
+   * the agent spent deciding and the element has to arrive there at once.
    */
   useEffect(() => {
     const video = element.current;
     if (video === null) return;
-    const ahead = video.currentTime * 1000 - videoMs;
-    if (ahead < 0 || ahead >= A_SECOND) video.currentTime = videoMs / 1000;
+    if (Math.abs(video.currentTime * 1000 - videoMs) >= A_SECOND) {
+      video.currentTime = videoMs / 1000;
+    }
   }, [videoMs]);
 
   useEffect(() => {
     const video = element.current;
     if (video === null) return;
-    if (!playing) {
+    // Held still while the session's clock crosses a wait: there is nothing in the stretch
+    // to play, and the frame the page is holding is the one the wait ends on.
+    if (!playing || held) {
       video.pause();
       return;
     }
@@ -103,7 +114,7 @@ export function VideoStage({
     void Promise.resolve(video.play()).catch(() => {
       onStopped();
     });
-  }, [playing, onStopped]);
+  }, [playing, held, onStopped]);
 
   return (
     <div
@@ -132,14 +143,14 @@ export function VideoStage({
           }
           // A seek before the metadata arrived may not have taken: the element did not yet
           // know how long the file was. The frame the link asked for is asked for again.
-          const ahead = video.currentTime * 1000 - videoMs;
-          if (ahead < 0 || ahead >= A_SECOND) video.currentTime = videoMs / 1000;
+          if (Math.abs(video.currentTime * 1000 - videoMs) >= A_SECOND) {
+            video.currentTime = videoMs / 1000;
+          }
         }}
-        onTimeUpdate={(event) => {
-          if (playing) onTime(event.currentTarget.currentTime * 1000);
-        }}
-        onEnded={onStopped}
-        onPause={onStopped}
+        // Neither `pause` nor `ended` is reported: the replay's clock is the session's and
+        // the element is not it. The element is paused on purpose at every wait, and a
+        // recording that runs out before the session's last figure has ended without the
+        // replay having.
         onError={() => {
           setState('unreadable');
           onStopped();
@@ -153,6 +164,14 @@ export function VideoStage({
         {gaze || scanpath ? <GazeOverlay trail={trail} marks={gaze} scanpath={scanpath} /> : null}
         {clicks ? <ClickOverlay marks={clickMarks} /> : null}
       </div>
+
+      {/* Over the stage and over the overlay: the seconds this stretch of the recording
+          really took, which the replay has crossed rather than played. */}
+      {waiting === null ? null : (
+        <span className={styles.waiting} data-waiting="true">
+          {waiting}
+        </span>
+      )}
 
       {state === 'loading' ? (
         <span className={styles.scrim} data-stage-state="loading">
@@ -170,5 +189,5 @@ export function VideoStage({
   );
 }
 
-/** The page's position is whole seconds, and this is one of them. */
+/** The slack between the page's clock and the element's, in milliseconds. */
 const A_SECOND = 1000;

@@ -71,6 +71,15 @@ const screenStarts = (file: SeedSession): number[] =>
     return index === 0 ? 0 : (first?.tMs ?? 0);
   });
 
+/** What the agent spent waiting before each action, keyed by the action's own index. */
+export type Waits = Readonly<Record<number, number>>;
+
+/** The waiting the recording had done by the time it stamped the entry at `tMs`. */
+const waitedBy = (file: SeedSession, waits: Waits, tMs: number): number =>
+  Object.entries(waits)
+    .filter(([index]) => (file.actions[Number(index)]?.tMs ?? Number.POSITIVE_INFINITY) <= tMs)
+    .reduce((total, [, ms]) => total + ms, 0);
+
 /**
  * One session of the seed run with the recording a run of this product now makes.
  *
@@ -90,20 +99,29 @@ export function recordedSession(
     shiftMs?: number;
     /** Milliseconds the recording ran on for after the session's last figure. */
     plusMs?: number;
+    /**
+     * Milliseconds the agent spent being told what to do next **before** the action of
+     * each index: time the recording ran and the session's own clock did not, which is
+     * what a wait is made of. A browser-driven run is mostly made of these, because the
+     * gaze model's clock costs no wall time and a model call does.
+     */
+    waits?: Waits;
     truncated?: 'screen' | 'session' | null;
   } = {},
 ): Record<string, unknown> {
   const file = readSeedSession(sessionId);
   const read = file as unknown as SeedSession;
   const shiftMs = options.shiftMs ?? 0;
-  const offset = (tMs: number): number => tMs + shiftMs;
+  const waits = options.waits ?? {};
+  const offset = (tMs: number): number => tMs + shiftMs + waitedBy(read, waits, tMs);
+  const waitedInAll = Object.values(waits).reduce((total, ms) => total + ms, 0);
 
   return {
     ...file,
     video: {
       state: 'recorded',
       path: layout.video(sessionId),
-      durationMs: read.durationMs + shiftMs + (options.plusMs ?? 0),
+      durationMs: read.durationMs + shiftMs + waitedInAll + (options.plusMs ?? 0),
       truncated: options.truncated ?? null,
       screenOffsetsMs: screenStarts(read).map(offset),
       actionOffsetsMs: read.actions.map((action) => offset(action.tMs)),
@@ -233,9 +251,13 @@ export function metadataArrives(size: { width: number; height: number }): void {
   fireEvent(stage(), new Event('loadedmetadata'));
 }
 
-/** The player running on to a moment of the recording, as a playing element reports it. */
-export function playedTo(seconds: number): void {
-  const video = stage() as unknown as Record<string, unknown>;
-  video.__t = seconds;
-  fireEvent(stage(), new Event('timeupdate'));
+/**
+ * The element arriving where the page seeked it, as a real player does.
+ *
+ * The replay's clock is the **session's** and the page owns it, so the element is never
+ * the thing being advanced: what a test drives is time (`vi.advanceTimersByTime`), and this
+ * is here for the one thing the element still reports on its own — a decode it could not do.
+ */
+export function playbackFails(): void {
+  fireEvent(stage(), new Event('error'));
 }
