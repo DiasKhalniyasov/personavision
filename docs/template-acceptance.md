@@ -18,7 +18,8 @@ site of five: four of the five were six automation failures out of six. Six fixe
   offline: with no key a model run is recorded and run as offline, and an offline walk of a
   live site proves nothing about the fixes.
 - **Chromium**: `pnpm --filter @personavision/browser exec playwright install chromium`.
-- **The network**, and five third-party websites up and unchanged enough to be driven.
+- **The network**, and the templates' third-party websites up and unchanged enough to be driven
+  (six of them today, on six distinct hosts).
 
 ## What it costs
 
@@ -55,7 +56,7 @@ The table is printed either way: a reader who runs this needs the whole table, n
 | `Criterion`                                        | What the template's success criterion is — an `element`, a piece of `text`, or a `url`, read by `criterionToObserve`, the rule the run loop decides a session by |
 | `success` / `failed` / `abandoned`                 | The three outcomes a session can be scored as                                                          |
 | `automation_failure`                               | The sessions **we** broke. Never a result; the bar is one session that is not one of these              |
-| `observed`                                         | How many sessions **observed the criterion**. A success is an observed criterion (#400), and so is the one case that is not a success: a criterion already true when the agent arrived is `failed`, because nothing was tested |
+| `observed`                                         | How many sessions' **outcomes say the criterion was observed** — **a floor, not an exact count**. A success is an observed criterion (#400), and so is the one case that is not a success: a criterion already true when the agent arrived is `failed`, because nothing was tested. A session that gave up early and observed the criterion later is scored `abandoned`, and its reason says nothing about the criterion: the sighting lives on the session's trace, which is not written to disk, so such a session cannot be counted |
 | `Wall clock` / `Cost`                              | Per template, the audience call included, and totalled at the foot                                      |
 
 The `Criterion` column is there because the two kinds are answered by different halves of a
@@ -63,16 +64,25 @@ screen: a `url` criterion by the address the screen was captured at, an `element
 `text` by what the page drew (#441). A template decided by an address has to be visible as such
 in the result.
 
-Under the table: the **first automation failure** of each template that had one, any run that
-never started, and a line per template saying whether it produced a **contrast** — a scored
-session that reached the thing and a scored session that did not, and on which viewports. That
-last line is what #429 reads first, because a slide set needs both.
+Under the table: the **first automation failure** of each template that had one, then one
+headed list per kind of trouble, then a line per template saying whether it produced a
+**contrast** — a scored session that reached the thing and a scored session that did not, and on
+which viewports. That last line is what #429 reads first, because a slide set needs both.
 
-The verdict above them keeps two failures apart, because they send a reader to different
-places. A template that **ran** and produced only automation failures is a finding about the
-site, and gets a sibling ticket on #222. A template whose run **never started** — no
-credential, no network, an address the contract refused — is a finding about the check's own
-circumstances, and no site is blamed for it.
+The three kinds of trouble are kept apart, because they send a reader to different places and
+none of them is a finding about the site:
+
+- **a run that never started** — no credential, no network, an address the contract refused, a
+  page that could not be opened at all;
+- **a run that started, landed sessions and was then stopped** — `run.json` could not be
+  written, say. Its sessions are real and are in the counts above;
+- **a run that finished and could not be read back in full** — the directory is on disk and is
+  still named, so #429 can find it, and the counts above are the sessions that did parse.
+
+So the verdict says one of two things about a template that produced nothing. If it **ran** and
+produced only automation failures, that is a finding about the site, and it gets a sibling
+ticket on #222. If any of the three troubles above stopped it, it was **not measured** — a
+finding about this check, and no site is blamed for it.
 
 ## Where the result goes
 
@@ -85,7 +95,8 @@ bar on #423 is never relaxed to make the table green.
 
 ## Why it is not in CI
 
-It drives five live third-party sites and spends the owner's model key on every branch, which is
+It drives the templates' live third-party sites and spends the owner's model key on every branch,
+which is
 neither polite nor affordable — and a red CI from somebody else's site redesign would be a false
 alarm on every pull request (the auto-decision of 2026-11-04 on #423). What CI does cover is
 that every template would survive the path a typed test takes:

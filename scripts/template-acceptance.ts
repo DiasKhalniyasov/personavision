@@ -14,7 +14,7 @@
  * it is added and a template that changes its criterion is checked as it now stands.
  *
  * **It is run by hand, and never by CI** (the auto-decision of 2026-11-04 on #423). It drives
- * five third-party websites and spends the owner's model key; a red CI from somebody else's
+ * the templates' third-party websites and spends the owner's model key; a red CI from somebody
  * site redesign would be a false alarm on every pull request. `docs/template-acceptance.md`
  * is what it costs, what it needs and where its result goes.
  *
@@ -40,7 +40,7 @@
 
 import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runPaths, runRequestSchema, sessionSchema } from '@personavision/contract';
 import { GENERATOR_VERSION, parseAudience } from '@personavision/personas';
@@ -96,7 +96,7 @@ export const TEMPLATE_ACCEPTANCE_SEED = 423;
  *
  * Outside, because `runs/` holds the committed example run and this script must not be able to
  * touch it. The same place every time, because #429 reads these directories to bake the front
- * page's carousel, and a temporary directory the system sweeps would make it pay for five live
+ * page's carousel, and a temporary directory the system sweeps would make it pay for the live
  * runs a second time.
  */
 export const DEFAULT_RUNS_ROOT = join(homedir(), '.personavision', 'template-acceptance');
@@ -132,6 +132,23 @@ export interface ReadSession {
   readonly persona: { readonly device: { readonly viewport: { readonly width: number } } } | null;
 }
 
+/**
+ * What stopped a template short of a finished, readable run — three different things, told
+ * apart because they send a reader to three different places and **none of them is a finding
+ * about the site**.
+ *
+ * `no-run` is a run that was never written: no credential, an address the contract refused, a
+ * page that could not be opened at all. `stopped` is `RunStoppedError`'s own meaning — the run
+ * started, landed real sessions and then broke somewhere that is not a session, so its
+ * sessions count and saying "nothing was simulated" about it would be a lie with a run sitting
+ * next to it. `unread-sessions` is a run that finished and whose session files could not all be
+ * read back; its directory is still named, because it is on disk and #429 may still want it.
+ */
+export type TemplateTrouble =
+  | { readonly kind: 'no-run'; readonly reason: string }
+  | { readonly kind: 'stopped'; readonly reason: string }
+  | { readonly kind: 'unread-sessions'; readonly reason: string };
+
 /** One template's row: what it asked for, what came back, what it took and what it cost. */
 export interface TemplateOutcome {
   /** The template's own id, from the one list. */
@@ -149,8 +166,8 @@ export interface TemplateOutcome {
   readonly wallClockMs: number;
   /** The run's own estimated cost plus the audience call's. */
   readonly costUsd: number;
-  /** Why no run started, in the words the artifact recorded; `null` where one did. */
-  readonly notStarted: string | null;
+  /** What stopped it short of a finished, readable run; `null` where nothing did. */
+  readonly trouble: TemplateTrouble | null;
 }
 
 /** The four counts, read off the sessions on disk. */
@@ -163,12 +180,20 @@ export const countOutcomes = (sessions: readonly ReadSession[]): OutcomeCounts =
 });
 
 /**
- * How many of these sessions **observed** the criterion.
+ * How many of these sessions' **outcomes say the criterion was observed**.
  *
- * A success is an observed criterion and nothing else is (#400), with one exception that is
- * not a success: a criterion that was already true when the agent arrived is `failed` because
- * nothing was tested — and that agent did see the thing. A column that counted successes
- * alone would report that nobody ever reached it.
+ * Two of the four statuses say it. A success is an observed criterion and nothing else is
+ * (#400); and a criterion that was already true when the agent arrived is `failed`, because
+ * nothing was tested — and that agent did see the thing, so a column counting successes alone
+ * would report that nobody ever reached it.
+ *
+ * **It is a floor, not an exact count, and it cannot be made exact from a session file.**
+ * `decideOutcome` consults `findGiveUp` *before* its success branch, so a session that gave up
+ * early and observed the criterion later is scored `abandoned` — and its reason is a give-up
+ * sentence that says nothing about the criterion. The sighting itself lives on the session's
+ * trace, which is not written to disk: a session records its outcome and not what each screen
+ * showed. So such a session is not counted here, and this column reads "at least this many".
+ * `docs/template-acceptance.md` says so where the column is described.
  */
 export const observedCount = (sessions: readonly ReadSession[]): number =>
   sessions.filter(
@@ -238,11 +263,16 @@ export const requestFor = (template: ExampleTest, audienceId: string): RunReques
 
 /* ===== the table ============================================================ */
 
-/** `1m 32s`, or `8.0s` under a minute: a wall clock a reader compares across runs. */
+/**
+ * `1m 32s`, or `8.0s` under a minute: a wall clock a reader compares across runs.
+ *
+ * The seconds are rounded **before** they are split, not after: rounding the remainder of a
+ * 119.6 s run gives 60, and `1m 60s` is not a time.
+ */
 const duration = (ms: number): string => {
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  return `${String(Math.floor(seconds / 60))}m ${String(Math.round(seconds % 60))}s`;
+  const whole = Math.round(ms / 1000);
+  if (whole < 60) return `${(ms / 1000).toFixed(1)}s`;
+  return `${String(Math.floor(whole / 60))}m ${String(whole % 60)}s`;
 };
 
 /** US dollars to four places: a six-session run on the cheap tier is cents. */
@@ -298,6 +328,16 @@ const contrast = (outcome: TemplateOutcome): string => {
   return `- ${outcome.siteUrl} — ${shape} (${String(reached)} reached, ${String(missed)} did not), viewports ${widths}`;
 };
 
+/** One headed list of templates and their reasons, or nothing at all when none applies. */
+const troubleSection = (heading: string, some: readonly TemplateOutcome[]): readonly string[] =>
+  some.length === 0
+    ? []
+    : [
+        heading,
+        ...some.map((outcome) => `- ${outcome.siteUrl} — ${outcome.trouble?.reason ?? ''}`),
+        '',
+      ];
+
 export interface RenderReportInput {
   readonly runsRoot: string;
   readonly outcomes: readonly TemplateOutcome[];
@@ -314,14 +354,18 @@ export const renderReport = ({ runsRoot, outcomes }: RenderReportInput): string 
     .filter(
       (entry): entry is { outcome: TemplateOutcome; reason: string } => entry.reason !== null,
     );
-  const notStarted = outcomes.filter((outcome) => outcome.notStarted !== null);
+  const troubled = (kind: TemplateTrouble['kind']): readonly TemplateOutcome[] =>
+    outcomes.filter((outcome) => outcome.trouble?.kind === kind);
   // **Two different failures, never one sentence.** A template that ran and produced only
   // automation failures is a finding about the site, which is what #423's bar is about. A
   // template whose run never started — no credential, no network, an address the contract
   // refused — is a finding about this check's own circumstances, and blaming the site for it
   // would send whoever reads the table to the wrong place.
-  const droveNothing = nothing.filter((outcome) => outcome.notStarted === null);
-  const neverRan = nothing.filter((outcome) => outcome.notStarted !== null);
+  // A template that produced nothing because the **site** could not be driven is the bar this
+  // check exists to hold; a template that produced nothing because the check itself could not
+  // get a run out of the machine is not, and the two never share a sentence.
+  const droveNothing = nothing.filter((outcome) => outcome.trouble === null);
+  const notMeasured = nothing.filter((outcome) => outcome.trouble !== null);
   const sites = (some: readonly TemplateOutcome[]): string =>
     some.map((outcome) => outcome.siteUrl).join(', ');
   const of = (some: readonly TemplateOutcome[]): string =>
@@ -338,10 +382,10 @@ export const renderReport = ({ runsRoot, outcomes }: RenderReportInput): string 
         : [
             `**${of(droveNothing)} templates ran and produced no outcome that is not an automation failure: ${sites(droveNothing)}.** That is a finding and a sibling ticket on #222, never a relaxed bar here.`,
           ]),
-      ...(neverRan.length === 0
+      ...(notMeasured.length === 0
         ? []
         : [
-            `**${of(neverRan)} templates never started a run: ${sites(neverRan)}.** The reasons are under the table. A credential or a network this check could not use is a finding about the check and not about the site.`,
+            `**${of(notMeasured)} templates were not measured: ${sites(notMeasured)}.** The reasons are under the table. A credential, a network or a run that could not be read is a finding about this check and not about the site.`,
           ]),
     ];
   })();
@@ -361,13 +405,15 @@ export const renderReport = ({ runsRoot, outcomes }: RenderReportInput): string 
           ...failures.map((entry) => `- ${entry.outcome.siteUrl} — ${entry.reason}`),
           '',
         ]),
-    ...(notStarted.length === 0
-      ? []
-      : [
-          '**Runs that never started**',
-          ...notStarted.map((outcome) => `- ${outcome.siteUrl} — ${String(outcome.notStarted)}`),
-          '',
-        ]),
+    ...troubleSection('**Runs that never started**', troubled('no-run')),
+    ...troubleSection(
+      '**Runs that started, landed sessions and were then stopped** — their sessions are in the counts above',
+      troubled('stopped'),
+    ),
+    ...troubleSection(
+      '**Runs that finished and could not be read back in full** — the directory is on disk; the counts above are the sessions that did parse',
+      troubled('unread-sessions'),
+    ),
     '**A contrast per template, for #429**',
     ...outcomes.map(contrast),
     '',
@@ -435,14 +481,39 @@ const wonderFromEnv = (env: Readonly<Record<string, string | undefined>>): Wonde
     createModelProvider: ({ apiKey, modelId }) => createMetaWonderProvider({ apiKey, modelId }),
   }).provider;
 
-/** The sessions a finished run wrote, read back off disk as a screen would read them. */
-const sessionsOf = async (runDir: string, sessionIds: readonly string[]): Promise<Session[]> => {
+/**
+ * The sessions a run wrote, read back off disk as a screen would read them — **and it never
+ * throws**.
+ *
+ * Every session is read on its own, so one unparsable file costs one session rather than the
+ * other five: five readable sessions still count towards the bar, and a template is still a
+ * row. The first file that could not be read is named, and the caller decides what that means
+ * — which matters because the moment this is least trustworthy is exactly when a run has
+ * broken, and a reader that threw here would take the whole table down with it after the live
+ * runs had already been paid for.
+ */
+const readSessions = async (
+  runDir: string,
+  sessionIds: readonly string[],
+): Promise<{ sessions: Session[]; unread: string | null }> => {
   const paths = runPaths(runDir);
-  return Promise.all(
+  const read = await Promise.allSettled(
     sessionIds.map(async (sessionId) =>
       sessionSchema.parse(JSON.parse(await readFile(paths.session(sessionId), 'utf8'))),
     ),
   );
+  const sessions = read.flatMap((one) => (one.status === 'fulfilled' ? [one.value] : []));
+  const failed = read.length - sessions.length;
+  if (failed === 0) return { sessions, unread: null };
+  const first = read.find((one) => one.status === 'rejected');
+  const why =
+    first !== undefined && first.status === 'rejected' && first.reason instanceof Error
+      ? first.reason.message
+      : 'the file could not be read';
+  return {
+    sessions,
+    unread: `${String(failed)} of ${String(read.length)} session files could not be read; the first said: ${why}`,
+  };
 };
 
 /** One template, end to end: the audience, the run, and the row the table prints. */
@@ -454,22 +525,34 @@ const check = async (
 ): Promise<TemplateOutcome> => {
   const startedAt = Date.now();
   const criterion = template.successCriterion;
-  const shared = {
+  // Outside the try so the cost of an audience call is still in the table when the run after
+  // it never happened: a call that was billed and then thrown away is still a call.
+  let costUsd = 0;
+  const row = (rest: {
+    readonly runId: string | null;
+    readonly runDir: string | null;
+    readonly sessions: readonly ReadSession[];
+    readonly trouble: TemplateTrouble | null;
+  }): TemplateOutcome => ({
     id: template.id,
     siteUrl: template.siteUrl,
     criterion,
     criterionKind: criterionKindOf(criterion),
-  };
+    wallClockMs: Date.now() - startedAt,
+    costUsd,
+    ...rest,
+  });
 
   report(`\n── ${template.id} — ${template.siteUrl}`);
   report(`   feature: ${template.feature}`);
   report(`   task: ${template.task}`);
-  report(`   criterion (${shared.criterionKind ?? 'unreadable'}): ${criterion}`);
+  report(`   criterion (${criterionKindOf(criterion) ?? 'unreadable'}): ${criterion}`);
 
-  // Outside the try so the cost of an audience call is still in the table when the run after
-  // it never happened: a call that was billed and then thrown away is still a call.
-  let costUsd = 0;
-
+  let ran: {
+    readonly runId: string;
+    readonly runDir: string;
+    readonly sessionIds: readonly string[];
+  };
   try {
     const written = await audienceFrom(wonderFromEnv(env), template);
     const { audience } = written;
@@ -489,18 +572,14 @@ const check = async (
         report(`   ${line}`);
       },
     });
-    const sessions = await sessionsOf(started.runDir, started.run.sessionIds);
-    return {
-      ...shared,
+    costUsd += started.run.usage?.estimatedCostUsd ?? 0;
+    ran = {
       runId: started.runId,
       runDir: started.runDir,
-      sessions,
-      wallClockMs: Date.now() - startedAt,
-      costUsd: costUsd + (started.run.usage?.estimatedCostUsd ?? 0),
-      notStarted: null,
+      sessionIds: started.run.sessionIds,
     };
   } catch (error) {
-    // **One template's failure is one row**, never the end of the check. The other five still
+    // **One template's failure is one row**, never the end of the check. The others still
     // have to be measured and the table still has to print: a site that cannot be opened at
     // all is exactly the finding this script exists to report, and a check that threw on the
     // third template would report nothing about the first two either.
@@ -508,37 +587,50 @@ const check = async (
     // That covers the audience call as well as the run. A Wonder call that came back 503 for
     // one sentence is one row; a credential the API refuses is six rows all saying so, which
     // is accurate and is what a reader needs — not an exception where the table should be.
-    if (error instanceof RunNotStartedError || error instanceof RunStoppedError) {
+    if (error instanceof RunStoppedError) {
+      // This one **started and landed sessions**, which is the whole difference between it and
+      // the two below: its sessions are real and belong in the counts.
+      costUsd += error.run.usage?.estimatedCostUsd ?? 0;
       const reason = error.run.failure?.reason ?? error.message;
-      report(`   no run: ${reason}`);
-      return {
-        ...shared,
+      report(`   stopped part way: ${reason}`);
+      const { sessions } = await readSessions(error.runDir, error.run.sessionIds);
+      return row({
         runId: error.runId,
         runDir: error.runDir,
-        sessions:
-          error instanceof RunStoppedError
-            ? await sessionsOf(error.runDir, error.run.sessionIds)
-            : [],
-        wallClockMs: Date.now() - startedAt,
-        costUsd: costUsd + (error.run.usage?.estimatedCostUsd ?? 0),
-        notStarted: reason,
-      };
+        sessions,
+        trouble: { kind: 'stopped', reason },
+      });
+    }
+    if (error instanceof RunNotStartedError) {
+      costUsd += error.run.usage?.estimatedCostUsd ?? 0;
+      const reason = error.run.failure?.reason ?? error.message;
+      report(`   no run: ${reason}`);
+      return row({
+        runId: error.runId,
+        runDir: error.runDir,
+        sessions: [],
+        trouble: { kind: 'no-run', reason },
+      });
     }
     // Named rather than summarised: `WonderCallError: the API answered 401 to the audience
     // ask` says both what failed and what to do about it, and a reader of the table should
     // not have to guess whether it was the site, the model or this script.
-    const named = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    report(`   no run: ${named}`);
-    return {
-      ...shared,
-      runId: null,
-      runDir: null,
-      sessions: [],
-      wallClockMs: Date.now() - startedAt,
-      costUsd,
-      notStarted: named,
-    };
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    report(`   no run: ${reason}`);
+    return row({ runId: null, runDir: null, sessions: [], trouble: { kind: 'no-run', reason } });
   }
+
+  // **Outside the try**, because a session file that will not parse is not a run that never
+  // started: the run is on disk, its directory is what #429 reads, and reporting it as "no
+  // run" would send a reader — and a sibling ticket — to the wrong place.
+  const { sessions, unread } = await readSessions(ran.runDir, ran.sessionIds);
+  if (unread !== null) report(`   ${unread}`);
+  return row({
+    runId: ran.runId,
+    runDir: ran.runDir,
+    sessions,
+    trouble: unread === null ? null : { kind: 'unread-sessions', reason: unread },
+  });
 };
 
 export interface TemplateAcceptanceOptions {
@@ -592,7 +684,7 @@ export const templateAcceptance = async ({
  * The templates named on the command line, or all of them.
  *
  * Naming one is how a site that came back mostly automation failures is looked at again
- * without paying for the other five, and it is what a reader does after somebody else's site
+ * without paying for the others, and it is what a reader does after somebody else's site
  * redesign. A name no template carries is refused with the names there are, rather than
  * checking nothing and exiting 1 as though a site had failed.
  */
@@ -609,9 +701,32 @@ export const templatesNamed = (ids: readonly string[]): readonly ExampleTest[] =
   });
 };
 
+/**
+ * The command line: an optional runs root, then optional template ids.
+ *
+ * **A runs root has to look like a path**, and anything else is read as a template id. Taking
+ * the first argument as the root unconditionally meant that
+ * `pnpm acceptance:templates ikea-furniture-take-back` — one keystroke from the documented
+ * form, and the obvious way to retry one site — created `./ikea-furniture-take-back` **inside
+ * the checkout** and then ran all six templates at full cost. This script's first promise is
+ * that it writes nothing into the repository, so the shape of the argument decides what it is,
+ * and a bare word that names no template is refused with the names there are.
+ */
+export const parseArguments = (
+  argv: readonly string[],
+): { readonly runsRoot: string; readonly ids: readonly string[] } => {
+  const [first, ...rest] = argv;
+  const looksLikeAPath =
+    first !== undefined &&
+    (isAbsolute(first) || first.includes('/') || first.includes('\\') || first.startsWith('.'));
+  return {
+    runsRoot: resolve(looksLikeAPath ? first : DEFAULT_RUNS_ROOT),
+    ids: looksLikeAPath || first === undefined ? rest : [first, ...rest],
+  };
+};
+
 const main = async (): Promise<void> => {
-  const [root, ...ids] = process.argv.slice(2);
-  const runsRoot = resolve(root ?? DEFAULT_RUNS_ROOT);
+  const { runsRoot, ids } = parseArguments(process.argv.slice(2));
   const result = await templateAcceptance({ runsRoot, templates: templatesNamed(ids) });
   process.stdout.write(`\n${result.report}\n`);
   // The table is the deliverable and it has just been printed, so a template that produced

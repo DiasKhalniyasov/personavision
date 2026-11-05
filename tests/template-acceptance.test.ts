@@ -5,6 +5,7 @@ import { EXAMPLE_TESTS } from '../apps/viewer/src/screens/newtest/templates.js';
 import {
   audienceFrom,
   countOutcomes,
+  DEFAULT_RUNS_ROOT,
   criterionKindOf,
   observedCount,
   PEOPLE_PER_TEMPLATE,
@@ -12,7 +13,9 @@ import {
   REPEATS,
   renderReport,
   requestFor,
+  parseArguments,
   TEMPLATE_ACCEPTANCE_SEED,
+  templatesNamed,
   verdictExitCode,
 } from '../scripts/template-acceptance.js';
 import type { TemplateOutcome } from '../scripts/template-acceptance.js';
@@ -53,7 +56,7 @@ const outcome = (over: Partial<TemplateOutcome> = {}): TemplateOutcome => ({
   sessions: [],
   wallClockMs: 1_000,
   costUsd: 0,
-  notStarted: null,
+  trouble: null,
   ...over,
 });
 
@@ -223,7 +226,9 @@ describe('the bar: each template produces an outcome that is not an automation f
   });
 
   it('fails a template whose run never started, and one that ran nobody', () => {
-    expect(producedAResult(outcome({ sessions: [], notStarted: 'no key' }))).toBe(false);
+    expect(
+      producedAResult(outcome({ sessions: [], trouble: { kind: 'no-run', reason: 'no key' } })),
+    ).toBe(false);
     expect(producedAResult(outcome({ sessions: [] }))).toBe(false);
   });
 
@@ -234,6 +239,36 @@ describe('the bar: each template produces an outcome that is not an automation f
     expect(verdictExitCode([produced, produced])).toBe(0);
     expect(verdictExitCode([produced, nothing])).toBe(1);
     expect(verdictExitCode([])).toBe(1);
+  });
+});
+
+describe('the command line', () => {
+  it('reads a path as the runs root and a bare word as a template id', () => {
+    expect(parseArguments(['/tmp/acceptance'])).toEqual({
+      runsRoot: '/tmp/acceptance',
+      ids: [],
+    });
+    expect(parseArguments(['/tmp/acceptance', 'apple-trade-in'])).toEqual({
+      runsRoot: '/tmp/acceptance',
+      ids: ['apple-trade-in'],
+    });
+    expect(parseArguments([])).toEqual({ runsRoot: DEFAULT_RUNS_ROOT, ids: [] });
+  });
+
+  it('never makes a directory out of a template id', () => {
+    // The foot-gun this exists for: taking the first argument as a root unconditionally made
+    // `pnpm acceptance:templates ikea-furniture-take-back` create `./ikea-furniture-take-back`
+    // inside the checkout and then run all six templates at full cost.
+    expect(parseArguments(['ikea-furniture-take-back'])).toEqual({
+      runsRoot: DEFAULT_RUNS_ROOT,
+      ids: ['ikea-furniture-take-back'],
+    });
+  });
+
+  it('refuses a name no template carries, with the names there are', () => {
+    expect(() => templatesNamed(['ikea'])).toThrow(/there is no template "ikea"/);
+    expect(() => templatesNamed(['ikea'])).toThrow(/ikea-furniture-take-back/);
+    expect(templatesNamed([])).toEqual(EXAMPLE_TESTS);
   });
 });
 
@@ -272,7 +307,7 @@ describe('the table that is posted on the ticket', () => {
           runId: null,
           runDir: null,
           sessions: [],
-          notStarted: 'the site could not be opened',
+          trouble: { kind: 'no-run', reason: 'the site could not be opened' },
           wallClockMs: 2_000,
           costUsd: 0,
         }),
@@ -299,6 +334,17 @@ describe('the table that is posted on the ticket', () => {
     expect(table).toMatch(/docs\.stripe\.com.*\| 2 \| 1 \| 1 \| 2 \| 2 \|/);
   });
 
+  it('never prints a minute with sixty seconds in it', () => {
+    // 119.6 s: rounding the remainder of the division gives 60, which is not a time.
+    const table = renderReport({
+      runsRoot: '/tmp/acceptance',
+      outcomes: [outcome({ sessions: [session('success')], wallClockMs: 119_600 })],
+    });
+
+    expect(table).toContain('2m 0s');
+    expect(table).not.toContain('1m 60s');
+  });
+
   it('gives the wall clock and the cost, per template and in total', () => {
     const table = report();
 
@@ -318,7 +364,61 @@ describe('the table that is posted on the ticket', () => {
   });
 
   it('says a run that never started never started, with why', () => {
-    expect(report()).toContain('the site could not be opened');
+    const table = report();
+
+    expect(table).toContain('**Runs that never started**');
+    expect(table).toContain('the site could not be opened');
+  });
+
+  it('does not call a run that started and was stopped a run that never started', () => {
+    // `RunStoppedError` means the run started and landed real sessions: its sessions are in
+    // the counts, and "nothing was simulated" would be a lie with a run sitting next to it.
+    const table = renderReport({
+      runsRoot: '/tmp/acceptance',
+      outcomes: [
+        outcome({
+          sessions: [session('success'), session('abandoned')],
+          trouble: { kind: 'stopped', reason: 'run.json could not be written' },
+        }),
+      ],
+    });
+
+    expect(table).not.toContain('**Runs that never started**');
+    expect(table).toContain('were then stopped');
+    expect(table).toContain('run.json could not be written');
+    // It produced results, so no verdict sentence accuses it of anything.
+    expect(table).toContain('Every template produced results: 1 of 1.');
+  });
+
+  it('keeps the directory of a run whose sessions could not all be read', () => {
+    // The run is on disk and #429 may still want it, so it is not reported as "no run
+    // directory was written" — and the sessions that did parse are still counted.
+    const table = renderReport({
+      runsRoot: '/tmp/acceptance',
+      outcomes: [
+        outcome({
+          sessions: [session('success')],
+          trouble: { kind: 'unread-sessions', reason: '1 of 2 session files could not be read' },
+        }),
+      ],
+    });
+
+    expect(table).toContain('could not be read back in full');
+    expect(table).toContain('2026-11-05-1200-find-out-how-to-check-a-payment');
+    expect(table).not.toContain('no run directory was written');
+  });
+
+  it('blames the check, not the site, when nothing could be measured', () => {
+    const table = renderReport({
+      runsRoot: '/tmp/acceptance',
+      outcomes: [
+        outcome({ sessions: [], trouble: { kind: 'no-run', reason: 'the API answered 401' } }),
+      ],
+    });
+
+    expect(table).toContain('**1 of 1 templates were not measured: https://docs.stripe.com.**');
+    expect(table).toContain('a finding about this check and not about the site');
+    expect(table).not.toContain('sibling ticket on #222');
   });
 
   it('says where the runs are, so #429 does not pay for them again', () => {
@@ -352,8 +452,8 @@ describe('the table that is posted on the ticket', () => {
 
     // dev.meta.ai never started a run at all. Counting that as a site that cannot be driven
     // would send a reader — and a sibling ticket — to the wrong place.
-    expect(table).toContain('**1 of 3 templates never started a run: https://dev.meta.ai.**');
-    expect(table).toContain('a finding about the check and not about the site');
+    expect(table).toContain('**1 of 3 templates were not measured: https://dev.meta.ai.**');
+    expect(table).toContain('a finding about this check and not about the site');
     expect(table).not.toMatch(
       /ran and produced no outcome that is not an automation failure[^\n]*dev\.meta\.ai/,
     );
