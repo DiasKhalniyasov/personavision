@@ -168,15 +168,16 @@ pnpm validate:example-run
 
 CI runs the same sequence on Node 22 with a frozen lockfile. [`tests/cold-start.test.ts`](tests/cold-start.test.ts) checks that a fresh clone starts the app on the committed example run.
 
-| Script                         | What it does                                               |
-| ------------------------------ | ---------------------------------------------------------- |
-| `pnpm open`                    | The app on the most recent run, at http://127.0.0.1:5175/  |
-| `pnpm dev`                     | Vite dev server for `apps/viewer`                          |
-| `pnpm demo:run`                | Regenerates the demo shop's run                            |
-| `pnpm recommend:run <run dir>` | Writes a run's recommendations                             |
-| `pnpm improve:local <run dir>` | Wonder improves a site from a run and opens a pull request |
-| `pnpm bake:landing-slides`     | Bakes the front page carousel's slides from committed runs |
-| `pnpm format`                  | Prettier, in place; `pnpm format:check` only reports       |
+| Script                         | What it does                                                                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm open`                    | The app on the most recent run, at http://127.0.0.1:5175/                                                                              |
+| `pnpm dev`                     | Vite dev server for `apps/viewer`                                                                                                      |
+| `pnpm demo:run`                | Regenerates the demo shop's run                                                                                                        |
+| `pnpm recommend:run <run dir>` | Writes a run's recommendations                                                                                                         |
+| `pnpm improve:local <run dir>` | Wonder improves a site from a run and opens a pull request                                                                             |
+| `pnpm bake:landing-slides`     | Bakes the front page carousel's slides from committed runs                                                                             |
+| `pnpm acceptance:templates`    | Runs every example template against its live site — needs a model key, spends money, never in CI ([docs](docs/template-acceptance.md)) |
+| `pnpm format`                  | Prettier, in place; `pnpm format:check` only reports                                                                                   |
 
 The front page carousel's slide data is generated from committed runs and never edited by hand; `slides.test.ts` reruns this exact line and compares the bytes:
 
@@ -191,6 +192,7 @@ pnpm bake:landing-slides runs apps/viewer/src/screens/landing/slides.json 2026-1
 - [`docs/improve-local.md`](docs/improve-local.md): improve a site from a test, on your own repository
 - [`docs/case-studies/front-page.md`](docs/case-studies/front-page.md): PersonaVision improving its own front page
 - [`docs/demo.md`](docs/demo.md): the demo, beat by beat
+- [`docs/template-acceptance.md`](docs/template-acceptance.md): the example templates run against their live sites, by hand
 - [`docs/meta-model-api.md`](docs/meta-model-api.md): how Muse Spark and Muse Wonder are called
 - [`docs/adr/`](docs/adr): the decisions, with the alternatives that were rejected
 
