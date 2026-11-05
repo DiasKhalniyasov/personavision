@@ -42,8 +42,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
 import { landingSlidesSchema, readRun } from '@personavision/contract';
@@ -389,6 +389,33 @@ const bakeLandingSlides = async (
   return landingSlidesSchema.parse(set);
 };
 
+/**
+ * The files already in `assetsDir` that this bake does not name, relative to it.
+ *
+ * A set's captures are **committed**, so a re-bake that drops a slide would otherwise leave
+ * that slide's capture behind: in the repository, in the build, and named by nothing. Rather
+ * than delete files under a path somebody typed on a command line, the bake refuses and names
+ * them. A directory that is not there yet is simply empty.
+ *
+ * Dot-files are not captures and are left alone — a `.DS_Store` is not a stale screenshot.
+ */
+const strayCaptures = async (
+  assetsDir: string,
+  wanted: ReadonlySet<string>,
+): Promise<readonly string[]> => {
+  let entries;
+  try {
+    entries = await readdir(assetsDir, { recursive: true, withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
+    .map((entry) => relative(assetsDir, join(entry.parentPath, entry.name)))
+    .filter((path) => !wanted.has(path))
+    .sort();
+};
+
 /** One capture copied into the viewer's assets, as the set's own record carries it. */
 interface CopiedCapture {
   readonly runId: string;
@@ -411,10 +438,17 @@ const copyCaptures = async (
 ): Promise<readonly CopiedCapture[]> => {
   const wanted = new Map<string, { runId: string; path: string }>();
   for (const slide of slides) {
-    wanted.set(`${slide.runId}/${slide.screenshot.path}`, {
+    wanted.set(join(slide.runId, slide.screenshot.path), {
       runId: slide.runId,
       path: slide.screenshot.path,
     });
+  }
+
+  const stray = await strayCaptures(assetsDir, new Set(wanted.keys()));
+  if (stray.length > 0) {
+    throw new Error(
+      `${assetsDir} already holds ${stray.length === 1 ? 'a capture' : 'captures'} this set does not name — ${stray.join(', ')}. A set's captures are committed, so delete the directory and bake again rather than leaving a screenshot nothing points at.`,
+    );
   }
 
   const copied: CopiedCapture[] = [];
@@ -456,10 +490,20 @@ const serialize = async (set: unknown, file: string): Promise<string> =>
     parser: 'json',
   });
 
-/** Whether an argument is a slide rather than a path: three parts, the last a screen index. */
+/**
+ * Whether an argument is a slide rather than a path.
+ *
+ * It is `parseTriple` itself rather than a second, looser reading of the same string: a guard
+ * that disagreed with the parser about what a slide is would let exactly the arguments through
+ * that it exists to catch.
+ */
 const looksLikeTriple = (argument: string): boolean => {
-  const parts = argument.split(':');
-  return parts.length === 3 && /^\d+$/.test(parts[2] as string);
+  try {
+    parseTriple(argument);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -480,9 +524,8 @@ const takeAssetsDir = (
   if (at === -1) return { rest: args };
   const dir = args[at + 1];
   if (dir === undefined || dir.startsWith('--') || looksLikeTriple(dir)) {
-    throw new Error(
-      `${COMMAND}: --assets needs a directory to copy the captures into${dir === undefined ? '' : `, and "${dir}" is a slide`}`,
-    );
+    const why = dir === undefined || dir.startsWith('--') ? '' : `, and "${dir}" is a slide`;
+    throw new Error(`${COMMAND}: --assets needs a directory to copy the captures into${why}`);
   }
   return { assetsDir: dir, rest: [...args.slice(0, at), ...args.slice(at + 2)] };
 };
@@ -523,8 +566,9 @@ const main = async (): Promise<void> => {
   const triples = rest.map(parseTriple);
   const set = await bakeLandingSlides(resolve(runsRoot), triples);
 
-  // The copy and the record go first: a set on disk whose captures are not beside it is a
-  // broken front page, and the bake refuses as a whole or not at all.
+  // The copy and the record go first, because a set on disk whose captures are not beside it
+  // is a broken front page. Every refusal this script makes — a bad triple, a missing capture,
+  // a stray one already in the assets — happens before any of the three files is written.
   const copied =
     assetsDir === undefined
       ? undefined

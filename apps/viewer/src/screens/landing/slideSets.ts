@@ -64,6 +64,25 @@ export interface SlideSet {
 }
 
 /**
+ * A set's assets directory, checked as it is declared.
+ *
+ * The base has to be origin-relative and end in a slash, or it runs together with the run id
+ * into one path segment: every capture then misses, and because the app answers an unclaimed
+ * path with its own HTML rather than a 404, the page draws broken frames and no failed request
+ * points at why. So a registration states the base through this rather than as a literal, and
+ * a base of the wrong shape fails at module load — where the mistake was made — instead of on
+ * the front page.
+ */
+export const assetsAt = (base: string): SlideScreenshots => {
+  if (!base.startsWith('/') || !base.endsWith('/')) {
+    throw new Error(
+      `a slide set's assets directory is origin-relative and ends in a slash, and "${base}" is not: a capture would be loaded from one path segment with the run id run into it`,
+    );
+  }
+  return { kind: 'assets', base };
+};
+
+/**
  * The committed example run's set: #427's file, baked from `runs/2026-10-24-1402-northwind-demo`.
  *
  * It is the fallback and so it is always last in `SLIDE_SETS`. Its captures come off the

@@ -12,7 +12,7 @@ import { landingSlidesSchema } from '@personavision/contract';
 import type { LandingSlides } from '@personavision/contract';
 import { paths } from '@/shell/paths';
 import { forgetRuns, mountApp } from '../../../tests/app';
-import { SLIDE_SETS, chosenSlideSet, screenshotBase } from './slideSets';
+import { SLIDE_SETS, assetsAt, chosenSlideSet, screenshotBase } from './slideSets';
 import type { SlideSet } from './slideSets';
 
 /**
@@ -175,6 +175,22 @@ describe('every registered set is one the page can draw', () => {
       });
 
       if (assets !== null) {
+        it('loads its captures from an origin-relative directory of its own', () => {
+          // Without the leading and trailing slash the base and the run id run together into
+          // one path segment, every capture misses, and `single: true` answers each miss with
+          // the app's own HTML — six broken frames and no failing request to find them by.
+          expect(assets.base).toMatch(/^\/.*\/$/);
+        });
+
+        it('is the file named after its id, which is where its record is looked for', async () => {
+          // `read` could point anywhere, and the record is named after the file it was baked
+          // to. Tying both to the set's id is what lets a reader — and the assertion below —
+          // find one from the other.
+          expect(await readFile(join(here, 'slides', `${set.id}.json`), 'utf8')).toBe(
+            await set.read(),
+          );
+        });
+
         it('records the triples it was baked from, beside the set', async () => {
           const record = JSON.parse(
             await readFile(join(here, 'slides', `${set.id}.bake.json`), 'utf8'),
@@ -247,7 +263,7 @@ describe('a set whose captures were copied into the assets', () => {
    */
   it('loads its captures from the assets directory and from no other host', async () => {
     const [{ set, data }] = parsed as [{ set: SlideSet; data: LandingSlides }];
-    chosen = { ...set, screenshots: { kind: 'assets', base: '/landing-slides/trial/' } };
+    chosen = { ...set, screenshots: assetsAt('/landing-slides/trial/') };
 
     const { container } = mountApp(paths.home, { session: SIGNED_OUT });
     const image = await waitFor(() => {
@@ -341,6 +357,26 @@ describe('a set baked from a run that is not committed', () => {
     await expect(stat(out)).rejects.toThrow();
   });
 
+  it('refuses to copy into a directory that holds a capture it does not name', async () => {
+    const assets = join(work, 'assets');
+    await bake(['runs', join(work, 'one.json'), '--assets', assets, ...TRIPLES]);
+
+    // The second bake names one slide of the two, so the first slide's capture is now in the
+    // assets with nothing pointing at it. A set's captures are committed, so that is refused
+    // rather than left to be committed by whoever runs `git add`.
+    const again = await bake(['runs', join(work, 'two.json'), '--assets', assets, TRIPLES[1]]);
+    expect(again.ok).toBe(false);
+    expect(again.output).toContain('already holds a capture this set does not name');
+    await expect(stat(join(work, 'two.json'))).rejects.toThrow();
+  });
+
+  it('bakes again into a directory holding exactly the captures it names', async () => {
+    const assets = join(work, 'assets');
+    await bake(['runs', join(work, 'one.json'), '--assets', assets, ...TRIPLES]);
+    const again = await bake(['runs', join(work, 'two.json'), '--assets', assets, ...TRIPLES]);
+    expect(again.ok, again.output).toBe(true);
+  });
+
   it('refuses --assets that swallowed a slide, rather than baking a smaller set', async () => {
     const out = join(work, 'trial.json');
     const baked = await bake(['runs', out, '--assets', ...TRIPLES]);
@@ -364,9 +400,17 @@ describe('where a capture is loaded from', () => {
   });
 
   it('is the set’s own assets directory for a run that is not', () => {
-    expect(screenshotBase({ kind: 'assets', base: '/landing-slides/x/' }, EXAMPLE_RUN)).toBe(
+    expect(screenshotBase(assetsAt('/landing-slides/x/'), EXAMPLE_RUN)).toBe(
       `/landing-slides/x/${EXAMPLE_RUN}/`,
     );
+  });
+
+  it('refuses an assets directory that would run into the run id', () => {
+    // Without the trailing slash the base and the run id are one segment, every capture
+    // misses, and the app answers a miss with its own HTML — so this fails where the set is
+    // declared rather than on the page.
+    expect(() => assetsAt('/landing-slides/x')).toThrow('ends in a slash');
+    expect(() => assetsAt('landing-slides/x/')).toThrow('origin-relative');
   });
 
   it('encodes a run id the same way either place does', () => {

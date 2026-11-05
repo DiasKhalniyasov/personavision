@@ -71,7 +71,7 @@ One entry in [`../slideSets.ts`](../slideSets.ts), above `EXAMPLE_SET`:
 {
   id: 'stripe-testing-payments',
   site: 'docs.stripe.com',
-  screenshots: { kind: 'assets', base: '/landing-slides/stripe-testing-payments/' },
+  screenshots: assetsAt('/landing-slides/stripe-testing-payments/'),
   read: async () => (await import('./slides/stripe-testing-payments.json?raw')).default,
 },
 ```
