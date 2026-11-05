@@ -185,6 +185,8 @@ The front page carousel's slide data is generated from committed runs and never 
 pnpm bake:landing-slides runs apps/viewer/src/screens/landing/slides.json 2026-10-24-1402-northwind-demo:S-03:2 2026-10-24-1402-northwind-demo:S-09:1 2026-10-24-1402-northwind-demo:S-04:24 2026-10-24-1402-northwind-demo:S-13:4 2026-10-24-1402-northwind-demo:S-24:3
 ```
 
+A set baked from a run that is **not** committed — the example templates' runs, which are made against live sites into a runs root outside the repository — adds `--assets <dir>`, which copies every capture the slides name into the app's own assets and records the triples and the captures' hashes beside the set. Which set `/` shows is decided in one file, [`slideSets.ts`](apps/viewer/src/screens/landing/slideSets.ts); [`slides/README.md`](apps/viewer/src/screens/landing/slides/README.md) is how a template's set is made and registered.
+
 ## Documentation
 
 - [`CONTEXT.md`](CONTEXT.md): the module map and the artifact's field names
