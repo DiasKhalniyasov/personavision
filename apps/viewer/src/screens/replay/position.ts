@@ -251,12 +251,57 @@ interface Anchor {
  * second time here. An action is stamped on both clocks already.
  */
 export interface VideoClock {
-  /** The recording's own length, which is what the scrubber runs over. */
-  readonly durationMs: number;
+  /** The recording's own length: what the file holds, and what a citation addresses. */
+  readonly videoDurationMs: number;
+  /** The session's own length, which is what the scrubber runs over. */
+  readonly sessionDurationMs: number;
+  /** The stretches the agent spent waiting, in the order the session met them. */
+  readonly waits: readonly Wait[];
   /** Where in the session a point in the recording falls. */
   sessionMsAt(videoMs: number): number;
   /** Where in the recording a moment of the session falls. */
   videoMsAt(sessionMs: number): number;
+  /** The wait the session's clock is inside at this moment, or `null` between them. */
+  waitAt(sessionMs: number): Wait | null;
+}
+
+/**
+ * How much longer the recording has to have run than the session for the stretch between
+ * two actions to be a **wait** rather than the two clocks disagreeing by a rounding.
+ *
+ * Two seconds. Under that the stretch is played through, because the label a wait carries
+ * reads in whole seconds and a marker on the track saying `1 s` is noise on a track a
+ * reader is trying to drag. Over it the page was standing still for long enough that
+ * playing it would be four fifths of the replay showing a picture that does not move,
+ * which is the defect this screen was built to stop (#414).
+ */
+export const WAIT_MS = 2000;
+
+/**
+ * One stretch between two actions that the recording spent waiting.
+ *
+ * It is **not a new field in the contract**: a wait is exactly what the two clocks
+ * disagree about, so it is read off the anchor pairs the recording already stores. The
+ * session's clock is the gaze model's own and advances by what the eye did; the recorder's
+ * is wall time and advances through every second spent asking the model what to do next.
+ * Where the second moved far more than the first, nothing happened on the page.
+ */
+export interface Wait {
+  /** The moment of the session the stretch begins at: the action before it. */
+  readonly fromSessionMs: number;
+  /** The moment of the session it ends at: the action the wait ends on. */
+  readonly toSessionMs: number;
+  /** The real milliseconds it took: the recording's own difference between the two. */
+  readonly waitedMs: number;
+  /** Where the stretch begins on the track, as a percentage of the session's length. */
+  readonly fromPct: number;
+  /** How much of the track it covers. */
+  readonly widthPct: number;
+}
+
+/** What a wait says, on the track and over the stage: `deciding… 14 s`. */
+export function waitLabel(waitedMs: number): string {
+  return `deciding… ${String(Math.round(Math.max(waitedMs, 0) / 1000))} s`;
 }
 
 /**
@@ -286,7 +331,29 @@ function anchorsOf(session: Session, video: Recording): Anchor[] {
   return kept;
 }
 
-/** One clock read on the other, linear between the pairs and one to one outside them. */
+/**
+ * Whether nothing happened on the page between two pairs.
+ *
+ * The recording ran `WAIT_MS` longer than the session did over the same stretch, which on
+ * a browser-driven run is the agent waiting to be told what to do next: the gaze model's
+ * clock advances by what the eye did and costs no wall time, while the recorder's runs
+ * through every second of the decision. There is nothing in such a stretch to play.
+ */
+function isWait(before: Anchor, after: Anchor): boolean {
+  return after.videoMs - before.videoMs - (after.sessionMs - before.sessionMs) >= WAIT_MS;
+}
+
+/**
+ * One clock read on the other: linear between the pairs, one to one outside them, and a
+ * **step** across a wait.
+ *
+ * The step is the whole of this ticket in one line. A stretch nothing happened in has no
+ * inside to be at, so either clock reads the moment the stretch **ends** on as soon as it
+ * has left the moment it began on. Read forwards that holds the recording still on the
+ * frame the wait ends on while the session's clock crosses the stretch — the replay crosses
+ * it at once rather than playing a page that is not moving. Read backwards it is what makes
+ * a `?t=` that lands inside a wait open on the action the wait ends on.
+ */
 function along(
   anchors: readonly Anchor[],
   read: (anchor: Anchor) => number,
@@ -307,19 +374,50 @@ function along(
       break;
     }
   }
+  // A pair's own moment is both clocks' answer for it, whichever stretch follows it.
+  if (value === read(before)) return write(before);
   if (after === null) return write(before) + (value - read(before));
+  if (isWait(before, after)) return write(after);
   const span = read(after) - read(before);
   const share = (value - read(before)) / span;
   return write(before) + share * (write(after) - write(before));
 }
 
+/**
+ * The waits, in the order the session meets them, each placed on the track the scrubber
+ * runs over — which is the session's own clock, so a wait covers the session time between
+ * the two actions and carries the recording's own difference as the seconds it took.
+ */
+function waitsOf(anchors: readonly Anchor[], sessionDurationMs: number): Wait[] {
+  const share = sessionDurationMs > 0 ? 100 / sessionDurationMs : 0;
+  const waits: Wait[] = [];
+
+  for (let index = 1; index < anchors.length; index += 1) {
+    const before = anchors[index - 1] as Anchor;
+    const after = anchors[index] as Anchor;
+    if (!isWait(before, after)) continue;
+    waits.push({
+      fromSessionMs: before.sessionMs,
+      toSessionMs: after.sessionMs,
+      waitedMs: after.videoMs - before.videoMs,
+      fromPct: before.sessionMs * share,
+      widthPct: (after.sessionMs - before.sessionMs) * share,
+    });
+  }
+
+  return waits;
+}
+
 export function videoClock(session: Session, video: Recording): VideoClock {
   const anchors = anchorsOf(session, video);
+  const waits = waitsOf(anchors, session.durationMs);
   const clamp = (value: number, upTo: number): number =>
     Number.isFinite(value) ? Math.min(Math.max(value, 0), upTo) : 0;
 
   return {
-    durationMs: video.durationMs,
+    videoDurationMs: video.durationMs,
+    sessionDurationMs: session.durationMs,
+    waits,
     sessionMsAt: (videoMs) =>
       clamp(
         along(
@@ -340,6 +438,11 @@ export function videoClock(session: Session, video: Recording): VideoClock {
         ),
         video.durationMs,
       ),
+    // Strictly inside: on either action the stretch is over, and the frame is that action's
+    // own. The same boundary `along` steps on, so the badge is up exactly while the
+    // recording is being held still.
+    waitAt: (sessionMs) =>
+      waits.find((wait) => sessionMs > wait.fromSessionMs && sessionMs < wait.toSessionMs) ?? null,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { Run, Session } from '@personavision/contract';
@@ -32,6 +32,7 @@ import {
   timeLabel,
   videoClock,
   videoTimeFromParam,
+  waitLabel,
 } from './position';
 import type { Recording } from './position';
 import styles from './replay.module.css';
@@ -45,17 +46,23 @@ import { captureFor, stepLabel, variantName } from './runWords';
  * the run directory over the read-only run mount, with the gaze, the clicks and the
  * scanpath drawn over the frame it is showing.
  *
- * **One clock.** The playhead is a moment of the recording and it is the screen's whole
- * position: the video's time, the highlighted screen in the timeline, the active row of the
- * event log and the fixation counter are every one of them read off it, through the
- * session's own timeline (#20) and the offsets the recording stores (#253). Nothing here
- * keeps a second position, so dragging the scrubber and letting the video play move the
- * same four things, and they cannot drift apart.
+ * **One clock, and it is the session's own.** The playhead is a moment of **this person's
+ * attempt** and it is the screen's whole position: the highlighted screen in the timeline,
+ * the active row of the event log, the fixation counter and the frame of the recording on
+ * the stage are every one of them read off it, through the session's own timeline (#20) and
+ * the offsets the recording stores (#253). Nothing here keeps a second position, so
+ * dragging the scrubber and pressing Play move the same four things and cannot drift apart.
  *
- * **The moment is in the URL**, as `?t=` in seconds — which is what a recommendation cites,
- * so a citation from the Summary or the Analysis opens paused on exactly the frame it
- * claims. The overlay switches are **not** URL state: what a link carries is the timestamp,
- * not how the reader had their layers set.
+ * It is the session's clock and not the tape's because a recording runs in wall-clock time
+ * and includes every second the agent spent waiting to be told what to do next: a 9 second
+ * session is a 2 minute file, and a screen that ran on the file's clock was four fifths a
+ * page that is not moving (#414). A stretch the two clocks disagree about is **crossed**
+ * rather than played, and said over the stage in the seconds it really took.
+ *
+ * **The moment is addressed in the URL**, as `?t=` in seconds of the recording — which is
+ * what a recommendation cites (decision 121), so a citation from the Summary or the
+ * Analysis opens paused on the action it claims. The overlay switches are **not** URL state:
+ * what a link carries is the timestamp, not how the reader had their layers set.
  *
  * **A session with no recording keeps its replay.** The screenshot stage below is the
  * fallback — the page as that person saw it, scrubbed by fixation with `?fix=` — so the
@@ -199,16 +206,20 @@ function ReplayLayout({
 }
 
 /**
- * The stage this ticket is about: the recording, with one clock over all of it.
+ * The stage this ticket is about: the recording, with the session's own clock over all of it.
  *
- * The playhead lives in the URL and nowhere else. `?t=` is **seconds into the recording**,
- * so every reader of the same link sees the same frame; the video element's own time is the
- * finer thing it paints, reported back while it plays and followed by everything else.
+ * **The position is a moment of the session** and the page holds it, because a wait makes
+ * the two clocks a step rather than a line: inside one, every moment of the session maps to
+ * the one frame the wait ends on, so the recording's second cannot carry the session's
+ * position back. The URL carries the **citation** instead — `?t=`, the second of the
+ * recording this moment falls at, which is what a recommendation cites and what decision 121
+ * settles — and a `?t=` the screen did not write is a link being opened and moves the
+ * playhead to it.
  *
  * **`?t=` wins over `?fix=`.** Both open a moment, and over a recording the recording is
- * what is being addressed: `t` is the unit a citation carries and the unit the frame has,
- * while `fix` is the unit of a session with no video — so a link carrying both opens on the
- * second it names, and `fix` still opens the fixation it names when `t` is absent.
+ * what is being addressed: `t` is the unit a citation carries, while `fix` is the unit of a
+ * session with no video — so a link carrying both opens on the action `t` names, and
+ * `fix` still opens the fixation it names when `t` is absent.
  */
 function RecordedReplay({
   run,
@@ -231,50 +242,107 @@ function RecordedReplay({
   const sizeBytes = useRecordingSize(session.runId, recording.path);
 
   /**
-   * Where the playhead is. `?t=` is the recording's own second; `?fix=` is a fixation, and
-   * a link carrying neither opens on the **first fixation** — the moment the screenshot
-   * stage opens on, so the same person opened from the Sessions grid lands on the same
-   * moment of their attempt whether or not their session was recorded.
+   * Where a link opens the replay, on the session's own clock.
+   *
+   * `?t=` is a second of the **recording**, which the clock resolves onto the session: a
+   * cited second lands on the action whose offset it cites, and one that falls inside a
+   * wait lands on the action that wait ends on rather than on a frozen frame. `?fix=` is a
+   * fixation, and a link carrying neither opens on the **first fixation** — the moment the
+   * screenshot stage opens on, so the same person opened from the Sessions grid lands on the
+   * same moment of their attempt whether or not their session was recorded.
    */
   const asked = videoTimeFromParam(params.get(T_PARAM), recording.durationMs);
-  const videoMs =
+  const opensAt =
     asked !== null
-      ? asked.videoMs
-      : clock.videoMsAt(
-          timeline.timeAtFixation(fixationFromParam(params.get(FIX_PARAM), timeline.fixationCount)),
-        );
+      ? clock.sessionMsAt(asked.videoMs)
+      : timeline.timeAtFixation(fixationFromParam(params.get(FIX_PARAM), timeline.fixationCount));
 
-  const moment = timeline.at(clock.sessionMsAt(videoMs));
+  const [sessionMs, setSessionMs] = useState(opensAt);
+  /** The position between renders, which is where the clock below reads it. */
+  const at = useRef(sessionMs);
+  /** The `?t=` this screen last wrote, so a `?t=` it did not write is a link being opened. */
+  const addressed = useRef(params.get(T_PARAM));
 
   /**
-   * The playhead, written as whole seconds and **replaced** rather than pushed: a session
-   * played through would otherwise leave a history entry per second between the reader and
-   * the back button. `?fix=` goes when the reader moves, because the moment is now `t`'s to
-   * carry and two parameters saying different things is the one state this screen refuses.
+   * Moving the playhead, and the citation in the address with it.
+   *
+   * The second is **replaced** rather than pushed: a session played through would otherwise
+   * leave a history entry per second between the reader and the back button. `?fix=` goes
+   * when the reader moves, because the moment is now `t`'s to carry and two parameters
+   * saying different things is the one state this screen refuses. Crossing a wait writes
+   * nothing, because the recording is being held on one frame and the second it is at has
+   * not changed.
    */
-  const goToMs = useCallback(
+  const goTo = useCallback(
     (nextMs: number): void => {
+      const bounded = Math.min(
+        Math.max(Number.isFinite(nextMs) ? nextMs : 0, 0),
+        session.durationMs,
+      );
+      at.current = bounded;
+      setSessionMs(bounded);
+
+      const second = String(Math.max(Math.floor(clock.videoMsAt(bounded) / 1000), 0));
+      if (second === addressed.current) return;
+      addressed.current = second;
       setParams(
         (previous) => {
           const updated = new URLSearchParams(previous);
-          updated.set(T_PARAM, String(Math.max(Math.floor(nextMs / 1000), 0)));
+          updated.set(T_PARAM, second);
           updated.delete(FIX_PARAM);
           return updated;
         },
         { replace: true },
       );
     },
-    [setParams],
+    [clock, session.durationMs, setParams],
   );
 
-  // The element paints four frames a second and the URL carries whole seconds, so it is
-  // written when the second changes and not on every frame.
-  const onTime = useCallback(
-    (elementMs: number): void => {
-      if (Math.floor(elementMs / 1000) !== Math.floor(videoMs / 1000)) goToMs(elementMs);
-    },
-    [goToMs, videoMs],
-  );
+  /**
+   * A `?t=` from somewhere other than this screen — a link followed, a citation pasted, the
+   * back button — moves the playhead to the moment it addresses.
+   */
+  const addressedNow = params.get(T_PARAM);
+  useEffect(() => {
+    if (addressedNow === addressed.current) return;
+    addressed.current = addressedNow;
+    at.current = opensAt;
+    setSessionMs(opensAt);
+  }, [addressedNow, opensAt]);
+
+  /**
+   * **The replay's clock, and the page owns it.** It runs on the session's own time, so a
+   * recording played from the start reaches the end in the time the attempt took rather than
+   * in the time the file runs: every stretch the agent spent waiting is crossed at once,
+   * because the frame on the stage is read from this clock through the anchor map and that
+   * map is a step across a wait.
+   *
+   * A tenth of a second: finer than a fixation, so the gaze moves smoothly, and coarse
+   * enough that the stage is not seeked at every frame. The elapsed time is measured rather
+   * than assumed, because a tab the browser throttles must not report a session shorter than
+   * the one it played.
+   */
+  useEffect(() => {
+    if (!playing) return undefined;
+    let last = Date.now();
+    const tick = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - last;
+      last = now;
+      const next = at.current + elapsed;
+      if (next >= session.durationMs) setPlaying(false);
+      goTo(Math.min(next, session.durationMs));
+    }, TICK_MS);
+
+    return () => {
+      clearInterval(tick);
+    };
+  }, [playing, goTo, session.durationMs]);
+
+  const moment = timeline.at(sessionMs);
+  /** The stretch the clock is crossing, which holds the recording still and says so. */
+  const wait = clock.waitAt(sessionMs);
+  const videoMs = clock.videoMsAt(sessionMs);
 
   const onStopped = useCallback((): void => {
     setPlaying(false);
@@ -290,7 +358,16 @@ function RecordedReplay({
   const trail = box === null ? EMPTY_TRAIL : gazeTrail(session, moment, box);
   const marks = box === null ? [] : clickMarks({ run, session, timeline, moment, box });
 
-  const position = `${clockLabel(videoMs, recording.durationMs)}, ${fixationWords(moment, timeline)}, on the ${screenName} screen`;
+  const position = [
+    clockLabel(sessionMs, session.durationMs),
+    fixationWords(moment, timeline),
+    `on the ${screenName} screen`,
+    ...(wait === null
+      ? []
+      : [
+          `the recording stood still here for ${String(Math.round(wait.waitedMs / 1000))} s while the agent decided`,
+        ]),
+  ].join(', ');
 
   return (
     <ReplayLayout
@@ -298,7 +375,9 @@ function RecordedReplay({
       session={session}
       timeline={timeline}
       moment={moment}
-      onGoTo={(fixationNumber) => goToMs(clock.videoMsAt(timeline.timeAtFixation(fixationNumber)))}
+      onGoTo={(fixationNumber) => {
+        goTo(timeline.timeAtFixation(fixationNumber));
+      }}
       recording={{ sizeBytes, resolution }}
     >
       <VideoStage
@@ -313,27 +392,29 @@ function RecordedReplay({
         videoMs={videoMs}
         durationMs={recording.durationMs}
         playing={playing}
+        held={wait !== null}
+        waiting={wait === null ? null : waitLabel(wait.waitedMs)}
         gaze={layers.gaze}
         clicks={layers.clicks}
         scanpath={layers.scanpath}
         trail={trail}
         clickMarks={marks}
-        alternative={attentionWords({ run, session, moment, marks, videoMs })}
-        onTime={onTime}
+        alternative={attentionWords({ run, session, moment, marks, sessionMs })}
         onStopped={onStopped}
         onResolution={setResolution}
       />
 
       <VideoBar
         playing={playing}
-        videoMs={videoMs}
-        durationMs={recording.durationMs}
+        sessionMs={sessionMs}
+        durationMs={session.durationMs}
+        waits={clock.waits}
         fixation={fixationWords(moment, timeline)}
         position={position}
         onPlayPause={() => setPlaying((was) => !was)}
         onSeek={(seconds) => {
           setPlaying(false);
-          goToMs(seconds * 1000);
+          goTo(seconds * 1000);
         }}
       />
 
@@ -350,6 +431,9 @@ function RecordedReplay({
     </ReplayLayout>
   );
 }
+
+/** How often the replay's own clock advances while it plays. */
+const TICK_MS = 100;
 
 /** The gaze when there is no box to place it in: nothing drawn, and the words still read. */
 const EMPTY_TRAIL = { marks: [], hops: [] } as const;
@@ -429,14 +513,14 @@ function attentionWords(input: {
   session: Session;
   moment: TimelineMoment;
   marks: readonly { readonly label: string }[];
-  videoMs: number;
+  sessionMs: number;
 }): string {
-  const { run, session, moment, marks, videoMs } = input;
-  const at = `Where this person was looking at ${timeLabel(videoMs)}`;
+  const { run, session, moment, marks, sessionMs } = input;
+  const at = `Where this person was looking at ${timeLabel(sessionMs)}`;
   const fixation = moment.fixation;
 
   if (fixation === null) {
-    return `${at}: nothing was recorded yet at this moment of the recording.`;
+    return `${at}: nothing was recorded yet at this moment of their attempt.`;
   }
   const area = run.aois.find((aoi) => aoi.id === fixation.aoiId);
   const held = `held ${(fixation.durationMs / 1000).toFixed(1)} seconds`;

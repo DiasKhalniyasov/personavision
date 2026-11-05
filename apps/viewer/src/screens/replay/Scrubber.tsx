@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { clockLabel, fixationLabel } from './position';
+import { clockLabel, fixationLabel, waitLabel } from './position';
+import type { Wait } from './position';
 import styles from './replay.module.css';
 
 /**
@@ -98,13 +99,20 @@ export function Scrubber({
 }
 
 /**
- * `.vidbar`: the one control over the recording.
+ * `.vidbar`: the one control over the replay.
  *
  * It is the same idea as the `Scrubber` above and a different unit. Over a screenshot the
- * position a reader talks in is a **fixation**; over a recording it is a **second**, which
- * is what a citation carries (`?t=`), what the clock reads and what the range runs over —
- * so dragging it moves the video, the gaze, the highlighted screen, the active row of the
- * log and the fixation counter, because all of them are read off the second it reports.
+ * position a reader talks in is a **fixation**; over a recording it is a **second** — but a
+ * second of the **session**, not of the tape. A recording runs in wall-clock time and
+ * includes every second the agent spent being told what to do next, so a track that ran
+ * over the file's own length would be four fifths a page that is not moving and a reader
+ * who dragged would land in a pause (#414). The track is therefore the session's own clock,
+ * from zero to the length the session reports, and the recording is seeked to follow it.
+ *
+ * **A wait is drawn rather than played.** Each stretch the two clocks disagree about is
+ * marked where it falls on this track, carrying the real seconds it took, and the line
+ * under the bar says what the marks are. Dragging across one costs the reader nothing,
+ * because there is nothing in it to see.
  *
  * The range is the registry's slider, so the arrow keys step it a second at a time and it
  * announces where it is; Play is a labelled button that says which of the two it will do.
@@ -113,59 +121,98 @@ export function Scrubber({
  */
 export function VideoBar({
   playing,
-  videoMs,
+  sessionMs,
   durationMs,
+  waits,
   fixation,
   position,
   onPlayPause,
   onSeek,
 }: {
   playing: boolean;
-  /** Where the playhead is, in milliseconds into the recording. */
-  videoMs: number;
+  /** Where the playhead is, in milliseconds into the **session**. */
+  sessionMs: number;
+  /** The session's own length, which is what the track runs over. */
   durationMs: number;
+  /** The stretches the recording ran on through and the session did not. */
+  waits: readonly Wait[];
   /** `fixation 21 of 29`, as the prototype's faint half reads it. */
   fixation: string;
   /** The whole position in words, for a reader who cannot see the stage. */
   position: string;
   onPlayPause: () => void;
-  /** Seconds into the recording. */
+  /** Seconds into the session. */
   onSeek: (seconds: number) => void;
 }) {
   // Floored, not rounded: the last second a reader can drag to has to be a second the
-  // recording has, or dragging to the right-hand end would ask for a moment past its end
-  // and the screen would say the link overshot when nobody had followed a link.
+  // session has, or dragging to the right-hand end would ask for a moment past its end.
   const seconds = Math.floor(durationMs / 1000);
 
   return (
-    <div className={styles.vidbar}>
-      <Button
-        id="rp-play"
-        variant="outline"
-        size="sm"
-        aria-label={playing ? 'Pause the recording' : 'Play the recording'}
-        onClick={onPlayPause}
-      >
-        {playing ? 'Pause' : 'Play'}
-      </Button>
-      <Slider
-        id="rp-range"
-        min={0}
-        max={Math.max(seconds, 1)}
-        step={1}
-        value={[Math.min(Math.round(videoMs / 1000), Math.max(seconds, 1))]}
-        aria-label="Scrub the recording"
-        aria-valuetext={position}
-        onValueChange={([next]) => {
-          if (next !== undefined) onSeek(next);
-        }}
-      />
-      <span className={`${styles.clock} num`} id="rp-clock">
-        {clockLabel(videoMs, durationMs)}
-      </span>
-      <span className="faint" id="rp-fixlabel">
-        {fixation}
-      </span>
-    </div>
+    <>
+      <div className={styles.vidbar}>
+        <Button
+          id="rp-play"
+          variant="outline"
+          size="sm"
+          aria-label={playing ? 'Pause the recording' : 'Play the recording'}
+          onClick={onPlayPause}
+        >
+          {playing ? 'Pause' : 'Play'}
+        </Button>
+        <span className={styles.track}>
+          <Slider
+            id="rp-range"
+            min={0}
+            max={Math.max(seconds, 1)}
+            step={1}
+            value={[Math.min(Math.round(sessionMs / 1000), Math.max(seconds, 1))]}
+            aria-label="Scrub the recording"
+            aria-valuetext={position}
+            onValueChange={([next]) => {
+              if (next !== undefined) onSeek(next);
+            }}
+          />
+          {waits.map((wait) => (
+            <span
+              key={wait.fromSessionMs}
+              className={styles.wait}
+              data-wait={Math.round(wait.waitedMs / 1000)}
+              title={waitLabel(wait.waitedMs)}
+              style={{ left: `${wait.fromPct}%`, width: `${wait.widthPct}%` }}
+            />
+          ))}
+        </span>
+        <span className={`${styles.clock} num`} id="rp-clock">
+          {clockLabel(sessionMs, durationMs)}
+        </span>
+        <span className="faint" id="rp-fixlabel">
+          {fixation}
+        </span>
+      </div>
+
+      {waits.length === 0 ? null : (
+        <p className="footnote" data-waits={waits.length}>
+          {waitWords(waits)}
+        </p>
+      )}
+    </>
   );
+}
+
+/**
+ * The marks on the track, in words: how many, how long each really was, and why the replay
+ * does not play them.
+ *
+ * The mark says *where*; this says *what*, which is the half a reader who cannot see the
+ * track needs and the half that makes the track readable at a phone's width, where a label
+ * on a two-pixel band would have nowhere to go.
+ */
+function waitWords(waits: readonly Wait[]): string {
+  const held = waits.map((wait) => `${String(Math.round(wait.waitedMs / 1000))} s`);
+  const last = held[held.length - 1] as string;
+  const listed = held.length === 1 ? last : `${held.slice(0, -1).join(', ')} and ${last}`;
+  const many = held.length === 1 ? 'one stretch' : `${String(held.length)} stretches`;
+
+  return `Marked on the track: ${many} the recording ran on through while nothing happened on the page — ${listed} — which the replay crosses rather than plays.`;
 }

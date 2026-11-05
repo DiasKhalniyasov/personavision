@@ -80,6 +80,16 @@ const recorded = (sessionId: string): Record<string, unknown> => {
   };
 };
 
+/**
+ * One session whose recording ran far longer than the attempt it holds, which is what every
+ * browser-driven recording does: the recorder's clock is wall time and includes every second
+ * the agent spent being told what to do next.
+ */
+const longRecording = (sessionId: string, durationMs: number): Record<string, unknown> => {
+  const file = recorded(sessionId);
+  return { ...file, video: { ...(file.video as Record<string, unknown>), durationMs } };
+};
+
 /** A session whose recorder said why there is no file. */
 const noRecording = (sessionId: string, reason: string): Record<string, unknown> => ({
   ...(session(sessionId) as unknown as Record<string, unknown>),
@@ -256,13 +266,37 @@ describe('a tile’s thumbnail', () => {
     expect((mark as HTMLElement).style.top).toBe(`${(fixation.y / height) * 100}%`);
   });
 
-  it('states how long the recording runs', async () => {
-    await serveRecorded();
+  it('states the session’s own duration and not the length of the file', async () => {
+    // A recording runs in wall-clock time and holds every second the agent spent waiting
+    // to be told what to do next, so the file is several times the attempt inside it: a
+    // tile printing the file's length read 2:05 for a 9 second session (#414). `S-24` ran
+    // 41 seconds and its recording here is two minutes five.
+    await serveRecorded({ sessions: { 'S-24': longRecording('S-24', 125_000) } });
     mountApp(paths.sessions(SEED));
 
     await tiles(PAGE);
-    // 41 000 ms, as `m:ss`.
-    expect(prose((await tileFor('S-24')).textContent)).toContain('0:41');
+    expect(prose((await tileFor('S-24')).textContent)).toContain('41.0 s');
+    expect(prose((await tileFor('S-24')).textContent)).not.toContain('2:05');
+  });
+
+  it('states the same duration the rows view of the same people states', async () => {
+    const user = userEvent.setup();
+    await serveRecorded({ sessions: { 'S-24': longRecording('S-24', 125_000) } });
+    mountApp(paths.sessions(SEED));
+
+    await tiles(PAGE);
+    const onTheTile = prose((await tileFor('S-24')).textContent);
+    await user.click(screen.getByRole('link', { name: 'Show these as rows instead' }));
+
+    const table = await screen.findByRole('table');
+    const row = within(table)
+      .getAllByRole('row')
+      .find((candidate) => prose(candidate.textContent).startsWith('S-24')) as HTMLElement;
+    const stated = `${String(session('S-24').durationMs / 1000).replace(/^(\d+)$/, '$1.0')} s`;
+
+    expect(stated).toBe('41.0 s');
+    expect(onTheTile).toContain(stated);
+    expect(prose(row.textContent)).toContain(stated);
   });
 
   it('is the shape the recording was made at, so a phone session is not a letterbox', async () => {
