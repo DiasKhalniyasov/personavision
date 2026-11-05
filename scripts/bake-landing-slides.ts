@@ -9,8 +9,28 @@
  * session, and every value on it is a copy of something the run artifact already holds.
  *
  * ```
- * pnpm bake:landing-slides <runs root> <output file> <runId:sessionId:screenIndex> …
+ * pnpm bake:landing-slides <runs root> <output file> [--assets <dir>] <runId:sessionId:screenIndex> …
  * ```
+ *
+ * ## `--assets`: a set from a run that is not committed (#429)
+ *
+ * The example run is committed under `runs/` and the app serves it, so the front page loads
+ * that set's captures straight off the run-data mount. **The example templates' runs are not
+ * committed**: they are made against live third-party sites into a runs root outside the
+ * repository (`docs/template-acceptance.md`), and the front page may not reach outside the
+ * app. So a set baked from such a run is given `--assets <dir>`, and the script
+ *
+ * - **copies** every capture its slides name into `<dir>/<runId>/<the run-relative path>`,
+ *   which is the layout `screenshotBase` in `apps/viewer/src/screens/landing/slideSets.ts`
+ *   resolves a slide against, and
+ * - **records the copy** beside the set, in `<output>.bake.json`: the triples it was baked
+ *   from and the SHA-256 of every capture copied.
+ *
+ * That record is the set's provenance, and it exists for the one reason the committed set
+ * does not need one: `slides.test.ts` can check #427's set value by value against the run it
+ * came from, because that run is in the repository. A template run is not, so the triples and
+ * the hashes are the only way a reader can tell what produced the file and a re-bake can be
+ * shown to reproduce it.
  *
  * The run is read through `@personavision/contract` — the same reader every screen uses —
  * and the script **refuses, naming the run and the field, and writes nothing** when a
@@ -21,8 +41,9 @@
  * Nothing under `runs/` is read for writing and no file is written inside a run directory.
  */
 
-import { stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
 import { landingSlidesSchema, readRun } from '@personavision/contract';
@@ -368,25 +389,152 @@ const bakeLandingSlides = async (
   return landingSlidesSchema.parse(set);
 };
 
+/** One capture copied into the viewer's assets, as the set's own record carries it. */
+interface CopiedCapture {
+  readonly runId: string;
+  readonly path: string;
+  readonly sha256: string;
+}
+
+/**
+ * The captures a set names, copied into `assetsDir` under `<runId>/<the run-relative path>`.
+ *
+ * Deduplicated on the pair, because two slides of one session's walk can be two looks at the
+ * same captured screen, and sorted so the record is the same whatever order the triples came
+ * in. The bytes are hashed as they are copied rather than read back: the hash is of what the
+ * run held, which is the thing a re-bake has to reproduce.
+ */
+const copyCaptures = async (
+  runsRoot: string,
+  assetsDir: string,
+  slides: readonly LandingSlide[],
+): Promise<readonly CopiedCapture[]> => {
+  const wanted = new Map<string, { runId: string; path: string }>();
+  for (const slide of slides) {
+    wanted.set(`${slide.runId}/${slide.screenshot.path}`, {
+      runId: slide.runId,
+      path: slide.screenshot.path,
+    });
+  }
+
+  const copied: CopiedCapture[] = [];
+  for (const { runId, path } of [...wanted.values()].sort((a, b) =>
+    `${a.runId}/${a.path}` < `${b.runId}/${b.path}` ? -1 : 1,
+  )) {
+    const from = join(runsRoot, runId, path);
+    const to = join(assetsDir, runId, path);
+    await mkdir(dirname(to), { recursive: true });
+    await copyFile(from, to);
+    copied.push({
+      runId,
+      path,
+      sha256: createHash('sha256')
+        .update(await readFile(from))
+        .digest('hex'),
+    });
+  }
+  return copied;
+};
+
+/**
+ * Where a set's record is written: beside the set, under the set's own name.
+ *
+ * `slides/stripe-testing-payments.json` records itself in
+ * `slides/stripe-testing-payments.bake.json`, so a reader who finds one finds the other and
+ * neither can be moved without the other being noticed.
+ */
+const recordFile = (output: string): string => `${output.replace(/\.json$/, '')}.bake.json`;
+
+/** A triple as the record spells it: parsed and printed back, never the characters typed. */
+const spell = ({ runId, sessionId, screenIndex }: Triple): string =>
+  `${runId}:${sessionId}:${String(screenIndex)}`;
+
 /** The set as the repository formats JSON, so the committed file is `prettier --check` clean. */
-const serialize = async (set: LandingSlides, file: string): Promise<string> =>
+const serialize = async (set: unknown, file: string): Promise<string> =>
   format(JSON.stringify(set, null, 2), {
     ...(await resolveConfig(file)),
     parser: 'json',
   });
 
-const main = async (): Promise<void> => {
-  const [runsRoot, output, ...rest] = process.argv.slice(2);
-  if (runsRoot === undefined || output === undefined || rest.length === 0) {
+/** Whether an argument is a slide rather than a path: three parts, the last a screen index. */
+const looksLikeTriple = (argument: string): boolean => {
+  const parts = argument.split(':');
+  return parts.length === 3 && /^\d+$/.test(parts[2] as string);
+};
+
+/**
+ * `--assets <dir>` taken out of the arguments, leaving the positional ones behind.
+ *
+ * A flag rather than a fourth positional argument: the triples are a list of unknown length,
+ * so anything after them cannot be positional, and a set baked from a committed run wants no
+ * copy at all.
+ *
+ * A flag does have one way to go wrong that a positional argument does not: `--assets` with
+ * the directory left out would quietly eat the triple behind it and bake a smaller set into a
+ * directory named after a person. So a value that is a slide is refused as one.
+ */
+const takeAssetsDir = (
+  args: readonly string[],
+): { readonly assetsDir?: string; readonly rest: readonly string[] } => {
+  const at = args.indexOf('--assets');
+  if (at === -1) return { rest: args };
+  const dir = args[at + 1];
+  if (dir === undefined || dir.startsWith('--') || looksLikeTriple(dir)) {
     throw new Error(
-      `${COMMAND} <runs root> <output file> <runId:sessionId:screenIndex> …: which runs to read, where to write the slide set, and which screens are slides`,
+      `${COMMAND}: --assets needs a directory to copy the captures into${dir === undefined ? '' : `, and "${dir}" is a slide`}`,
     );
   }
-  const set = await bakeLandingSlides(resolve(runsRoot), rest.map(parseTriple));
+  return { assetsDir: dir, rest: [...args.slice(0, at), ...args.slice(at + 2)] };
+};
+
+/**
+ * The captures copied and the copy recorded, and the line that says where both went.
+ *
+ * The record carries the triples rather than the characters that were typed, so that two
+ * spellings of one slide produce one record and a reader can line a record up against the
+ * set's own slides.
+ */
+const copyAndRecord = async (
+  runsRoot: string,
+  assetsDir: string,
+  output: string,
+  triples: readonly Triple[],
+  set: LandingSlides,
+): Promise<string> => {
+  const copied = await copyCaptures(runsRoot, assetsDir, set.slides);
+  const file = recordFile(output);
+  await writeFile(
+    file,
+    await serialize({ triples: triples.map(spell), screenshots: copied }, file),
+    'utf8',
+  );
+  const what = copied.length === 1 ? 'capture' : 'captures';
+  return `landing slides: copied ${String(copied.length)} ${what} into ${assetsDir} and recorded them in ${file}\n`;
+};
+
+const main = async (): Promise<void> => {
+  const { assetsDir, rest: args } = takeAssetsDir(process.argv.slice(2));
+  const [runsRoot, output, ...rest] = args;
+  if (runsRoot === undefined || output === undefined || rest.length === 0) {
+    throw new Error(
+      `${COMMAND} <runs root> <output file> [--assets <dir>] <runId:sessionId:screenIndex> …: which runs to read, where to write the slide set, where to copy its captures when the run is not committed, and which screens are slides`,
+    );
+  }
+  const triples = rest.map(parseTriple);
+  const set = await bakeLandingSlides(resolve(runsRoot), triples);
+
+  // The copy and the record go first: a set on disk whose captures are not beside it is a
+  // broken front page, and the bake refuses as a whole or not at all.
+  const copied =
+    assetsDir === undefined
+      ? undefined
+      : await copyAndRecord(resolve(runsRoot), resolve(assetsDir), resolve(output), triples, set);
+
   await writeFile(resolve(output), await serialize(set, resolve(output)), 'utf8');
   process.stdout.write(
     `landing slides: wrote ${set.slides.length} slides from ${set.runIds.length} ${set.runIds.length === 1 ? 'run' : 'runs'} to ${resolve(output)}\n`,
   );
+  if (copied !== undefined) process.stdout.write(copied);
 };
 
 const invokedDirectly =

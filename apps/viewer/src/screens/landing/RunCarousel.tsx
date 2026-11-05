@@ -22,7 +22,8 @@ import { GazeOverlay } from '@/screens/replay/GazeOverlay';
 import type { ClickMark, GazeTrail } from '@/screens/replay/position';
 import { outcomeWords } from '@/session/index.js';
 import { paths } from '@/shell/paths';
-import { runDataBase } from '@/shell/useRun';
+import { screenshotBase } from './slideSets';
+import type { SlideScreenshots } from './slideSets';
 import { useLandingSlides } from './useLandingSlides';
 import styles from './runCarousel.module.css';
 
@@ -308,10 +309,10 @@ export function RunCarousel() {
     );
   }
 
-  return <Carousel set={state.set} />;
+  return <Carousel set={state.set} screenshots={state.screenshots} />;
 }
 
-function Carousel({ set }: { set: LandingSlides }) {
+function Carousel({ set, screenshots }: { set: LandingSlides; screenshots: SlideScreenshots }) {
   const [at, setAt] = useState(0);
   const headingId = useId();
   const panelId = useId();
@@ -473,14 +474,18 @@ function Carousel({ set }: { set: LandingSlides }) {
             would not be if React reused this position's state across a slide change. The
             key is the session and the screen together, as the dots' is, because a set may
             hold two screens of one session. */}
-        <Slide key={`${slide.sessionId}-${slide.screenIndex}`} slide={slide} />
+        <Slide
+          key={`${slide.sessionId}-${slide.screenIndex}`}
+          slide={slide}
+          screenshots={screenshots}
+        />
       </div>
     </section>
   );
 }
 
 /** One person: who they are, what they did, what they thought, how it ended. */
-function Slide({ slide }: { slide: LandingSlide }) {
+function Slide({ slide, screenshots }: { slide: LandingSlide; screenshots: SlideScreenshots }) {
   const [view, setView] = useState<ViewId>(DEFAULT_VIEW);
   const { person } = slide;
   const onWhat = screenWords(slide) ?? 'this page';
@@ -496,11 +501,13 @@ function Slide({ slide }: { slide: LandingSlide }) {
   const outcome = outcomeWords(slide.outcome.status);
   const transform = transformOf(slide);
 
-  // The artifact's own `path`, resolved against the run directory the viewer serves it from:
-  // the committed example run on this machine, and never a third-party host.
+  // The artifact's own `path`, resolved against wherever this set's captures live — the
+  // run-data mount for a run committed under `runs/`, this app's own assets for a run that is
+  // not (`slideSets.ts`, #429). Either way the only host asked is this one, never a third
+  // party's.
   const screenshotUrl = new URL(
     slide.screenshot.path,
-    new URL(runDataBase(slide.runId), window.location.href),
+    new URL(screenshotBase(screenshots, slide.runId), window.location.href),
   ).toString();
 
   /** What every layer is given. `NO_AGGREGATE` is honest: a slide has no aggregate. */

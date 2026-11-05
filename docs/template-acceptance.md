@@ -69,6 +69,16 @@ headed list per kind of trouble, then a line per template saying whether it prod
 **contrast** — a scored session that reached the thing and a scored session that did not, and on
 which viewports. That last line is what #429 reads first, because a slide set needs both.
 
+## Afterwards: the front page's slide sets
+
+The runs are kept because the front page's carousel is baked out of them (#429). Once the table
+is posted, each template that produced a contrast becomes one slide set:
+[`apps/viewer/src/screens/landing/slides/README.md`](../apps/viewer/src/screens/landing/slides/README.md)
+is the curation rule and the exact `pnpm bake:landing-slides … --assets` line, and
+`apps/viewer/src/screens/landing/slideSets.ts` is the one place that decides which set `/` shows.
+A template that produced no outcome of its own gets **no set**: the finding goes on the ticket
+instead.
+
 The three kinds of trouble are kept apart, because they send a reader to different places and
 none of them is a finding about the site:
 
