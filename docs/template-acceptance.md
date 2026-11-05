@@ -64,9 +64,15 @@ screen: a `url` criterion by the address the screen was captured at, an `element
 in the result.
 
 Under the table: the **first automation failure** of each template that had one, any run that
-never started, and a line per template saying whether it produced a **contrast** — a session
-that reached the thing and a session that did not, and on which viewports. That last line is
-what #429 reads first, because a slide set needs both.
+never started, and a line per template saying whether it produced a **contrast** — a scored
+session that reached the thing and a scored session that did not, and on which viewports. That
+last line is what #429 reads first, because a slide set needs both.
+
+The verdict above them keeps two failures apart, because they send a reader to different
+places. A template that **ran** and produced only automation failures is a finding about the
+site, and gets a sibling ticket on #222. A template whose run **never started** — no
+credential, no network, an address the contract refused — is a finding about the check's own
+circumstances, and no site is blamed for it.
 
 ## Where the result goes
 
