@@ -678,11 +678,18 @@ describe('a run whose task declares no control that advances it', () => {
     expect(unmarked.map((finding) => findingRuleIdOf(finding))).not.toEqual(
       expect.arrayContaining(aboutTheControl),
     );
-    // And no sentence names one either: the wording of all three is about "the button
-    // that completes the order", and a run with no such button must not print the phrase.
-    for (const finding of unmarked) {
-      expect(`${finding.claim} ${finding.evidence}`).not.toMatch(/primary action|main button/i);
-    }
+    // And no sentence names one either, in the words the product actually uses for a
+    // control: `primaryActionSaid`'s two phrasings, the competing rule's comparison
+    // against it, and the counterpart sentence that reads it on the other version. The
+    // same scan over the **declared** checkout finds all of them, which is what stops this
+    // assertion passing on wording the product never writes.
+    const NAMES_A_CONTROL =
+      /the button that (?:completes the order|moves on from)|the control beneath it|the same control/;
+    const sentencesOf = (list: readonly Finding[]): string =>
+      list.map((finding) => `${finding.claim} ${finding.evidence}`).join(' ');
+
+    expect(sentencesOf(forCheckouts(defectiveVariantSessions))).toMatch(NAMES_A_CONTROL);
+    expect(sentencesOf(unmarked)).not.toMatch(NAMES_A_CONTROL);
   });
 
   /**
