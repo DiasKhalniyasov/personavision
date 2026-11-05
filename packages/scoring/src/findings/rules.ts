@@ -264,11 +264,16 @@ const primaryActionBelowFold: VariantRule = (reading) => {
  * not merely first, it is where the time went.
  *
  * **It is held to steps that have such a control**, which is the reading it was written
- * for. "More attention than the control" is a comparison, and on a step that declares no
- * control there is nothing on the other side of it: every test of one URL is that shape
- * (#418), and comparing against nothing would turn the most-looked-at block of any page
- * into a competing banner and indict the whole site (#422). A step with no control has no
- * area that fails to advance the task relative to another, so the rule says nothing.
+ * for. "More attention than the control" is a comparison, and on a step with no control in
+ * the artifact there is nothing on the other side of it: `?? 0` made the comparison
+ * vacuous, so any area with a millisecond of dwell won it, and the most-looked-at block of
+ * any page became a competing banner (#422).
+ *
+ * Two kinds of step are that shape, and both lose the finding deliberately: every step of
+ * a test of one URL, which declares no control at all (#418), and a **declared** step whose
+ * `primaryAction` is `optional` and absent from the page, where `resolvePrimaryAction`
+ * marks nothing. The second is the narrower case the change also covers: a banner there is
+ * holding attention against nothing measured, which is a claim this rule cannot make.
  */
 const competingFirstFixation: VariantRule = (reading) => {
   const candidates = reading.areas.filter((area) => {

@@ -184,6 +184,15 @@ const firstFixationReading = (
  * a control that does not exist and then charging 35% of the score for it would make the
  * friction score of a healthy site read as friction, so the component is absent instead and
  * `frictionScoreOf` renormalises over the ones that were measured.
+ *
+ * **Which of the two it is is read from what the variant declared, never from how far the
+ * sessions got.** The areas are searched for a control before the journey is walked, so a
+ * checkout whose control sits on the review step still *has* one when every session gave up
+ * on the basket: nobody could reach it, which is the full 1.0 below, and not a measurement
+ * this run never had to take. Deciding it from the steps the sessions reached would make a
+ * run that failed completely score **better** than one that half worked, and would
+ * renormalise one seed group and not another on the same variant — two group scores blended
+ * from different denominators and averaged into one median.
  */
 const worstPrimaryAction = (
   sessions: readonly Session[],
@@ -197,6 +206,9 @@ const worstPrimaryAction = (
     );
   }
 
+  // Nothing to time, on any step, reached or not: the one case the component is absent in.
+  if (!aois.some((aoi) => aoi.isPrimaryAction)) return null;
+
   let worst: NonNullable<Score['components']['timeToFirstFixationPrimary']> | undefined;
   for (const step of steps) {
     const primaries = aois.filter((aoi) => aoi.step === step && aoi.isPrimaryAction);
@@ -208,7 +220,11 @@ const worstPrimaryAction = (
     if (worst === undefined || best.value > worst.value) worst = { worstStep: step, ...best };
   }
 
-  return worst ?? null;
+  // A control this variant declares that no step the sessions reached holds: unreachable,
+  // which is the same 1.0 as unseen and the reading this function has always given it. The
+  // step named is the last of the journey the sessions walked, which is where the task
+  // would have been completed.
+  return worst ?? { worstStep: steps[steps.length - 1], ...NEVER_FIXATED };
 };
 
 /**

@@ -5,6 +5,7 @@ import {
   FINDING_RULE_IDS,
   score,
   scoringConfig,
+  type Aoi,
   type AoiMetric,
   type VariantScore,
 } from '../src/index.js';
@@ -346,6 +347,96 @@ describe('the time to first fixation on the primary action', () => {
       medianSeconds: null,
       value: 1,
     });
+  });
+});
+
+/**
+ * The other absence, and the one the component must **not** report as not measured: a
+ * control the task really declares, on a step every session gave up before reaching.
+ * Nobody could look at it, which is the full 1.0 the formula has always given, and reading
+ * it as "nothing to measure" would score a run that failed completely better than one that
+ * half worked.
+ */
+describe('a control the sessions never got to', () => {
+  /** The checkout with its control declared on the review step **only**. */
+  const controlOnReviewOnly: Aoi[] = fixtureAois.map((aoi) => ({
+    ...aoi,
+    isPrimaryAction: aoi.isPrimaryAction && aoi.step === 'review',
+  }));
+
+  /** One session of variant A that walked the steps given and timed no control. */
+  const stoppedAt = (sessionId: string, seed: number, steps: readonly string[]): Session =>
+    buildSession(
+      {
+        sessionId,
+        variant: 'A',
+        seed,
+        personaId: 'P-1',
+        status: 'abandoned',
+        steps: steps.map((step) => ({ step, primaryAfterSeconds: null, deadEndReturns: 0 })),
+      },
+      controlOnReviewOnly,
+    );
+
+  const scoreOver = (sessions: readonly Session[]): VariantScore => {
+    const [only] = score(
+      sessions,
+      controlOnReviewOnly,
+      buildAoiMetrics(sessions, controlOnReviewOnly),
+      fixtureTask,
+    );
+    if (only === undefined) throw new Error('the sessions produced no score');
+    return only;
+  };
+
+  it('reads the full 1.0, on the last step of the journey they walked', () => {
+    const scored = scoreOver([stoppedAt('S-01', 1, ['cart', 'payment'])]);
+
+    expect(timed(scored.components)).toEqual({
+      worstStep: 'payment',
+      medianSeconds: null,
+      value: 1,
+    });
+  });
+
+  it('is not renormalised: the 35% is still charged, for a control nobody could reach', () => {
+    const { weights, pointsPerUnit } = scoringConfig;
+    const scored = scoreOver([stoppedAt('S-01', 1, ['cart', 'payment'])]);
+
+    // Everyone gave up, and nobody could reach the control: 20% + 35% of a whole unit.
+    expect(scored.frictionScore.median).toBeCloseTo(
+      (weights.abandonment + weights.timeToFirstFixationPrimary) * pointsPerUnit,
+      10,
+    );
+  });
+
+  /**
+   * And the same for one seed group of it. The absence is read from the areas and not from
+   * the journey, so it cannot differ between the groups of one variant — two group scores
+   * blended from different denominators would be averaged into one median, and the four
+   * components printed beside it would reconstruct neither.
+   */
+  it('divides every seed group of a declared variant by the same weight', () => {
+    const { weights, pointsPerUnit } = scoringConfig;
+    const gotThere = stoppedAt('S-01', 1, ['cart', 'payment', 'review']);
+    const stoppedShort = stoppedAt('S-02', 2, ['cart', 'payment']);
+    const scored = scoreOver([gotThere, stoppedShort]);
+
+    const blendOf = (session: Session): number => {
+      const { components } = scoreOver([session]);
+      return (
+        (weights.taskFailureRate * components.taskFailureRate +
+          weights.abandonment * components.abandonment +
+          weights.timeToFirstFixationPrimary * timed(components).value +
+          weights.deadEndRevisits * components.deadEndRevisits) *
+        pointsPerUnit
+      );
+    };
+
+    expect(scored.perSeedGroup).toEqual([
+      { seed: 1, frictionScore: blendOf(gotThere) },
+      { seed: 2, frictionScore: blendOf(stoppedShort) },
+    ]);
   });
 });
 

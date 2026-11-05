@@ -513,6 +513,38 @@ describe('the hero evidence when there was no control to time', () => {
     expect(() => verdictSchema.parse(written)).not.toThrow();
   });
 
+  /**
+   * The figures beside the heatmap are over the scored sessions of this variant and this
+   * task, so the heatmap has to be of a page one of **those** reached. A session our own
+   * automation lost reaches no component and no finding, and a session of another task is
+   * another row's result.
+   */
+  it('reads only the sessions the figures were computed from', () => {
+    const deeper = (over: Partial<Session>): Session => ({
+      ...walked('B', ['cart', 'payment', 'review', 'confirm']),
+      sessionId: 'S-deep',
+      ...over,
+    });
+    const lostByOurAutomation = deeper({
+      outcome: {
+        status: 'automation_failure',
+        step: 'confirm',
+        reason: 'the continue selector timed out',
+        attribution: 'automation',
+        excludedFromScores: true,
+      },
+    });
+    const anotherTask = deeper({ taskId: 'buy-a-stove' });
+
+    for (const ignored of [lostByOurAutomation, anotherTask]) {
+      const written = verdict([DERIVED_CLEAN, DERIVED_HARDER], [], AUDIENCE, undefined, [
+        ...WALK,
+        ignored,
+      ]);
+      expect(written.heroEvidence.step).toBe('review');
+    }
+  });
+
   it('still prefers a finding that named an area, as it does on any other run', () => {
     const written = verdict(
       [DERIVED_CLEAN, DERIVED_HARDER],
