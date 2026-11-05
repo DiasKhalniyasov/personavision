@@ -279,11 +279,15 @@ const row = (outcome: TemplateOutcome): string => {
  * to paper over with an invented slide.
  */
 const contrast = (outcome: TemplateOutcome): string => {
-  const counts = countOutcomes(outcome.sessions);
-  const scored = scoredCount(counts);
-  if (scored === 0) return `- ${outcome.siteUrl} — no outcome to build a slide set from`;
-  const reached = observedCount(outcome.sessions);
-  const missed = scored - reached;
+  // The scored sessions and not all of them: a slide set is built out of people who produced
+  // an outcome, and counting an automation failure on either side of the contrast would offer
+  // #429 a session that recorded nothing to show.
+  const scored = outcome.sessions.filter(
+    (session) => session.outcome.status !== 'automation_failure',
+  );
+  if (scored.length === 0) return `- ${outcome.siteUrl} — no outcome to build a slide set from`;
+  const reached = observedCount(scored);
+  const missed = scored.length - reached;
   const widths = viewportsOf(outcome)
     .map((width) => String(width))
     .join(', ');
@@ -323,26 +327,32 @@ export const renderReport = ({ runsRoot, outcomes }: RenderReportInput): string 
   const of = (some: readonly TemplateOutcome[]): string =>
     `${String(some.length)} of ${String(outcomes.length)}`;
 
+  const verdict = ((): readonly string[] => {
+    if (outcomes.length === 0) {
+      return ['**No template was checked**, so nothing was proved: this ran over an empty list.'];
+    }
+    if (nothing.length === 0) return [`**Every template produced results: ${of(outcomes)}.**`];
+    return [
+      ...(droveNothing.length === 0
+        ? []
+        : [
+            `**${of(droveNothing)} templates ran and produced no outcome that is not an automation failure: ${sites(droveNothing)}.** That is a finding and a sibling ticket on #222, never a relaxed bar here.`,
+          ]),
+      ...(neverRan.length === 0
+        ? []
+        : [
+            `**${of(neverRan)} templates never started a run: ${sites(neverRan)}.** The reasons are under the table. A credential or a network this check could not use is a finding about the check and not about the site.`,
+          ]),
+    ];
+  })();
+
   return [
     `| Site | Criterion | Sessions | success | failed | abandoned | automation_failure | observed | Wall clock | Cost |`,
     `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
     ...outcomes.map(row),
     `| **total** | | ${String(outcomes.reduce((all, outcome) => all + outcome.sessions.length, 0))} | | | | | | ${duration(outcomes.reduce((all, outcome) => all + outcome.wallClockMs, 0))} | ${money(outcomes.reduce((all, outcome) => all + outcome.costUsd, 0))} |`,
     '',
-    ...(nothing.length === 0
-      ? [`**Every template produced results: ${of(outcomes)}.**`]
-      : [
-          ...(droveNothing.length === 0
-            ? []
-            : [
-                `**${of(droveNothing)} templates ran and produced no outcome that is not an automation failure: ${sites(droveNothing)}.** That is a finding and a sibling ticket on #222, never a relaxed bar here.`,
-              ]),
-          ...(neverRan.length === 0
-            ? []
-            : [
-                `**${of(neverRan)} templates never started a run: ${sites(neverRan)}.** The reasons are under the table. A credential or a network this check could not use is a finding about the check and not about the site.`,
-              ]),
-        ]),
+    ...verdict,
     '',
     ...(failures.length === 0
       ? []
